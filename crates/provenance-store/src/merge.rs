@@ -3,11 +3,8 @@ use provenance_macros::rule;
 use serde_json::Value;
 use std::collections::{BTreeMap, BTreeSet};
 
-mod batch_report;
-mod batches;
 pub mod validation;
 
-pub use batch_report::{FailedCheck, LeftOutBatch, MergeOrder, SequenceDifference};
 pub use validation::{changed_statement_diagnostics, validate_merged_records, ShardFamily};
 
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
@@ -22,20 +19,9 @@ pub enum MergeConflictKind {
     DeleteModify,
 }
 
-/// A record that the two sides of a merge change differently.
-///
-/// For a record of a landing batch, the conflict is a record that each side
-/// changes in a batch that only that side holds, and that our read and their
-/// read give differently. `base`, `ours` and `theirs` are the records that a
-/// read of the base landings, of our landings and of their landings gives.
-/// `base` is `None` when the base landings hold no record with the id, also
-/// when a direct file of the scope holds one, because the merge driver reads
-/// only the landings file.
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
 pub struct MergeConflict {
     pub kind: MergeConflictKind,
-    /// The id of the record: its id, or `<list>/<id>` for a record of a
-    /// landing batch, where the list is the field of the batch.
     pub record_id: String,
     /// The base pre-image, so a reader can see what both sides moved away
     /// from. `None` for an add/add clash, where the base held nothing.
@@ -52,18 +38,6 @@ pub enum MergeOutcome<T> {
     },
     Conflicted {
         conflicts: Vec<MergeConflict>,
-        /// For landing batches, the first common batch that the two sides
-        /// do not hold in one sequence.
-        #[serde(skip_serializing_if = "Option::is_none")]
-        sequence: Option<SequenceDifference>,
-        /// For landing batches, the first check that the merged file fails,
-        /// with our batches first and with their batches first.
-        #[serde(skip_serializing_if = "Vec::is_empty")]
-        failed_checks: Vec<FailedCheck>,
-        /// For landing batches, each batch of theirs that our file does not
-        /// hold; the merged file is our file.
-        #[serde(skip_serializing_if = "Vec::is_empty")]
-        left_out: Vec<LeftOutBatch>,
         partial: T,
     },
 }
@@ -81,38 +55,6 @@ impl<T> MergeOutcome<T> {
             Self::Clean { .. } => panic!("expected conflicted merge"),
             Self::Conflicted { conflicts, .. } => conflicts,
         }
-    }
-
-    /// The text of the conflict that the merge of a shard with `identity`
-    /// leaves, or `None` for a clean merge.
-    #[must_use]
-    pub fn conflict_text(&self, identity: RowIdentity) -> Option<String> {
-        let Self::Conflicted {
-            conflicts,
-            sequence,
-            failed_checks,
-            left_out,
-            ..
-        } = self
-        else {
-            return None;
-        };
-        Some(match identity {
-            RowIdentity::Field(_) => {
-                let ids: Vec<_> = conflicts
-                    .iter()
-                    .map(|conflict| conflict.record_id.as_str())
-                    .collect();
-                format!(
-                    "merge left {} conflicting record(s): {}",
-                    ids.len(),
-                    ids.join(", ")
-                )
-            }
-            RowIdentity::Batch => {
-                batch_report::conflict_text(conflicts, sequence.as_ref(), failed_checks, left_out)
-            }
-        })
     }
 }
 
@@ -207,84 +149,23 @@ pub(crate) fn preserved_lines(
         .collect()
 }
 
-/// What makes rows of the sides of a merge the same record.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum RowIdentity {
-    /// Rows with the same string in this field are one record. The merge
-    /// writes the records in the order of that string.
-    Field(&'static str),
-    /// The rows are landing batches, and equal rows are the same batch. One
-    /// side can hold equal batches, so the second equal row of one side is
-    /// the same batch as the second equal row of another side.
-    Batch,
-}
-
-/// Gives the key of each row of one side, in the order of the rows.
-struct RowKeys {
-    identity: RowIdentity,
-    /// For a batch identity, the number of rows so far equal to each row.
-    equal_rows: BTreeMap<String, usize>,
-}
-
-impl RowKeys {
-    const fn new(identity: RowIdentity) -> Self {
-        Self {
-            identity,
-            equal_rows: BTreeMap::new(),
-        }
-    }
-
-    fn key(&mut self, record: &CanonicalRecord) -> anyhow::Result<String> {
-        match self.identity {
-            RowIdentity::Field(field) => string_id(field, record).map(str::to_owned),
-            RowIdentity::Batch => batch_key(&mut self.equal_rows, record),
-        }
-    }
-}
-
-/// The key of one batch row: its canonical JSON and the number of rows of
-/// its side up to it that are equal to it.
-fn batch_key(
-    equal_rows: &mut BTreeMap<String, usize>,
-    record: &CanonicalRecord,
-) -> anyhow::Result<String> {
-    let row = String::from_utf8(crate::canonical_digest::canonical_bytes(record)?)?;
-    let count = equal_rows.entry(row.clone()).or_default();
-    *count += 1;
-    Ok(format!("{row}#{count}"))
-}
-
-/// Merges by the row identity of the shard. Call [`validate_merged_records`]
-/// before publication.
+/// Merges by the selected key, keeping a change when the other side matches the
+/// base. Call [`validate_merged_records`] before publication: records valid alone
+/// can be invalid together.
+#[rule("rule_record_merge")]
 pub fn merge_records(
-    identity: RowIdentity,
+    key: &str,
     base: &[CanonicalRecord],
     ours: &[CanonicalRecord],
     theirs: &[CanonicalRecord],
 ) -> anyhow::Result<MergeOutcome<Vec<CanonicalRecord>>> {
-    let base = keyed_rows(identity, base)?;
-    let ours = keyed_rows(identity, ours)?;
-    let theirs = keyed_rows(identity, theirs)?;
-    match identity {
-        RowIdentity::Field(_) => Ok(merge_by_key(base, ours, theirs)),
-        RowIdentity::Batch => batches::merge_batches([&base, &ours, &theirs]),
-    }
-}
-
-/// Merges the records of the three sides by their key, keeping a change when
-/// the other side matches the base.
-#[rule("rule_record_merge")]
-fn merge_by_key(
-    base: Vec<(String, CanonicalRecord)>,
-    ours: Vec<(String, CanonicalRecord)>,
-    theirs: Vec<(String, CanonicalRecord)>,
-) -> MergeOutcome<Vec<CanonicalRecord>> {
-    let ids: BTreeSet<String> = [&base, &ours, &theirs]
-        .into_iter()
-        .flat_map(|rows| rows.iter().map(|(key, _)| key.clone()))
-        .collect();
-    let [base, ours, theirs] =
-        [base, ours, theirs].map(|rows| rows.into_iter().collect::<BTreeMap<_, _>>());
+    let base = index_by_id(key, base)?;
+    let ours = index_by_id(key, ours)?;
+    let theirs = index_by_id(key, theirs)?;
+    let mut ids = BTreeSet::new();
+    ids.extend(base.keys().cloned());
+    ids.extend(ours.keys().cloned());
+    ids.extend(theirs.keys().cloned());
 
     let mut merged = Vec::new();
     let mut conflicts = Vec::new();
@@ -336,22 +217,19 @@ fn merge_by_key(
             (None, None, None) => unreachable!(),
         }
     }
+
     if conflicts.is_empty() {
-        MergeOutcome::Clean { records: merged }
+        Ok(MergeOutcome::Clean { records: merged })
     } else {
-        MergeOutcome::Conflicted {
+        Ok(MergeOutcome::Conflicted {
             conflicts,
-            sequence: None,
-            failed_checks: Vec::new(),
-            left_out: Vec::new(),
             partial: merged,
-        }
+        })
     }
 }
 
 /// One side of a three-way merge.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
-#[serde(rename_all = "snake_case")]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MergeSide {
     Base,
     Ours,
@@ -368,28 +246,24 @@ impl std::fmt::Display for MergeSide {
     }
 }
 
-/// Refuses one side of a merge that holds a record key on two rows.
+/// Refuses one side of a merge that holds a record id on two rows.
 ///
 /// Call it before [`merge_records`], on base, then ours, then theirs. The
 /// rows are checked in their order, as [`merge_records`] checks them, so the
-/// first fault of a side wins. For a field identity, a row with no string in
-/// the field gets the refusal of [`merge_records`], and a second row with a
-/// key is `invalid_state_file` at `shard_path` and its line: the message
-/// names the side, the key and the line of the first row. For a batch
-/// identity, the key of a row holds its count among the equal rows of its
-/// side, so no two rows have one key and the function refuses only a row
-/// that is not canonical JSON.
+/// first fault of a side wins. A row with no string id gets the refusal of
+/// [`merge_records`]. A second row with an id is `invalid_state_file` at
+/// `shard_path` and its line, and the message names the side, the id and the
+/// line of the first row.
 pub fn ensure_unique_ids(
     shard_path: &camino::Utf8Path,
     side: MergeSide,
-    identity: RowIdentity,
+    key: &str,
     rows: &[StoredRow],
 ) -> anyhow::Result<()> {
-    let mut keys = RowKeys::new(identity);
     let mut first_lines = BTreeMap::new();
     for row in rows {
-        let id = keys.key(&row.record)?;
-        if let Some(first) = first_lines.insert(id.clone(), row.line_number) {
+        let id = string_id(key, &row.record)?;
+        if let Some(first) = first_lines.insert(id, row.line_number) {
             return Err(crate::refusal::state_fault(
                 &crate::state_store::message_ids::ShardLine::new(shard_path, row.line_number),
                 format!(
@@ -426,21 +300,17 @@ pub fn read_jsonl_records_for_shard(
         .collect())
 }
 
-/// Each record of one side with its key, in the order of the side. A key on
-/// two rows is refused at the second row.
-fn keyed_rows(
-    identity: RowIdentity,
+fn index_by_id(
+    key: &str,
     records: &[CanonicalRecord],
-) -> anyhow::Result<Vec<(String, CanonicalRecord)>> {
-    let mut keys = RowKeys::new(identity);
-    let mut seen = BTreeSet::new();
-    let mut rows = Vec::new();
+) -> anyhow::Result<BTreeMap<String, CanonicalRecord>> {
+    let mut indexed = BTreeMap::new();
     for record in records {
-        let id = keys.key(record)?;
-        crate::write_error::ensure!(Fault, seen.insert(id.clone()), "duplicate record id {id}");
-        rows.push((id, record.clone()));
+        let id = string_id(key, record)?;
+        crate::write_error::ensure!(Fault, !indexed.contains_key(id), "duplicate record id {id}");
+        indexed.insert(id.to_string(), record.clone());
     }
-    Ok(rows)
+    Ok(indexed)
 }
 
 #[cfg(test)]

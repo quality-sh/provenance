@@ -104,8 +104,6 @@ mod ideation;
 #[cfg(feature = "host")]
 mod ideation_duplicates;
 #[cfg(feature = "host")]
-mod ideation_overlay_order;
-#[cfg(feature = "host")]
 mod ideation_targets;
 #[cfg(feature = "host")]
 mod implementation_bindings;
@@ -147,6 +145,8 @@ mod shaping_archive_atomicity;
 mod source_requirements;
 #[cfg(feature = "host")]
 mod source_supersedes_concurrency;
+#[cfg(feature = "host")]
+mod swarm_landing_publication;
 #[cfg(feature = "host")]
 mod threads;
 #[cfg(feature = "host")]

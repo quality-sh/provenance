@@ -1,11 +1,13 @@
-//! A repository where Git merges the landings file with the JSONL merge
+//! A repository where Git merges the state files with the JSONL merge
 //! driver, and the commands that land swarm runs in it and read the result.
 
 use super::merge_driver::{cli, git, git_ok, json, repository};
 use serde_json::Value;
+use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
-pub const LANDINGS: &str = ".provenance/state/scopes/default/ideation/landings.jsonl";
+/// The directory of the ideation state files of the default scope.
+const IDEATION: &str = ".provenance/state/scopes/default/ideation";
 
 /// The read of each family that a landing batch holds.
 const FAMILIES: [&str; 5] = [
@@ -53,16 +55,15 @@ pub fn landing_repository() -> Landing {
     }
 }
 
-pub fn landings(repo: &Path) -> PathBuf {
-    repo.join(LANDINGS)
-}
-
-/// The rows of the landings file, each as the file stores it.
-pub fn landing_lines(repo: &Path) -> Vec<String> {
-    std::fs::read_to_string(landings(repo))
+/// The bytes of each file of the ideation directory, by file name.
+pub fn ideation_files(repo: &Path) -> BTreeMap<String, Vec<u8>> {
+    std::fs::read_dir(repo.join(IDEATION))
         .unwrap()
-        .lines()
-        .map(str::to_owned)
+        .map(|entry| {
+            let entry = entry.unwrap();
+            let name = entry.file_name().into_string().unwrap();
+            (name, std::fs::read(entry.path()).unwrap())
+        })
         .collect()
 }
 
@@ -112,14 +113,8 @@ pub fn proposal_run(title: &str, claim: &str) -> Value {
     })
 }
 
-/// Lands the swarm run `run` with these contributions and this merge output,
-/// and returns the batch row that the landing adds.
-pub fn land_run(
-    landing: &Landing,
-    run: &str,
-    contributions: &[Value],
-    merge: Option<Value>,
-) -> String {
+/// Lands the swarm run `run` with these contributions and this merge output.
+pub fn land_run(landing: &Landing, run: &str, contributions: &[Value], merge: Option<Value>) {
     let repo = landing.repo();
     let run = landing.run_dir(run);
     let extractors = run.join("extractors");
@@ -142,11 +137,10 @@ pub fn land_run(
             run.to_str().unwrap(),
         ],
     );
-    landing_lines(repo).pop().unwrap()
 }
 
 /// Lands a swarm run whose one contribution is `contrib_<name>`.
-pub fn land(landing: &Landing, name: &str) -> String {
+pub fn land(landing: &Landing, name: &str) {
     let id = format!("contrib_{name}");
     land_run(
         landing,
@@ -197,33 +191,4 @@ pub fn read_record<'a>(read: &'a Value, id: &str) -> &'a Value {
         .iter()
         .find(|item| item["id"] == id)
         .unwrap_or_else(|| panic!("no record {id} in {read}"))
-}
-
-/// The driver run again on the three stages that Git keeps for the landings
-/// file after a conflict: its exit code, the merge outcome that it prints,
-/// and its standard error.
-pub fn driver_outcome(landing: &Landing) -> (Option<i32>, Value, String) {
-    let repo = landing.repo();
-    let stages = landing.runs.path().join("stages");
-    std::fs::create_dir_all(&stages).unwrap();
-    let mut sides = Vec::new();
-    for stage in 1..=3 {
-        let path = stages.join(format!("{stage}.jsonl"));
-        let shown = git(repo, &["show", &format!(":{stage}:{LANDINGS}")]);
-        assert!(shown.status.success());
-        std::fs::write(&path, shown.stdout).unwrap();
-        sides.push(path.to_str().unwrap().to_owned());
-    }
-    let output = assert_cmd::Command::new(assert_cmd::cargo::cargo_bin!("provenance"))
-        .arg("merge-jsonl")
-        .args(&sides)
-        .args(["--path", LANDINGS])
-        .output()
-        .unwrap();
-    let outcome = serde_json::from_slice(&output.stdout).unwrap();
-    (
-        output.status.code(),
-        outcome,
-        String::from_utf8_lossy(&output.stderr).into_owned(),
-    )
 }

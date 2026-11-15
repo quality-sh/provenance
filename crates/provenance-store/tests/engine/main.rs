@@ -30,8 +30,6 @@ use discussion_support::base as review_support;
 mod history_git_failures;
 #[path = "../history_versions_contract.rs"]
 mod history_versions_contract;
-#[path = "../landing_merge_domain.rs"]
-mod landing_merge_domain;
 #[path = "../manifest_scope_ids.rs"]
 mod manifest_scope_ids;
 #[path = "../support/memory.rs"]
@@ -62,3 +60,5 @@ mod staged_view;
 mod state_view;
 #[path = "../stray_state_entries.rs"]
 mod stray_state_entries;
+#[path = "../swarm_run_merge_domain.rs"]
+mod swarm_run_merge_domain;

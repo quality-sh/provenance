@@ -20,7 +20,6 @@ mod in_place_behavior;
 mod linked_entries;
 mod materialization_behavior;
 mod materialize_guard_behavior;
-mod merge_row_identity;
 mod page_order;
 mod page_work;
 mod projection_digest_sensitivity;

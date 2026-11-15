@@ -2,8 +2,6 @@ use provenance_macros::verifies;
 
 use super::*;
 
-const ID: RowIdentity = RowIdentity::Field("id");
-
 fn record(id: &str, statement: &str) -> Value {
     serde_json::json!({ "id": id, "statement": statement })
 }
@@ -146,9 +144,7 @@ fn expected(id: &str, case: [Slot; 3]) -> (Option<Value>, Option<MergeConflict>)
 fn parts(outcome: MergeOutcome<Vec<Value>>) -> (Vec<Value>, Vec<MergeConflict>) {
     match outcome {
         MergeOutcome::Clean { records } => (records, Vec::new()),
-        MergeOutcome::Conflicted {
-            conflicts, partial, ..
-        } => (partial, conflicts),
+        MergeOutcome::Conflicted { conflicts, partial } => (partial, conflicts),
     }
 }
 
@@ -161,7 +157,7 @@ fn every_reachable_single_record_case_matches_the_decision() {
         let ours: Vec<Value> = slot_record(id, case[1]).into_iter().collect();
         let theirs: Vec<Value> = slot_record(id, case[2]).into_iter().collect();
 
-        let outcome = merge_records(ID, &base, &ours, &theirs).unwrap();
+        let outcome = merge_records("id", &base, &ours, &theirs).unwrap();
         let clean = matches!(outcome, MergeOutcome::Clean { .. });
         let (records, conflicts) = parts(outcome);
 
@@ -272,7 +268,7 @@ fn multi_record_merge_is_the_per_record_decision_applied_independently() {
             wanted_conflicts.extend(conflict);
         }
 
-        let outcome = merge_records(ID, &sides[0], &sides[1], &sides[2]).unwrap();
+        let outcome = merge_records("id", &sides[0], &sides[1], &sides[2]).unwrap();
         let clean = matches!(outcome, MergeOutcome::Clean { .. });
         let (records, conflicts) = parts(outcome);
 
@@ -289,9 +285,14 @@ fn multi_record_merge_is_the_per_record_decision_applied_independently() {
 #[test]
 #[verifies("rule_record_merge", examples)]
 fn merge_keeps_one_sided_additions_and_sorts_by_stable_key() {
-    let merged = merge_records(ID, &[], &[record("rule_b", "b")], &[record("rule_a", "a")])
-        .unwrap()
-        .unwrap_clean();
+    let merged = merge_records(
+        "id",
+        &[],
+        &[record("rule_b", "b")],
+        &[record("rule_a", "a")],
+    )
+    .unwrap()
+    .unwrap_clean();
 
     assert_eq!(ids(&merged), vec!["rule_a", "rule_b"]);
 }
@@ -303,7 +304,7 @@ fn merge_collapses_identical_edits() {
     let ours = [record("rule_a", "new")];
     let theirs = [record("rule_a", "new")];
 
-    let merged = merge_records(ID, &base, &ours, &theirs)
+    let merged = merge_records("id", &base, &ours, &theirs)
         .unwrap()
         .unwrap_clean();
 
@@ -317,7 +318,7 @@ fn merge_reports_divergent_edits_with_the_base_pre_image() {
     let ours = [record("rule_a", "ours")];
     let theirs = [record("rule_a", "theirs")];
 
-    let conflicts = merge_records(ID, &base, &ours, &theirs)
+    let conflicts = merge_records("id", &base, &ours, &theirs)
         .unwrap()
         .unwrap_conflicts();
 
@@ -332,7 +333,7 @@ fn merge_reports_add_add_separately_from_divergent_edits() {
     let ours = [record("rule_a", "ours")];
     let theirs = [record("rule_a", "theirs")];
 
-    let conflicts = merge_records(ID, &[], &ours, &theirs)
+    let conflicts = merge_records("id", &[], &ours, &theirs)
         .unwrap()
         .unwrap_conflicts();
 
@@ -349,7 +350,7 @@ fn merge_reports_delete_modify_conflict() {
     let base = [record("rule_a", "old")];
     let theirs = [record("rule_a", "new")];
 
-    let conflicts = merge_records(ID, &base, &[], &theirs)
+    let conflicts = merge_records("id", &base, &[], &theirs)
         .unwrap()
         .unwrap_conflicts();
 
@@ -374,7 +375,7 @@ fn discussion_additions_merge_and_divergent_replies_conflict() {
         ShardFamily::for_shard_path(camino::Utf8Path::new(
             ".provenance/state/scopes/default/threads/discussions.jsonl",
         ))
-        .row_identity(),
+        .record_key(),
         std::slice::from_ref(&base),
         std::slice::from_ref(&ours),
         &[base.clone(), theirs.clone()],
@@ -386,7 +387,7 @@ fn discussion_additions_merge_and_divergent_replies_conflict() {
         ShardFamily::for_shard_path(camino::Utf8Path::new(
             ".provenance/state/scopes/default/threads/discussions.jsonl",
         ))
-        .row_identity(),
+        .record_key(),
         &[base],
         std::slice::from_ref(&ours),
         &[discussion("discussion_x", 2, "msg_theirs")],
@@ -421,61 +422,12 @@ fn only_the_scoped_discussion_shard_uses_the_discussion_key() {
         ("threads/discussions.jsonl", "id"),
     ] {
         assert_eq!(
-            ShardFamily::for_shard_path(camino::Utf8Path::new(path)).row_identity(),
-            RowIdentity::Field(key)
+            ShardFamily::for_shard_path(camino::Utf8Path::new(path)).record_key(),
+            key
         );
     }
     let duplicate = serde_json::json!({"discussion_id": "same"});
-    let error = merge_records(
-        RowIdentity::Field("discussion_id"),
-        &[],
-        &[duplicate.clone(), duplicate],
-        &[],
-    )
-    .unwrap_err();
+    let error =
+        merge_records("discussion_id", &[], &[duplicate.clone(), duplicate], &[]).unwrap_err();
     assert!(error.to_string().contains("duplicate record id same"));
-}
-
-#[test]
-#[verifies("rule_landing_batch_merge", examples)]
-fn a_side_that_lands_an_equal_batch_again_keeps_the_two_copies() {
-    let batch = |id: &str| {
-        serde_json::json!({ "contributions": [{
-            "scope_id": "default", "id": id,
-            "target": {"artifact_type": "requirement", "artifact_id": "req_a"},
-            "participant_slot": "slot_a", "stance": "support", "strongest_finding": "Observed",
-            "evidence_references": [], "material_claims": [], "risks": [], "objections": [],
-            "challenges": [], "suggested_artifact_changes": [],
-            "unsupported_recommendations": [],
-            "uncertainty": {"level": "low", "rationale": "Direct."}, "open_questions": []
-        }]})
-    };
-    let merged = merge_records(
-        RowIdentity::Batch,
-        &[batch("contrib_a")],
-        &[batch("contrib_a"), batch("contrib_a")],
-        &[batch("contrib_a"), batch("contrib_b")],
-    )
-    .unwrap()
-    .unwrap_clean();
-    assert_eq!(
-        merged,
-        [batch("contrib_a"), batch("contrib_a"), batch("contrib_b")]
-    );
-}
-
-// No Rule binding: an aid to the implementation. It shows the refusal of a
-// batch row that a hand edit breaks.
-#[test]
-fn a_row_that_is_not_a_landing_batch_is_refused_with_its_side_and_row() {
-    let row = serde_json::json!({ "contributions": {} });
-
-    let error = merge_records(RowIdentity::Batch, &[], &[], &[row]).unwrap_err();
-
-    assert!(
-        error
-            .to_string()
-            .starts_with("row 1 of theirs is not a landing batch: "),
-        "{error}"
-    );
 }

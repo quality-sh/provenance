@@ -9,7 +9,7 @@ use crate::cache::tests::fixtures::{open, seeded_layout, sid};
 use crate::cache::{catch_up_state, open_cache};
 use crate::layout::ProvenanceLayout;
 use crate::state_store::StateStore;
-use crate::stopped_child::{names, run_as_child};
+use crate::stopped_child::{copy_state, names, run_as_child, state_tree, CRASH_PHASES};
 use crate::test_probes;
 use camino::{Utf8Path, Utf8PathBuf};
 use provenance_core::{ScopeId, Stamp};
@@ -18,17 +18,6 @@ use std::collections::BTreeMap;
 
 const STAGED_RULE: &str = "rule_staged_publication";
 
-/// Crash probes in publication order, and whether the reopened state is new.
-const CRASH_PHASES: [(&str, bool); 8] = [
-    ("state_prepared", false),
-    ("state_marker_prepared", false),
-    ("state_after_backup_rename", false),
-    ("state_backup_created", false),
-    ("state_before_install", false),
-    ("state_after_install_rename", true),
-    ("state_installed", true),
-    ("state_published", true),
-];
 
 fn scope() -> ScopeId {
     ScopeId::new("default").unwrap()
@@ -58,34 +47,6 @@ fn write_rule(staged: &StateStore) -> anyhow::Result<()> {
 
 fn stage_rule(repository: &Repository) -> anyhow::Result<()> {
     repository.stage(false, Some(stamp()), write_rule)
-}
-
-/// Every state file under `root`, by path relative to the state directory.
-fn state_tree(root: &Utf8Path) -> BTreeMap<Utf8PathBuf, Vec<u8>> {
-    fn visit(base: &Utf8Path, directory: &Utf8Path, tree: &mut BTreeMap<Utf8PathBuf, Vec<u8>>) {
-        for entry in std::fs::read_dir(directory).unwrap() {
-            let path = Utf8PathBuf::from_path_buf(entry.unwrap().path()).unwrap();
-            if path.is_dir() {
-                visit(base, &path, tree);
-            } else {
-                let relative = path.strip_prefix(base).unwrap().to_owned();
-                tree.insert(relative, std::fs::read(&path).unwrap());
-            }
-        }
-    }
-    let state = ProvenanceLayout::new(root).state_dir();
-    let mut tree = BTreeMap::new();
-    visit(&state, &state, &mut tree);
-    tree
-}
-
-fn copy_state(from: &Utf8Path, to: &Utf8Path) {
-    let target = ProvenanceLayout::new(to).state_dir();
-    for (relative, bytes) in state_tree(from) {
-        let path = target.join(relative);
-        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
-        std::fs::write(path, bytes).unwrap();
-    }
 }
 
 fn serial(repository: &Repository) -> i64 {

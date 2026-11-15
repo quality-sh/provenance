@@ -20,7 +20,7 @@ use provenance_core::model::relations::{missing_required, required_refusal, Rela
 use provenance_core::{Question, Requirement, RequirementReview, Resolution, Rule, Source, Topic};
 use serde_json::Value;
 
-use super::{CanonicalRecord, RowIdentity};
+use super::CanonicalRecord;
 use crate::statement_analysis::{analyze_changed_statements, StatementDiagnostic};
 
 /// The record type a shard holds, read off the repository path of the file
@@ -69,22 +69,13 @@ const SCOPED_FAMILIES: [(&str, ShardFamily); 6] = [
 ];
 
 impl ShardFamily {
-    /// The row identity of the shard: a Discussion row is keyed by its
-    /// `discussion_id`, so that the replies of two sides merge per Discussion.
+    /// Discussion records use `discussion_id`; all other records use `id`.
     #[provenance_macros::rule("rule_discussion_merge_keys_discussion_id")]
     #[must_use]
-    pub const fn row_identity(self) -> RowIdentity {
+    pub const fn record_key(self) -> &'static str {
         match self {
-            Self::Discussions => RowIdentity::Field("discussion_id"),
-            Self::IdeationLandings => RowIdentity::Batch,
-            Self::Sources
-            | Self::RequirementReviews
-            | Self::Requirements
-            | Self::Resolutions
-            | Self::Rules
-            | Self::Topics
-            | Self::Questions
-            | Self::Unrecognized => RowIdentity::Field("id"),
+            Self::Discussions => "discussion_id",
+            _ => "id",
         }
     }
 
@@ -156,8 +147,6 @@ pub fn validate_merged_records(
         ShardFamily::Rules => validate_typed_records::<Rule>(records, "rule"),
         ShardFamily::Topics => validate_typed_records::<Topic>(records, "topic"),
         ShardFamily::Questions => validate_typed_records::<Question>(records, "question"),
-        // The merge of landing batches runs the checks of the read on the
-        // merged file before it gives a clean outcome.
         ShardFamily::IdeationLandings | ShardFamily::Discussions | ShardFamily::Unrecognized => {
             Ok(())
         }
@@ -312,22 +301,20 @@ mod tests {
         );
     }
 
-    /// The kind and row identity that the driver must select for the shard of
-    /// each store family.
-    fn expected_kind(family: ProjectionFamily) -> (ShardFamily, RowIdentity) {
-        const ID: RowIdentity = RowIdentity::Field("id");
-        const DISCUSSION_ID: RowIdentity = RowIdentity::Field("discussion_id");
+    /// The kind and key that the driver must select for the shard of each
+    /// store family.
+    fn expected_kind(family: ProjectionFamily) -> (ShardFamily, &'static str) {
         // No catch-all arm: a new family in the store table stops this test
         // until it gets an expected kind here.
         match family {
-            ProjectionFamily::Sources => (ShardFamily::Sources, ID),
-            ProjectionFamily::Requirements => (ShardFamily::Requirements, ID),
-            ProjectionFamily::RequirementReviews => (ShardFamily::RequirementReviews, ID),
-            ProjectionFamily::Resolutions => (ShardFamily::Resolutions, ID),
-            ProjectionFamily::Rules => (ShardFamily::Rules, ID),
-            ProjectionFamily::Topics => (ShardFamily::Topics, ID),
-            ProjectionFamily::Questions => (ShardFamily::Questions, ID),
-            ProjectionFamily::Discussions => (ShardFamily::Discussions, DISCUSSION_ID),
+            ProjectionFamily::Sources => (ShardFamily::Sources, "id"),
+            ProjectionFamily::Requirements => (ShardFamily::Requirements, "id"),
+            ProjectionFamily::RequirementReviews => (ShardFamily::RequirementReviews, "id"),
+            ProjectionFamily::Resolutions => (ShardFamily::Resolutions, "id"),
+            ProjectionFamily::Rules => (ShardFamily::Rules, "id"),
+            ProjectionFamily::Topics => (ShardFamily::Topics, "id"),
+            ProjectionFamily::Questions => (ShardFamily::Questions, "id"),
+            ProjectionFamily::Discussions => (ShardFamily::Discussions, "discussion_id"),
             ProjectionFamily::Threads
             | ProjectionFamily::Messages
             | ProjectionFamily::Contributions
@@ -337,7 +324,7 @@ mod tests {
             | ProjectionFamily::Dispositions
             | ProjectionFamily::ImplementationBindings
             | ProjectionFamily::VerificationBindings
-            | ProjectionFamily::Withdrawals => (ShardFamily::Unrecognized, ID),
+            | ProjectionFamily::Withdrawals => (ShardFamily::Unrecognized, "id"),
         }
     }
 
@@ -350,11 +337,27 @@ mod tests {
             let path = format!(".provenance/state/scopes/default/{}", family.shard_suffix());
             let kind = ShardFamily::for_shard_path(Utf8Path::new(&path));
             assert_eq!(
-                (kind, kind.row_identity()),
+                (kind, kind.record_key()),
                 expected_kind(family),
                 "{family:?} at {path}"
             );
         }
+    }
+
+    // No Rule binding: an aid to the implementation. The landings file is not
+    // in the store family table. The driver knows its path, but its rows have
+    // no `id`, so the driver cannot merge it (bead provenance-5mmu).
+    #[test]
+    fn cannot_merge_the_landings_file_because_its_rows_have_no_id() {
+        let path = Utf8Path::new(".provenance/state/scopes/default/ideation/landings.jsonl");
+        let kind = ShardFamily::for_shard_path(path);
+        assert_eq!(kind, ShardFamily::IdeationLandings);
+        assert_eq!(kind.record_key(), "id");
+
+        let batches = [serde_json::json!({ "contributions": [], "synthesis_packets": [] })];
+        let error =
+            super::super::merge_records(kind.record_key(), &[], &batches, &batches).unwrap_err();
+        assert_eq!(error.to_string(), "record is missing string id");
     }
 
     #[test]
