@@ -27,11 +27,7 @@ fn refusal() -> Value {
 
 /// The exit code, the standard output and the standard error of a command.
 fn run(repo: &Path, args: &[&str]) -> (Option<i32>, String, String) {
-    let output = provenance()
-        .current_dir(repo)
-        .args(args)
-        .output()
-        .unwrap();
+    let output = provenance().current_dir(repo).args(args).output().unwrap();
     (
         output.status.code(),
         String::from_utf8(output.stdout).unwrap(),
@@ -77,7 +73,8 @@ fn committed() -> tempfile::TempDir {
     create(repo, &["req_child", "--refines", "req_parent"]);
     git(repo, &["add", "--all"]);
     let identity = ["-c", "user.name=Test", "-c", "user.email=test@example.com"];
-    git(repo, &[&identity[..], &["commit", "--quiet", "-m", "records"]].concat());
+    let commit = [&identity[..], &["commit", "--quiet", "-m", "records"]].concat();
+    git(repo, &commit);
     directory
 }
 
@@ -89,7 +86,8 @@ fn unparsable() -> tempfile::TempDir {
     let text = std::fs::read_to_string(&path).unwrap();
     let changed = text.replace(r#""refines":["req_parent"]"#, r#""refines":"req_parent""#);
     assert_ne!(changed, text, "{text}");
-    assert!(changed.starts_with(r#"{"scope_id":"default","id":"req_child""#), "{changed}");
+    let first = r#"{"scope_id":"default","id":"req_child""#;
+    assert!(changed.starts_with(first), "{changed}");
     std::fs::write(&path, changed).unwrap();
     directory
 }
@@ -223,13 +221,13 @@ fn a_bad_line_of_a_different_family_names_the_same_ways_out() {
     let path = repo.join(".provenance/state").join(file);
     let mut text = std::fs::read_to_string(&path).unwrap();
     let line = text.lines().count() + 1;
-    text.push_str("{\"not\":\"a record\"}\n");
+    text.push_str("{\"scope_id\":\"default\"}\n");
     std::fs::write(&path, text).unwrap();
 
     let answer = run(repo, &["req_child", "get", "--format", "json"]);
 
     let refusal = json!({"error": {"kind": "invalid_state_file", "file": file, "line": line,
-        "message": "missing field `scope_id`", "hint": HINT}, "meta": {}});
+        "message": "missing field `id`", "hint": HINT}, "meta": {}});
     assert_eq!(answer, (Some(1), String::new(), format!("{refusal}\n")));
 }
 

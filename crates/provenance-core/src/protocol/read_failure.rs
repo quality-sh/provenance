@@ -145,7 +145,7 @@ impl UnparsableStateFile {
 
 impl std::fmt::Display for UnparsableStateFile {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        self.failure().fmt(formatter)
+        std::fmt::Display::fmt(&self.failure(), formatter)
     }
 }
 
