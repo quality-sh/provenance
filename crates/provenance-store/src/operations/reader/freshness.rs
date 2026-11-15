@@ -9,15 +9,27 @@
 //! canonical units and refuses any digest change. The read database owns
 //! the connection through its completion, so no step decides how a
 //! connection closes.
+//!
+//! Without `host` a read takes no publication guard and never writes the
+//! read database: the embedder catches the database up after each of its
+//! publishes ([`catch_up_in_publish`]). A `catch_up` read then answers as
+//! an `annotate_only` read does, and its stamp says `annotate_only`.
+//!
+//! [`catch_up_in_publish`]: crate::cache::catch_up_in_publish
 
 use super::{ReadContext, ReadFuture, ReadRefusal, ReadSnapshot};
+#[cfg(feature = "host")]
 use crate::cache::catch_up_work;
 use crate::current_schema::{self, Compatibility};
 use crate::layout::ProvenanceLayout;
 use crate::operations::read_policy::FreshnessPolicy;
 use crate::operations::stamp;
-use crate::publication::{publication_guard, PublicationGuard};
-use crate::read_database::{ReadDatabase, ReadWork, SqlColumns, Transaction, Unopened};
+#[cfg(feature = "host")]
+use crate::publication::publication_guard;
+use crate::publication::PublicationGuard;
+#[cfg(feature = "host")]
+use crate::read_database::ReadDatabase;
+use crate::read_database::{ReadWork, SqlColumns, Transaction, Unopened};
 use crate::repository::Repository;
 use provenance_core::protocol::{Stamp, StampPolicy, Stamped};
 use provenance_macros::rule;
@@ -31,14 +43,20 @@ pub(super) struct Freshness {
 /// What the read checks in its transaction before it opens the snapshot.
 pub(super) enum Check {
     /// A catch-up pass under this guard, in a write just before the read.
+    #[cfg(feature = "host")]
     CatchUp(PublicationGuard),
     /// Nothing: the catch-up failed.
+    #[cfg(feature = "host")]
     None,
     /// The schema, under `annotate_only`.
     Schema,
-    /// The schema and the canonical digests, under `refuse_stale`. The
-    /// guard, when the read has one, is held until the digests are hashed.
-    Stale(Option<PublicationGuard>),
+    /// The schema and the canonical digests, under `refuse_stale`, hashed
+    /// `passes` times. The guard, when the read has one, is held until the
+    /// digests are hashed.
+    Stale {
+        guard: Option<PublicationGuard>,
+        passes: usize,
+    },
 }
 
 /// The operation of one read, and the answer that its work leaves.
@@ -103,6 +121,7 @@ impl Freshness {
             answer: None,
         };
         let (policy, error, outcome) = match check {
+            #[cfg(feature = "host")]
             Check::CatchUp(guard) => match catch_up(guard, database, &mut reading).await {
                 Ok(outcome) => (policy, None, outcome),
                 Err(failure) => {
@@ -152,15 +171,13 @@ async fn open_snapshot(
 ) -> anyhow::Result<ReadSnapshot> {
     let layout = repository.layout();
     match check {
+        #[cfg(feature = "host")]
         Check::CatchUp(_) | Check::None => {}
         Check::Schema => {
             ensure_current_schema(&mut transaction, layout).await?;
         }
-        Check::Stale(guard) => {
-            let repeat_hash = guard.is_none();
-            let snapshot =
-                super::refuse_stale::check(transaction, layout, repository.scope(), repeat_hash)
-                    .await;
+        Check::Stale { guard, passes } => {
+            let snapshot = super::refuse_stale::check(transaction, repository, passes).await;
             drop(guard);
             let snapshot = snapshot?;
             crate::test_probes::at("refuse_stale_after_hash")?;
@@ -206,20 +223,39 @@ pub(super) async fn run(
     policy: FreshnessPolicy,
 ) -> anyhow::Result<Freshness> {
     match policy {
-        FreshnessPolicy::CatchUp => Ok(match publication_guard(repository).await {
-            Ok(guard) => Freshness {
-                check: Check::CatchUp(guard),
-                policy: StampPolicy::CatchUp,
-                error: None,
-            },
-            Err(error) => stored(&error),
-        }),
-        FreshnessPolicy::AnnotateOnly => Ok(Freshness {
-            check: Check::Schema,
-            policy: StampPolicy::AnnotateOnly,
-            error: None,
-        }),
+        FreshnessPolicy::CatchUp => {
+            // A read whose pass finds the catch-up claim held, as by a pass
+            // of `catch_up_in_publish`, answers as a read whose catch-up
+            // failed.
+            #[cfg(feature = "host")]
+            let freshness = match publication_guard(repository)
+                .await
+                .and_then(|guard| guard.for_pass().map_err(anyhow::Error::from))
+            {
+                Ok(guard) => Freshness {
+                    check: Check::CatchUp(guard),
+                    policy: StampPolicy::CatchUp,
+                    error: None,
+                },
+                Err(error) => stored(&error),
+            };
+            // No catch-up runs without `host`, so the read is an
+            // `annotate_only` read and its stamp says so.
+            #[cfg(not(feature = "host"))]
+            let freshness = annotate_only();
+            Ok(freshness)
+        }
+        FreshnessPolicy::AnnotateOnly => Ok(annotate_only()),
         FreshnessPolicy::RefuseStale => super::refuse_stale::run(repository).await,
+    }
+}
+
+/// A read at the stored serial with no freshness step but the schema check.
+const fn annotate_only() -> Freshness {
+    Freshness {
+        check: Check::Schema,
+        policy: StampPolicy::AnnotateOnly,
+        error: None,
     }
 }
 
@@ -234,6 +270,7 @@ pub(super) async fn run(
 /// the freshness step, even when the pass gave its report; an error after
 /// it is the error of the read.
 #[rule("rule_read_holds_guard_for_freshness_only")]
+#[cfg(feature = "host")]
 async fn catch_up<R, F>(
     guard: PublicationGuard,
     database: &dyn ReadDatabase,
@@ -260,6 +297,7 @@ where
 /// `-shm` file cannot be created, so the database opens as an immutable
 /// image.
 #[rule("rule_failed_freshness_answers_at_stored_serial")]
+#[cfg(feature = "host")]
 fn stored(error: &anyhow::Error) -> Freshness {
     Freshness {
         check: Check::None,

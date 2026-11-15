@@ -477,7 +477,9 @@
         "filetime",
         "fs_at",
         "jsonschema",
+        "sqlx",
         "tempfile",
+        "tokio",
         "windows-sys"
       ]
     },

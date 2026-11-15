@@ -109,6 +109,13 @@ impl HostAccess for LocalRepository {
             self.scope().as_str().to_owned(),
         ))
     }
+
+    fn read_operations(
+        &self,
+    ) -> Option<std::sync::Arc<dyn provenance_store::operations::read_operations::ReadOperations>>
+    {
+        Self::read_operations(self)
+    }
 }
 
 #[cfg(test)]

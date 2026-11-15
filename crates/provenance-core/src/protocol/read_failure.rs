@@ -177,6 +177,19 @@ pub fn shown_file(path: &Utf8Path, repository: Option<&Utf8Path>) -> String {
         .unwrap_or_default()
 }
 
+impl ReadFailure {
+    /// The response status of this failure. Each kind has one status.
+    pub const fn status_code(&self) -> u16 {
+        match self {
+            Self::ResourceNotFound => 404,
+            Self::ReadFailed { .. } | Self::InvalidStateFile { .. } => 500,
+            Self::FileAccessDenied => 403,
+            Self::FileUnavailable | Self::GitUnavailable | Self::CacheCloseTimedOut { .. } => 503,
+            _ => 409,
+        }
+    }
+}
+
 /// What a cache close was waiting for when its deadline passed.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
