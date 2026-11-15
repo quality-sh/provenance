@@ -61,7 +61,11 @@ macro_rules! review_read {
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 pub struct StartDiscussionData {
-    #[serde(default, deserialize_with = "provenance_core::actor_input::given")]
+    #[serde(
+        default,
+        deserialize_with = "provenance_core::actor_input::given",
+        skip_serializing_if = "Option::is_none"
+    )]
     #[cfg_attr(
         feature = "schema",
         schemars(with = "String", description = provenance_core::actor_input::DESCRIPTION)
@@ -75,7 +79,11 @@ pub struct StartDiscussionData {
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 pub struct ReplyDiscussionData {
-    #[serde(default, deserialize_with = "provenance_core::actor_input::given")]
+    #[serde(
+        default,
+        deserialize_with = "provenance_core::actor_input::given",
+        skip_serializing_if = "Option::is_none"
+    )]
     #[cfg_attr(
         feature = "schema",
         schemars(with = "String", description = provenance_core::actor_input::DESCRIPTION)

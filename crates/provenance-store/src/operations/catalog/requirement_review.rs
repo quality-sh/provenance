@@ -33,7 +33,11 @@ fn resource_from(snapshot: review::RequirementResourceSnapshot) -> RequirementRe
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 pub struct CreateRequirementRequest {
-    #[serde(default, deserialize_with = "provenance_core::actor_input::given")]
+    #[serde(
+        default,
+        deserialize_with = "provenance_core::actor_input::given",
+        skip_serializing_if = "Option::is_none"
+    )]
     #[cfg_attr(
         feature = "schema",
         schemars(with = "String", description = provenance_core::actor_input::DESCRIPTION)
@@ -89,7 +93,11 @@ scoped_write_operation!(
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 pub struct UpdateRequirementRequest {
-    #[serde(default, deserialize_with = "provenance_core::actor_input::given")]
+    #[serde(
+        default,
+        deserialize_with = "provenance_core::actor_input::given",
+        skip_serializing_if = "Option::is_none"
+    )]
     #[cfg_attr(
         feature = "schema",
         schemars(with = "String", description = provenance_core::actor_input::DESCRIPTION)

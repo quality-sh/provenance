@@ -8,7 +8,11 @@ use serde::Deserialize;
 #[serde(deny_unknown_fields)]
 pub struct WriteTargetDiscussionRequest {
     pub scope_id: ScopeId,
-    #[serde(default, deserialize_with = "provenance_core::actor_input::given")]
+    #[serde(
+        default,
+        deserialize_with = "provenance_core::actor_input::given",
+        skip_serializing_if = "Option::is_none"
+    )]
     #[cfg_attr(
         feature = "schema",
         schemars(with = "String", description = provenance_core::actor_input::DESCRIPTION)

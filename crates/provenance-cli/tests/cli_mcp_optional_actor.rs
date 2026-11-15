@@ -86,7 +86,7 @@ async fn a_reply_with_no_actor_is_accepted_on_the_cli_and_mcp_and_stores_no_acto
 }
 
 /// Implementation aid: a JSON `null` actor is refused on each MCP write that takes an
-/// optional actor, as before the actor was optional, and the write changes no record.
+/// optional actor, because the input schema allows no `null`, and the write changes no record.
 #[tokio::test]
 async fn a_null_actor_is_refused_on_each_mcp_write() {
     let directory = repository();
@@ -116,19 +116,9 @@ async fn a_null_actor_is_refused_on_each_mcp_write() {
     }
     let after = mcp_review(&server).await;
     server.close().await;
-    let refused = |field: Value| {
-        json!({"error":{"kind":"invalid_input", "field":field, "reason":"invalid_value"},
-            "meta":{}})
-    };
-    assert_eq!(
-        refusals,
-        [
-            refused(json!("request.actor")),
-            refused(Value::Null),
-            refused(json!("actor")),
-            refused(json!("actor")),
-        ]
-    );
+    let refused = json!({"error":{"kind":"invalid_input", "field":"actor",
+        "reason":"invalid_value", "message":"actor must be a string"}, "meta":{}});
+    assert_eq!(refusals, vec![refused; 4]);
     assert_eq!(after, before);
     let requirements = repo.join(".provenance/state/scopes/default/requirements/req.jsonl");
     let requirements = std::fs::read_to_string(requirements).unwrap();

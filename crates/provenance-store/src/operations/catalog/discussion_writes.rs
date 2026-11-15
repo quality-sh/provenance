@@ -13,7 +13,11 @@ pub struct WriteDiscussionRequest {
     pub parent: ThreadParent,
     /// The actor of the write. A status change must give an actor. A start that gives no
     /// actor records the actor `authoring`, and a reply needs no actor.
-    #[serde(default, deserialize_with = "provenance_core::actor_input::given")]
+    #[serde(
+        default,
+        deserialize_with = "provenance_core::actor_input::given",
+        skip_serializing_if = "Option::is_none"
+    )]
     #[cfg_attr(feature = "schema", schemars(with = "String"))]
     pub actor: Option<String>,
     pub declared_by: Option<String>,
