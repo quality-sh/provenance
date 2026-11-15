@@ -123,7 +123,7 @@ impl Listed {
         host: &StatementHost,
         arguments: Map<String, Value>,
     ) -> CallToolResult {
-        let (call, arguments) = match self.checked(arguments) {
+        let (call, arguments) = match self.checked(host, arguments) {
             Ok(checked) => checked,
             Err(refused) => return refused,
         };
@@ -140,12 +140,13 @@ impl Listed {
 
     fn checked(
         &self,
+        host: &StatementHost,
         mut arguments: Map<String, Value>,
     ) -> Result<(Call, Map<String, Value>), CallToolResult> {
         let wrong_tool = match &self.runner {
             Runner::Get => tools::get_refusal(&self.tool.input_schema, &arguments),
             Runner::Discussions(_) => tools::discussions_refusal(&arguments),
-            Runner::Change(input) => tools::change_refusal(input, &arguments),
+            Runner::Change(input) => tools::change_refusal(host, input, &arguments),
             Runner::Trace | Runner::Search | Runner::Api | Runner::Check => None,
         };
         if let Some(refused) = wrong_tool {

@@ -6,7 +6,7 @@ use super::{authoring, discussions, notify};
 mod output;
 use crate::exposed::{Place, EXPOSED};
 use crate::surface::{Effect, SchemaDeclaration};
-use provenance_core::protocol::failure::OperationFailure;
+use provenance_core::protocol::failure::{ErasedFailure, OperationFailure};
 use provenance_porcelain::action_input::ActionInput;
 use provenance_porcelain::registry::{Command, GraphCommand, RepositoryCommand};
 use provenance_porcelain::{dictionary, import, materialize, swarm_backtrace};
@@ -106,14 +106,35 @@ pub fn tool(host: &StatementHost, input: &ActionInput) -> Option<Tool> {
     ))
 }
 
-/// The refusal of a write that this host does not grant: it is denied, not unknown.
-pub fn refusal(input: &ActionInput, arguments: &Map<String, Value>) -> Option<CallToolResult> {
+/// The refusal of a write that this host does not run. A write that needs a repository
+/// binding or a notify port that the host does not bind is unavailable; another write is
+/// denied. When the host also denies the record read that notify needs, notify is denied.
+pub fn refusal(
+    host: &StatementHost,
+    input: &ActionInput,
+    arguments: &Map<String, Value>,
+) -> Option<CallToolResult> {
     let Some(Value::String(word)) = arguments.get("action") else {
         return None;
     };
-    (is_action(word) && !input.actions().any(|action| action == word)).then(|| {
-        crate::surface::detail_error(json!({"kind": "access_denied", "message": "access denied"}))
-    })
+    if !is_action(word) || input.actions().any(|action| action == word) {
+        return None;
+    }
+    let porcelain = host.porcelain();
+    let unbound = if word == NOTIFY {
+        porcelain.get_is_available()
+    } else {
+        repository_command(word).is_some() && !porcelain.repository_is_available()
+    };
+    Some(if unbound { unavailable() } else { denied() })
+}
+
+fn denied() -> CallToolResult {
+    crate::surface::detail_error(json!({"kind": "access_denied", "message": "access denied"}))
+}
+
+fn unavailable() -> CallToolResult {
+    crate::surface::failure_result(ErasedFailure::new(None, OperationFailure::UnavailableNeeds))
 }
 
 /// Runs the write that the action selects. The result names the action.
@@ -149,9 +170,7 @@ async fn run_repository(
     arguments: Map<String, Value>,
 ) -> CallToolResult {
     let Some(work) = host.porcelain().repository() else {
-        return crate::surface::detail_error(
-            json!({"kind": "access_denied", "message": "access denied"}),
-        );
+        return unavailable();
     };
     let arguments = Value::Object(arguments);
     // The result of the command and the readable line of the result.
