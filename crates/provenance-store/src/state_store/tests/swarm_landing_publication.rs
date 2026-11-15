@@ -16,7 +16,7 @@ use std::collections::BTreeMap;
 
 const CHILD: &str = "state_store::tests::swarm_landing_publication::landing_child";
 
-/// The files of the ideation directory that a landing of [`run`] writes.
+/// The files below the state directory that a landing of [`run`] writes.
 const LANDED: [&str; 2] = [
     "scopes/default/ideation/contributions.jsonl",
     "scopes/default/ideation/synthesis_packets.jsonl",
@@ -108,9 +108,9 @@ fn a_landing_writes_the_file_of_each_kind_of_its_records() {
         .new
         .iter()
         .filter(|(path, bytes)| fixture.old.get(*path) != Some(*bytes))
-        .map(|(path, _)| path.as_str())
+        .map(|(path, _)| path.as_path())
         .collect();
-    assert_eq!(changed, LANDED);
+    assert_eq!(changed, LANDED.map(Utf8Path::new));
 }
 
 #[test]
