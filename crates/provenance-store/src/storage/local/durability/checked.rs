@@ -7,12 +7,14 @@ use camino::Utf8Path;
 const RANDOM_LENGTH: usize = 6;
 const SUFFIX: &str = ".tmp";
 
-/// Replaces the file at `path` with `bytes` in this order: remove each
-/// temporary file of `temporary_prefix` that a stopped call left in the
-/// directory of `path`, write the temporary file in that directory, set its
-/// permissions, sync it, call `check`, rename the temporary file onto `path`
-/// in one step, and sync the directories as [`super::write_synced_file`]
-/// does. The function gives the permissions of the new file.
+/// Replaces the file at `path` with `bytes` in one rename, after `check`.
+///
+/// The steps, in order: remove each temporary file of `temporary_prefix`
+/// that a stopped call left in the directory of `path`, write the temporary
+/// file in that directory, set its permissions, sync it, call `check`, rename
+/// the temporary file onto `path` in one step, and sync the directories as
+/// [`super::write_synced_file`] does. The function gives the permissions of
+/// the new file.
 ///
 /// The name of the temporary file is `temporary_prefix`, six letters or
 /// digits, and `.tmp`. Only a regular file with a name of that form is a
