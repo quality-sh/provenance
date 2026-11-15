@@ -479,6 +479,8 @@ mod review_history;
 mod review_merged_decisions;
 #[path = "porcelain_api/review_merged_withdrawals.rs"]
 mod review_merged_withdrawals;
+#[path = "porcelain_api/review_record_faults.rs"]
+mod review_record_faults;
 #[path = "porcelain_api/review_state_files.rs"]
 mod review_state_files;
 #[path = "porcelain_api/scope.rs"]

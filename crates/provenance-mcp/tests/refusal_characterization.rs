@@ -14,6 +14,7 @@ use support::records::Repository;
 
 const REQUIREMENTS: &str = ".provenance/state/scopes/default/requirements/req.jsonl";
 const PROPOSALS: &str = ".provenance/state/scopes/default/ideation/proposal_cards.jsonl";
+const DISPOSITIONS: &str = ".provenance/state/scopes/default/ideation/dispositions.jsonl";
 
 type Client = rmcp::service::RunningService<rmcp::RoleClient, ()>;
 
@@ -55,9 +56,11 @@ fn submission(summary: &str) -> String {
 }
 
 /// The read of `req_shared` when a hand edit puts one review submission ID
-/// on two lines with different contents, and the number of lines before
-/// them. The edit is removed after the read.
+/// on two lines with different contents and a decision names it, and the
+/// number of lines before them. A write of a different record answers. The
+/// edit and the written record are removed after the read.
 async fn disagreeing_review_rows(client: &Client, repo: &Repository) -> (Value, usize) {
+    support::records::allow_reviewer(repo);
     let path = repo.dir.path().join(PROPOSALS);
     let stored = std::fs::read_to_string(&path).unwrap_or_default();
     std::fs::create_dir_all(path.parent().unwrap()).unwrap();
@@ -67,9 +70,18 @@ async fn disagreeing_review_rows(client: &Client, repo: &Repository) -> (Value, 
         submission("Second.")
     );
     std::fs::write(&path, edited).unwrap();
+    let decision = json!({"scope_id":"default", "id":"decision_by_hand",
+        "proposal_id":"submission_by_hand", "decision":"rejected", "rationale":"By hand.",
+        "actor":{"identity_type":"human","id":"reviewer"}});
+    std::fs::write(repo.dir.path().join(DISPOSITIONS), format!("{decision}\n")).unwrap();
     let mut answer = call(client, "api", json!({"path":"requirements/req_shared"})).await;
     answer["row"] = json!("read a record whose review rows do not agree");
+    let requirements = std::fs::read_to_string(repo.dir.path().join(REQUIREMENTS)).unwrap();
+    let other = call(client, "api", create("req_other", &json!({}))).await;
+    assert_eq!(other["is_error"], json!(false), "{other}");
+    std::fs::write(repo.dir.path().join(REQUIREMENTS), requirements).unwrap();
     std::fs::write(&path, &stored).unwrap();
+    std::fs::remove_file(repo.dir.path().join(DISPOSITIONS)).unwrap();
     (answer, stored.lines().count())
 }
 
@@ -117,9 +129,9 @@ async fn rows(client: &Client, repo: &Repository) -> Vec<Value> {
         answer["error"],
         json!({"file":"scopes/default/ideation/proposal_cards.jsonl",
             "kind":"invalid_state_file", "line":second,
-            "message":format!("review submission submission_by_hand is on line {first} and line \
+            "message":format!("review submission submission_by_hand is on lines {first} and \
                 {second} of ideation/proposal_cards.jsonl with different contents. To repair, \
-                remove the line that is not correct, then commit.")}),
+                keep one of these lines and remove the others, then commit.")}),
         "the MCP read gives the envelope of the API read"
     );
     rows.push(json!({"is_error":answer["is_error"], "row":answer["row"]}));

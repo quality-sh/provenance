@@ -34,7 +34,8 @@ async fn a_withdrawal_that_names_no_submission_is_located() {
     assert_eq!(
         failure["error"],
         json!({"kind":"invalid_state_file", "file":WITHDRAWALS, "line":1,
-            "message":"withdrawal withdrawal_lost names no review submission: proposal_missing"}),
+            "message":"withdrawal withdrawal_lost names no review submission: proposal_missing. \
+                To repair, remove ideation/withdrawals.jsonl line 1, then commit."}),
     );
 }
 
@@ -95,9 +96,9 @@ async fn a_withdrawal_id_on_two_lines_is_located_at_the_second_line() {
     assert_eq!(
         failure["error"],
         json!({"kind":"invalid_state_file", "file":WITHDRAWALS, "line":2,
-            "message":"withdrawal withdrawal_a is on line 1 and line 2 of \
-                ideation/withdrawals.jsonl with different contents. To repair, remove the line \
-                that is not correct, then commit."}),
+            "message":"withdrawal withdrawal_a is on lines 1 and 2 of ideation/withdrawals.jsonl \
+                with different contents. To repair, keep one of these lines and remove the \
+                others, then commit."}),
     );
 }
 
@@ -122,7 +123,8 @@ async fn a_withdrawal_that_names_no_submission_after_two_withdrawals_is_located(
     assert_eq!(
         failure["error"],
         json!({"kind":"invalid_state_file", "file":WITHDRAWALS, "line":3,
-            "message":"withdrawal withdrawal_lost names no review submission: proposal_missing"}),
+            "message":"withdrawal withdrawal_lost names no review submission: proposal_missing. \
+                To repair, remove ideation/withdrawals.jsonl line 3, then commit."}),
     );
 }
 
@@ -210,7 +212,9 @@ async fn a_message_id_on_two_lines_is_located_at_the_second_line() {
 }
 
 /// Two decisions with different results on the submission of `req_shared`
-/// refuse its read, and the read of a different record answers.
+/// refuse its read, and the read of a different record answers. The test
+/// writes the two decision lines by hand, as a merge of two branches
+/// stores them.
 #[tokio::test]
 #[verifies("rule_review_row_refusal_stays_with_record", examples)]
 async fn decisions_with_different_results_refuse_only_their_record() {
@@ -245,11 +249,70 @@ async fn decisions_with_different_results_refuse_only_their_record() {
     assert_eq!(
         failure["error"],
         json!({"kind":"invalid_state_file", "file":DISPOSITIONS, "line":2,
-            "message":format!("review submission {proposal} of requirement req_shared has two \
-                decisions with different results: deferred decision_a at \
-                ideation/dispositions.jsonl line 1 and rejected decision_b at line 2. To \
-                repair, remove the line of the decision that you do not keep, then commit.")}),
+            "message":format!("review submission {proposal} of requirement req_shared has \
+                decisions with different results in ideation/dispositions.jsonl: deferred \
+                decision_a at line 1 and rejected decision_b at line 2. To repair, remove each of \
+                these lines that has a result that you do not keep, then commit.")}),
     );
     let (status, other) = call(&reader, "GET", "/requirements/req_other", None).await;
     assert_eq!(status, 200, "{other}");
+}
+
+/// A hand edit copies the line of the submission of `req_shared` and changes
+/// its summary, and a decision names the submission. The decision is a part
+/// of the fault of `req_shared`: only that record refuses, and the list
+/// reads, a different record, its document and a new record answer.
+#[tokio::test]
+#[verifies("rule_review_row_refusal_stays_with_record", examples)]
+async fn a_decision_on_a_submission_on_lines_that_disagree_refuses_only_its_record() {
+    const PROPOSALS: &str = "scopes/default/ideation/proposal_cards.jsonl";
+    const DISPOSITIONS: &str = "scopes/default/ideation/dispositions.jsonl";
+    let repo = Repository::new("The shared graph is readable.");
+    let proposal = pending_submission(&repo).await;
+    let state = repo.dir.path().join(".provenance/state");
+    let text = std::fs::read_to_string(state.join(PROPOSALS)).unwrap();
+    let (first, line) = text
+        .lines()
+        .enumerate()
+        .find(|(_, line)| line.contains(&format!("\"id\":\"{proposal}\"")))
+        .map(|(index, line)| (index + 1, line.to_owned()))
+        .unwrap();
+    let mut changed: serde_json::Value = serde_json::from_str(&line).unwrap();
+    changed["summary"] = json!("Changed by hand.");
+    let second = text.lines().count() + 1;
+    std::fs::write(state.join(PROPOSALS), format!("{text}{changed}\n")).unwrap();
+    let decision = json!({"scope_id":"default", "id":"decision_a", "proposal_id":proposal,
+        "decision":"rejected", "rationale":"By hand.",
+        "actor":{"identity_type":"human","id":"reviewer"}});
+    std::fs::write(state.join(DISPOSITIONS), format!("{decision}\n")).unwrap();
+    let reader = host(&repo, true);
+    let (status, failure) = call(&reader, "GET", "/requirements/req_shared", None).await;
+    assert_eq!(status, 500, "{failure}");
+    assert_eq!(
+        failure["error"],
+        json!({"kind":"invalid_state_file", "file":PROPOSALS, "line":second,
+            "message":format!("review submission {proposal} is on lines {first} and {second} of \
+                ideation/proposal_cards.jsonl with different contents. To repair, keep one of \
+                these lines and remove the others, then commit.")}),
+    );
+    let (status, created) = call(
+        &reader,
+        "POST",
+        "/requirements",
+        Some(json!({"data":{"actor":"agent", "id":"req_other",
+            "statement":"The other record is readable.", "status":"active",
+            "depends_on":[], "supersedes":[]}})),
+    )
+    .await;
+    assert_eq!(status, 200, "{created}");
+    for path in [
+        "/requirements/req_other",
+        "/requirements/req_other/document",
+        "/proposals",
+        "/dispositions",
+    ] {
+        let (status, answer) = call(&reader, "GET", path, None).await;
+        assert_eq!(status, 200, "{path} {answer}");
+        assert_eq!(answer["meta"]["freshness_error"], json!(null), "{path} {answer}");
+    }
 }

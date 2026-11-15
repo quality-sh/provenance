@@ -54,8 +54,7 @@ fn init_guidance_permits_only_the_review_row_repair_by_hand() {
     assert!(
         prose.contains(
             "Do not edit `.provenance/state` by hand, with one exception: when a read or \
-             `check` refuses review rows that do not agree and names a line, remove that line \
-             as the refusal says, then commit."
+             `check` refuses review rows, remove each line that the refusal names, then commit."
         ),
         "{agents}"
     );

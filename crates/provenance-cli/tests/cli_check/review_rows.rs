@@ -61,10 +61,10 @@ fn check_reports_two_submissions_with_one_cycle_at_the_second_line() {
         .failure()
         .stderr(contains("review row finding(s):"))
         .stderr(contains(format!(
-            "scopes/default/ideation/proposal_cards.jsonl line {line}: requirement req_a has two \
-             review submissions with review cycle 1:"
-        )))
-        .stderr(contains("To repair, remove the line of one submission"));
+            "scopes/default/ideation/proposal_cards.jsonl line {line}: requirement req_a has 2 \
+             review submissions with review cycle 1. To repair, keep one submission and remove \
+             the lines of each other submission, then commit."
+        )));
 }
 
 /// Flow: a hand edit adds a withdrawal that names no review submission and
@@ -93,11 +93,13 @@ fn check_reports_each_withdrawal_that_a_read_refuses() {
         .failure()
         .stderr(contains(
             "scopes/default/ideation/withdrawals.jsonl line 1: withdrawal withdrawal_lost names \
-             no review submission: proposal_missing",
+             no review submission: proposal_missing. To repair, remove ideation/withdrawals.jsonl \
+             line 1, then commit.",
         ))
         .stderr(contains(
-            "scopes/default/ideation/withdrawals.jsonl line 3: withdrawal withdrawal_a is on line \
-             2 and line 3 of ideation/withdrawals.jsonl with different contents.",
+            "scopes/default/ideation/withdrawals.jsonl line 3: withdrawal withdrawal_a is on lines \
+             2 and 3 of ideation/withdrawals.jsonl with different contents. To repair, keep one \
+             of these lines and remove the others, then commit.",
         ));
 }
 

@@ -162,6 +162,30 @@ fn two_deferrals_merged_by_the_driver_read_as_one() {
     decisions_with_one_result_read_as_one("deferred", Merge::Driver);
 }
 
+/// Flow: two branches approve one submission, and the person keeps both
+/// sides of the conflict.
+#[test]
+#[verifies("rule_same_result_decisions_read_as_one", examples)]
+fn two_approvals_kept_by_a_person_read_as_one() {
+    decisions_with_one_result_read_as_one("accepted", Merge::KeepBoth);
+}
+
+/// Flow: two branches reject one submission, the merge driver merges them,
+/// and the record takes a resubmission.
+#[test]
+#[verifies("rule_same_result_decisions_read_as_one", examples)]
+fn two_rejections_merged_by_the_driver_read_as_one() {
+    decisions_with_one_result_read_as_one("rejected", Merge::Driver);
+}
+
+/// Flow: two branches defer one submission, and the person keeps both sides
+/// of the conflict.
+#[test]
+#[verifies("rule_same_result_decisions_read_as_one", examples)]
+fn two_deferrals_kept_by_a_person_read_as_one() {
+    decisions_with_one_result_read_as_one("deferred", Merge::KeepBoth);
+}
+
 /// Flow: a hand edit copies the line of a submission, of a decision and of
 /// a withdrawal. Each row reads one time, the catch-up loads it one time,
 /// and `check` passes.

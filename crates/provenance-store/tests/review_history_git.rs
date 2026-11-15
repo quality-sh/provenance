@@ -212,9 +212,20 @@ async fn merge_that_resolves_a_conflict_to_new_content_adds_one_version() {
         "merger",
         &["merge", "-q", "--no-edit", "-X", "ours", "feature"],
     );
-    // Each branch opened a review submission of req_a with review cycle 2.
-    // The merger removes the line of one of them, as the refusal of two
-    // submissions with one cycle says.
+    // Each branch opened a review submission of req_a with review cycle 2,
+    // so a read of req_a refuses. The merger removes the line of one of
+    // them, as the refusal says: neither has a decision or a withdrawal.
+    let refusal = store
+        .requirement_decision_state(&scope(), &id())
+        .unwrap_err()
+        .to_string();
+    assert!(
+        refusal.contains(
+            "requirement req_a has 2 review submissions with review cycle 2. To repair, keep one \
+             submission and remove the lines of each other submission, then commit."
+        ),
+        "{refusal}"
+    );
     let proposals = temp
         .path()
         .join(".provenance/state/scopes/default/ideation/proposal_cards.jsonl");
