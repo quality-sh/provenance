@@ -192,7 +192,10 @@ fn scope_validation_rejects_a_persisted_missing_canonical_artifact() {
         .unwrap_err()
         .to_string();
     assert!(
-        error.contains("canonical artifact does not exist"),
+        error.contains(
+            "disposition disposition_artifact names requirement req_missing, \
+             which the scope does not have"
+        ),
         "{error}"
     );
 }
@@ -227,7 +230,10 @@ fn scope_validation_rejects_a_misfiled_canonical_artifact() {
         .to_string();
 
     assert!(
-        error.contains("canonical artifact does not exist"),
+        error.contains(
+            "disposition disposition_artifact names requirement artifact_misfiled, \
+             which the scope does not have"
+        ),
         "{error}"
     );
 }

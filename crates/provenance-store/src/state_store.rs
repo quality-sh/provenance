@@ -59,11 +59,11 @@ pub use inputs::{
     CreateAssertionInput, CreateContributionInput, CreateDispositionInput, CreateProposalCardInput,
     CreateQuestionInput, CreateRequirementInput, CreateResolutionInput, CreateRuleInput,
     CreateSourceInput, CreateSynthesisPacketInput, CreateTopicInput, DeclarationReferenceInput,
-    MaterializeImplementationBindingInput, MaterializeVerificationBindingInput, PostMessageInput,
-    ReconcileState, ReconciledResource, TypedAdoptionTarget, TypedDeclarationKind,
-    TypedFieldChange, TypedImplementationInput, TypedRequirementInput, TypedResourceKind,
-    TypedRuleInput, TypedSourceInput, TypedSpecDiagnostic, TypedSpecInput, TypedSpecResult,
-    UpdateQuestionInput,
+    DeletionRefusal, MaterializeImplementationBindingInput, MaterializeVerificationBindingInput,
+    PostMessageInput, ReconcileState, ReconciledResource, TypedAdoptionTarget,
+    TypedDeclarationKind, TypedFieldChange, TypedImplementationInput, TypedRequirementInput,
+    TypedResourceKind, TypedRuleInput, TypedSourceInput, TypedSpecDiagnostic, TypedSpecInput,
+    TypedSpecResult, UpdateQuestionInput,
 };
 pub use proposal_surfaces::{ProposalDemand, ProposalSurfaceReason, SurfacedProposal, TopicClaim};
 pub use requirement_reviews::{
@@ -71,7 +71,7 @@ pub use requirement_reviews::{
 };
 pub use scope_ingestion::ScopeShards;
 pub(crate) use statement_policy::StatementWriteError;
-pub use typed_specs::{decide_typed_spec, TypedSpecDecision, TypedSpecView};
+pub use typed_specs::{decide_typed_spec, ReviewHistory, TypedSpecDecision, TypedSpecView};
 pub use typed_statement_policy::TypedSpecWriteError;
 
 use crate::{layout::ProvenanceLayout, repository::RepositoryIdentity, shards};

@@ -55,6 +55,7 @@ fn assert_deletion_conflict(error: anyhow::Error, kind: NodeType, id: &str) {
         WriteFailure::EnrolledRecordDeletionConflict {
             record_kind,
             record_id,
+            ..
         } if record_kind == kind && record_id.as_str() == id
     ));
     assert_eq!(error.status(), 409);

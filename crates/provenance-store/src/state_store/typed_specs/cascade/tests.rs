@@ -91,6 +91,7 @@ fn publish_changed_cascade(kind: NodeType) {
         topics,
         questions,
         changes: Vec::new(),
+        deletions: Vec::new(),
     }
     .publish(&store, &scope)
     .unwrap();
