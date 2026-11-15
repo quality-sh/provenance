@@ -254,8 +254,9 @@ async fn decisions_with_different_results_refuse_only_their_record() {
         json!({"kind":"invalid_state_file", "file":DISPOSITIONS, "line":2,
             "message":format!("review submission {proposal} of requirement req_shared has \
                 decisions with different results in ideation/dispositions.jsonl: deferred \
-                decision_a at line 1 and rejected decision_b at line 2. To repair, remove each of \
-                these lines that has a result that you do not keep, then commit.")}),
+                decision_a at line 1 and rejected decision_b at line 2"),
+            "hint":"To repair, remove each of these lines that has a result that you do not keep, \
+                then commit."}),
     );
     let (status, other) = call(&reader, "GET", "/requirements/req_other", None).await;
     assert_eq!(status, 200, "{other}");
@@ -323,7 +324,7 @@ async fn a_decision_on_a_submission_on_lines_that_disagree_refuses_only_its_reco
         failure["error"],
         json!({"kind":"invalid_state_file", "file":PROPOSALS, "line":second,
             "message":format!("review submission {proposal} is on lines {first} and {second} of \
-                ideation/proposal_cards.jsonl with different contents. To repair, keep one of \
-                these lines and remove the others, then commit.")}),
+                ideation/proposal_cards.jsonl with different contents"),
+            "hint":"To repair, keep one of these lines and remove the others, then commit."}),
     );
 }

@@ -1,9 +1,10 @@
 //! Review rows of one record that do not agree refuse each read and each
 //! review write of that record with `invalid_state_file` at the line of the
 //! second row. The message names the rows and their lines, and the hint
-//! gives the repair, which names each line that it removes. The other records, the list reads and the cache catch-up
-//! continue, `provenance check` reports the same fault, and after the person
-//! removes the named lines and commits, the reads and `check` pass.
+//! gives the repair, which names each line that it removes. The other
+//! records, the list reads and the cache catch-up continue, `provenance check`
+//! reports the same fault, and after the person removes the named lines and
+//! commits, the reads and `check` pass.
 
 use super::review_history::{commit, git};
 use super::review_merged_decisions::{
