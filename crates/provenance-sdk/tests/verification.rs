@@ -1,7 +1,7 @@
 //! The failing-verification corpus for the Rust side (V11): an error and
 //! a panic both record `failed`, then propagate.
 
-use std::sync::{Mutex, MutexGuard};
+use std::sync::{Mutex, MutexGuard, PoisonError};
 
 use provenance_core::{Manifest, RepoPathPrefix, ScopeId, VerificationRunStatus};
 use provenance_macros::verifies;
@@ -12,7 +12,8 @@ use provenance_store::layout::ProvenanceLayout;
 static ENV_LOCK: Mutex<()> = Mutex::new(());
 
 fn repository() -> (tempfile::TempDir, MutexGuard<'static, ()>) {
-    let guard = ENV_LOCK.lock().unwrap();
+    // A failed test leaves the lock poisoned, and the next test still runs.
+    let guard = ENV_LOCK.lock().unwrap_or_else(PoisonError::into_inner);
     let dir = tempfile::tempdir().unwrap();
     let root =
         camino::Utf8PathBuf::from_path_buf(dunce::canonicalize(dir.path()).unwrap()).unwrap();
@@ -147,19 +148,17 @@ fn text_for_row(root: &std::path::Path, row: usize) -> String {
     "x".repeat(row - serde_json::to_vec(&run).unwrap().len())
 }
 
-/// The newest stored run, and the newest run that the evidence read of
-/// `rule` gives.
-fn newest_runs(
-    root: &std::path::Path,
-    rule: &str,
-) -> (
-    provenance_core::VerificationRun,
-    Option<provenance_core::VerificationRun>,
-) {
+/// The newest stored run.
+fn newest_run(root: &std::path::Path) -> provenance_core::VerificationRun {
     let mut runs = recorded_runs(root);
     runs.sort_by(|left, right| {
         (left.started_at, left.id.as_str()).cmp(&(right.started_at, right.id.as_str()))
     });
+    runs.pop().unwrap()
+}
+
+/// The newest run that the evidence read of `rule` gives.
+fn evidence_run(root: &std::path::Path, rule: &str) -> Option<provenance_core::VerificationRun> {
     let utf8 = camino::Utf8PathBuf::from_path_buf(root.to_path_buf()).unwrap();
     let repository = Repository::open(&utf8, "default").unwrap();
     let query = provenance_core::protocol::EvidenceQuery {
@@ -177,10 +176,7 @@ fn newest_runs(
             query,
         ))
         .unwrap();
-    (
-        runs.pop().unwrap(),
-        evidence.result.latest_verification_run,
-    )
+    evidence.result.latest_verification_run
 }
 
 /// Asserts that `run` failed inside the budget, and that its stored text is
@@ -209,19 +205,18 @@ fn a_failure_text_over_the_run_budget_is_stored_cut_and_returned_whole() {
     })
     .unwrap_err()
     .to_string();
-    let (run, _) = newest_runs(dir.path(), &rule);
-    assert_eq!(run.error.as_deref(), Some(fits.as_str()));
+    assert_eq!(newest_run(dir.path()).error.as_deref(), Some(fits.as_str()));
 
     let error = verify(&rule, "expiry-holds", || {
         Err::<(), String>(text_for_row(dir.path(), BUDGET + 1))
     })
     .unwrap_err();
 
-    let (run, evidence) = newest_runs(dir.path(), &rule);
+    let run = newest_run(dir.path());
     let text = "x".repeat(fits.len() + 1);
     assert_eq!(error.to_string(), text);
     assert_stored_cut(&run, &text);
-    assert_eq!(evidence, Some(run));
+    assert_eq!(evidence_run(dir.path(), &rule), Some(run));
 }
 
 #[test]
@@ -236,8 +231,7 @@ fn a_panic_text_over_the_run_budget_is_stored_cut_and_the_panic_goes_on_whole() 
     })
     .unwrap_err();
     let fits = fits.downcast_ref::<String>().unwrap();
-    let (run, _) = newest_runs(dir.path(), &rule);
-    assert_eq!(run.error.as_ref(), Some(fits));
+    assert_eq!(newest_run(dir.path()).error.as_ref(), Some(fits));
 
     let unwind = std::panic::catch_unwind(|| {
         let _ = verify(&rule, "expiry-holds", || -> Result<(), String> {
@@ -246,9 +240,9 @@ fn a_panic_text_over_the_run_budget_is_stored_cut_and_the_panic_goes_on_whole() 
     })
     .unwrap_err();
 
-    let (run, evidence) = newest_runs(dir.path(), &rule);
+    let run = newest_run(dir.path());
     let text = "x".repeat(fits.len() + 1);
     assert_eq!(unwind.downcast_ref::<String>(), Some(&text));
     assert_stored_cut(&run, &text);
-    assert_eq!(evidence, Some(run));
+    assert_eq!(evidence_run(dir.path(), &rule), Some(run));
 }
