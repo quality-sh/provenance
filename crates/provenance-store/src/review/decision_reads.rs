@@ -208,14 +208,14 @@ impl StateStore {
 /// Whether a reviewer accepted the current revision of a Resolution of one
 /// scope. It reads the review rows of the scope at the first question, so a
 /// citation check that needs no acceptance reads no review rows.
-pub(crate) struct ResolutionAcceptance<'s> {
+pub struct ResolutionAcceptance<'s> {
     store: &'s StateStore,
     scope: &'s ScopeId,
     rows: Option<StoredRows>,
 }
 
 impl<'s> ResolutionAcceptance<'s> {
-    pub(crate) const fn new(store: &'s StateStore, scope: &'s ScopeId) -> Self {
+    pub const fn new(store: &'s StateStore, scope: &'s ScopeId) -> Self {
         Self {
             store,
             scope,
@@ -229,7 +229,7 @@ impl<'s> ResolutionAcceptance<'s> {
     /// Refuses with the refusal of a read of `resolution` when its review
     /// rows do not agree.
     #[rule("rule_review_acceptance_approves_resolution_citation")]
-    pub(crate) fn accepts(&mut self, resolution: &Resolution) -> anyhow::Result<bool> {
+    pub fn accepts(&mut self, resolution: &Resolution) -> anyhow::Result<bool> {
         if !matches!(
             resolution.status,
             ResolutionStatus::Draft | ResolutionStatus::Review | ResolutionStatus::Proposed
