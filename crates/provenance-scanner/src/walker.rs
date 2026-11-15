@@ -17,6 +17,7 @@ mod bounded;
 #[cfg(test)]
 mod bounded_tests;
 mod consumed;
+mod declaration;
 mod ignore;
 mod rust_lines;
 mod script_literals;
@@ -255,7 +256,7 @@ fn scan_file_contents(
         let (comment, end_idx) = collect_annotation_comment(&lines, idx, marker_position);
         let parsed = parse_annotations(&comment);
         warnings.extend(parsed.warnings);
-        let function_name = next_function_name(language, &lines[end_idx.saturating_add(1)..]);
+        let function_name = declaration::item_name(language, &lines[idx + 1..]);
         for annotation in parsed.annotations {
             annotations.push(AnnotationLocation {
                 file_path: file_path.to_path_buf(),
@@ -338,7 +339,7 @@ fn binding_item_name(
     verification: Option<Verification>,
 ) -> Option<String> {
     if matches!(language, Language::Rust | Language::Python) {
-        return next_item_name(language, &lines[idx + 1..]);
+        return declaration::item_name(language, &lines[idx + 1..]);
     }
     assignment_name(lines[idx]).or_else(|| {
         if verification.is_some() {
@@ -395,27 +396,6 @@ fn enclosing_script_function(lines: &[&str], idx: usize) -> Option<String> {
     None
 }
 
-/// Like `next_function_name`, but looks past other attribute lines such as
-/// `#[test]`, and also accepts type definitions (`construction` bindings sit
-/// on types, not functions).
-fn next_item_name(language: Language, following: &[&str]) -> Option<String> {
-    following
-        .iter()
-        .filter(|line| !line.trim_start().starts_with("#["))
-        .take(6)
-        .find_map(|line| {
-            let line = line.trim();
-            function_name(language, line).or_else(|| type_name(line))
-        })
-}
-
-fn type_name(line: &str) -> Option<String> {
-    ["struct ", "enum ", "trait ", "type "]
-        .iter()
-        .find(|marker| line.contains(*marker))
-        .and_then(|marker| token_after(line, marker))
-}
-
 fn collect_annotation_comment(
     lines: &[&str],
     start: usize,
@@ -440,37 +420,6 @@ fn is_comment_continuation(line: &str) -> bool {
         || trimmed.starts_with('*')
         || trimmed.starts_with("/*")
         || trimmed.starts_with("*/")
-}
-
-fn next_function_name(language: Language, following: &[&str]) -> Option<String> {
-    following
-        .iter()
-        .take(6)
-        .find_map(|line| function_name(language, line.trim()))
-}
-
-fn function_name(language: Language, line: &str) -> Option<String> {
-    let marker = match language {
-        Language::Rust => "fn ",
-        Language::Python => "def ",
-        Language::Go => "func ",
-        Language::JavaScript | Language::TypeScript | Language::Java => " ",
-    };
-    if matches!(language, Language::JavaScript | Language::TypeScript) {
-        if line.contains("function ") {
-            return token_after(line, "function ");
-        }
-        for declaration in ["const ", "let ", "var "] {
-            if line.contains(declaration) {
-                return token_after(line, declaration);
-            }
-        }
-    }
-    if language == Language::Go && line.starts_with("func (") {
-        let after_receiver = line.split_once(") ")?.1;
-        return token_after(after_receiver, "");
-    }
-    token_after(line, marker)
 }
 
 fn token_after(line: &str, marker: &str) -> Option<String> {

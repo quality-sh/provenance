@@ -40,18 +40,39 @@ together when you move code.
 The scanner reads the marker only on a comment line: after leading whitespace,
 the line starts with `//`, `/*`, or `*` (or `#` in Python), or the line is
 inside an open block comment. A marker after code on the same line does not
-bind. The comment binds the Rule whatever item comes below it. The scanner
-takes the item name from the six lines below the comment:
+bind. The comment binds the Rule whatever item comes below it.
 
-- Rust, Python, Go: the first `fn`, `def`, or `func` in those lines. A `const`,
-  a `static`, or a type gives no name, and a function lower in the six lines,
-  such as a method of the type, gives its own name.
-- JavaScript, TypeScript: the first `function`, `const`, `let`, or `var`
-  declaration. On any other line the scanner takes the word after the first
-  space, so `class Token` gives `Token` and `export class Token` gives `class`.
-- Java: the word after the first space of the first line that has one, so
-  `boolean paysOvertime(int hours) {` gives `paysOvertime` and
-  `public static boolean paysOvertime(int hours) {` gives `static`.
+The scanner takes the item name from the declaration below the comment. It
+reads the next six code lines; comment lines and empty lines do not count.
+Attributes, decorators, and annotations can come between the comment and the
+declaration, and the declaration can continue on the next lines. The item name
+is the name of the function or type that the first code line declares:
+
+- Rust: `fn`, `struct`, `enum`, `union`, `trait`, or `type`, after `#[...]`
+  attributes, `pub` or `pub(...)`, and `const`, `async`, `unsafe`, `extern`,
+  or `default`.
+- Python: `def` or `class`, after decorators and `async`.
+- Go: `func`, with or without a receiver, or `type`.
+- JavaScript, TypeScript: `function` or `function*`, `class`, `interface`,
+  `type`, `enum`, `const`, `let`, or `var`, after decorators and the words
+  `export`, `default`, `declare`, `abstract`, `async`, `public`, `private`,
+  `protected`, `static`, `readonly`, `override`, `accessor`, `get`, and `set`.
+  A class method gives its name, so
+  `public async total(): Promise<number> {` gives `total`.
+- Java: `class`, `interface`, `enum`, `record`, `@interface`, a method, or a
+  constructor, after annotations and modifiers, so
+  `public static boolean paysOvertime(int hours) {` gives `paysOvertime`.
+
+When the first code line declares no function or type, for example a Rust
+`impl` block, a Rust `const`, or a Java field, the first function in the six
+lines gives the item name. In JavaScript and TypeScript, a named function
+expression also counts, so `test("overtime", function overtimeExamples() {`
+gives `overtimeExamples`. When the six lines have no function, the comment has
+no item name. A declaration without a name, such as
+`export default function () {}`, gives no name of its own.
+
+A Rust `#[rule]` or `#[verifies]` attribute and a Python `@rule` decorator take
+their item name by the same rules.
 
 ## Test code
 
