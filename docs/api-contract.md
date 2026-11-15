@@ -238,9 +238,11 @@ stored projection. With no stored revision, the read refuses with
 location. When a state line does not parse, the refusal also has the
 location fields of `invalid_state_file`: `file`, the path below the state
 directory, and `line`, from 1. The refusal has `file` and `line` together,
-or neither. A cause that has no file, such as a database fault or a cache
-close that did not finish in time, has only `message`: the client reads the
-document again. The client reads these fields and does not parse the text.
+or neither. A cause that has no file has only `message`, which says what
+the cause is. The client reads the document again after a temporary cause,
+such as a cache close that did not finish in time. It corrects a cause in
+the record files first. The client reads these fields and does not parse
+the text.
 
 ## 6. Compatibility tuple and gate
 

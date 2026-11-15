@@ -21,7 +21,7 @@ pub enum ReadFailure {
     /// also gives its location, as `invalid_state_file` gives it.
     #[error("catch-up failed; restart the document read")]
     DocumentCatchUpFailed {
-        #[serde(flatten)]
+        #[serde(flatten, deserialize_with = "file_and_line")]
         location: Option<FileLine>,
         message: String,
     },
@@ -76,6 +76,24 @@ pub struct FileLine {
     pub file: String,
     /// The line that does not parse, from 1. It comes with `file`.
     pub line: u64,
+}
+
+/// Reads the location of a failure from its `file` and `line` keys. A body
+/// with one of the two keys is refused, so that no key is lost.
+fn file_and_line<'de, D: serde::Deserializer<'de>>(
+    deserializer: D,
+) -> Result<Option<FileLine>, D::Error> {
+    #[derive(Deserialize)]
+    struct Keys {
+        file: Option<String>,
+        line: Option<u64>,
+    }
+    let keys = Keys::deserialize(deserializer)?;
+    match (keys.file, keys.line) {
+        (Some(file), Some(line)) => Ok(Some(FileLine { file, line })),
+        (None, None) => Ok(None),
+        _ => Err(serde::de::Error::custom("a failure gives file and line together, or neither")),
+    }
 }
 
 /// A line of a record file, or the dictionary reference, that does not parse.

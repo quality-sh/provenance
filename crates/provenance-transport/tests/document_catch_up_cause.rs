@@ -100,10 +100,8 @@ async fn a_document_read_with_no_stored_revision_refuses_with_no_projection() {
     let repo = Repository::new("The shared graph is readable.");
     let host = host(&repo, false);
     give_refines_a_string(repo.dir.path(), "req_shared");
-    let cache = repo.dir.path().join(".provenance/cache");
-    if cache.exists() {
-        std::fs::remove_dir_all(&cache).unwrap();
-    }
+    // The writes of the fixture leave a read database; the test removes it.
+    std::fs::remove_dir_all(repo.dir.path().join(".provenance/cache")).unwrap();
 
     let (status, refused) = call(&host, "GET", DOCUMENT, None).await;
 

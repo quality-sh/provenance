@@ -136,12 +136,13 @@ fn unaccepted_registration_fails_and_leaves_no_registration() {
     setup.quiet(&setup.thread, 0);
 }
 
-/// A registration whose document read cannot catch up refuses with the text of that
-/// refusal, which holds no path. A read database that the host cannot write stops the
-/// catch-up of a new Requirement line. The observation of the host reads only the state.
+/// A registration whose document read cannot catch up refuses with the text of the
+/// document read refusal, and not with the text of its cause. A read database that the
+/// host cannot write stops the catch-up of a new Requirement line. The observation of
+/// the host reads only the state.
 #[test]
 #[verifies("rule_review_partial_reads_remain_explicit", examples)]
-fn registration_whose_catch_up_fails_refuses_with_no_path() {
+fn registration_whose_catch_up_fails_refuses_with_the_text_of_the_refusal() {
     let setup = Setup::start();
     let database = setup.path().join(".provenance/cache/provenance.db");
     let mut permissions = std::fs::metadata(&database).unwrap().permissions();
