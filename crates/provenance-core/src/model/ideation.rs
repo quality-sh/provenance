@@ -66,6 +66,20 @@ impl CanonicalArtifactType {
     }
 }
 
+/// A canonical artifact names a graph record; this is the kind it names.
+impl From<CanonicalArtifactType> for NodeType {
+    fn from(artifact_type: CanonicalArtifactType) -> Self {
+        match artifact_type {
+            CanonicalArtifactType::Source => Self::Source,
+            CanonicalArtifactType::Requirement => Self::Requirement,
+            CanonicalArtifactType::Resolution => Self::Resolution,
+            CanonicalArtifactType::Rule => Self::Rule,
+            CanonicalArtifactType::Topic => Self::Topic,
+            CanonicalArtifactType::Question => Self::Question,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub enum IdentityType {
