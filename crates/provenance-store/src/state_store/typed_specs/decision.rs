@@ -18,6 +18,7 @@ use super::{
     adopted_rule_ids, all_resources, cascade, publication, reconcile_implementations, spec_result,
     DesiredImplementations,
 };
+#[cfg(feature = "host")]
 use crate::state_store::requirement_reviews::{
     requirement_statement_changes, rules_citing, RequirementStatementChange,
 };
@@ -59,6 +60,7 @@ enum Outcome {
 impl TypedSpecDecision {
     /// Each Requirement statement that the spec changes, with the Rules that cite the
     /// Requirement after the reconciliation. A decision with conflicts changes no statement.
+    #[cfg(feature = "host")]
     pub(crate) fn restatements(&self) -> Vec<(RequirementStatementChange, Vec<StableId>)> {
         let Outcome::Replace { replacement } = &self.outcome else {
             return Vec::new();
