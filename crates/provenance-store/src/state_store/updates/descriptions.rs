@@ -4,14 +4,12 @@ use super::{
 };
 use crate::{
     shards,
-    state_store::{RequirementReviewInput, StateStore},
+    state_store::{requirement_reviews::Restatement, StateStore},
 };
 use provenance_core::{Requirement, RequirementStatus};
-use provenance_macros::rule;
 
 impl StateStore {
     /// Writes one review per produced Rule when the Requirement statement changes.
-    #[rule("rule_review_record_per_rule")]
     pub(crate) fn apply_requirement_update(
         &self,
         input: UpdateRequirementInput,
@@ -21,9 +19,10 @@ impl StateStore {
                 required_text(statement)?;
                 super::super::statement_policy::ensure_statement_is_writable(held, statement)?;
             }
-            let rule_ids = held.rule_ids_for_requirement(&input.scope_id, &input.id)?;
+            // A Rule file or a review file that does not parse refuses the change before it
+            // writes, with the file and the line of the fault.
+            held.list_rules(&input.scope_id)?;
             held.list_requirement_reviews(&input.scope_id)?;
-            let changed_at = super::super::requirement_reviews::now_millis(&*held.clock())?;
             let path = shards::requirements_path(&held.layout, &input.scope_id);
             let mut before = String::new();
             let mut was_archived = false;
@@ -57,18 +56,12 @@ impl StateStore {
                 held.archive_dependents(&record.scope_id, &record.id, stamp)?;
             }
             if before != record.statement {
-                let reviews = rule_ids
-                    .into_iter()
-                    .map(|rule_id| RequirementReviewInput {
-                        rule_id,
-                        requirement_id: record.id.clone(),
-                        field: "statement".into(),
-                        before: before.clone(),
-                        after: record.statement.clone(),
-                        changed_at,
-                    })
-                    .collect();
-                held.record_requirement_reviews(&input.scope_id, reviews)
+                let restatement = Restatement {
+                    requirement_id: record.id.clone(),
+                    before,
+                    after: record.statement.clone(),
+                };
+                held.record_restatements(&input.scope_id, vec![restatement])
                     .map_err(crate::write_error::publication_started)?;
             }
             Ok(record)

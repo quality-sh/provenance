@@ -75,6 +75,8 @@ mod porcelain_check_statement;
 mod porcelain_contracts;
 #[path = "../porcelain_discussion.rs"]
 mod porcelain_discussion;
+#[path = "../porcelain_import_review_guard.rs"]
+mod porcelain_import_review_guard;
 #[path = "../porcelain_schema_variants.rs"]
 mod porcelain_schema_variants;
 #[path = "../porcelain_search.rs"]
