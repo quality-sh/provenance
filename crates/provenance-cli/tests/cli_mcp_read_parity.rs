@@ -28,7 +28,12 @@ pub fn cli(args: &[&str]) -> String {
 /// The JSON answer of one CLI command in `repo`.
 pub fn cli_json(repo: impl AsRef<std::path::Path>, args: &[&str]) -> Value {
     let mut all = args.to_vec();
-    all.extend(["--repo", repo.as_ref().to_str().unwrap(), "--format", "json"]);
+    all.extend([
+        "--repo",
+        repo.as_ref().to_str().unwrap(),
+        "--format",
+        "json",
+    ]);
     serde_json::from_str(&cli(&all)).unwrap()
 }
 
