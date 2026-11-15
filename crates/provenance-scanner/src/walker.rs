@@ -9,6 +9,7 @@ use crate::{Annotation, ParseWarning};
 use bindings::parse_binding_or_warn;
 pub use bounded::scan_path_bounded;
 use consumed::{consume_binding_lines, consume_comment_lines};
+use declaration::LineStart;
 pub use ignore::selects_source_path;
 use rust_lines::{rust_annotation_marker_position, rust_line_states, RustLexicalState};
 
@@ -230,13 +231,14 @@ fn scan_file_contents(
                 &mut multiline_delimiter,
                 &mut in_block_comment,
             );
-            let item_name = binding_item_name(
+            let below = line_start(
+                &rust_states[end_idx + 1..],
                 language,
-                &lines,
-                end_idx,
                 in_block_comment,
-                binding.verification,
+                &multiline_delimiter,
             );
+            let item_name =
+                binding_item_name(language, &lines, end_idx, below, binding.verification);
             bindings.push(AttributeBinding {
                 file_path: file_path.to_path_buf(),
                 line: idx + 1,
@@ -262,7 +264,13 @@ fn scan_file_contents(
         let (comment, end_idx) = collect_annotation_comment(&lines, idx, marker_position);
         let parsed = parse_annotations(&comment);
         warnings.extend(parsed.warnings);
-        let function_name = declaration::item_name(language, &lines[idx + 1..], in_block_comment);
+        let below = line_start(
+            &rust_states[idx + 1..],
+            language,
+            in_block_comment,
+            &multiline_delimiter,
+        );
+        let function_name = declaration::item_name(language, &lines[idx + 1..], below);
         for annotation in parsed.annotations {
             annotations.push(AnnotationLocation {
                 file_path: file_path.to_path_buf(),
@@ -338,15 +346,33 @@ fn is_annotation_comment_line(
         || (language == Language::Python && trimmed.starts_with('#'))
 }
 
+/// The lexical state of the walker at the first of `rust_states`, the
+/// states of the lines below a binding.
+fn line_start<'a>(
+    rust_states: &'a [RustLexicalState],
+    language: Language,
+    in_block_comment: bool,
+    multiline_delimiter: &Option<String>,
+) -> LineStart<'a> {
+    if language == Language::Rust {
+        LineStart::Rust(rust_states)
+    } else {
+        LineStart::Carried {
+            in_block_comment,
+            multiline_delimiter: multiline_delimiter.clone(),
+        }
+    }
+}
+
 fn binding_item_name(
     language: Language,
     lines: &[&str],
     idx: usize,
-    in_block_comment: bool,
+    below: LineStart<'_>,
     verification: Option<Verification>,
 ) -> Option<String> {
     if matches!(language, Language::Rust | Language::Python) {
-        return declaration::item_name(language, &lines[idx + 1..], in_block_comment);
+        return declaration::item_name(language, &lines[idx + 1..], below);
     }
     assignment_name(lines[idx]).or_else(|| {
         if verification.is_some() {
