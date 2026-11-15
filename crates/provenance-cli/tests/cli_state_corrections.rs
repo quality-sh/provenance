@@ -1,42 +1,19 @@
 //! A refusal for a state file that does not parse names the two procedures
-//! that correct the state and what each procedure removes, and each procedure,
-//! done as the refusal says, gives a state that Provenance can read. The state
-//! of most tests has a Requirement line whose `refines` is a string and not a
-//! list, as in a line of an older form. The tests of the two procedures also
-//! use a line that a person cut, and a manifest of each of these two forms. A
-//! get over a bad Requirement line answers at the stored serial, and its
-//! freshness warning is the text of the refusal.
+//! that correct the state and what each procedure removes. The state of most
+//! tests has a Requirement line whose `refines` is a string and not a list, as
+//! in a line of an older form. A get over a bad Requirement line answers at the
+//! stored serial, and its freshness warning is the text of the refusal.
 use provenance_macros::verifies;
 use serde_json::{json, Value};
 use std::path::Path;
 use std::process::Stdio;
 
 use crate::support;
-use support::review_paths::provenance;
-use support::stale_repo::{commit, git, init_repo};
-
-/// The hint of a record file that does not parse. The other tests compare
-/// with the public constant; this file pins the text that a person reads.
-const HINT: &str = "To correct this fault, use one of these two procedures. \
-    Procedure 1: get .provenance/state from a commit where Provenance can read it. \
-    This can remove records and changes that are not in that commit. \
-    Procedure 2: remove .provenance/state and then do the command provenance init. \
-    This removes all records, the scopes, the disposition actors and the technical names of \
-    the dictionary.";
-
-const REQUIREMENTS: &str = "scopes/default/requirements/req.jsonl";
+use support::state_faults::{
+    committed, cut_manifest, damage, older_manifest, passes, run, HINT, REQUIREMENTS, WRITE,
+};
 
 const MESSAGE: &str = "invalid type: string \"req_parent\", expected a sequence";
-
-/// A write that reads the Requirement file.
-const WRITE: [&str; 6] = [
-    "req_new",
-    "create",
-    "--type",
-    "requirement",
-    "--statement",
-    "The system keeps a record.",
-];
 
 /// The freshness warning of a read over the Requirement line that does not parse.
 fn warning() -> String {
@@ -49,41 +26,6 @@ fn refusal() -> Value {
         "message": MESSAGE, "hint": HINT}, "meta": {}})
 }
 
-/// The exit code, the standard output and the standard error of a command.
-fn run(repo: &Path, args: &[&str]) -> (Option<i32>, String, String) {
-    let output = provenance().current_dir(repo).args(args).output().unwrap();
-    (
-        output.status.code(),
-        String::from_utf8(output.stdout).unwrap(),
-        String::from_utf8(output.stderr).unwrap(),
-    )
-}
-
-/// The standard output of a command that succeeds.
-fn passes(repo: &Path, args: &[&str]) -> String {
-    let (code, stdout, stderr) = run(repo, args);
-    assert_eq!(code, Some(0), "{args:?}: {stderr}");
-    stdout
-}
-
-/// Creates the Requirement that `args` names, with the flags that follow it.
-fn create(repo: &Path, args: &[&str]) {
-    let statement = ["--statement", "The system keeps review feedback available."];
-    let flags = ["create", "--type", "requirement"];
-    passes(repo, &[&args[..1], &flags, &statement, &args[1..]].concat());
-}
-
-/// A Git repository with a commit of `req_parent` and `req_child`, where
-/// `req_child` refines `req_parent`.
-fn committed() -> tempfile::TempDir {
-    let directory = init_repo();
-    let repo = directory.path();
-    create(repo, &["req_parent"]);
-    create(repo, &["req_child", "--refines", "req_parent"]);
-    commit(repo, "records");
-    directory
-}
-
 /// The committed repository after a change of the `req_child` line, so that
 /// its `refines` is a string.
 fn unparsable() -> tempfile::TempDir {
@@ -92,78 +34,12 @@ fn unparsable() -> tempfile::TempDir {
     directory
 }
 
-/// Changes the `req_child` line, so that its `refines` is a string, as in a
-/// line of an older form.
-fn damage(repo: &Path) {
-    let path = repo.join(".provenance/state").join(REQUIREMENTS);
-    let text = std::fs::read_to_string(&path).unwrap();
-    let changed = text.replace(r#""refines":["req_parent"]"#, r#""refines":"req_parent""#);
-    assert_ne!(changed, text, "{text}");
-    let first = r#"{"scope_id":"default","id":"req_child""#;
-    assert!(changed.starts_with(first), "{changed}");
-    std::fs::write(&path, changed).unwrap();
-}
-
-/// Removes the last character of the `req_child` line, as a person who
-/// stopped an edit of the line.
-fn cut(repo: &Path) {
-    let path = repo.join(".provenance/state").join(REQUIREMENTS);
-    let text = std::fs::read_to_string(&path).unwrap();
-    let mut lines: Vec<&str> = text.lines().collect();
-    assert!(lines[0].contains(r#""id":"req_child""#), "{text}");
-    lines[0] = &lines[0][..lines[0].len() - 1];
-    std::fs::write(&path, lines.join("\n") + "\n").unwrap();
-}
-
-/// Changes the manifest, so that its disposition actors are one string and
-/// not a list, as in a manifest of an older form. It gives the line and the
-/// parse message of the refusal.
-fn older_manifest(repo: &Path) -> (u64, String) {
-    let path = repo.join(".provenance/state/manifest.json");
-    let mut manifest: Value = serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
-    manifest["disposition_actor_ids"] = json!("reviewer");
-    let text = serde_json::to_string_pretty(&manifest).unwrap();
-    assert!(
-        text.starts_with("{\n  \"disposition_actor_ids\": \"reviewer\","),
-        "{text}"
-    );
-    std::fs::write(&path, text + "\n").unwrap();
-    let message = "invalid type: string \"reviewer\", expected a sequence";
-    (2, message.to_owned())
-}
-
-/// Removes the last character of the manifest, as a person who stopped an
-/// edit of the file. It gives the line and the parse message of the refusal.
-fn cut_manifest(repo: &Path) -> (u64, String) {
-    let path = repo.join(".provenance/state/manifest.json");
-    let text = std::fs::read_to_string(&path).unwrap();
-    let text = text.trim_end();
-    assert!(text.ends_with('}'), "{text}");
-    let cut = &text[..text.len() - 1];
-    std::fs::write(&path, cut).unwrap();
-    let line = u64::try_from(cut.matches('\n').count() + 1).unwrap();
-    (line, "EOF while parsing an object".to_owned())
-}
-
 /// A fault of a manifest, which gives the line and the parse message of the
 /// refusal.
 type ManifestFault = fn(&Path) -> (u64, String);
 
 /// The two faults of a manifest.
 const MANIFEST_FAULTS: [ManifestFault; 2] = [older_manifest, cut_manifest];
-
-/// The faults of the state: a `req_child` line of an older form, a
-/// `req_child` line that a person cut, and the two faults of a manifest.
-const FAULTS: [fn(&Path); 4] = [
-    damage,
-    cut,
-    |repo| {
-        older_manifest(repo);
-    },
-    |repo| {
-        cut_manifest(repo);
-    },
-];
 
 /// The refusal text of a manifest that does not parse at `line`.
 fn manifest_cause((line, message): &(u64, String)) -> String {
@@ -308,111 +184,6 @@ async fn an_mcp_get_names_the_two_ways_out() {
         text.ends_with(&format!("\nwarning: record freshness: {warning}")),
         "{text}"
     );
-}
-
-/// The hint of the refusal of a write.
-fn hint(repo: &Path) -> Value {
-    let (code, _, stderr) = run(repo, &[&WRITE[..], &["--format", "json"]].concat());
-    assert_eq!(code, Some(1), "{stderr}");
-    serde_json::from_str::<Value>(&stderr).unwrap()["error"]["hint"].take()
-}
-
-/// The JSON get of `id`, which passes with no freshness warning.
-fn read(repo: &Path, id: &str) -> Value {
-    let read = passes(repo, &[id, "get", "--format", "json"]);
-    let read: Value = serde_json::from_str(&read).unwrap();
-    let warning = &read["record_metadata"]["freshness_error"];
-    assert_eq!(warning, &Value::Null, "{read}");
-    read
-}
-
-/// Writes a dictionary reference with a technical name to the state. The CLI
-/// has no command that adds a technical name.
-fn add_technical_name(repo: &Path) {
-    let dictionary = crate::dictionary_support::imported_dictionary();
-    crate::dictionary_support::write_reference_with_technical_names(
-        repo,
-        dictionary,
-        &["Provenance"],
-    );
-}
-
-/// The JSON file at `file` below the state directory.
-fn state_json(repo: &Path, file: &str) -> Value {
-    let path = repo.join(".provenance/state").join(file);
-    serde_json::from_slice(&std::fs::read(path).unwrap()).unwrap()
-}
-
-/// The technical names of the dictionary reference of the state, when it has
-/// a reference.
-fn technical_names(repo: &Path) -> Option<Value> {
-    let path = repo.join(".provenance/state/dictionary.json");
-    let bytes = std::fs::read(path).ok()?;
-    let reference: Value = serde_json::from_slice(&bytes).unwrap();
-    reference.get("technical_names").cloned()
-}
-
-/// Procedure 2, done as the hint says: remove .provenance/state and then do
-/// the command provenance init. After them, the state reads, and it holds none
-/// of the records, scopes, disposition actors and technical names that it held.
-#[test]
-#[verifies("rule_state_parse_refusal_names_the_corrections", examples)]
-fn init_after_the_removal_of_the_state_gives_a_state_that_reads() {
-    for fault in FAULTS {
-        let directory = committed();
-        let repo = directory.path();
-        std::fs::create_dir(repo.join("other")).unwrap();
-        support::review_paths::init_scope(repo, "other", "other");
-        passes(repo, &["init", "--disposition-actor-id", "approver"]);
-        let actors = state_json(repo, "manifest.json")["disposition_actor_ids"].to_string();
-        assert!(actors.contains("\"approver\""), "{actors}");
-        fault(repo);
-        assert_eq!(hint(repo), json!(HINT));
-        add_technical_name(repo);
-        assert_eq!(technical_names(repo), Some(json!(["Provenance"])));
-
-        std::fs::remove_dir_all(repo.join(".provenance/state")).unwrap();
-        passes(repo, &["init"]);
-
-        let manifest = state_json(repo, "manifest.json");
-        let scopes = json!([{"id": "default", "path_prefix": "."}]);
-        assert_eq!(manifest["scopes"], scopes, "{manifest}");
-        let actors = manifest["disposition_actor_ids"].as_array().unwrap();
-        assert!(!actors.contains(&json!("approver")), "{manifest}");
-        assert_eq!(technical_names(repo), None);
-        let (code, stdout, stderr) = run(repo, &["req_child", "get", "--format", "json"]);
-        assert_eq!(code, Some(1), "{stdout}");
-        let refused: Value = serde_json::from_str(&stderr).unwrap();
-        assert_eq!(refused["error"]["kind"], "resource_not_found", "{stderr}");
-        create(repo, &["req_new"]);
-        let read = read(repo, "req_new");
-        assert_eq!(read["record"]["id"], "req_new", "{read}");
-    }
-}
-
-/// Procedure 1, done as the hint says: get .provenance/state from a commit
-/// where Provenance can read it. The state then reads and holds the records of
-/// that commit, and a record that is not in that commit is removed.
-#[test]
-#[verifies("rule_state_parse_refusal_names_the_corrections", examples)]
-fn the_state_of_a_commit_where_it_reads_gives_a_state_that_reads() {
-    for fault in FAULTS {
-        let directory = committed();
-        let repo = directory.path();
-        create(repo, &["req_extra"]);
-        fault(repo);
-        assert_eq!(hint(repo), json!(HINT));
-
-        git(repo, &["checkout", "HEAD", "--", ".provenance/state"]);
-
-        let read = read(repo, "req_child");
-        let refines = &read["record"]["value"]["refines"];
-        assert_eq!(refines, &json!(["req_parent"]), "{read}");
-        let (code, _, stderr) = run(repo, &["req_extra", "get", "--format", "json"]);
-        assert_eq!(code, Some(1), "{stderr}");
-        let refused: Value = serde_json::from_str(&stderr).unwrap();
-        assert_eq!(refused["error"]["kind"], "resource_not_found", "{stderr}");
-    }
 }
 
 /// A line of a different record family that is not a record gives the same

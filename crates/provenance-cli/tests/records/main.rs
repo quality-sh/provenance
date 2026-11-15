@@ -13,6 +13,7 @@ mod support {
     pub mod record_review;
     pub mod review_paths;
     pub mod stale_repo;
+    pub mod state_faults;
     pub mod state_files;
 }
 use support::review_paths;
@@ -118,6 +119,8 @@ mod cli_shard_parse_errors;
 mod cli_source_requirement;
 #[path = "../cli_state_corrections.rs"]
 mod cli_state_corrections;
+#[path = "../cli_state_procedures.rs"]
+mod cli_state_procedures;
 #[path = "../cli_statement_write_gate.rs"]
 mod cli_statement_write_gate;
 #[path = "../cli_status_request.rs"]
