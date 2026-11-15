@@ -3,6 +3,9 @@ use assert_cmd::Command;
 use provenance_macros::verifies;
 use serde_json::Value;
 
+use crate::support;
+use support::record_review::{accept_current, accept_status_request};
+
 const COMMIT: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
 
 fn run(repo: &str, args: &[&str]) -> Value {
@@ -31,6 +34,8 @@ fn repository() -> tempfile::TempDir {
             "default",
             "--path-prefix",
             ".",
+            "--disposition-actor-id",
+            "reviewer",
         ])
         .assert()
         .success();
@@ -61,12 +66,21 @@ fn repository() -> tempfile::TempDir {
     directory
 }
 
+/// Archives a record. An archive is a status request, so the reviewer
+/// accepts the record's creation first and the archive after it.
 fn archive(repo: &str, id: &str, commit_flags: &[&str]) -> Value {
+    let (collection, kind) = if id.starts_with("rule_") {
+        ("rules", "rule")
+    } else {
+        ("requirements", "requirement")
+    };
+    accept_current(repo, collection, kind, id);
     let current = run(repo, &[id, "get"]);
     let etag = current["edit"]["etag"].as_str().unwrap().to_owned();
     let mut args = vec![id, "update", "--if-match", &etag, "--status", "archived"];
     args.extend_from_slice(commit_flags);
     run(repo, &args);
+    accept_status_request(repo, collection, kind, id);
     run(repo, &[id, "get"])["record"]["value"].clone()
 }
 

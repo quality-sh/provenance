@@ -6,7 +6,6 @@ use crate::{
         read_budget::ensure_slice_within_read_budget, record_stamps::GraphRecord, RecordStamp,
         StateStore,
     },
-    write_error::WriteFailure,
 };
 use camino::Utf8Path;
 use provenance_core::{review::ReviewRecord, StableId};
@@ -143,16 +142,5 @@ fn check_etag<T: GraphRecord>(before: &[T], id: &StableId, expected: &str) -> an
                 "native update cannot create a graph record"
             )
         })?;
-    let record: ReviewRecord = record.clone().into();
-    let current_etag = super::save::etag(&record)?;
-    if expected != current_etag {
-        return Err(crate::refusal::refuse!(
-            (WriteFailure::RecordEditConflict {
-                record_kind: T::KIND,
-                current_etag,
-            }),
-            "stale native record edit etag"
-        ));
-    }
-    Ok(())
+    super::save::ensure_etag(&record.clone().into(), expected)
 }

@@ -68,14 +68,33 @@ A Requirement `create` or `update`, `discuss`, and `reply` take an optional
 JSON `null` actor is invalid input. A Rule or Resolution write takes no actor and
 records `authoring`. `submit`, `claim`, and `release` need `--actor`.
 
-Rule creation defaults to `draft` in the CLI and in catalog operations. Pass
-`--status active` only when a person ratifies the Rule. Coverage reports do not
-produce active-Rule absence findings for a draft Rule.
+Rule creation defaults to `draft` in the CLI and in catalog operations. An
+update with `--status active` or `--status archived`, or a create with
+`--status active`, opens a status request and does not change the status. A
+create with `--status archived` is refused: create the Rule, then request the
+archive. A create with `--status active` writes the Rule as `review` until a
+reviewer accepts the request. Coverage reports do not produce active-Rule
+absence findings for a draft Rule.
+
+A status request of a Rule or a Requirement is a review submission. The result
+of the request gives its Proposal ID under `decision.pending.proposal_id` and
+the call that accepts it. A reviewer on the reviewer list of the repository
+accepts it with `provenance api <collection>/<id>/submissions/<proposal_id>/decide
+--method post --input -`, where `<collection>` is `rules` or `requirements`. The
+input names the reviewer, the decision and the reviewed record:
+`{"actor":{"identity_type":"human","id":"<reviewer>"},"decision":"accepted","canonical_artifact":{"artifact_type":"rule","artifact_id":"<id>"}}`.
+An acceptance with the `agent` identity type needs a prior assertion, which a
+review submission does not have, so it is refused with
+`approval_evidence_required`. The status changes in the write of the
+acceptance. A rejection or a withdrawal keeps the status. With an empty
+reviewer list, nobody can accept the request: the result says so and names
+`provenance init --disposition-actor-id <id>`, which adds a reviewer.
 
 A typed specification cannot set a Rule status, so apply creates each new
-specification Rule as `draft`. To make a specification Rule active, a person
-changes its status with `provenance <id> update --status active
---declared-by <owner> --if-match <etag>`. A later apply keeps that status. If a
+specification Rule as `draft`. To make a specification Rule active, request the
+status with `provenance <id> update --status active --declared-by <owner>
+--if-match <etag>`. The Rule is active when an allowed reviewer accepts the
+request. A later apply keeps the accepted status. If a
 Rule declaration changes its key or moves to a different Requirement, apply
 creates a new `draft` Rule and deletes the old Rule. A move between a
 Requirement and the shared specification context keeps the Rule and its status

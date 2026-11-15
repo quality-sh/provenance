@@ -41,9 +41,22 @@ async function create(workspace, type, { id, ...fields }) {
   for (const [key, value] of Object.entries(fields)) args.push(`--${key.replaceAll('_', '-')}-json`, JSON.stringify(value));
   return cli(workspace, args);
 }
+const reviewer = 'reviewer';
+async function acceptStatusRequest(workspace, collection, kind, id) {
+  const record = JSON.parse(await cli(workspace, ['api', `${collection}/${id}`])).data;
+  const proposal = record.decision.pending?.proposal_id;
+  if (!record.decision.pending?.status_request) throw new Error(`no pending status request on ${id}`);
+  const directory = await mkdtemp(join(tmpdir(), 'shaping-decision-'));
+  const body = join(directory, 'decision.json');
+  await writeFile(body, JSON.stringify({
+    actor: { identity_type: 'human', id: reviewer }, decision: 'accepted',
+    canonical_artifact: { artifact_type: kind, artifact_id: id },
+  }));
+  await cli(workspace, ['api', `${collection}/${id}/submissions/${proposal}/decide`, '--method', 'post', '--input', body]);
+}
 export async function prepare(workspace, { variant }) {
   await checked('git', ['init', '-q'], workspace);
-  await checked(process.env.PROVENANCE_BIN ?? 'provenance', ['init', '--path', '.', '--quiet'], workspace);
+  await checked(process.env.PROVENANCE_BIN ?? 'provenance', ['init', '--path', '.', '--quiet', '--disposition-actor-id', reviewer], workspace);
   await cli(workspace, ['skills', 'install', '--copy', '--force']);
   // Pin the evaluated guidance independently of the installed CLI build.
   for (const name of skillNames) {
@@ -69,6 +82,8 @@ export async function prepare(workspace, { variant }) {
   // The owner brief grounds the active Rule. Only an approved Resolution can produce an
   // active Rule, so the Rule does not cite the proposed Resolution.
   await create(workspace, 'rule', { id: 'rule_negative_control', requirement_ids: ['req_health'], statement: 'Health cannot decrease below 0.', source_document: 'Owner brief, health negative control', source_section: 'The owner requires a zero health floor independently of the proposed Resolution.', status: 'active' });
+  // A new active Rule waits for review: the permitted reviewer accepts its request.
+  await acceptStatusRequest(workspace, 'rules', 'rule', 'rule_negative_control');
 }
 
 export async function snapshot(workspace) {

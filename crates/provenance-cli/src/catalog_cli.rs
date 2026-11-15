@@ -96,6 +96,11 @@ pub async fn dispatch_target(
         ));
     }
     let writes_statement = statement_warning::has_statement(&data);
+    let requested = data
+        .get("status")
+        .and_then(serde_json::Value::as_str)
+        .filter(|_| matches!(action, Action::Create | Action::Update))
+        .map(str::to_owned);
     let replacement = matches.get_one::<String>("replace_parent");
     let guidance = |failure: &provenance_core::protocol::failure::ErasedFailure| {
         failure_with_guidance(failure, &route.path, Some(&target), &context.repo)
@@ -136,6 +141,10 @@ pub async fn dispatch_target(
     if writes_statement {
         statement_warning::print_if_rule_one_one_did_not_run(&repo.repo);
     }
+    let note = match &requested {
+        Some(status) => opened_request(&host, &route, &target, status, &mut value).await,
+        None => None,
+    };
     let affected = route.definition.registration.review_link.map(|kind| {
         crate::review_link::AffectedReviewRecord {
             kind,
@@ -146,12 +155,33 @@ pub async fn dispatch_target(
     if json {
         crate::output::print_json(&value)?;
     } else {
+        if let Some(note) = &note {
+            println!("{note}");
+        }
         println!(
             "{}",
             provenance_porcelain::action::render_readable(action, &target, route.kind, &value)
         );
     }
     Ok(())
+}
+
+/// The note of the status request that a write of `target` opened, if it
+/// opened one. The result gets the decision state under `data.decision` and
+/// the note under `meta.notes`.
+async fn opened_request(
+    host: &provenance_transport::StatementHost,
+    route: &provenance_transport::porcelain::TargetRoute,
+    target: &str,
+    requested: &str,
+    value: &mut serde_json::Value,
+) -> Option<String> {
+    let opened = host
+        .open_status_request(route.kind, target, requested, value)
+        .await?;
+    value["data"]["decision"] = opened.decision;
+    value["meta"]["notes"] = serde_json::json!([opened.note.trim_end()]);
+    Some(opened.note)
 }
 
 fn failure_with_guidance(

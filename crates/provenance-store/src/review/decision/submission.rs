@@ -12,7 +12,7 @@ use crate::{
     state_store::{CreateProposalCardInput, RecordStamp, StateStore},
 };
 use provenance_core::{
-    review::{CycleEntry, CycleFact},
+    review::{CycleEntry, CycleFact, StatusRequest},
     IdeationTarget, PromotionState, ProposalTraceability, ProposalType, RecordRevisionBinding,
 };
 use provenance_macros::rule;
@@ -45,6 +45,19 @@ impl StateStore {
         &self,
         input: SubmitRecordReview,
     ) -> anyhow::Result<CycleEntry> {
+        self.commit_submission_with(input, None)
+    }
+
+    /// Writes one bound submission. A submission with a status request
+    /// has a title that names the requested status.
+    pub(in crate::review) fn commit_submission_with(
+        &self,
+        mut input: SubmitRecordReview,
+        status_request: Option<StatusRequest>,
+    ) -> anyhow::Result<CycleEntry> {
+        if let Some(request) = &status_request {
+            input.title = format!("Set status to {}", request.status.as_str());
+        }
         let scope = input.scope_id.clone();
         let record = crate::families::review_families::record(
             self,
@@ -112,7 +125,10 @@ impl StateStore {
             promotion_state: PromotionState::Proposed,
             duplicate_of: None,
             superseded_by: None,
-            record_revision: Some(RecordRevisionBinding { revision }),
+            record_revision: Some(RecordRevisionBinding {
+                revision,
+                status_request,
+            }),
             actor: Some(input.actor.clone()),
             revises,
             revises_rejection,
