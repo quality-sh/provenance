@@ -36,6 +36,9 @@ mod history_fixture;
 mod history_folder;
 #[path = "support/history_long.rs"]
 mod history_long;
+#[cfg(feature = "host")]
+#[path = "support/history_pages.rs"]
+mod history_pages;
 #[path = "support/memory.rs"]
 mod memory;
 #[path = "support/sqlite_database.rs"]

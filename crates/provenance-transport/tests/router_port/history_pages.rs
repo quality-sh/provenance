@@ -3,69 +3,26 @@
 //! version is larger than the page bytes: a client that follows
 //! `next_cursor` comes to the end of the history.
 
-use crate::support::history_cases::LIST;
-use crate::support::history_fixture::{history, Sources};
-use crate::support::history_long::{long_history, long_name, LONG};
-use crate::support::history_routes::path;
-use crate::support::memory_host::{bound, in_process, over_memory};
-use crate::support::router_answer::Http;
-use camino::Utf8PathBuf;
+use crate::support::history_long::{long_name, LONG};
+use crate::support::history_pages::{follow, long_setup, over_port};
+use crate::support::memory_host::over_memory;
 use provenance_macros::verifies;
-use provenance_store::repository::{RandomIds, SystemClock};
 use provenance_store::review::history::contract::MemoryFileVersions;
 use provenance_store::settings::Settings;
 use serde_json::{json, Value};
 use std::sync::Arc;
-
-/// The most pages that one read of a history follows.
-const FOLLOWS: usize = 10;
 
 /// The ids of the entries of each page of the history of `req_a` over the
 /// 205-commit history, where the author name of `edit_001` has `author`
 /// bytes. The client follows `next_cursor` from the first page. A failed
 /// page gives the pages before it, and its status and its error.
 async fn pages(author: usize) -> (Vec<Vec<String>>, Option<(u16, Value)>) {
-    let base = history(&Sources {
-        clock: Arc::new(SystemClock),
-        ids: Arc::new(RandomIds),
-    });
-    let mut commits = long_history(&base.working);
-    commits[1].author = "a".repeat(author);
-    let missing = tempfile::tempdir().unwrap();
-    let root = Utf8PathBuf::from_path_buf(missing.path().join("project")).unwrap();
-    let (repository, _) = over_memory(&root, "default", Settings::default(), base.state()).await;
-    let repository = repository.with_file_versions(Arc::new(MemoryFileVersions::new(&commits)));
-    let port = in_process(&repository);
-    let http = Http::with_access(Arc::new(bound(repository, port)));
-    let mut request = json!({"record_kind": "requirement", "record_id": "req_a", "limit": 200});
-    let mut pages = Vec::new();
-    for _ in 0..FOLLOWS {
-        let route = path(LIST, &request);
-        let answer = http.call("GET", &route, None, &[], route.clone()).await;
-        let body = answer.json();
-        if answer.status != 200 {
-            return (pages, Some((answer.status, body["error"].clone())));
-        }
-        let ids: Vec<String> = body["data"]["items"]
-            .as_array()
-            .unwrap()
-            .iter()
-            .map(|entry| entry["id"].as_str().unwrap().to_owned())
-            .collect();
-        let next = &body["meta"]["next_cursor"];
-        assert!(
-            !(ids.is_empty() && next.is_string()),
-            "page {} is empty and gives a cursor; the cursor it was read with: {}",
-            pages.len() + 1,
-            request["cursor"]
-        );
-        pages.push(ids);
-        if !next.is_string() {
-            return (pages, None);
-        }
-        request["cursor"] = next.clone();
-    }
-    panic!("the history has more than {FOLLOWS} pages");
+    let (mut long, _missing, root) = long_setup();
+    long.commits[1].author = "a".repeat(author);
+    let (repository, _) = over_memory(&root, "default", Settings::default(), long.state()).await;
+    let repository =
+        repository.with_file_versions(Arc::new(MemoryFileVersions::new(&long.commits)));
+    follow(&over_port(repository)).await
 }
 
 /// A version larger than the page bytes and smaller than the response

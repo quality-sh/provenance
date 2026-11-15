@@ -51,6 +51,8 @@ mod support {
     pub mod history_folder;
     #[path = "../../../provenance-store/tests/support/history_long.rs"]
     pub mod history_long;
+    #[path = "../support/history_pages.rs"]
+    pub mod history_pages;
     #[path = "../support/history_routes.rs"]
     pub mod history_routes;
     #[path = "../support/memory_host.rs"]

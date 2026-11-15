@@ -14,6 +14,8 @@
 mod discussion_support;
 #[path = "history_text_calls/entry_edges.rs"]
 mod entry_edges;
+#[path = "support/history_pages.rs"]
+mod history_pages;
 #[path = "history_text_calls/page_edges.rs"]
 mod page_edges;
 use camino::Utf8Path;
