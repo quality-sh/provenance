@@ -1,5 +1,5 @@
 use super::canonical_artifacts::CanonicalArtifactIndex;
-use super::ideation_batches::place_in_file;
+use super::ideation_batches::add_to_file;
 use super::{
     serde_name, CreateAssertionInput, CreateDispositionInput, CreateProposalCardInput, StateStore,
 };
@@ -151,14 +151,18 @@ impl StateStore {
         };
         self.ensure_proposal_not_disposed(&input.scope_id, &assertion.proposal_id)?;
         let mut assertions = self.list_assertion_records(&input.scope_id)?;
+        let stored = || {
+            crate::refusal::refuse!(
+                AlreadyExists,
+                "assertion identity or proposal assertion already exists"
+            )
+        };
         // The aggregate check refuses these too, but with no declared kind.
-        crate::write_error::ensure!(
-            AlreadyExists,
-            !assertions.iter().any(|record| {
-                record.id == assertion.id || record.proposal_id == assertion.proposal_id
-            }),
-            "assertion identity or proposal assertion already exists"
-        );
+        if assertions.iter().any(|record| {
+            record.id == assertion.id || record.proposal_id == assertion.proposal_id
+        }) {
+            return Err(stored());
+        }
         let path = shards::assertion_records_path(&self.layout, &input.scope_id);
         self.mutate_jsonl_records(&path, |records: &mut Vec<AssertionRecord>| {
             assertions.push(assertion.clone());
@@ -175,7 +179,7 @@ impl StateStore {
                 },
             )?;
             super::read_budget::ensure_within_read_budget(&assertion)?;
-            place_in_file(records, assertion.clone());
+            add_to_file(records, assertion.clone(), |_| stored())?;
             Ok(assertion)
         })
     }
@@ -205,14 +209,18 @@ impl StateStore {
             "only a review submission names its actor"
         );
         let mut proposals = self.list_proposal_definitions(&candidate.scope_id)?;
+        let stored = |row: &ProposalCard| {
+            crate::refusal::refuse!(
+                AlreadyExists,
+                "proposal {} already exists and is immutable",
+                row.id.as_str()
+            )
+        };
         // The store names an existing id before the aggregate check, which
         // refuses it with no declared kind.
-        crate::write_error::ensure!(
-            AlreadyExists,
-            !proposals.iter().any(|record| record.id == candidate.id),
-            "proposal {} already exists and is immutable",
-            candidate.id.as_str()
-        );
+        if let Some(record) = proposals.iter().find(|record| record.id == candidate.id) {
+            return Err(stored(record));
+        }
         proposals.push(candidate.clone());
         self.check_ideation_aggregate(
             &candidate.scope_id,
@@ -231,7 +239,7 @@ impl StateStore {
         // check above covers it.
         self.mutate_jsonl_records(&path, |records: &mut Vec<ProposalCard>| {
             super::read_budget::ensure_within_read_budget(&candidate)?;
-            place_in_file(records, candidate.clone());
+            add_to_file(records, candidate.clone(), stored)?;
             Ok(candidate)
         })
     }
@@ -286,13 +294,13 @@ impl StateStore {
         // The store names an existing id, and a proposal that has a
         // disposition, before the gate, which refuses both with no declared
         // kind.
-        crate::write_error::ensure!(
-            AlreadyExists,
-            !dispositions
-                .iter()
-                .any(|record| record.id == disposition.id),
-            "disposition already exists"
-        );
+        let stored = || crate::refusal::refuse!(AlreadyExists, "disposition already exists");
+        if dispositions
+            .iter()
+            .any(|record| record.id == disposition.id)
+        {
+            return Err(stored());
+        }
         crate::write_error::ensure!(
             InvalidUpdate,
             !dispositions
@@ -325,7 +333,7 @@ impl StateStore {
             &dispositions_path,
             |records: &mut Vec<DispositionRecord>| {
                 super::read_budget::ensure_within_read_budget(&disposition)?;
-                place_in_file(records, disposition.clone());
+                add_to_file(records, disposition.clone(), |_| stored())?;
                 Ok(disposition)
             },
         )

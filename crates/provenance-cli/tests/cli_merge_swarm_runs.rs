@@ -278,7 +278,6 @@ fn a_landing_and_a_different_direct_change_of_one_record_conflict() {
 }
 
 #[test]
-#[verifies("rule_swarm_run_records_in_kind_files", examples)]
 #[verifies("rule_record_merge", examples)]
 fn a_landing_and_an_equal_direct_change_of_one_record_merge_to_one_copy() {
     let landing = a_landing_and_a_direct_change("Changed.", "Changed.");

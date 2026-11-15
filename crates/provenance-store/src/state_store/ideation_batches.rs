@@ -334,9 +334,9 @@ fn merge_immutable<T: Clone + IdeationRecord>(
 }
 
 /// Puts `record` in the rows of the state file of its kind: in place of the
-/// row with its id, or else among the rows in id order. Each direct writer and
-/// each landing give a record its place with this function, so the file stays
-/// in id order.
+/// row with its id, or else among the rows in id order. The writers of a kind
+/// whose record a write can replace (a contribution, a synthesis packet) and
+/// each landing give a record its place with this function.
 pub(super) fn place_in_file<T: IdeationRecord>(rows: &mut Vec<T>, record: T) {
     let Ok(()) = place_checked_in_file(rows, record, |_| Ok::<(), Infallible>(()));
 }
@@ -349,8 +349,34 @@ pub(super) fn place_checked_in_file<T: IdeationRecord, E>(
     check_stored: impl FnOnce(&T) -> Result<(), E>,
 ) -> Result<(), E> {
     replace_checked_or_append(rows, record, check_stored)?;
-    rows.sort_by(|a, b| a.immutable_id().cmp(b.immutable_id()));
+    sort_by_id(rows);
     Ok(())
+}
+
+/// Puts the new `record` among the rows of the state file of its kind, in id
+/// order, for the writers of a kind whose record no write replaces. When a row
+/// has the id of `record`, `rows` stays as it is and the write fails with the
+/// error that `stored` gives for that row.
+pub(super) fn add_to_file<T: IdeationRecord>(
+    rows: &mut Vec<T>,
+    record: T,
+    stored: impl FnOnce(&T) -> anyhow::Error,
+) -> anyhow::Result<()> {
+    if let Some(row) = rows
+        .iter()
+        .find(|row| row.immutable_id() == record.immutable_id())
+    {
+        return Err(stored(row));
+    }
+    rows.push(record);
+    sort_by_id(rows);
+    Ok(())
+}
+
+/// Puts the rows of a state file in id order: the order of each product write
+/// of a record of the five ideation kinds.
+fn sort_by_id<T: IdeationRecord>(rows: &mut [T]) {
+    rows.sort_by(|a, b| a.immutable_id().cmp(b.immutable_id()));
 }
 
 /// Puts `record` in place of the record of `records` with its id, or at the
@@ -378,4 +404,38 @@ pub(super) fn replace_checked_or_append<T: IdeationRecord, E>(
         None => records.push(record),
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn assertion(id: &str) -> AssertionRecord {
+        serde_json::from_value(serde_json::json!({"scope_id": "default", "id": id,
+            "proposal_id": format!("proposal_{id}"), "synthesis_packet_id": "packet_a",
+            "supporting_claim_ids": []}))
+        .unwrap()
+    }
+
+    fn ids(rows: &[AssertionRecord]) -> Vec<&str> {
+        rows.iter().map(|row| row.immutable_id()).collect()
+    }
+
+    /// Implementation aid: `add_to_file` puts a new record in id order and
+    /// never replaces a row. No Rule binds it: no public surface reaches the
+    /// refusal, because each writer refuses a stored id before it.
+    #[test]
+    fn add_to_file_puts_a_new_record_in_id_order_and_refuses_a_stored_id() {
+        let mut rows = vec![assertion("c"), assertion("a")];
+        add_to_file(&mut rows, assertion("b"), |_| anyhow::anyhow!("stored")).unwrap();
+        assert_eq!(ids(&rows), ["a", "b", "c"]);
+        let mut changed = assertion("b");
+        changed.proposal_id = provenance_core::StableId::new("proposal_x").unwrap();
+        let error = add_to_file(&mut rows, changed, |row| {
+            anyhow::anyhow!("{}", row.proposal_id.as_str())
+        })
+        .unwrap_err();
+        assert_eq!(error.to_string(), "proposal_b");
+        assert_eq!(rows, [assertion("a"), assertion("b"), assertion("c")]);
+    }
 }
