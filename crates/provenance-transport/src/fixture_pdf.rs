@@ -36,7 +36,7 @@ fn alpha_suffix(index: usize) -> String {
 }
 
 /// Returns the complete PDF for one simulated onboarding.
-pub(crate) fn dictionary_pdf() -> Vec<u8> {
+pub fn dictionary_pdf() -> Vec<u8> {
     let page_count = (APPROVED_ROWS + UNAPPROVED_ROWS).div_ceil(ROWS_PER_PAGE);
     let pages: Vec<String> = (0..page_count).map(page_stream).collect();
     assemble(&pages)

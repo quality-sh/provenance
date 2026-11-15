@@ -352,8 +352,9 @@ mod tests {
         crate::test_probes::arm("project_file_compared", move || {
             for entry in probe_repo.read_dir_utf8().unwrap() {
                 let entry = entry.unwrap();
-                let name = entry.file_name();
-                if name.starts_with(".AGENTS.md.provenance-") && name.ends_with(".tmp") {
+                let temporary = entry.file_name().starts_with(".AGENTS.md.provenance-")
+                    && entry.path().extension() == Some("tmp");
+                if temporary {
                     std::fs::remove_file(entry.path()).unwrap();
                 }
             }
