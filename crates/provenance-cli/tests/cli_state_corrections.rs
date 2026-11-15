@@ -209,6 +209,22 @@ fn init_names_the_two_ways_out_and_changes_no_file() {
     assert_eq!(support::state_files::files_below(&state), before);
 }
 
+/// `check` gives the cause with the hint in each section that the cause stops,
+/// and its error line gives the cause with the hint one time.
+#[test]
+#[verifies("rule_state_parse_refusal_names_the_corrections", examples)]
+fn check_gives_the_hint_one_time_in_its_error_line() {
+    let directory = unparsable();
+
+    let answer = run(directory.path(), &["check"]);
+
+    let cause = warning();
+    let stdout = format!(
+        "graph: findings\n  - {cause}\nstatements: unavailable\n  - {cause}\nbindings: passed\n"
+    );
+    assert_eq!(answer, (Some(1), stdout, format!("Error: {cause}\n")));
+}
+
 /// The MCP get of the record serves the record of the read cache and gives
 /// the refusal of the state as its freshness warning.
 #[tokio::test]
