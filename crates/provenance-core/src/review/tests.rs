@@ -3,6 +3,7 @@ use crate::NodeType;
 use serde_json::json;
 
 mod disputed_lines;
+mod repair_property;
 mod rows;
 
 /// Implementation aid: pins the closed read of an enrolled record; no Rule
