@@ -1,7 +1,8 @@
 //! A refusal for a state file that does not parse names the two steps that
 //! correct the state, and each step gives a state that Provenance can read.
 //! The state of each test is the state of a Requirement line whose `refines`
-//! is a string and not a list.
+//! is a string and not a list. A get over that state answers at the stored
+//! serial, and its freshness warning is the text of the refusal.
 
 use provenance_macros::verifies;
 use serde_json::{json, Value};
@@ -18,6 +19,21 @@ const HINT: &str = "get .provenance/state from a branch or a commit where Proven
 const REQUIREMENTS: &str = "scopes/default/requirements/req.jsonl";
 
 const MESSAGE: &str = "invalid type: string \"req_parent\", expected a sequence";
+
+/// A write that reads the Requirement file.
+const WRITE: [&str; 6] = [
+    "req_new",
+    "create",
+    "--type",
+    "requirement",
+    "--statement",
+    "The system keeps a record.",
+];
+
+/// The freshness warning of a read over the Requirement line that does not parse.
+fn warning() -> String {
+    format!("{REQUIREMENTS} line 1: {MESSAGE}; {HINT}")
+}
 
 /// The refusal object of the Requirement line that does not parse.
 fn refusal() -> Value {
@@ -82,37 +98,75 @@ fn committed() -> tempfile::TempDir {
 /// its `refines` is a string.
 fn unparsable() -> tempfile::TempDir {
     let directory = committed();
-    let path = directory.path().join(".provenance/state").join(REQUIREMENTS);
+    damage(directory.path());
+    directory
+}
+
+/// Changes the `req_child` line, so that its `refines` is a string.
+fn damage(repo: &Path) {
+    let path = repo.join(".provenance/state").join(REQUIREMENTS);
     let text = std::fs::read_to_string(&path).unwrap();
     let changed = text.replace(r#""refines":["req_parent"]"#, r#""refines":"req_parent""#);
     assert_ne!(changed, text, "{text}");
     let first = r#"{"scope_id":"default","id":"req_child""#;
     assert!(changed.starts_with(first), "{changed}");
     std::fs::write(&path, changed).unwrap();
-    directory
 }
 
+/// A JSON get gives the record at the stored serial with the warning.
 #[test]
 #[verifies("rule_state_parse_refusal_names_the_corrections", examples)]
 fn a_json_get_names_the_two_ways_out() {
-    let directory = unparsable();
+    let directory = committed();
+    let repo = directory.path();
+    let clean = passes(repo, &["req_child", "get", "--format", "json"]);
+    let mut expected: Value = serde_json::from_str(&clean).unwrap();
+    damage(repo);
 
-    let answer = run(directory.path(), &["req_child", "get", "--format", "json"]);
+    let (code, stdout, stderr) = run(repo, &["req_child", "get", "--format", "json"]);
+
+    expected["record_metadata"]["freshness_error"] = json!(warning());
+    expected["record_metadata"]["stamp"]["policy"] = json!("catch_up_failed");
+    let stdout: Value = serde_json::from_str(&stdout).unwrap();
+    assert_eq!((code, stdout, stderr), (Some(0), expected, String::new()));
+}
+
+/// A text get gives the record at the stored serial and the warning below it.
+#[test]
+#[verifies("rule_state_parse_refusal_names_the_corrections", examples)]
+fn a_text_get_names_the_two_ways_out() {
+    let directory = committed();
+    let repo = directory.path();
+    let clean = passes(repo, &["req_child", "get"]);
+    damage(repo);
+
+    let answer = run(repo, &["req_child", "get"]);
+
+    let stdout = format!("{clean}\nwarning: record freshness: {}\n", warning());
+    assert_eq!(answer, (Some(0), stdout, String::new()));
+}
+
+/// A JSON write refuses with the refusal object.
+#[test]
+#[verifies("rule_state_parse_refusal_names_the_corrections", examples)]
+fn a_json_write_names_the_two_ways_out() {
+    let directory = unparsable();
+    let args = [&WRITE[..], &["--format", "json"]].concat();
+
+    let answer = run(directory.path(), &args);
 
     assert_eq!(answer, (Some(1), String::new(), format!("{}\n", refusal())));
 }
 
+/// A text write refuses with the refusal object after `Error: `.
 #[test]
 #[verifies("rule_state_parse_refusal_names_the_corrections", examples)]
-fn a_text_get_names_the_two_ways_out() {
+fn a_text_write_names_the_two_ways_out() {
     let directory = unparsable();
+    let answer = run(directory.path(), &WRITE);
 
-    let answer = run(directory.path(), &["req_child", "get"]);
-
-    assert_eq!(
-        answer,
-        (Some(1), String::new(), format!("Error: {}\n", refusal()))
-    );
+    let stderr = format!("Error: {}\n", refusal());
+    assert_eq!(answer, (Some(1), String::new(), stderr));
 }
 
 #[test]
@@ -153,22 +207,31 @@ async fn an_mcp_get_names_the_two_ways_out() {
     client.cancel().await.unwrap();
     child.wait().await.unwrap();
 
-    let warning = format!("{REQUIREMENTS} line 1: {MESSAGE}; {HINT}");
+    let warning = warning();
     assert_eq!(answer["isError"], json!(false), "{answer}");
     let metadata = &answer["structuredContent"]["record_metadata"];
     assert_eq!(metadata["freshness_error"], json!(warning), "{answer}");
     let text = answer["content"][0]["text"].as_str().unwrap();
     assert!(
-        text.ends_with(&format!("\n\nwarning: record freshness: {warning}")),
+        text.ends_with(&format!("\nwarning: record freshness: {warning}")),
         "{text}"
     );
 }
 
-/// The hint of the refusal of a `get` of `req_child`.
+/// The hint of the refusal of a write.
 fn hint(repo: &Path) -> Value {
-    let (code, _, stderr) = run(repo, &["req_child", "get", "--format", "json"]);
+    let (code, _, stderr) = run(repo, &[&WRITE[..], &["--format", "json"]].concat());
     assert_eq!(code, Some(1), "{stderr}");
     serde_json::from_str::<Value>(&stderr).unwrap()["error"]["hint"].take()
+}
+
+/// The JSON get of `id`, which passes with no freshness warning.
+fn read(repo: &Path, id: &str) -> Value {
+    let read = passes(repo, &[id, "get", "--format", "json"]);
+    let read: Value = serde_json::from_str(&read).unwrap();
+    let warning = &read["record_metadata"]["freshness_error"];
+    assert_eq!(warning, &Value::Null, "{read}");
+    read
 }
 
 /// The second way: the refusal names the removal of the state directory and
@@ -188,8 +251,7 @@ fn init_after_the_removal_of_the_state_gives_a_state_that_reads() {
     let refused: Value = serde_json::from_str(&stderr).unwrap();
     assert_eq!(refused["error"]["kind"], "resource_not_found", "{stderr}");
     create(repo, &["req_new"]);
-    let read = passes(repo, &["req_new", "get", "--format", "json"]);
-    let read: Value = serde_json::from_str(&read).unwrap();
+    let read = read(repo, "req_new");
     assert_eq!(read["record"]["id"], "req_new", "{read}");
 }
 
@@ -204,8 +266,7 @@ fn the_state_of_a_commit_where_it_reads_gives_a_state_that_reads() {
 
     git(repo, &["checkout", "HEAD", "--", ".provenance/state"]);
 
-    let read = passes(repo, &["req_child", "get", "--format", "json"]);
-    let read: Value = serde_json::from_str(&read).unwrap();
+    let read = read(repo, "req_child");
     let refines = &read["record"]["value"]["refines"];
     assert_eq!(refines, &json!(["req_parent"]), "{read}");
 }
@@ -224,7 +285,7 @@ fn a_bad_line_of_a_different_family_names_the_same_ways_out() {
     text.push_str("{\"scope_id\":\"default\"}\n");
     std::fs::write(&path, text).unwrap();
 
-    let answer = run(repo, &["req_child", "get", "--format", "json"]);
+    let answer = run(repo, &[&WRITE[..], &["--format", "json"]].concat());
 
     let refusal = json!({"error": {"kind": "invalid_state_file", "file": file, "line": line,
         "message": "missing field `id`", "hint": HINT}, "meta": {}});

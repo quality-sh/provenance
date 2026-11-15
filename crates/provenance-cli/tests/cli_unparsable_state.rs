@@ -1,6 +1,6 @@
 //! A state file line that does not parse is a classified refusal. The CLI
 //! answer names the file below the state directory, the line number and the
-//! parse message, for a write, an `api` read and a `get`.
+//! parse message, for a create, an update and an `api` read.
 
 use provenance_macros::verifies;
 use serde_json::Value;
@@ -11,10 +11,12 @@ use support::review_paths::{create_requirement, provenance};
 const CARDS: &str = "scopes/default/ideation/proposal_cards.jsonl";
 
 /// A repository with one requirement whose first proposal card names an
-/// artifact type that this build does not know.
-fn unknown_artifact_type() -> (tempfile::TempDir, String) {
+/// artifact type that this build does not know, and the edit etag of the
+/// requirement.
+fn unknown_artifact_type() -> (tempfile::TempDir, String, String) {
     let (directory, repo) = support::review_paths::init();
-    create_requirement(&repo, "req_a");
+    let created = create_requirement(&repo, "req_a");
+    let etag = created["data"]["edit"]["etag"].as_str().unwrap().to_owned();
     let path = directory.path().join(".provenance/state").join(CARDS);
     let text = std::fs::read_to_string(&path).unwrap();
     let mut lines: Vec<String> = text.lines().map(str::to_owned).collect();
@@ -22,7 +24,7 @@ fn unknown_artifact_type() -> (tempfile::TempDir, String) {
     card["traceability"]["target"]["artifact_type"] = "widget".into();
     lines[0] = card.to_string();
     std::fs::write(&path, lines.join("\n") + "\n").unwrap();
-    (directory, repo)
+    (directory, repo, etag)
 }
 
 /// The refusal object on standard error, with or without the `Error: ` prefix.
@@ -53,7 +55,7 @@ fn assert_names_the_line(repo: &str, refusal: &Value) {
 #[test]
 #[verifies("rule_state_parse_refusal_names_the_line", examples)]
 fn a_create_names_the_state_line_that_does_not_parse() {
-    let (_directory, repo) = unknown_artifact_type();
+    let (_directory, repo, _) = unknown_artifact_type();
     let refusal = refusal(
         &repo,
         &[
@@ -73,15 +75,27 @@ fn a_create_names_the_state_line_that_does_not_parse() {
 #[test]
 #[verifies("rule_state_parse_refusal_names_the_line", examples)]
 fn an_api_read_names_the_state_line_that_does_not_parse() {
-    let (_directory, repo) = unknown_artifact_type();
+    let (_directory, repo, _) = unknown_artifact_type();
     let refusal = refusal(&repo, &["api", "/requirements/req_a"]);
     assert_names_the_line(&repo, &refusal);
 }
 
 #[test]
 #[verifies("rule_state_parse_refusal_names_the_line", examples)]
-fn a_get_names_the_state_line_that_does_not_parse() {
-    let (_directory, repo) = unknown_artifact_type();
-    let refusal = refusal(&repo, &["req_a", "get", "--format", "json"]);
+fn an_update_names_the_state_line_that_does_not_parse() {
+    let (_directory, repo, etag) = unknown_artifact_type();
+    let refusal = refusal(
+        &repo,
+        &[
+            "req_a",
+            "update",
+            "--if-match",
+            &etag,
+            "--description",
+            "Changed.",
+            "--format",
+            "json",
+        ],
+    );
     assert_names_the_line(&repo, &refusal);
 }
