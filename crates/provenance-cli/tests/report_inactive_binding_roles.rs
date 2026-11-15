@@ -246,7 +246,9 @@ fn check_bindings_gives_the_inactive_rule_warnings_of_a_file_in_line_order() {
         command.args(["--path", "src", "--scope", "default"]);
         let report = format.map(|format| repo.join(format!("report.{format}")));
         if let (Some(format), Some(report)) = (format, &report) {
-            command.args(["--output-format", format, "--output"]).arg(report);
+            command
+                .args(["--output-format", format, "--output"])
+                .arg(report);
         }
         let output = command.output().unwrap();
         let stderr = String::from_utf8_lossy(&output.stderr);
@@ -270,7 +272,12 @@ fn check_bindings_gives_the_inactive_rule_warnings_of_a_file_in_line_order() {
         .map(|warning| warning["line"].as_u64().unwrap())
         .collect::<Vec<_>>();
     assert_eq!(lines, [1, 4, 7, 10], "{json}");
-    let rules = ["rule_deprecated", "rule_deprecated", "rule_archived", "rule_archived"];
+    let rules = [
+        "rule_deprecated",
+        "rule_deprecated",
+        "rule_archived",
+        "rule_archived",
+    ];
     for output in [&text, &markdown] {
         let citations = inactive_citations(output);
         let cited = citations

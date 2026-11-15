@@ -36,7 +36,11 @@ pub(super) struct Tokens<'a> {
 }
 
 impl<'a> Tokens<'a> {
-    pub(super) const fn new(language: Language, lines: &'a [&'a str], start: LineStart<'a>) -> Self {
+    pub(super) const fn new(
+        language: Language,
+        lines: &'a [&'a str],
+        start: LineStart<'a>,
+    ) -> Self {
         Self {
             language,
             lines,

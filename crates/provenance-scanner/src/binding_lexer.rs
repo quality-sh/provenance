@@ -14,10 +14,7 @@ pub fn call_arguments<'a>(
             found = line[range.clone()]
                 .match_indices(&marker)
                 .map(|(offset, _)| range.start + offset)
-                .find(|start| {
-                    let boundary = start.checked_sub(1).map(|previous| bytes[previous]);
-                    !boundary.is_some_and(|byte| byte.is_ascii_alphanumeric() || byte == b'_')
-                });
+                .find(|start| is_name_start(bytes, *start));
         }
         if found.is_some() {
             ControlFlow::Break(())
@@ -26,6 +23,12 @@ pub fn call_arguments<'a>(
         }
     });
     found.map(|start| &line[start + marker.len()..])
+}
+
+/// Whether no word character comes before `start`, so a name starts there.
+fn is_name_start(bytes: &[u8], start: usize) -> bool {
+    let boundary = start.checked_sub(1).map(|previous| bytes[previous]);
+    !boundary.is_some_and(|byte| byte.is_ascii_alphanumeric() || byte == b'_')
 }
 
 /// Carries C-style block-comment state between source lines.
@@ -216,12 +219,11 @@ pub fn multiline_parts(
     if starts_in_block_comment {
         return Some(MultilineParts { code, opened: None });
     }
-    let opened = unclosed_multiline_delimiter(&line[code.clone()], style).map(
-        |(delimiter, opening)| {
+    let opened =
+        unclosed_multiline_delimiter(&line[code.clone()], style).map(|(delimiter, opening)| {
             *active_delimiter = Some(delimiter);
             code.start + opening..line.len()
-        },
-    );
+        });
     if let Some(opened) = &opened {
         code.end = opened.start;
     }
