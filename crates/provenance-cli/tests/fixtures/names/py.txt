@@ -50,3 +50,9 @@ def test_long(hours):
 @cached
 def pays_holiday():
     return True
+
+
+# @provenance rule: rule_star_assignment
+*rest, last = values
+def after_star():
+    return rest

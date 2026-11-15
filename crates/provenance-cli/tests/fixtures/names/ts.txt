@@ -41,3 +41,51 @@ export const enum Shift {
 
 // @provenance rule: rule_abstract_class
 export abstract class Base {}
+
+export class Clock {
+  // @provenance rule: rule_generator_method
+  *shifts() {
+    const first = 1;
+    yield first;
+  }
+
+  // @provenance rule: rule_getter
+  get total(): number {
+    return 0;
+  }
+
+  // @provenance rule: rule_setter
+  set total(value: number) {}
+
+  // @provenance rule: rule_optional_method
+  pays?(hours: number): boolean;
+
+  // @provenance rule: rule_parameter_properties
+  constructor(
+    private readonly first: number,
+    private readonly second: number,
+    private readonly third: number,
+    private readonly fourth: number,
+    private readonly fifth: number,
+  ) {}
+
+  run(): void {
+    // @provenance rule: rule_ternary
+    ready ? (start) : stop;
+    // @provenance rule: rule_call_then_block
+    start(1)
+    {
+      stop();
+    }
+  }
+}
+
+// @provenance rule: rule_internal_doc
+/** @internal */ export function hidden(): void {}
+export function visible(): void {}
+
+// @provenance rule: rule_export_decorated
+export @sealed class Sealed {}
+
+// @provenance rule: rule_default_decorated
+export default @sealed class SealedDefault {}

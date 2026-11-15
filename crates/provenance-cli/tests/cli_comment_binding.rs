@@ -150,6 +150,10 @@ fn a_rust_binding_names_the_function_or_type_below_it() {
         ("rule_long_derive", Some("Wide")),
         ("rule_attribute_long_derive", Some("WideEntry")),
         ("rule_raw_identifier", Some("match")),
+        ("rule_block_comment", Some("hidden_after_block")),
+        ("rule_inline_comment", Some("inline_after_comment")),
+        ("rule_deref_statement", None),
+        ("rule_nested_comment", Some("after_nested")),
         ("rule_end", None),
     ]);
     assert_eq!(item_names(&report), expected, "{report}");
@@ -169,6 +173,7 @@ fn a_python_binding_names_the_function_or_class_below_it() {
         ("rule_if_block", None),
         ("rule_long_decorator", Some("test_long")),
         ("rule_decorator", Some("pays_holiday")),
+        ("rule_star_assignment", None),
     ]);
     assert_eq!(item_names(&report), expected, "{report}");
 }
@@ -200,9 +205,17 @@ fn a_java_binding_names_the_method_or_type_below_it() {
         ("rule_long_annotation", Some("cast")),
         ("rule_static_method", Some("paysOvertime")),
         ("rule_annotated_test", Some("paysOvertimeExamples")),
+        ("rule_constructor", Some("Payroll")),
+        ("rule_doc_inline", Some("pays")),
+        ("rule_synchronized", None),
+        ("rule_generic_call", None),
+        ("rule_default_arrow", None),
+        ("rule_default_label", None),
         ("rule_wrapped_generic", Some("max")),
         ("rule_annotation_type", Some("Audited")),
         ("rule_record", Some("Shift")),
+        ("rule_enum", Some("Color")),
+        ("rule_interface", Some("Shape")),
     ]);
     assert_eq!(item_names(&report), expected, "{report}");
 }
@@ -223,6 +236,16 @@ fn a_typescript_binding_names_the_exported_declaration_below_it() {
         ("rule_async_function", Some("paysOvertime")),
         ("rule_const_enum", Some("Shift")),
         ("rule_abstract_class", Some("Base")),
+        ("rule_generator_method", Some("shifts")),
+        ("rule_getter", Some("total")),
+        ("rule_setter", Some("total")),
+        ("rule_optional_method", None),
+        ("rule_parameter_properties", Some("constructor")),
+        ("rule_ternary", None),
+        ("rule_call_then_block", None),
+        ("rule_internal_doc", Some("hidden")),
+        ("rule_export_decorated", Some("Sealed")),
+        ("rule_default_decorated", Some("SealedDefault")),
     ]);
     assert_eq!(item_names(&report), expected, "{report}");
 }
@@ -239,6 +262,9 @@ fn a_javascript_binding_names_the_exported_declaration_below_it() {
         ("rule_test_callback", None),
         ("rule_arrow_test", None),
         ("rule_anonymous_default", None),
+        ("rule_generator_method", Some("hours")),
+        ("rule_let", Some("first")),
+        ("rule_var", Some("counter")),
     ]);
     assert_eq!(item_names(&report), expected, "{report}");
 }

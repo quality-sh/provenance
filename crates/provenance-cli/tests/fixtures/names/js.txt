@@ -27,3 +27,17 @@ test("hours above 38", () => {
 export default function () {}
 
 export function namedAfter() {}
+
+export class Clock {
+  // @provenance rule: rule_generator_method
+  *hours() {
+    let total = 0;
+    return total;
+  }
+}
+
+// @provenance rule: rule_let
+let first, second;
+
+// @provenance rule: rule_var
+var counter = 0;

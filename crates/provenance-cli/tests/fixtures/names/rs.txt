@@ -99,4 +99,23 @@ pub struct WideEntry;
 // @provenance rule: rule_raw_identifier
 pub fn r#match() {}
 
+// @provenance rule: rule_block_comment
+/* block
+ */ pub fn hidden_after_block() {}
+pub fn below_block() {}
+
+// @provenance rule: rule_inline_comment
+/* note */ pub fn inline_after_comment() {}
+pub fn next_after_inline() {}
+
+pub fn counts() {
+    // @provenance rule: rule_deref_statement
+    *counter() += 1;
+    fn nested_helper() {}
+}
+
+// @provenance rule: rule_nested_comment
+/* outer /* inner */ fn commented() {} */
+pub fn after_nested() {}
+
 // @provenance rule: rule_end

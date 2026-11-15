@@ -26,6 +26,36 @@ public final class Payroll {
         assertTrue(paysOvertime(39));
     }
 
+    // @provenance rule: rule_constructor
+    public Payroll(int hours) {
+        this.hours = hours;
+    }
+
+    // @provenance rule: rule_doc_inline
+    /** Pays. */ public int pays() { return 1; }
+    public int nextMethod() { return 2; }
+
+    void run() {
+        // @provenance rule: rule_synchronized
+        synchronized (lock) {
+            work();
+        }
+        // @provenance rule: rule_generic_call
+        Collections.<String>emptyList();
+        switch (hours) {
+            case 1 -> work();
+            // @provenance rule: rule_default_arrow
+            default -> rest(hours);
+        }
+        switch (hours) {
+            case 1:
+                break;
+            // @provenance rule: rule_default_label
+            default:
+                rest(hours);
+        }
+    }
+
     // @provenance rule: rule_wrapped_generic
     public static <T extends Comparable<T>> T
             max(java.util.List<T> items) {
@@ -38,3 +68,9 @@ public @interface Audited {}
 
 // @provenance rule: rule_record
 public record Shift(int hours) {}
+
+// @provenance rule: rule_enum
+public enum Color { RED }
+
+// @provenance rule: rule_interface
+interface Shape {}

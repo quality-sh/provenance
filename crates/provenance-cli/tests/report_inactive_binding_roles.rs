@@ -219,3 +219,62 @@ fn the_rendered_report_shows_a_test_comment_on_an_archived_rule_as_a_verificatio
         format!("- Current verification: [`tests/test_records.py:1`]({link}) (method `examples`).");
     assert_eq!(sites, [expected.as_str()], "{markdown}");
 }
+
+/// The lines of `output` that cite an inactive Rule, in output order.
+fn inactive_citations(output: &str) -> Vec<String> {
+    output
+        .lines()
+        .filter(|line| line.contains("with status"))
+        .map(str::to_owned)
+        .collect()
+}
+
+#[test]
+// Implementation aid: no Rule states the order of the warnings. The test keeps
+// the line order of the sites of one file in each output format.
+fn check_bindings_gives_the_inactive_rule_warnings_of_a_file_in_line_order() {
+    let directory = repo_with_inactive_rules();
+    let repo = directory.path();
+    let source = "#[rule(\"rule_deprecated\")]\npub fn first() {}\n\n\
+                  // @provenance rule: rule_deprecated\npub fn second() {}\n\n\
+                  #[rule(\"rule_archived\")]\npub fn third() {}\n\n\
+                  // @provenance rule: rule_archived\npub fn fourth() {}\n";
+    write(repo, "src/lib.rs", source);
+    let check = |format: Option<&str>| {
+        let mut command = provenance(repo);
+        command.args(["check", "--bindings", "--repo"]).arg(repo);
+        command.args(["--path", "src", "--scope", "default"]);
+        let report = format.map(|format| repo.join(format!("report.{format}")));
+        if let (Some(format), Some(report)) = (format, &report) {
+            command.args(["--format", format, "--output"]).arg(report);
+        }
+        let output = command.output().unwrap();
+        match report {
+            Some(report) => std::fs::read_to_string(report).unwrap(),
+            None => String::from_utf8(output.stdout).unwrap(),
+        }
+    };
+
+    let text = check(None);
+    let json = check(Some("json"));
+    let markdown = check(Some("markdown"));
+
+    let report: Value = serde_json::from_str(&json).unwrap();
+    let lines = report["warnings"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|warning| warning["message"].as_str().unwrap().contains("with status"))
+        .map(|warning| warning["line"].as_u64().unwrap())
+        .collect::<Vec<_>>();
+    assert_eq!(lines, [1, 4, 7, 10], "{json}");
+    let rules = ["rule_deprecated", "rule_deprecated", "rule_archived", "rule_archived"];
+    for output in [&text, &markdown] {
+        let citations = inactive_citations(output);
+        let cited = citations
+            .iter()
+            .map(|line| rules.iter().find(|rule| line.contains(*rule)).copied())
+            .collect::<Vec<_>>();
+        assert_eq!(cited, rules.map(Some), "{output}");
+    }
+}
