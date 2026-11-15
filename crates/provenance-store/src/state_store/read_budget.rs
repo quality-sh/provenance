@@ -134,7 +134,7 @@ pub fn ensure_within_read_budget<T: ReadBudget>(record: &T) -> anyhow::Result<()
 /// Refuses a stored line of more than `budget` bytes before it is written, for
 /// a file whose reads measure each stored line.
 #[cfg(feature = "host")]
-pub(crate) fn ensure_line_within(line: &str, budget: usize) -> anyhow::Result<()> {
+pub fn ensure_line_within(line: &str, budget: usize) -> anyhow::Result<()> {
     ensure_within(line.len(), budget)
 }
 
