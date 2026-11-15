@@ -24,8 +24,10 @@ pub enum OpenFailure {
     Settings(#[from] SettingsError),
     /// The initialized-graph gate did not complete: an I/O failure, a lock
     /// failure, a manifest that is not a file, or a manifest that does not parse.
-    #[error("{0:#}")]
-    Io(anyhow::Error),
+    /// The error is the source of this failure, so a caller that wraps the
+    /// failure finds a manifest that does not parse in its cause chain.
+    #[error("cannot open the repository")]
+    Io(#[source] anyhow::Error),
 }
 
 impl From<OpenFailure> for OperationFailure {

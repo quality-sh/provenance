@@ -118,14 +118,20 @@ impl PreparedContext {
         }
         Ok(self)
     }
-    pub(super) fn scope(self) -> Result<PreparedScope, OperationFailure> {
-        self.scope.ok_or(OperationFailure::UnavailableNeeds)
+    /// The scope of the operation, after the check of its grant.
+    pub(super) fn scope(self) -> anyhow::Result<PreparedScope> {
+        let scope = self.scope.ok_or(OperationFailure::UnavailableNeeds)?;
+        declared(&scope.repository)?;
+        Ok(scope)
     }
     pub(super) fn repository(self) -> Result<PreparedRepository, OperationFailure> {
         self.repository.ok_or(OperationFailure::UnavailableNeeds)
     }
-    pub(super) fn graph(self) -> Result<PreparedRead, OperationFailure> {
-        self.read.ok_or(OperationFailure::UnavailableNeeds)
+    /// The graph read of the operation, after the check of its grant.
+    pub(super) fn graph(self) -> anyhow::Result<PreparedRead> {
+        let read = self.read.ok_or(OperationFailure::UnavailableNeeds)?;
+        declared(&read.repository)?;
+        Ok(read)
     }
     pub(super) const fn validate_kind(&self, kind: ContextKind) -> Result<(), OperationFailure> {
         let valid = match kind {
@@ -174,6 +180,22 @@ pub trait ContextResolver: Send + Sync {
         context: RequestedContext,
         needs: ExecutionNeeds,
     ) -> Result<PreparedContext, OperationFailure>;
+}
+/// The grant of a scoped operation: the manifest must still declare the scope
+/// of `repository`. The check runs in the operation, before each read of the
+/// scope, so that a manifest that does not parse gives its own error to the
+/// failure of the operation, which classifies it as `invalid_state_file`.
+fn declared(repository: &Repository) -> anyhow::Result<()> {
+    let manifest = repository.manifest()?;
+    if manifest
+        .scopes
+        .iter()
+        .any(|scope| &scope.id == repository.scope())
+    {
+        Ok(())
+    } else {
+        Err(crate::refusal::common(OperationFailure::UnknownScope))
+    }
 }
 /// Tests only: a resolver with no repositories.
 #[cfg(test)]

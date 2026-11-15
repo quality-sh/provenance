@@ -421,21 +421,27 @@ same read. A write that needs the approval of
 the record gives the same refusal: an active Rule or an answered Question that
 cites a Resolution that is not approved needs the approval of that Resolution.
 
-The refusal names the file and the line of one row, and its message names the
-rows and each line that the repair removes. For example:
+The refusal names the file and the line of one row. Its message names the rows
+and their lines, and its `hint` gives the repair step, which names each line
+that the repair removes. The text form gives the message, then `; ` and the
+repair step. For example:
 
 ```text
-review submission S of requirement req_a has decisions with different results in ideation/dispositions.jsonl: accepted D1 at line 1 and rejected D2 at line 2. To repair, remove each of these lines that has a result that you do not keep, then commit.
+scopes/default/ideation/dispositions.jsonl line 2: review submission S of requirement req_a has decisions with different results in ideation/dispositions.jsonl: accepted D1 at line 1 and rejected D2 at line 2; To repair, remove each of these lines that has a result that you do not keep, then commit.
 ```
+
+This refusal does not give the two general procedures of a state file that
+does not parse, because it has a repair step of its own.
 
 Other records, the documents that do not hold the record, and the reads of all
 records of a type continue. `provenance check` reports each of these faults
 with its file and its line.
 
 A withdrawal that names no review submission makes each review read of the
-scope refuse. Its message names the line of the withdrawal.
+scope refuse. Its message names the withdrawal, and its repair step names its
+line.
 
-To repair the rows, do the repair step that the message gives, then commit.
+To repair the rows, do the repair step that the refusal gives, then commit.
 Some steps give a choice: keep one line of an ID, keep the decisions of one
 result, keep the approval or the withdrawals, or keep one submission. Remove
 only the lines that the step tells you to remove. One run of `provenance check`

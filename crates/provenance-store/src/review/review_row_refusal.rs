@@ -1,9 +1,9 @@
 //! The refusal of review rows that do not agree: `invalid_state_file` at the
-//! line of the second row, with a message that names both rows and the step
-//! that repairs them.
+//! line of the second row, with a message that names both rows and, as its
+//! correction, the step that repairs them.
 
 use super::review_rows::StoredRows;
-use crate::refusal::state_fault;
+use crate::refusal::corrected_state_fault;
 use crate::state_store::message_ids::ShardLine;
 use provenance_core::{
     review::{ReviewRowFamily, ReviewRowFault, RowAt},
@@ -125,16 +125,13 @@ fn rows_text(rows: &StoredRows, at: &[RowAt], label: impl Fn(RowAt) -> String) -
     )
 }
 
-/// The message of a fault. Its repair names each line that the person
-/// removes, so that one repair is sufficient.
-#[rule("rule_review_row_refusal_gives_repair")]
+/// The message of a fault: the rows and their lines, with no repair.
 fn message(rows: &StoredRows, fault: &ReviewRowFault) -> String {
     match fault {
         ReviewRowFault::IdOnTwoLines { id, lines, .. } => {
             let numbers = lines.iter().map(|&at| rows.line(at).line.to_string());
             format!(
-                "{} {} is on lines {} of {} with different contents. To repair, keep one of \
-                 these lines and remove the others, then commit.",
+                "{} {} is on lines {} of {} with different contents",
                 noun(lines[0].family),
                 id.as_str(),
                 joined(numbers),
@@ -146,8 +143,7 @@ fn message(rows: &StoredRows, fault: &ReviewRowFault) -> String {
             decisions,
             ..
         } => format!(
-            "{} has decisions with different results in {}: {}. To repair, remove each of these \
-             lines that has a result that you do not keep, then commit.",
+            "{} has decisions with different results in {}: {}",
             submission_name(rows, submission),
             file_of(rows.line(decisions[0])),
             rows_text(rows, decisions, |at| format!(
@@ -161,8 +157,7 @@ fn message(rows: &StoredRows, fault: &ReviewRowFault) -> String {
             approvals,
             withdrawals,
         } => format!(
-            "{} is accepted and withdrawn. The approvals in {}: {}. The withdrawals in {}: {}. \
-             To repair, remove each approval line or each withdrawal line, then commit.",
+            "{} is accepted and withdrawn. The approvals in {}: {}. The withdrawals in {}: {}",
             submission_name(rows, submission),
             file_of(rows.line(approvals[0])),
             rows_text(rows, approvals, |at| rows.id(at).as_str().to_owned()),
@@ -177,16 +172,15 @@ fn message(rows: &StoredRows, fault: &ReviewRowFault) -> String {
                 .iter()
                 .map(|lines| {
                     format!(
-                        "The lines of {}: {}.",
+                        "The lines of {}: {}",
                         rows.id(lines.submission).as_str(),
                         lines_text(rows, &lines.lines)
                     )
                 })
                 .collect::<Vec<_>>()
-                .join(" ");
+                .join(". ");
             format!(
-                "{} {} has {} review submissions with review cycle {cycle}. To repair, keep one \
-                 submission and remove the lines of each other submission, then commit. {}",
+                "{} {} has {} review submissions with review cycle {cycle}. {}",
                 NodeType::from(target.artifact_type).as_str(),
                 target.artifact_id.as_str(),
                 submissions.len(),
@@ -194,16 +188,38 @@ fn message(rows: &StoredRows, fault: &ReviewRowFault) -> String {
             )
         }
         ReviewRowFault::NoSubmission { proposal, lines } => format!(
-            "withdrawal {} names no review submission: {}. To repair, remove {}, then commit.",
+            "withdrawal {} names no review submission: {}",
             rows.id(lines[0]).as_str(),
             proposal.as_str(),
-            lines_text(rows, lines),
         ),
     }
+}
+
+/// The repair of a fault, which the refusal gives as its correction. It names
+/// each line that the person removes, or the lines of the message from which
+/// the person keeps one choice, so that one repair is sufficient.
+#[rule("rule_review_row_refusal_gives_repair")]
+fn repair(rows: &StoredRows, fault: &ReviewRowFault) -> String {
+    let step = match fault {
+        ReviewRowFault::IdOnTwoLines { .. } => "keep one of these lines and remove the others",
+        ReviewRowFault::DifferentResults { .. } => {
+            "remove each of these lines that has a result that you do not keep"
+        }
+        ReviewRowFault::AcceptedAndWithdrawn { .. } => {
+            "remove each approval line or each withdrawal line"
+        }
+        ReviewRowFault::OneCycleTwoSubmissions { .. } => {
+            "keep one submission and remove the lines of each other submission"
+        }
+        ReviewRowFault::NoSubmission { lines, .. } => {
+            return format!("To repair, remove {}, then commit.", lines_text(rows, lines));
+        }
+    };
+    format!("To repair, {step}, then commit.")
 }
 
 /// `invalid_state_file` at the line of the row that the fault names.
 #[rule("rule_inconsistent_records_refusal_names_records")]
 pub(super) fn refusal(rows: &StoredRows, fault: &ReviewRowFault) -> anyhow::Error {
-    state_fault(rows.line(fault.at()), message(rows, fault))
+    corrected_state_fault(rows.line(fault.at()), message(rows, fault), &repair(rows, fault))
 }

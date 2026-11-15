@@ -20,11 +20,12 @@ use axum::{
     routing::{get, post},
     Json,
 };
-use provenance_core::protocol::failure::{FailureEnvelope, OperationFailure};
+use provenance_core::protocol::failure::{ErasedFailure, FailureEnvelope, OperationFailure};
 use provenance_macros::rule;
 use provenance_porcelain::check::CheckPort;
 use provenance_store::{
     operations::{
+        catalog::{HandlerFailure as _, ReadError},
         read_policy::{FreshnessPolicy, ReadPolicy},
         LocalRepository,
     },
@@ -363,7 +364,8 @@ async fn configuration(
         return refusal(error);
     }
     let actor_ids = match disposition_actor_ids(config.repository.clone()).await {
-        Ok(actor_ids) => actor_ids,
+        Ok(Ok(actor_ids)) => actor_ids,
+        Ok(Err(error)) => return read_refusal(error),
         Err(error) => return refusal(error),
     };
     let path = config.path.clone();
@@ -387,12 +389,13 @@ async fn configuration(
 }
 
 /// The manifest read can wait for the publication lock, so it runs off the runtime workers.
+/// The outer failure is a read task that did not finish.
 async fn disposition_actor_ids(
     repository: Arc<LocalRepository>,
-) -> Result<Vec<String>, OperationFailure> {
+) -> Result<Result<Vec<String>, ReadError>, OperationFailure> {
     tokio::task::spawn_blocking(move || repository.disposition_actor_ids())
         .await
-        .unwrap_or(Err(OperationFailure::Internal))
+        .map_err(|_| OperationFailure::Internal)
 }
 
 async fn protect_origin(
@@ -459,6 +462,17 @@ async fn protect_origin(
             .expect("loopback WebSocket policy"),
     );
     response
+}
+
+/// The answer of a read failure, such as `invalid_state_file` for a manifest that does not
+/// parse, with its status.
+fn read_refusal(error: ReadError) -> Response {
+    let status = error.failure_status();
+    (
+        StatusCode::from_u16(status).expect("read failure status"),
+        Json(ErasedFailure::declared("review-config", error, status)),
+    )
+        .into_response()
 }
 
 fn refusal(error: OperationFailure) -> Response {
