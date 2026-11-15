@@ -121,22 +121,26 @@ The row "stops that left no live state" counts the stops that killed a
 write before its answer and left no live state. The next read recovers
 the live state from the transaction.
 
-Five probes of the CLI layer stop a write on each run. One stops an update
-of two keys at its transaction, and the stop must land before the marker.
-One stops the update at the marker, and the stop must land after the marker
-and before the install. After each of the two, a read must remove the
-marker and the transaction and give the state before the update. One stops
-a claim, a write of one key, when its temporary file appears, and the stop
-must land before the rename; after a read, the state is the state before
-the claim, and the temporary file stays, but no read sees it. One stops the
-claim when its temporary file goes, and the stop must land after the
-rename; after a read, only the Topic key changed. One stops each kind of
-write that the simulation sends at its first point: a write of two keys
-must stop before the marker, and a write of one key before the rename. On
-macOS the rename of a one-key write can occur after the test saw its
-temporary file and before the kill lands: the probe before the rename does
-not run there, and the probe of each kind also accepts a stop after the
-rename.
+Four probes of the CLI layer stop a write on each run. The job summary of
+each system counts the stops of each probe in rows of their own: the name
+of the probe, a row of the table above, and the count.
+
+- `stop-before-marker` stops an update of two keys when its transaction
+  appears. The stop must land before the marker.
+- `stop-after-marker` stops the update when its marker appears. The stop
+  must land after the marker and before the install. After each of these
+  two stops, a read must remove the marker and the transaction and give the
+  state before the update.
+- `one-key-write` stops a claim, a write of one key, when its temporary
+  file appears. The stop can land before the rename or after it, or the
+  claim can end with a success before the kill. For a stop before the
+  rename, the state after a read is the state before the claim; the
+  temporary file stays, but no read sees it. For a stop after the rename
+  or a success, only the Topic key changed after a read.
+- `each-kind` stops each kind of write that the simulation sends at its
+  first point. A write of two keys must stop before the marker. A write of
+  one key can stop before or after its rename, or end with a success
+  before the kill.
 
 ## When a failure issue opens
 
