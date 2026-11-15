@@ -23,8 +23,8 @@ const FOLLOWS: usize = 10;
 /// The ids of the entries of each page of the history of `req_a` over the
 /// 205-commit history, where the author name of `edit_001` has `author`
 /// bytes. The client follows `next_cursor` from the first page. A failed
-/// page gives its status and its error.
-async fn pages(author: usize) -> Result<Vec<Vec<String>>, (u16, Value)> {
+/// page gives the pages before it, and its status and its error.
+async fn pages(author: usize) -> (Vec<Vec<String>>, Option<(u16, Value)>) {
     let base = history(&Sources {
         clock: Arc::new(SystemClock),
         ids: Arc::new(RandomIds),
@@ -44,7 +44,7 @@ async fn pages(author: usize) -> Result<Vec<Vec<String>>, (u16, Value)> {
         let answer = http.call("GET", &route, None, &[], route.clone()).await;
         let body = answer.json();
         if answer.status != 200 {
-            return Err((answer.status, body["error"].clone()));
+            return (pages, Some((answer.status, body["error"].clone())));
         }
         let ids: Vec<String> = body["data"]["items"]
             .as_array()
@@ -61,7 +61,7 @@ async fn pages(author: usize) -> Result<Vec<Vec<String>>, (u16, Value)> {
         );
         pages.push(ids);
         if !next.is_string() {
-            return Ok(pages);
+            return (pages, None);
         }
         request["cursor"] = next.clone();
     }
@@ -71,11 +71,13 @@ async fn pages(author: usize) -> Result<Vec<Vec<String>>, (u16, Value)> {
 /// A version larger than the page bytes and smaller than the response
 /// budget is alone on its page, and the pages after it hold the rest of
 /// the history.
+///
+/// Implementation aid, no Rule: no Rule in the graph says a page with a cursor holds an entry.
 #[tokio::test]
-#[verifies("rule_query_pages_bound_shared_reads", examples)]
 async fn a_version_larger_than_a_page_is_alone_on_its_page() {
     let _alone = crate::one_at_a_time().await;
-    let pages = pages(1_050_000).await.unwrap();
+    let (pages, failure) = pages(1_050_000).await;
+    assert_eq!(failure, None);
     let sizes: Vec<usize> = pages.iter().map(Vec::len).collect();
     assert_eq!(sizes, [1, 1, 200, 4]);
     assert_eq!(pages[0], [long_name(0)]);
@@ -86,13 +88,16 @@ async fn a_version_larger_than_a_page_is_alone_on_its_page() {
 }
 
 /// A version larger than the response budget gives the explicit budget
-/// refusal on its page.
+/// refusal on page 2, its page, and page 1 gives the version before it.
 #[tokio::test]
 #[verifies("rule_query_pages_bound_shared_reads", examples)]
 async fn a_version_larger_than_the_budget_gives_page_budget_exceeded() {
     let _alone = crate::one_at_a_time().await;
     assert_eq!(
         pages(1_200_000).await,
-        Err((409, json!({"kind": "page_budget_exceeded"})))
+        (
+            vec![vec![long_name(0)]],
+            Some((409, json!({"kind": "page_budget_exceeded"})))
+        )
     );
 }

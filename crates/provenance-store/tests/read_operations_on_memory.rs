@@ -20,6 +20,9 @@ mod adapter;
 mod answers;
 #[path = "read_operations_on_memory/catch_up.rs"]
 mod catch_up;
+#[cfg(feature = "host")]
+#[path = "read_operations_on_memory/git_history_pages.rs"]
+mod git_history_pages;
 #[path = "read_operations_on_memory/history.rs"]
 mod history;
 #[path = "support/history_cases.rs"]

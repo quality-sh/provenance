@@ -8,8 +8,8 @@
 //! are in their own binary, and the tests that read a history to its end
 //! take `ONE_READER` so that no other test changes what the process keeps.
 //! `entry_edges` holds the entry reads at the edges of a page, and
-//! `page_edges` the history pages at the same edges, as evidence of
-//! `rule_query_pages_bound_shared_reads`.
+//! `page_edges` the history pages at the same edges; its budget refusal
+//! test is evidence of `rule_query_pages_bound_shared_reads`.
 
 mod discussion_support;
 #[path = "history_text_calls/entry_edges.rs"]
