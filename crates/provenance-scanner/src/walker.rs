@@ -186,9 +186,7 @@ fn scan_file_contents(
     content: &str,
     lexical_content: &str,
 ) -> FileScan {
-    let mut annotations = Vec::new();
-    let mut bindings = Vec::new();
-    let mut warnings = Vec::new();
+    let (mut annotations, mut bindings, mut warnings) = (Vec::new(), Vec::new(), Vec::new());
     let original_lines = content.lines().collect::<Vec<_>>();
     let lines = lexical_content.lines().collect::<Vec<_>>();
     let rust_states = rust_line_states(language, &lines);
@@ -235,7 +233,7 @@ fn scan_file_contents(
                 &rust_states[end_idx + 1..],
                 language,
                 in_block_comment,
-                &multiline_delimiter,
+                multiline_delimiter.clone(),
             );
             let item_name =
                 binding_item_name(language, &lines, end_idx, below, binding.verification);
@@ -250,14 +248,13 @@ fn scan_file_contents(
             idx = end_idx + 1;
             continue;
         }
-        let marker_position = annotation_marker_start(
+        let Some(marker_position) = annotation_marker_start(
             language,
             lines[idx],
             rust_states[idx],
             started_in_block_comment,
             started_in_multiline_string,
-        );
-        let Some(marker_position) = marker_position else {
+        ) else {
             idx += 1;
             continue;
         };
@@ -268,18 +265,16 @@ fn scan_file_contents(
             &rust_states[idx + 1..],
             language,
             in_block_comment,
-            &multiline_delimiter,
+            multiline_delimiter.clone(),
         );
         let function_name = declaration::item_name(language, &lines[idx + 1..], below);
-        for annotation in parsed.annotations {
-            annotations.push(AnnotationLocation {
-                file_path: file_path.to_path_buf(),
-                line: idx + 1,
-                function_name: function_name.clone(),
-                anchor: EvidenceAnchor::new(function_name.clone(), original_lines[idx]),
-                annotation,
-            });
-        }
+        annotations.extend(parsed.annotations.into_iter().map(|annotation| AnnotationLocation {
+            file_path: file_path.to_path_buf(),
+            line: idx + 1,
+            function_name: function_name.clone(),
+            anchor: EvidenceAnchor::new(function_name.clone(), original_lines[idx]),
+            annotation,
+        }));
         consume_comment_lines(language, &lines[idx + 1..=end_idx], &mut in_block_comment);
         idx = end_idx + 1;
     }
@@ -352,14 +347,14 @@ fn line_start<'a>(
     rust_states: &'a [RustLexicalState],
     language: Language,
     in_block_comment: bool,
-    multiline_delimiter: &Option<String>,
+    multiline_delimiter: Option<String>,
 ) -> LineStart<'a> {
     if language == Language::Rust {
         LineStart::Rust(rust_states)
     } else {
         LineStart::Carried {
             in_block_comment,
-            multiline_delimiter: multiline_delimiter.clone(),
+            multiline_delimiter,
         }
     }
 }

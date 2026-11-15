@@ -31,18 +31,18 @@ pub(super) struct Tokens<'a> {
     lines: &'a [&'a str],
     start: LineStart<'a>,
     next_line: usize,
-    tokens: Vec<(&'a str, usize)>,
+    read: Vec<(&'a str, usize)>,
     first: usize,
 }
 
 impl<'a> Tokens<'a> {
-    pub(super) fn new(language: Language, lines: &'a [&'a str], start: LineStart<'a>) -> Self {
+    pub(super) const fn new(language: Language, lines: &'a [&'a str], start: LineStart<'a>) -> Self {
         Self {
             language,
             lines,
             start,
             next_line: 0,
-            tokens: Vec::new(),
+            read: Vec::new(),
             first: 0,
         }
     }
@@ -50,22 +50,22 @@ impl<'a> Tokens<'a> {
     /// The token at `index`, counted from the first token. The lines are read
     /// up to that token and no further.
     pub(super) fn get(&mut self, index: usize) -> Option<&'a str> {
-        while self.first + index >= self.tokens.len() {
+        while self.first + index >= self.read.len() {
             if !self.read_line() {
                 return None;
             }
         }
-        Some(self.tokens[self.first + index].0)
+        Some(self.read[self.first + index].0)
     }
 
     /// Whether the tokens at `left` and `right`, which `get` gave, are on one
     /// line.
     pub(super) fn on_one_line(&self, left: usize, right: usize) -> bool {
-        self.tokens[self.first + left].1 == self.tokens[self.first + right].1
+        self.read[self.first + left].1 == self.read[self.first + right].1
     }
 
     /// Makes the token at `index` the first token.
-    pub(super) fn skip(&mut self, index: usize) {
+    pub(super) const fn skip(&mut self, index: usize) {
         self.first += index;
     }
 
@@ -105,7 +105,7 @@ impl<'a> Tokens<'a> {
         }
         for (range, piece) in pieces {
             match piece {
-                Piece::Quoted => self.tokens.push((&line[range], number)),
+                Piece::Quoted => self.read.push((&line[range], number)),
                 Piece::Code => self.push_words(&line[range], number),
             }
         }
@@ -130,12 +130,12 @@ impl<'a> Tokens<'a> {
                     end = index + next.len_utf8();
                 }
             }
-            self.tokens.push((&code[start..end], number));
+            self.read.push((&code[start..end], number));
         }
     }
 }
 
-fn comment_syntax(language: Language) -> CommentSyntax {
+const fn comment_syntax(language: Language) -> CommentSyntax {
     match language {
         Language::Python => CommentSyntax::Hash,
         Language::Rust => CommentSyntax::Rust,

@@ -246,9 +246,11 @@ fn check_bindings_gives_the_inactive_rule_warnings_of_a_file_in_line_order() {
         command.args(["--path", "src", "--scope", "default"]);
         let report = format.map(|format| repo.join(format!("report.{format}")));
         if let (Some(format), Some(report)) = (format, &report) {
-            command.args(["--format", format, "--output"]).arg(report);
+            command.args(["--output-format", format, "--output"]).arg(report);
         }
         let output = command.output().unwrap();
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert!(output.status.success(), "{stderr}");
         match report {
             Some(report) => std::fs::read_to_string(report).unwrap(),
             None => String::from_utf8(output.stdout).unwrap(),

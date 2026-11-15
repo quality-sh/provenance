@@ -77,35 +77,33 @@ pub(super) fn rust_pieces(
                     *state = RustLexicalState::BlockComment(1);
                     index += 2;
                 }
-                b'\'' => match rust_character_literal_end(line, index + 1) {
-                    Some(end) => {
+                b'\'' => {
+                    if let Some(end) = rust_character_literal_end(line, index + 1) {
                         end_code(index, &mut code_start, &mut visit);
                         visit(index..end + 1, Piece::Quoted);
                         index = end + 1;
-                    }
-                    None => {
+                    } else {
                         code_start.get_or_insert(index);
                         index += 1;
                     }
-                },
+                }
                 b'"' => {
                     end_code(index, &mut code_start, &mut visit);
                     quote_start = Some(index);
                     *state = RustLexicalState::Quoted;
                     index += 1;
                 }
-                b'r' => match raw_string_hashes(&bytes[index + 1..]) {
-                    Some(hashes) => {
+                b'r' => {
+                    if let Some(hashes) = raw_string_hashes(&bytes[index + 1..]) {
                         end_code(index, &mut code_start, &mut visit);
                         quote_start = Some(index);
                         *state = RustLexicalState::Raw(hashes);
                         index += hashes + 2;
-                    }
-                    None => {
+                    } else {
                         code_start.get_or_insert(index);
                         index += 1;
                     }
-                },
+                }
                 _ => {
                     code_start.get_or_insert(index);
                     index += 1;
