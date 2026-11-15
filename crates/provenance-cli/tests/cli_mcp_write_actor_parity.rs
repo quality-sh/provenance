@@ -52,12 +52,36 @@ fn assert_same_data(by_cli: &Value, by_mcp: &Value) {
 async fn create_and_update(actor: Option<&str>) -> [Value; 2] {
     let [by_cli, by_mcp] = [repository(), repository()];
     let actor_flags = actor.map_or_else(Vec::new, |actor| vec!["--actor", actor]);
-    let mut create = vec!["req_a", "create", "--type", "requirement", "--statement", STATEMENT];
-    create.extend(["--status", "active", "--depends-on-json", "[]", "--supersedes-json", "[]"]);
+    let mut create = vec![
+        "req_a",
+        "create",
+        "--type",
+        "requirement",
+        "--statement",
+        STATEMENT,
+    ];
+    create.extend([
+        "--status",
+        "active",
+        "--depends-on-json",
+        "[]",
+        "--supersedes-json",
+        "[]",
+    ]);
     create.extend(&actor_flags);
     let cli_created = cli_json(by_cli.path(), &create);
-    let etag = cli_review(by_cli.path())["edit"]["etag"].as_str().unwrap().to_owned();
-    let mut update = vec!["req_a", "update", "--if-match", &etag, "--description", "Edited."];
+    let etag = cli_review(by_cli.path())["edit"]["etag"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    let mut update = vec![
+        "req_a",
+        "update",
+        "--if-match",
+        &etag,
+        "--description",
+        "Edited.",
+    ];
     update.extend(&actor_flags);
     let cli_updated = cli_json(by_cli.path(), &update);
 
@@ -80,8 +104,14 @@ async fn create_and_update(actor: Option<&str>) -> [Value; 2] {
     let mcp_stored = mcp_review(&server).await["decision"]["pending"]["actor"].clone();
     server.close().await;
 
-    assert_same_data(&cli_created["data"], &mcp_created["structuredContent"]["data"]);
-    assert_same_data(&cli_updated["data"], &mcp_updated["structuredContent"]["data"]);
+    assert_same_data(
+        &cli_created["data"],
+        &mcp_created["structuredContent"]["data"],
+    );
+    assert_same_data(
+        &cli_updated["data"],
+        &mcp_updated["structuredContent"]["data"],
+    );
     let cli_stored = cli_review(by_cli.path())["decision"]["pending"]["actor"].clone();
     [cli_stored, mcp_stored]
 }
@@ -142,8 +172,18 @@ async fn a_submit_with_no_actor_is_refused_on_the_cli_and_mcp() {
     crate::cli_mcp_write_actor::requirement(repo);
     let refusal = json!({"error":{"field":"request.actor","kind":"invalid_input",
         "reason":"required"},"meta":{}});
-    let lists = ["--source-ids-json", "[]", "--evidence-references-json", "[]"];
-    let submit = [&["req_a", "submit"][..], &lists[..], &["--builds-on-json", "[]"]].concat();
+    let lists = [
+        "--source-ids-json",
+        "[]",
+        "--evidence-references-json",
+        "[]",
+    ];
+    let submit = [
+        &["req_a", "submit"][..],
+        &lists[..],
+        &["--builds-on-json", "[]"],
+    ]
+    .concat();
     let (code, stdout, stderr) = run(repo, &[&submit[..], &["--format", "json"]].concat());
     assert_eq!((code, stdout.as_str()), (1, ""));
     assert_eq!(serde_json::from_str::<Value>(&stderr).unwrap(), refusal);
@@ -169,10 +209,32 @@ async fn rule_and_resolution_writes_record_authoring_and_refuse_an_actor() {
     let directory = repository();
     let repo = directory.path();
     crate::cli_mcp_write_actor::requirement(repo);
-    let rule = ["rule_a", "create", "--type", "rule", "--statement", "The system stores rules."];
-    let resolution = ["res_a", "create", "--type", "resolution", "--title", "One store"];
-    let resolution_text = ["--position", "Keep one store.", "--rationale", "It is simple."];
-    let writes = [rule.to_vec(), [&resolution[..], &resolution_text[..]].concat()];
+    let rule = [
+        "rule_a",
+        "create",
+        "--type",
+        "rule",
+        "--statement",
+        "The system stores rules.",
+    ];
+    let resolution = [
+        "res_a",
+        "create",
+        "--type",
+        "resolution",
+        "--title",
+        "One store",
+    ];
+    let resolution_text = [
+        "--position",
+        "Keep one store.",
+        "--rationale",
+        "It is simple.",
+    ];
+    let writes = [
+        rule.to_vec(),
+        [&resolution[..], &resolution_text[..]].concat(),
+    ];
     for create in writes {
         let id = create[0];
         let create = [&create[..], &["--requirement-ids", "req_a"]].concat();
@@ -183,7 +245,10 @@ async fn rule_and_resolution_writes_record_authoring_and_refuse_an_actor() {
         );
         cli_json(repo, &create);
         let read = cli_json(repo, &[id, "get", "--view", "review"]);
-        assert_eq!(read["review"]["decision"]["pending"]["actor"], "authoring", "{id}");
+        assert_eq!(
+            read["review"]["decision"]["pending"]["actor"], "authoring",
+            "{id}"
+        );
     }
     let server = Server::start(repo.to_str().unwrap()).await;
     for (id, field) in [("rule_a", "description"), ("res_a", "rationale")] {
@@ -194,7 +259,11 @@ async fn rule_and_resolution_writes_record_authoring_and_refuse_an_actor() {
         let error = &refused["structuredContent"]["error"];
         assert_eq!(
             (&error["kind"], &error["field"], &error["reason"]),
-            (&json!("invalid_input"), &json!("actor"), &json!("unknown_field")),
+            (
+                &json!("invalid_input"),
+                &json!("actor"),
+                &json!("unknown_field")
+            ),
             "{id}"
         );
     }

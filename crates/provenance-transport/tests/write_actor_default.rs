@@ -30,7 +30,11 @@ async fn an_api_requirement_create_with_no_actor_records_authoring() {
     assert_eq!(stored["decision"]["pending"]["actor"], "authoring");
     assert_eq!(
         (&stored["id"], &stored["statement"], &stored["status"]),
-        (&json!("req_new"), &json!("The system stores each record."), &json!("active"))
+        (
+            &json!("req_new"),
+            &json!("The system stores each record."),
+            &json!("active")
+        )
     );
     assert_eq!(created, json!({"data": stored, "meta": {}}));
 }
@@ -95,11 +99,19 @@ async fn an_api_discussion_status_change_with_no_actor_is_refused() {
         "body":"A concern."}});
     let (status, started) = call(&host, "POST", PARENT, Some(body)).await;
     assert_eq!(status, 200, "{started}");
-    let discussion = format!("{PARENT}/{}", started["data"]["discussion_id"].as_str().unwrap());
+    let discussion = format!(
+        "{PARENT}/{}",
+        started["data"]["discussion_id"].as_str().unwrap()
+    );
     let body = json!({"data":{"declared_by":null, "status":"resolved"}});
-    let (status, refused) =
-        call_with_headers(&host, "PATCH", &discussion, Some(body), &[("if-match", "\"1\"")])
-            .await;
+    let (status, refused) = call_with_headers(
+        &host,
+        "PATCH",
+        &discussion,
+        Some(body),
+        &[("if-match", "\"1\"")],
+    )
+    .await;
     assert_eq!(status, 400, "{refused}");
     assert_eq!(
         refused,
@@ -107,5 +119,8 @@ async fn an_api_discussion_status_change_with_no_actor_is_refused() {
             "meta":{}})
     );
     let stored = read(&host, &discussion).await["discussion"].clone();
-    assert_eq!((&stored["status"], &stored["version"]), (&json!("active"), &json!(1)));
+    assert_eq!(
+        (&stored["status"], &stored["version"]),
+        (&json!("active"), &json!(1))
+    );
 }

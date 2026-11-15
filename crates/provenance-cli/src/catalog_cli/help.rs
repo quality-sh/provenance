@@ -37,7 +37,8 @@ pub(super) fn target(
                 allowed.extend(fields::accepted_flags(&declared));
                 for field in &declared {
                     if let Some(description) = fields::description(field) {
-                        help.entry(field.name.clone()).or_insert_with(|| description.to_owned());
+                        help.entry(field.name.clone())
+                            .or_insert_with(|| description.to_owned());
                     }
                 }
             }

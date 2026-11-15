@@ -41,7 +41,15 @@ pub fn cli_json(repo: &Path, args: &[&str]) -> Value {
 pub fn repository() -> tempfile::TempDir {
     let directory = tempfile::tempdir().unwrap();
     let repo = directory.path().to_str().unwrap();
-    let args = ["init", "--scope", "default", "--path-prefix", ".", "--path", repo];
+    let args = [
+        "init",
+        "--scope",
+        "default",
+        "--path-prefix",
+        ".",
+        "--path",
+        repo,
+    ];
     let (code, _, stderr) = run(directory.path(), &args);
     assert_eq!(code, 0, "{stderr}");
     directory
@@ -51,7 +59,16 @@ pub fn repository() -> tempfile::TempDir {
 pub fn requirement(repo: &Path) {
     cli_json(
         repo,
-        &["req_a", "create", "--type", "requirement", "--statement", STATEMENT, "--actor", "author"],
+        &[
+            "req_a",
+            "create",
+            "--type",
+            "requirement",
+            "--statement",
+            STATEMENT,
+            "--actor",
+            "author",
+        ],
     );
 }
 
@@ -62,7 +79,10 @@ pub fn cli_review(repo: &Path) -> Value {
 
 /// The review view of `req_a`, as MCP reads it.
 pub async fn mcp_review(server: &Server) -> Value {
-    let read = server.client.call("get", json!({"target":"req_a","view":"review"})).await;
+    let read = server
+        .client
+        .call("get", json!({"target":"req_a","view":"review"}))
+        .await;
     assert_ne!(read["isError"], json!(true), "{read}");
     read["structuredContent"]["review"].clone()
 }
@@ -116,7 +136,14 @@ fn a_cli_requirement_create_with_no_actor_records_authoring() {
     let repo = directory.path();
     let created = cli_json(
         repo,
-        &["req_a", "create", "--type", "requirement", "--statement", STATEMENT],
+        &[
+            "req_a",
+            "create",
+            "--type",
+            "requirement",
+            "--statement",
+            STATEMENT,
+        ],
     );
     let review = cli_review(repo);
     assert_eq!(review["decision"]["pending"]["actor"], "authoring");
@@ -131,10 +158,20 @@ fn a_cli_requirement_update_with_no_actor_records_authoring() {
     let directory = repository();
     let repo = directory.path();
     requirement(repo);
-    let etag = cli_review(repo)["edit"]["etag"].as_str().unwrap().to_owned();
+    let etag = cli_review(repo)["edit"]["etag"]
+        .as_str()
+        .unwrap()
+        .to_owned();
     let updated = cli_json(
         repo,
-        &["req_a", "update", "--if-match", &etag, "--description", "Edited."],
+        &[
+            "req_a",
+            "update",
+            "--if-match",
+            &etag,
+            "--description",
+            "Edited.",
+        ],
     );
     let review = cli_review(repo);
     assert_eq!(review["decision"]["pending"]["actor"], "authoring");
