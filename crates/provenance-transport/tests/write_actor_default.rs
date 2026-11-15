@@ -1,6 +1,6 @@
 //! A Requirement create, a Requirement update and a Discussion start through the HTTP API
 //! that give no actor record the actor `authoring`. A reply needs no actor. A Discussion
-//! status change still needs its actor, and a JSON `null` actor is refused on each write.
+//! status change needs its actor, and a JSON `null` actor is refused on each write.
 #![cfg(feature = "test-fixture")]
 use crate::support;
 use provenance_macros::verifies;
@@ -196,6 +196,7 @@ async fn an_api_reply_with_or_without_an_actor_stores_no_actor() {
     let host = host(&repo, true);
     let discussion = discussion(&host).await;
     let replies = format!("{discussion}/messages");
+    let mut answers = Vec::new();
     for (version, actor) in [(1, Some("agent")), (2, None)] {
         let mut data = json!({"declared_by":null, "role":"user", "body":"A reply."});
         if let Some(actor) = actor {
@@ -211,6 +212,7 @@ async fn an_api_reply_with_or_without_an_actor_stores_no_actor() {
         )
         .await;
         assert_eq!(status, 200, "{actor:?}: {answer}");
+        answers.push(answer);
     }
     let discussions = discussion_rows(&repo);
     assert_eq!(discussions.len(), 1);
@@ -239,10 +241,22 @@ async fn an_api_reply_with_or_without_an_actor_stores_no_actor() {
         });
         assert_eq!(row, &expected);
     }
+    let id = discussion.rsplit('/').next().unwrap();
+    let receipt = |version: usize| {
+        json!({
+            "scope_id": "default", "discussion_id": id,
+            "parent": {"node_type": "requirement", "node_id": "req_shared"},
+            "thread_id": thread, "root_message_id": message_ids[0],
+            "message_ids": message_ids[..version], "status": "active", "version": version,
+            "actor": "reviewer", "outcomes": [], "disposition_id": null,
+        })
+    };
+    let expected = [2, 3].map(|version| json!({"data": receipt(version), "meta": {}}));
+    assert_eq!(answers, expected);
 }
 
-/// Implementation aid: a JSON `null` actor is refused on each write that takes an optional
-/// actor, as before the actor was optional, and the write changes no record.
+/// Implementation aid: a JSON `null` actor is invalid input on each write that takes an
+/// optional actor, and the write changes no record.
 #[tokio::test]
 async fn a_null_actor_is_refused_on_each_write() {
     let repo = Repository::new("The shared graph is readable.");

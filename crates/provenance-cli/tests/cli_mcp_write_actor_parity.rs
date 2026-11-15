@@ -3,7 +3,8 @@
 //! on the two interfaces.
 
 use crate::cli_mcp_record_actions::Server;
-use crate::cli_mcp_write_actor::{cli_json, cli_review, mcp_review, repository, run, STATEMENT};
+use crate::cli_mcp_read_parity::cli_json;
+use crate::cli_mcp_write_actor::{cli_review, mcp_review, repository, run, STATEMENT};
 use provenance_macros::verifies;
 use serde_json::{json, Map, Value};
 

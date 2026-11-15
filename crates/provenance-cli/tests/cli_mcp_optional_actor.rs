@@ -3,7 +3,8 @@
 //! one description.
 
 use crate::cli_mcp_record_actions::Server;
-use crate::cli_mcp_write_actor::{cli_json, mcp_review, repository, requirement};
+use crate::cli_mcp_read_parity::cli_json;
+use crate::cli_mcp_write_actor::{mcp_review, repository, requirement};
 use serde_json::{json, Value};
 use std::path::Path;
 
@@ -63,7 +64,7 @@ async fn a_reply_with_no_actor_is_accepted_on_the_cli_and_mcp_and_stores_no_acto
         .as_str()
         .unwrap()
         .to_owned();
-    let replied = cli_json(
+    let by_cli = cli_json(
         repo,
         &[
             id.as_str(),
@@ -74,16 +75,11 @@ async fn a_reply_with_no_actor_is_accepted_on_the_cli_and_mcp_and_stores_no_acto
             "1",
         ],
     );
-    assert_eq!(
-        (&replied["kind"], &replied["receipt"]["actor"]),
-        (&json!("written"), &json!("reviewer"))
-    );
     let server = Server::start(repo.to_str().unwrap()).await;
     let arguments = json!({"action":"reply","target":id,"role":"user","body":"A reply.",
         "expected_version":2});
-    let replied = server.client.call("change", arguments).await;
+    let by_mcp = server.client.call("change", arguments).await;
     server.close().await;
-    assert_ne!(replied["isError"], json!(true), "{replied}");
     let (discussions, messages) = discussion_rows(repo);
     assert_eq!(discussions.len(), 1);
     assert_eq!(
@@ -103,6 +99,27 @@ async fn a_reply_with_no_actor_is_accepted_on_the_cli_and_mcp_and_stores_no_acto
         });
         assert_eq!(row, &expected);
     }
+    let receipt = |version: usize| {
+        json!({
+            "scope_id": "default", "discussion_id": id,
+            "parent": {"node_type": "requirement", "node_id": "req_a"},
+            "thread_id": thread, "root_message_id": message_ids[0],
+            "message_ids": message_ids[..version], "status": "active", "version": version,
+            "actor": "reviewer", "outcomes": [], "disposition_id": null,
+        })
+    };
+    assert_eq!(by_cli, json!({"kind": "written", "receipt": receipt(2)}));
+    let text = format!(
+        "discussion {id} parent=requirement req_a status=active version=3 message={}",
+        message_ids[2].as_str().unwrap()
+    );
+    assert_eq!(
+        by_mcp,
+        json!({
+            "content": [{"type": "text", "text": text}], "isError": false,
+            "structuredContent": {"action": "reply", "kind": "written", "receipt": receipt(3)},
+        })
+    );
 }
 
 /// Implementation aid: a JSON `null` actor is refused on each MCP write that takes an

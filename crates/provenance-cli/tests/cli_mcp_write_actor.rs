@@ -3,6 +3,7 @@
 //! complete answer and then reads the stored actor back through the same interface.
 
 use crate::bounded_process::{provenance, Bounded as _};
+use crate::cli_mcp_read_parity::cli_json;
 use crate::cli_mcp_record_actions::{init, Server};
 use provenance_macros::verifies;
 use serde_json::{json, Value};
@@ -10,9 +11,14 @@ use std::path::Path;
 
 pub const STATEMENT: &str = "The system stores records.";
 
-/// The text that the CLI gives when no review host runs for the repository `.`.
-const REVIEW_MESSAGE: &str = "No review host is running. Start it with `provenance review \
-     --repo . --repository-id local --scope default --detach`.";
+/// The text that the CLI gives when no review host runs for the repository `repo`.
+fn review_message(repo: &Path) -> String {
+    format!(
+        "No review host is running. Start it with `provenance review --repo {} \
+         --repository-id local --scope default --detach`.",
+        repo.display()
+    )
+}
 
 /// The exit code, the standard output and the standard error of one CLI command that runs
 /// in the repository directory.
@@ -23,15 +29,6 @@ pub fn run(repo: &Path, args: &[&str]) -> (i32, String, String) {
         String::from_utf8(output.stdout).unwrap(),
         String::from_utf8(output.stderr).unwrap(),
     )
-}
-
-/// The JSON answer of one CLI command that succeeds with no text on standard error.
-pub fn cli_json(repo: &Path, args: &[&str]) -> Value {
-    let mut all = args.to_vec();
-    all.extend(["--format", "json"]);
-    let (code, stdout, stderr) = run(repo, &all);
-    assert_eq!((code, stderr.as_str()), (0, ""), "{all:?}");
-    serde_json::from_str(&stdout).unwrap()
 }
 
 /// A new repository with one scope.
@@ -134,7 +131,7 @@ fn a_cli_requirement_create_with_no_actor_records_authoring() {
     let review = cli_review(repo);
     assert_eq!(review["decision"]["pending"]["actor"], "authoring");
     let mut data = requirement_data(&review, None);
-    data["review_message"] = json!(REVIEW_MESSAGE);
+    data["review_message"] = json!(review_message(repo));
     assert_eq!(created, json!({"data": data, "meta": {}}));
 }
 
@@ -162,7 +159,7 @@ fn a_cli_requirement_update_with_no_actor_records_authoring() {
     let review = cli_review(repo);
     assert_eq!(review["decision"]["pending"]["actor"], "authoring");
     let mut data = requirement_data(&review, Some("Edited."));
-    data["review_message"] = json!(REVIEW_MESSAGE);
+    data["review_message"] = json!(review_message(repo));
     assert_eq!(updated, json!({"data": data, "meta": {}}));
 }
 
