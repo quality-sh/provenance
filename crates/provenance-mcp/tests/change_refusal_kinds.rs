@@ -1,6 +1,7 @@
-//! The change tool answer to a write that the host does not run: a write that needs a
-//! repository binding or a notify port that the host does not bind, and a write that
-//! the host access denies.
+//! The change tool tells a write that the host cannot run from a write that the host
+//! access denies. A write that needs a repository binding or a notify port that the host
+//! does not bind answers unavailable_needs; a denied write answers access_denied.
+//! No Rule binds these rows; the owner of the refusal kinds decides the Rule.
 #![cfg(feature = "test-fixture")]
 
 use crate::support;
@@ -22,15 +23,25 @@ async fn row(name: &str, host: StatementHost, arguments: Value) -> Value {
     json!({"row": name, "answer": result})
 }
 
-const DENIED: &str =
-    "{\"error\":{\"kind\":\"access_denied\",\"message\":\"access denied\"},\"meta\":{}}";
+/// The answer row of one refusal with this error object and empty metadata.
+fn refused(name: &str, error: &Value) -> Value {
+    let content = json!({"error": error, "meta": {}});
+    json!({"row": name, "answer": {
+        "content": [{"type": "text", "text": content.to_string()}],
+        "isError": true,
+        "structuredContent": content
+    }})
+}
 
 fn denied(name: &str) -> Value {
-    json!({"row": name, "answer": {
-        "content": [{"type": "text", "text": DENIED}],
-        "isError": true,
-        "structuredContent": {"error": {"kind": "access_denied", "message": "access denied"}, "meta": {}}
-    }})
+    refused(
+        name,
+        &json!({"kind": "access_denied", "message": "access denied"}),
+    )
+}
+
+fn unavailable(name: &str) -> Value {
+    refused(name, &json!({"kind": "unavailable_needs"}))
 }
 
 #[tokio::test]
@@ -71,8 +82,8 @@ async fn an_unbound_need_and_a_denied_operation_answer_different_kinds() {
     assert_eq!(
         Value::Array(rows),
         json!([
-            denied("materialize on a host that binds no repository"),
-            denied("notify on a host that binds no notify port"),
+            unavailable("materialize on a host that binds no repository"),
+            unavailable("notify on a host that binds no notify port"),
             denied("notify on a host that denies the record read"),
             denied("update on a host that denies update-source"),
         ])
