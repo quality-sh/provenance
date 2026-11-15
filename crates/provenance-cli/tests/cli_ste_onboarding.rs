@@ -13,6 +13,9 @@ mod support;
 
 use support::{init_args, serial, Fixture, TestServer};
 
+#[path = "cli_ste_onboarding/damaged_reference.rs"]
+mod damaged_reference;
+
 #[test]
 #[verifies("rule_ste_dictionary_agent_acquisition", examples)]
 #[verifies("rule_ste_dictionary_download_identity", examples)]
