@@ -1,10 +1,11 @@
 //! A refusal for a state file that does not parse names the two steps that
-//! correct the state, and each step gives a state that Provenance can read.
-//! The state of each test is the state of a Requirement line whose `refines`
-//! is a string and not a list. A get over that state answers at the stored
-//! serial, and its freshness warning is the text of the refusal.
+//! correct the state and what each step removes, and each step, done as the
+//! refusal says, gives a state that Provenance can read. The state of each
+//! test has a Requirement line whose `refines` is a string and not a list, as
+//! in a line of an older form. The tests of the two steps also use a line that
+//! a person cut. A get over that state answers at the stored serial, and its
+//! freshness warning is the text of the refusal.
 
-use provenance_core::protocol::read_failure::STATE_CORRECTIONS as HINT;
 use provenance_macros::verifies;
 use serde_json::{json, Value};
 use std::path::Path;
@@ -12,6 +13,15 @@ use std::process::Stdio;
 
 use crate::support;
 use support::review_paths::provenance;
+
+/// The hint of a record file that does not parse. The other tests compare
+/// with the public constant; this file pins the text that a person reads.
+const HINT: &str = "To correct this fault, do one of these steps. \
+    Get .provenance/state from a commit that Provenance can read, which removes records and \
+    changes that are not in that commit. \
+    Or remove .provenance/state, which removes all records, the scopes, the disposition actors \
+    and the technical names of the dictionary. \
+    Then do the command provenance init.";
 
 const REQUIREMENTS: &str = "scopes/default/requirements/req.jsonl";
 

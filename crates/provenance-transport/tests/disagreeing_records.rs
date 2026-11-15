@@ -144,8 +144,11 @@ async fn a_requirement_stored_on_two_lines_is_located_at_the_second_line() {
     );
 }
 
+/// The refusal of a duplicate Message ID has a correction of its own: its
+/// hint names the hand repair and not the two corrections of the state.
 #[tokio::test]
 #[verifies("rule_inconsistent_records_refusal_names_records", examples)]
+#[verifies("rule_state_parse_refusal_names_the_corrections", examples)]
 async fn a_message_id_on_two_lines_is_located_at_the_second_line() {
     let repo = Repository::new("The shared graph is readable.");
     let (status, started) = call(

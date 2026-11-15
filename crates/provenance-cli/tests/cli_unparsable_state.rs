@@ -47,8 +47,7 @@ fn refusal(repo: &str, args: &[&str]) -> Value {
 /// steps that correct the state. No other member and no other text holds a
 /// repository path.
 fn assert_names_the_line(refusal: &Value) {
-    let mut refusal = refusal.clone();
-    let error = refusal["error"].as_object_mut().unwrap();
+    let error = refusal["error"].as_object().unwrap();
     let keys: Vec<&str> = error.keys().map(String::as_str).collect();
     assert_eq!(keys, ["file", "hint", "kind", "line", "message"], "{refusal}");
     assert_eq!(error["kind"], "invalid_state_file", "{refusal}");
@@ -56,8 +55,10 @@ fn assert_names_the_line(refusal: &Value) {
     assert_eq!(error["line"], 1, "{refusal}");
     let message = error["message"].as_str().unwrap_or_default();
     assert!(message.starts_with("unknown variant `widget`"), "{refusal}");
-    assert_eq!(error.remove("hint").unwrap(), STATE_CORRECTIONS);
-    assert!(!refusal.to_string().contains(".provenance"), "{refusal}");
+    assert_eq!(error["hint"], STATE_CORRECTIONS, "{refusal}");
+    let mut rest = refusal.clone();
+    rest["error"].as_object_mut().unwrap().remove("hint");
+    assert!(!rest.to_string().contains(".provenance"), "{refusal}");
 }
 
 #[test]
