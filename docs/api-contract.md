@@ -117,8 +117,10 @@ changed enrolled record and refuses to delete an enrolled record. The plan
 `refused` and a `refusal`. Its `kind` is `review_submission` or `disposition`,
 and its `message` is the text of the apply refusal. The plan counts the entry
 in `refused`, not in `deleted`. A Disposition that names a record that the
-scope does not have fails the plan and the apply with `invalid_state_file` at
-the line of the Disposition. Apply continues
+scope does not have fails the plan, the apply and each other read of the
+ideation records with `invalid_state_file` at the line that stores the
+Disposition: its line in the Disposition file, or the line of its landing.
+Apply continues
 to replace un-enrolled graph state without journal entries because those
 records have not entered review. When apply deletes a record, also by cascade,
 it deletes the Discussions of that record, active or resolved, with their
