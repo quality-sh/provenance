@@ -1,6 +1,6 @@
 //! Archive identity is checked before any build input directory appears.
 
-#[path = "review_bundle/archive.rs"]
+#[path = "support/bundle_archive.rs"]
 mod archive;
 
 use std::{fmt::Write as _, io::Write, path::Path, path::PathBuf};

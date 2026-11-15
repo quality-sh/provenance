@@ -26,8 +26,8 @@ cargo provenance init
 ```
 
 The Cargo initializer finds the current workspace, adds `provenance-sdk` at the
-CLI version, creates the default scope, validates the state, and ignores
-`.provenance/cache/`. In a workspace with multiple packages, use `cargo
+CLI version as a development dependency, creates the default scope, validates
+the state, and ignores `.provenance/cache/`. In a workspace with multiple packages, use `cargo
 provenance init --package <name>`.
 
 For a TypeScript project, run:

@@ -3,8 +3,8 @@
 //! take the write permission from a directory with its mode.
 #![cfg(unix)]
 
-use crate::discussion_support::base::initialization;
 use crate::memory;
+use crate::review_support::initialization;
 
 use camino::Utf8Path;
 use memory::{begin_input, scope};

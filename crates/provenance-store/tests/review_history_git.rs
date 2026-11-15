@@ -1,6 +1,6 @@
 //! Record history over a merged Git history and over a shard version that
 //! does not parse.
-use crate::discussion_support::base as review_support;
+use crate::review_support;
 use provenance_core::review::{RecordVersion, ReviewHistoryQuery};
 use provenance_core::{NodeType, StableId};
 use provenance_macros::verifies;
