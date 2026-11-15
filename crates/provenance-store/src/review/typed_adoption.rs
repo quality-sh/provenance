@@ -1,6 +1,6 @@
 //! Guarded typed-spec changes to enrolled graph records.
 
-use super::{classifier, decision_state::CycleFacts};
+use super::{classifier, review_rows::StoredRows};
 use crate::{
     families::review_families,
     review::publication::with_record_state,
@@ -18,13 +18,14 @@ impl StateStore {
     /// deletes a record, and refuses a Withdrawal that names no review
     /// submission.
     pub(crate) fn review_history(&self, scope: &ScopeId) -> anyhow::Result<ReviewHistory> {
-        let facts = CycleFacts::validated(self, scope)?;
+        let stored = StoredRows::read(self, scope)?;
+        let facts = stored.facts()?;
         Ok(ReviewHistory {
             submitted: facts
                 .submitted_records()
                 .map(|(kind, id)| (kind, id.clone()))
                 .collect(),
-            dispositions: facts.dispositions().to_vec(),
+            dispositions: self.list_dispositions(scope)?,
         })
     }
 

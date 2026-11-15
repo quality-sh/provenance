@@ -7,7 +7,10 @@ mod stored_rows;
 use crate::{NodeType, RequirementStatus, RuleStatus, ScopeId, StableId};
 use serde::{Deserialize, Serialize};
 
-pub use stored_rows::{withdrawn_submission_ids, WithdrawalRowFault};
+pub use stored_rows::{
+    is_review_submission, read_review_rows, review_cycle, RecordReview, ReviewReading,
+    ReviewRowFamily, ReviewRowFault, RowAt, RowsOnce, StoredReviewRows, SubmissionLines,
+};
 
 const fn requirement_kind() -> NodeType {
     NodeType::Requirement

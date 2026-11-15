@@ -311,7 +311,7 @@ macro_rules! expand_record_family_rows {
                     meta: { shard: "ideation/dispositions.jsonl", order: 170,
                         budget: Resource },
                     node: [],
-                    reader: { open: list_dispositions, strategy: shared },
+                    reader: { open: list_dispositions, strategy: dispositions },
                     id: field,
                     loader: [payload(rows_of_dispositions)],
                     graph: [],

@@ -1,10 +1,10 @@
-use super::validate_submission_address;
 use crate::{
     review::publication::with_record_state,
     review::{
         decision_input::{DecideRecordReview, ReviewFeedback},
-        decision_state::{check_request_size, review_submission, CycleFacts, Receipt},
+        decision_state::{check_request_size, review_submission, Receipt},
         new_id,
+        review_rows::StoredRows,
     },
     shards,
     state_store::{CreateDispositionInput, RecordStamp, StateStore},
@@ -39,17 +39,17 @@ impl StateStore {
         let scope = input.scope_id.clone();
         self.with_repository_publication(move |held| {
             crate::review::ensure_manifest_scope(held, &scope)?;
-            let proposal = review_submission(held, &scope, &input.proposal_id)?;
-            let facts = CycleFacts::validated(held, &scope)?;
-            validate_submission_address(
-                &proposal,
-                addressed.as_ref().map(|(kind, id)| (*kind, id)),
-            )?;
+            let stored = StoredRows::read(held, &scope)?;
+            let facts = stored.facts()?;
+            let addressed = addressed.as_ref().map(|(kind, id)| (*kind, id));
+            facts.ensure_addressed(&input.proposal_id, addressed)?;
+            let proposal = review_submission(held, &scope, &facts, &input.proposal_id)?;
             let kind = NodeType::from(proposal.traceability.target.artifact_type);
             let record_id = &proposal.traceability.target.artifact_id;
             crate::families::review_families::record(held, &scope, kind, record_id)?;
+            let review = facts.record(kind, record_id)?;
             validate_decision_input(kind, record_id, &input)?;
-            if facts.is_withdrawn(&input.proposal_id) || facts.is_decided(&input.proposal_id) {
+            if review.is_withdrawn(&input.proposal_id) || review.is_decided(&input.proposal_id) {
                 return Err(crate::refusal::refuse!(
                     (facts.conflict_failure(held, &scope, kind, record_id)?),
                     "this review submission is no longer pending"
@@ -64,7 +64,9 @@ impl StateStore {
     /// Creates the server-owned Disposition identity for a review decision.
     #[rule("rule_review_disposition_identity_server_created")]
     fn commit_decision(&self, input: DecideRecordReview) -> anyhow::Result<CycleEntry> {
-        let proposal = review_submission(self, &input.scope_id, &input.proposal_id)?;
+        let stored = StoredRows::read(self, &input.scope_id)?;
+        let facts = stored.facts()?;
+        let proposal = review_submission(self, &input.scope_id, &facts, &input.proposal_id)?;
         let kind = NodeType::from(proposal.traceability.target.artifact_type);
         let record_id = proposal.traceability.target.artifact_id.clone();
         let binding = proposal
@@ -76,7 +78,6 @@ impl StateStore {
         let revision = super::super::save::current_revision(&record)?
             .ok_or_else(|| crate::refusal::fault!("the submitted record has no review revision"))?;
         if revision != binding.revision {
-            let facts = CycleFacts::validated(self, &input.scope_id)?;
             return Err(crate::refusal::refuse!(
                 (facts.conflict_failure(self, &input.scope_id, kind, &record_id)?),
                 "stale review selection"
