@@ -215,8 +215,7 @@ fn the_rendered_report_shows_a_test_comment_on_an_archived_rule_as_a_verificatio
         .filter(|line| line.starts_with("- Current "))
         .collect::<Vec<_>>();
     let link = format!("https://github.com/example/payroll/blob/{head}/tests/test_records.py#L1");
-    let expected = format!(
-        "- Current verification: [`tests/test_records.py:1`]({link}) (method `examples`)."
-    );
+    let expected =
+        format!("- Current verification: [`tests/test_records.py:1`]({link}) (method `examples`).");
     assert_eq!(sites, [expected.as_str()], "{markdown}");
 }
