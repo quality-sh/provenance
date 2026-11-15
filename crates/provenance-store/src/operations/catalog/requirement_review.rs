@@ -208,6 +208,7 @@ addressed_decision!(
 );
 
 #[cfg(test)]
+#[cfg(feature = "host")]
 #[path = "requirement_review_tests.rs"]
 mod requirement_review_tests;
 addressed_decision!(

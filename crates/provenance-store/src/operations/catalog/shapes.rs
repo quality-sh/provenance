@@ -165,8 +165,11 @@ impl<S: ScopedWriteSpec> OperationShape<S> for ScopedWrite {
     }
 }
 
+// The commands (apply, plan, verification) need `host`.
+#[cfg(feature = "host")]
 pub struct ScopedCommand;
 
+#[cfg(feature = "host")]
 pub trait ScopedCommandSpec: OperationSpec<Shape = ScopedCommand> {
     fn request_scope(request: &Self::Request) -> Option<&ScopeId>;
 
@@ -176,6 +179,7 @@ pub trait ScopedCommandSpec: OperationSpec<Shape = ScopedCommand> {
     ) -> anyhow::Result<Self::Success>;
 }
 
+#[cfg(feature = "host")]
 impl<S: ScopedCommandSpec> OperationShape<S> for ScopedCommand {
     type Failure = WriteError;
 
@@ -341,6 +345,7 @@ macro_rules! scoped_write_operation {
     };
 }
 
+#[cfg(feature = "host")]
 macro_rules! scoped_command_operation {
     ($visibility:vis $name:ident, $wire:literal, $request:ty, $success:ty,
      mutates = $mutates:literal, $statuses:expr, $needs:expr, scope = none,
@@ -404,6 +409,6 @@ macro_rules! scoped_command_operation {
     };
 }
 
-pub(super) use {
-    graph_read_operation, scoped_command_operation, scoped_read_operation, scoped_write_operation,
-};
+#[cfg(feature = "host")]
+pub(super) use scoped_command_operation;
+pub(super) use {graph_read_operation, scoped_read_operation, scoped_write_operation};
