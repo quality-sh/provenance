@@ -74,7 +74,7 @@ pub(crate) use statement_policy::StatementWriteError;
 pub use typed_specs::{decide_typed_spec, ReviewHistory, TypedSpecDecision, TypedSpecView};
 pub use typed_statement_policy::TypedSpecWriteError;
 
-use crate::{layout::ProvenanceLayout, repository::RepositoryIdentity, shards};
+use crate::{layout::ProvenanceLayout, repository::RepositoryIdentity};
 use provenance_core::{
     ensure_record_id_assignable, AssertionRecord, Contribution, DispositionRecord,
     ImplementationBinding, Manifest, Message, ProposalCard, ScopeId, SynthesisPacket, Thread,
