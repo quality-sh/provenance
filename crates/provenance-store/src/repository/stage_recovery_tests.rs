@@ -201,7 +201,11 @@ fn a_one_key_stage_stopped_before_its_rename_keeps_the_key_and_one_temporary_fil
     let temporaries = crate::stopped_child::files_named(&key_dir, ".tmp", "");
     assert_eq!(temporaries.len(), 1, "{:?}", names(&key_dir));
     let mut tree = state_tree(&root);
-    tree.retain(|path, _| !path.file_name().is_some_and(|name| name.starts_with(".tmp")));
+    tree.retain(|path, _| {
+        !path
+            .file_name()
+            .is_some_and(|name| name.starts_with(".tmp"))
+    });
     assert!(tree == old, "the stop kept the old bytes of each key");
     let repository = open(&layout);
     assert!(!layout.publication_marker_path().exists());
