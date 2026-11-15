@@ -169,13 +169,7 @@ fn inactive_current_bindings(
     implementations: &[ImplementationBinding],
     verifications: &[VerificationBinding],
 ) -> Vec<InactiveCurrentBinding> {
-    let mut current = scans
-        .iter()
-        .flat_map(|scan| {
-            let annotations = scan.annotations.iter().map(SourceSite::Annotation);
-            let attributes = scan.bindings.iter().map(SourceSite::Attribute);
-            annotations.chain(attributes)
-        })
+    let mut current = source_sites(scans)
         .filter_map(|site| scanned_binding(inactive, site))
         .collect::<Vec<_>>();
     current.extend(implementations.iter().filter_map(|binding| {

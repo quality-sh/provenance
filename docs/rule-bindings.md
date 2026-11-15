@@ -42,40 +42,47 @@ the line starts with `//`, `/*`, or `*` (or `#` in Python), or the line is
 inside an open block comment. A marker after code on the same line does not
 bind. The comment binds the Rule whatever item comes below it.
 
-The scanner takes the item name from the declaration below the comment. It
-reads the next six code lines. Comment lines, empty lines, and lines that start
-an attribute, a decorator, or an annotation do not count. These can come
-between the comment and the declaration, and the declaration can continue on
-the next lines. The item name is the name of the function or type that the
-first code line declares:
+The item name of the comment is the name of the declaration below it. The
+scanner reads past comment lines, empty lines, and attributes, decorators, and
+annotations (with all their lines) to the first code line. When the declaration
+that starts on that line is a function, a method, or a type, its name is the
+item name. In JavaScript and TypeScript, a `const`, `let`, or `var` declaration
+also gives its name. The forms are:
 
-- Rust: `fn`, `struct`, `enum`, `union`, `trait`, or `type`, after `#[...]`
-  attributes, `pub` or `pub(...)`, and `const`, `async`, `unsafe`, `extern`,
-  or `default`.
-- Python: `def` or `class`, after decorators and `async`.
+- Rust: `fn`, `struct`, `enum`, `union`, `trait`, or `type`, after `pub` or
+  `pub(...)`, and `const`, `async`, `unsafe`, `extern`, or `default`. A raw
+  identifier `r#match` gives `match`.
+- Python: `def` or `class`, after `async`.
 - Go: `func`, with or without a receiver, or `type`.
 - JavaScript, TypeScript: `function` or `function*`, `class`, `interface`,
-  `type`, `enum`, `const`, `let`, or `var`, after decorators and the words
-  `export`, `default`, `declare`, `abstract`, `async`, `public`, `private`,
-  `protected`, `static`, `readonly`, `override`, `accessor`, `get`, and `set`.
-  A class method gives its name, so
-  `public async total(): Promise<number> {` gives `total`.
+  `type`, `enum`, `const`, `let`, or `var`, after the words `export`,
+  `default`, `declare`, `abstract`, `async`, `public`, `private`, `protected`,
+  `static`, `readonly`, `override`, `accessor`, `get`, and `set`. A class
+  method gives its name, so `public async total(): Promise<number> {` gives
+  `total`.
 - Java: `class`, `interface`, `enum`, `record`, `@interface`, a method, or a
-  constructor, after annotations and modifiers, so
+  constructor, after modifiers, so
   `public static boolean paysOvertime(int hours) {` gives `paysOvertime`.
 
-When the first code line declares no function or type, for example a Rust
-`impl` block, a Rust `const`, a Java field, or a test call, the scanner reads
-the six lines one at a time and takes the first name that this line rule gives:
+In all other cases the comment has no item name. The scanner does not take a
+name from a different line or from a lower declaration. Limits: these forms
+give no item name:
 
-- Rust, Python, Go: the word after `fn`, `def`, or `func`.
-- JavaScript, TypeScript: the word after `function`, `const`, `let`, or `var`.
-  On a line without these words, the word after the first space.
-- Java: the word after the first space.
-
-So `test("overtime", function overtimeExamples() {` gives `overtimeExamples`,
-and `test("hours above 38", () => {` gives `above`. When no line gives a name,
-the comment has no item name.
+- A Rust `impl` block, `const`, `static`, `mod`, or `macro_rules!`.
+- A Go `type (` group, a `var`, or a `const`.
+- A Python assignment, or a `def` inside an `if` block.
+- A Java field.
+- A test call such as `test("hours above 38", () => {`, also with a named
+  function argument, and a `describe(...)` call.
+- A TypeScript arrow property `total = () => {`, and
+  `export default function () {}`.
+- A declaration whose name is more than six code lines below its first line,
+  and a TypeScript method whose parameter list does not close in those six
+  lines.
+- A line that starts with `*` is a comment line, so a class generator method
+  `*shifts() {` is not read as a declaration.
+- A Rust attribute directly below a binding comment is not scanned as a
+  binding: the comment takes in the attribute line.
 
 A Rust `#[rule]` or `#[verifies]` attribute and a Python `@rule` decorator take
 their item name by the same rules.
