@@ -189,10 +189,7 @@ async fn a_message_id_on_two_lines_is_located_at_the_second_line() {
     assert_eq!(
         failure["error"],
         json!({"kind":"invalid_state_file", "file":file, "line":2,
-        "message":format!(
-            "Message ID {id} appears more than once: {file}:1, {file}:2; \
-             see docs/cli.md#repairing-a-duplicate-message-id"
-        ),
-            "hint":STATE_CORRECTIONS}),
+        "message":format!("Message ID {id} appears more than once: {file}:1, {file}:2"),
+        "hint":"see docs/cli.md#repairing-a-duplicate-message-id"}),
     );
 }

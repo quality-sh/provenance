@@ -1,7 +1,9 @@
 //! A state file line that does not parse is a classified refusal. The CLI
-//! answer names the file below the state directory, the line number and the
-//! parse message, for a create, an update and an `api` read.
+//! answer names the file below the state directory, the line number, the
+//! parse message and the steps that correct the state, for a create, an update
+//! and an `api` read.
 
+use provenance_core::protocol::read_failure::STATE_CORRECTIONS;
 use provenance_macros::verifies;
 use serde_json::Value;
 
@@ -41,18 +43,21 @@ fn refusal(repo: &str, args: &[&str]) -> Value {
     serde_json::from_str(object).unwrap_or_else(|error| panic!("{args:?}: {error}: {text}"))
 }
 
-fn assert_names_the_line(repo: &str, refusal: &Value) {
-    let error = &refusal["error"];
+/// The refusal names the file, the line and the message, and its hint is the
+/// steps that correct the state. No other member and no other text holds a
+/// repository path.
+fn assert_names_the_line(refusal: &Value) {
+    let mut refusal = refusal.clone();
+    let error = refusal["error"].as_object_mut().unwrap();
+    let keys: Vec<&str> = error.keys().map(String::as_str).collect();
+    assert_eq!(keys, ["file", "hint", "kind", "line", "message"], "{refusal}");
     assert_eq!(error["kind"], "invalid_state_file", "{refusal}");
     assert_eq!(error["file"], CARDS, "{refusal}");
     assert_eq!(error["line"], 1, "{refusal}");
     let message = error["message"].as_str().unwrap_or_default();
     assert!(message.starts_with("unknown variant `widget`"), "{refusal}");
-    let repo = serde_json::to_string(repo).unwrap();
-    assert!(
-        !refusal.to_string().contains(repo.trim_matches('"')),
-        "{refusal}"
-    );
+    assert_eq!(error.remove("hint").unwrap(), STATE_CORRECTIONS);
+    assert!(!refusal.to_string().contains(".provenance"), "{refusal}");
 }
 
 #[test]
@@ -72,7 +77,7 @@ fn a_create_names_the_state_line_that_does_not_parse() {
             "json",
         ],
     );
-    assert_names_the_line(&repo, &refusal);
+    assert_names_the_line(&refusal);
 }
 
 #[test]
@@ -80,7 +85,7 @@ fn a_create_names_the_state_line_that_does_not_parse() {
 fn an_api_read_names_the_state_line_that_does_not_parse() {
     let (_directory, repo, _) = unknown_artifact_type();
     let refusal = refusal(&repo, &["api", "/requirements/req_a"]);
-    assert_names_the_line(&repo, &refusal);
+    assert_names_the_line(&refusal);
 }
 
 #[test]
@@ -100,5 +105,5 @@ fn an_update_names_the_state_line_that_does_not_parse() {
             "json",
         ],
     );
-    assert_names_the_line(&repo, &refusal);
+    assert_names_the_line(&refusal);
 }

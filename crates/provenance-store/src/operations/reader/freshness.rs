@@ -4,7 +4,8 @@
 //! write of the read database, drops the guard, and reads on the same open
 //! of the database. When the pass fails and the database holds a revision,
 //! the read goes on at the stored serial with the policy word
-//! `catch_up_failed` and the error text beside the answer. `annotate_only`
+//! `catch_up_failed` and the error text beside the answer; a read that
+//! needs a current answer refuses with that error instead. `annotate_only`
 //! takes no guard and refuses an absent database. `refuse_stale` hashes
 //! canonical units and refuses any digest change. The read database owns
 //! the connection through its completion, so no step decides how a
@@ -17,7 +18,7 @@
 //!
 //! [`catch_up_in_publish`]: crate::cache::catch_up_in_publish
 
-use super::{ReadContext, ReadFuture, ReadRefusal, ReadSnapshot};
+use super::{CatchUpFailed, ReadContext, ReadFuture, ReadRefusal, ReadSnapshot};
 #[cfg(feature = "host")]
 use crate::cache::catch_up_work;
 use crate::current_schema::{self, Compatibility};
@@ -27,9 +28,7 @@ use crate::operations::stamp;
 #[cfg(feature = "host")]
 use crate::publication::publication_guard;
 use crate::publication::PublicationGuard;
-#[cfg(feature = "host")]
-use crate::read_database::ReadDatabase;
-use crate::read_database::{ReadWork, SqlColumns, Transaction, Unopened};
+use crate::read_database::{ReadDatabase, ReadWork, SqlColumns, Transaction, Unopened};
 use crate::repository::Repository;
 use provenance_core::protocol::{Stamp, StampPolicy, Stamped};
 use provenance_macros::rule;
@@ -37,7 +36,36 @@ use provenance_macros::rule;
 pub(super) struct Freshness {
     pub(super) check: Check,
     pub(super) policy: StampPolicy,
-    pub(super) error: Option<String>,
+    /// The error of a failed catch-up.
+    pub(super) failure: Option<anyhow::Error>,
+}
+
+/// A read that completed: the result of its operation, its stamp, and the
+/// error of a failed catch-up when the read answered at the stored serial.
+pub(super) struct Completed<R> {
+    result: anyhow::Result<R>,
+    stamp: Stamp,
+    failure: Option<anyhow::Error>,
+}
+
+impl<R> Completed<R> {
+    /// The answer, with the text of a failed catch-up beside it.
+    pub(super) fn answer(self) -> anyhow::Result<Stamped<R>> {
+        Ok(Stamped {
+            result: self.result?,
+            stamp: self.stamp,
+            freshness_error: self.failure.map(|failure| format!("{failure:#}")),
+        })
+    }
+
+    /// The answer of a read that needs a current answer. A failed catch-up
+    /// refuses with [`CatchUpFailed`], before an error of the operation.
+    pub(super) fn current(mut self) -> anyhow::Result<Stamped<R>> {
+        if let Some(failure) = self.failure.take() {
+            return Err(CatchUpFailed(failure).into());
+        }
+        self.answer()
+    }
 }
 
 /// What the read checks in its transaction before it opens the snapshot.
@@ -107,12 +135,7 @@ impl Freshness {
         repository: &Repository,
         scan_limit: usize,
         run: impl for<'c> FnOnce(&'c ReadContext) -> ReadFuture<'c, R> + Send,
-    ) -> anyhow::Result<Stamped<R>> {
-        let Self {
-            check,
-            policy,
-            error,
-        } = self;
+    ) -> anyhow::Result<Completed<R>> {
         let database = repository.read_database()?;
         let mut reading = Reading {
             repository,
@@ -120,45 +143,60 @@ impl Freshness {
             run: Some(run),
             answer: None,
         };
-        let (policy, error, outcome) = match check {
+        let failure = match self.check {
             #[cfg(feature = "host")]
             Check::CatchUp(guard) => match catch_up(guard, database, &mut reading).await {
-                Ok(outcome) => (policy, None, outcome),
-                Err(failure) => {
-                    let Self {
-                        check,
-                        policy,
-                        error,
-                    } = stored(&failure);
-                    let outcome = database
-                        .read(reading.work(check, policy, error.as_deref()))
-                        .await;
-                    (policy, error, outcome)
+                Ok(outcome) => {
+                    outcome.map_err(|failure| {
+                        unopened(repository.layout(), self.policy, None, failure)
+                    })?;
+                    None
                 }
+                Err(error) => stored(error).read(database, &mut reading).await?,
             },
-            check => {
-                let outcome = database
-                    .read(reading.work(check, policy, error.as_deref()))
-                    .await;
-                (policy, error, outcome)
-            }
+            check => Self { check, ..self }.read(database, &mut reading).await?,
         };
-        if let Err(failure) = outcome {
-            return Err(unopened(
-                repository.layout(),
-                policy,
-                error.as_deref(),
-                failure,
-            ));
-        }
         let (result, stamp) = reading.answer.ok_or_else(|| {
             crate::refusal::fault!("the read database ended a read without its work")
         })?;
-        Ok(Stamped {
-            result: result?,
+        Ok(Completed {
+            result,
             stamp,
-            freshness_error: error,
+            failure,
         })
+    }
+
+    /// Runs the work of `reading` on the snapshot that the check opens, and
+    /// gives back the error of a failed catch-up. A database that did not
+    /// open refuses as [`unopened`] says.
+    async fn read<R, F>(
+        self,
+        database: &dyn ReadDatabase,
+        reading: &mut Reading<'_, R, F>,
+    ) -> anyhow::Result<Option<anyhow::Error>>
+    where
+        R: Send,
+        F: for<'c> FnOnce(&'c ReadContext) -> ReadFuture<'c, R> + Send,
+    {
+        let Self {
+            check,
+            policy,
+            failure,
+        } = self;
+        let repository = reading.repository;
+        let because = failure.as_ref().map(|failure| format!("{failure:#}"));
+        if let Err(outcome) = database
+            .read(reading.work(check, policy, because.as_deref()))
+            .await
+        {
+            return Err(unopened(
+                repository.layout(),
+                policy,
+                because.as_deref(),
+                outcome,
+            ));
+        }
+        Ok(failure)
     }
 }
 
@@ -235,9 +273,9 @@ pub(super) async fn run(
                 Ok(guard) => Freshness {
                     check: Check::CatchUp(guard),
                     policy: StampPolicy::CatchUp,
-                    error: None,
+                    failure: None,
                 },
-                Err(error) => stored(&error),
+                Err(error) => stored(error),
             };
             // No catch-up runs without `host`, so the read is an
             // `annotate_only` read and its stamp says so.
@@ -255,7 +293,7 @@ const fn annotate_only() -> Freshness {
     Freshness {
         check: Check::Schema,
         policy: StampPolicy::AnnotateOnly,
-        error: None,
+        failure: None,
     }
 }
 
@@ -298,11 +336,11 @@ where
 /// image.
 #[rule("rule_failed_freshness_answers_at_stored_serial")]
 #[cfg(feature = "host")]
-fn stored(error: &anyhow::Error) -> Freshness {
+const fn stored(error: anyhow::Error) -> Freshness {
     Freshness {
         check: Check::None,
         policy: StampPolicy::CatchUpFailed,
-        error: Some(format!("{error:#}")),
+        failure: Some(error),
     }
 }
 

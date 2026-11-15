@@ -257,16 +257,14 @@ pub fn half_reference() -> String {
 /// The parse message of [`half_reference`].
 pub const HALF_REFERENCE_MESSAGE: &str = "EOF while parsing a string";
 
-/// The hint that each answer gives for a reference that does not parse: the
-/// two steps that correct the state.
-pub const STATE_CORRECTIONS: &str = "get .provenance/state from a branch or a commit where \
-    Provenance can read it, or remove all records and settings of the repository: remove \
-    .provenance/state and run provenance init";
+/// The repair that each answer gives for a reference that does not parse.
+pub const REFERENCE_REPAIR: &str =
+    "get the file again from git or correct its JSON, and then do the command again";
 
 /// The text of the problem of a reference whose first line does not parse
 /// with `message`.
 pub fn reference_problem(message: &str) -> String {
-    format!("dictionary.json line 1: {message}; {STATE_CORRECTIONS}")
+    format!("dictionary.json line 1: {message}; {REFERENCE_REPAIR}")
 }
 
 /// The standard error of a write that refuses a reference whose first line

@@ -4,6 +4,7 @@
 //! is a string and not a list. A get over that state answers at the stored
 //! serial, and its freshness warning is the text of the refusal.
 
+use provenance_core::protocol::read_failure::STATE_CORRECTIONS as HINT;
 use provenance_macros::verifies;
 use serde_json::{json, Value};
 use std::path::Path;
@@ -11,10 +12,6 @@ use std::process::Stdio;
 
 use crate::support;
 use support::review_paths::provenance;
-
-const HINT: &str = "get .provenance/state from a branch or a commit where Provenance can read \
-                    it, or remove all records and settings of the repository: remove \
-                    .provenance/state and run provenance init";
 
 const REQUIREMENTS: &str = "scopes/default/requirements/req.jsonl";
 
@@ -102,7 +99,8 @@ fn unparsable() -> tempfile::TempDir {
     directory
 }
 
-/// Changes the `req_child` line, so that its `refines` is a string.
+/// Changes the `req_child` line, so that its `refines` is a string, as in a
+/// line of an older form.
 fn damage(repo: &Path) {
     let path = repo.join(".provenance/state").join(REQUIREMENTS);
     let text = std::fs::read_to_string(&path).unwrap();
@@ -112,6 +110,21 @@ fn damage(repo: &Path) {
     assert!(changed.starts_with(first), "{changed}");
     std::fs::write(&path, changed).unwrap();
 }
+
+/// Removes the last character of the `req_child` line, as a person who
+/// stopped an edit of the line.
+fn cut(repo: &Path) {
+    let path = repo.join(".provenance/state").join(REQUIREMENTS);
+    let text = std::fs::read_to_string(&path).unwrap();
+    let mut lines: Vec<&str> = text.lines().collect();
+    assert!(lines[0].contains(r#""id":"req_child""#), "{text}");
+    lines[0] = &lines[0][..lines[0].len() - 1];
+    std::fs::write(&path, lines.join("\n") + "\n").unwrap();
+}
+
+/// The two faults of the `req_child` line: a line of an older form and a line
+/// that a person changed.
+const FAULTS: [fn(&Path); 2] = [damage, cut];
 
 /// A JSON get gives the record at the stored serial with the warning.
 #[test]
@@ -234,41 +247,54 @@ fn read(repo: &Path, id: &str) -> Value {
     read
 }
 
-/// The second way: the refusal names the removal of the state directory and
-/// init. After them, the state reads, and it holds none of the records.
+/// The second way, done as the hint says: remove .provenance/state, then do
+/// the command provenance init. After them, the state reads, and it holds none
+/// of the records.
 #[test]
 #[verifies("rule_state_parse_refusal_names_the_corrections", examples)]
 fn init_after_the_removal_of_the_state_gives_a_state_that_reads() {
-    let directory = unparsable();
-    let repo = directory.path();
-    assert_eq!(hint(repo), json!(HINT));
+    for fault in FAULTS {
+        let directory = committed();
+        let repo = directory.path();
+        fault(repo);
+        assert_eq!(hint(repo), json!(HINT));
 
-    std::fs::remove_dir_all(repo.join(".provenance/state")).unwrap();
-    passes(repo, &["init"]);
+        std::fs::remove_dir_all(repo.join(".provenance/state")).unwrap();
+        passes(repo, &["init"]);
 
-    let (code, stdout, stderr) = run(repo, &["req_child", "get", "--format", "json"]);
-    assert_eq!(code, Some(1), "{stdout}");
-    let refused: Value = serde_json::from_str(&stderr).unwrap();
-    assert_eq!(refused["error"]["kind"], "resource_not_found", "{stderr}");
-    create(repo, &["req_new"]);
-    let read = read(repo, "req_new");
-    assert_eq!(read["record"]["id"], "req_new", "{read}");
+        let (code, stdout, stderr) = run(repo, &["req_child", "get", "--format", "json"]);
+        assert_eq!(code, Some(1), "{stdout}");
+        let refused: Value = serde_json::from_str(&stderr).unwrap();
+        assert_eq!(refused["error"]["kind"], "resource_not_found", "{stderr}");
+        create(repo, &["req_new"]);
+        let read = read(repo, "req_new");
+        assert_eq!(read["record"]["id"], "req_new", "{read}");
+    }
 }
 
-/// The first way: the refusal names the state of a commit where it reads.
-/// That state gives a state that reads, with the records of that commit.
+/// The first way, done as the hint says: get .provenance/state from a commit
+/// that Provenance can read. The state then reads and holds the records of
+/// that commit, and a record that is not in that commit is removed.
 #[test]
 #[verifies("rule_state_parse_refusal_names_the_corrections", examples)]
 fn the_state_of_a_commit_where_it_reads_gives_a_state_that_reads() {
-    let directory = unparsable();
-    let repo = directory.path();
-    assert_eq!(hint(repo), json!(HINT));
+    for fault in FAULTS {
+        let directory = committed();
+        let repo = directory.path();
+        create(repo, &["req_extra"]);
+        fault(repo);
+        assert_eq!(hint(repo), json!(HINT));
 
-    git(repo, &["checkout", "HEAD", "--", ".provenance/state"]);
+        git(repo, &["checkout", "HEAD", "--", ".provenance/state"]);
 
-    let read = read(repo, "req_child");
-    let refines = &read["record"]["value"]["refines"];
-    assert_eq!(refines, &json!(["req_parent"]), "{read}");
+        let read = read(repo, "req_child");
+        let refines = &read["record"]["value"]["refines"];
+        assert_eq!(refines, &json!(["req_parent"]), "{read}");
+        let (code, _, stderr) = run(repo, &["req_extra", "get", "--format", "json"]);
+        assert_eq!(code, Some(1), "{stderr}");
+        let refused: Value = serde_json::from_str(&stderr).unwrap();
+        assert_eq!(refused["error"]["kind"], "resource_not_found", "{stderr}");
+    }
 }
 
 /// A line of a different record family that is not a record gives the same
@@ -290,18 +316,4 @@ fn a_bad_line_of_a_different_family_names_the_same_ways_out() {
     let refusal = json!({"error": {"kind": "invalid_state_file", "file": file, "line": line,
         "message": "missing field `id`", "hint": HINT}, "meta": {}});
     assert_eq!(answer, (Some(1), String::new(), format!("{refusal}\n")));
-}
-
-/// A dictionary reference that does not parse gives the same two ways out.
-#[test]
-#[verifies("rule_state_parse_refusal_names_the_corrections", examples)]
-fn a_dictionary_reference_that_does_not_parse_names_the_same_ways_out() {
-    let directory = committed();
-    let repo = directory.path();
-    std::fs::write(repo.join(".provenance/state/dictionary.json"), "").unwrap();
-
-    let answer = run(repo, &["init"]);
-
-    let stderr = format!("Error: dictionary.json line 1: EOF while parsing a value; {HINT}\n");
-    assert_eq!(answer, (Some(1), String::new(), stderr));
 }

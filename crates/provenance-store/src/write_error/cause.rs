@@ -41,15 +41,16 @@ pub fn native(error: &anyhow::Error) -> &anyhow::Error {
         .map_or(error, |located| &located.source)
 }
 
-/// The display chain of `error` for a refusal of no known kind. A path below
-/// the repository root is relative to that root, with `/` between its parts.
-/// Any other absolute path is only its file name.
+/// The display chain of `cause`, the native error of `error` or a cause in
+/// it, for a refusal of no known kind. A path below the repository root of
+/// `error` is relative to that root, with `/` between its parts. Any other
+/// absolute path is only its file name.
 #[rule("rule_unclassified_refusal_gives_cause")]
-pub fn failure_cause(error: &anyhow::Error) -> String {
+pub fn failure_cause(error: &anyhow::Error, cause: &anyhow::Error) -> String {
     let roots = error
         .downcast_ref::<InRepository>()
         .map_or(&[][..], |located| &located.roots);
-    let text = format!("{:#}", native(error));
+    let text = format!("{cause:#}");
     file_names_only(&relative_to(&text, roots))
 }
 

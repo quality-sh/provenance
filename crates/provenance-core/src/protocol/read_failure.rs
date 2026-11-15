@@ -16,8 +16,18 @@ pub enum ReadFailure {
     PageRecordTooLarge,
     #[error("document root is missing")]
     DocumentRootMissing,
+    /// The document read did not catch up the document. `message` is the
+    /// cause as text, without its location. A state line that does not parse
+    /// also gives its location and its hint, as `invalid_state_file` gives
+    /// them.
     #[error("catch-up failed; restart the document read")]
-    DocumentCatchUpFailed,
+    DocumentCatchUpFailed {
+        #[serde(flatten, deserialize_with = "file_and_line")]
+        location: Option<FileLine>,
+        message: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        hint: Option<String>,
+    },
     #[error("repository file access denied")]
     FileAccessDenied,
     #[error("secure repository file access unavailable")]
@@ -65,11 +75,48 @@ fn hint_detail(hint: Option<&str>) -> String {
     hint.map_or_else(String::new, |hint| format!("; {hint}"))
 }
 
-/// The hint of a state file that does not parse: the two steps that correct
-/// the state.
-pub const STATE_CORRECTIONS: &str = "get .provenance/state from a branch or a commit where \
-    Provenance can read it, or remove all records and settings of the repository: remove \
-    .provenance/state and run provenance init";
+/// The hint of a file below `.provenance/state` that does not parse and that
+/// has no correction of its own: the two steps that give a state that reads,
+/// each with what it removes.
+pub const STATE_CORRECTIONS: &str = "To correct this fault, do one of these steps. \
+    Get .provenance/state from a commit that Provenance can read, which removes records and \
+    changes that are not in that commit. \
+    Or remove .provenance/state, which removes all records, the scopes, the disposition actors \
+    and the technical names of the dictionary. \
+    Then do the command provenance init.";
+
+/// The location of a state line that does not parse.
+///
+/// A failure gives `file` and `line` together, or neither.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+pub struct FileLine {
+    /// The file that holds the line, as `invalid_state_file` gives it. It
+    /// comes with `line`.
+    pub file: String,
+    /// The line that does not parse, from 1. It comes with `file`.
+    pub line: u64,
+}
+
+/// Reads the location of a failure from its `file` and `line` keys. A body
+/// with one of the two keys is refused, so that no key is lost.
+fn file_and_line<'de, D: serde::Deserializer<'de>>(
+    deserializer: D,
+) -> Result<Option<FileLine>, D::Error> {
+    #[derive(Deserialize)]
+    struct Keys {
+        file: Option<String>,
+        line: Option<u64>,
+    }
+    let keys = Keys::deserialize(deserializer)?;
+    match (keys.file, keys.line) {
+        (Some(file), Some(line)) => Ok(Some(FileLine { file, line })),
+        (None, None) => Ok(None),
+        _ => Err(serde::de::Error::custom(
+            "a failure gives file and line together, or neither",
+        )),
+    }
+}
 
 /// A line of a record file, or the dictionary reference, that does not parse.
 ///
@@ -81,19 +128,28 @@ pub struct UnparsableStateFile {
     file: String,
     line: u64,
     message: String,
+    correction: Option<String>,
     in_state: bool,
 }
 
 impl UnparsableStateFile {
     /// The file at `path` does not parse at `line`. `repository` is the root
     /// of the repository that holds the file, when one holds it. `message` is
-    /// the parse message with no position.
+    /// the parse message with no position, and `correction` is the step that
+    /// corrects the file, when the reader knows one.
     #[provenance_macros::rule("rule_state_parse_refusal_names_the_line")]
-    pub fn new(path: &Utf8Path, repository: Option<&Utf8Path>, line: u64, message: String) -> Self {
+    pub fn new(
+        path: &Utf8Path,
+        repository: Option<&Utf8Path>,
+        line: u64,
+        message: String,
+        correction: Option<String>,
+    ) -> Self {
         Self {
             file: shown_file(path, repository),
             line,
             message,
+            correction,
             in_state: below_state(path).is_some(),
         }
     }
@@ -113,17 +169,15 @@ impl UnparsableStateFile {
         &self.message
     }
 
-    /// For a file below a `.provenance/state` directory, the two steps that
-    /// correct a state that Provenance cannot read. Each is true for a line in
-    /// a format that this build does not read and for a line that a person
-    /// changed. A file outside the state gets no hint.
+    /// The next step of each refusal for this line: the correction of the
+    /// reader when it knows one, else [`STATE_CORRECTIONS`] for a file below a
+    /// `.provenance/state` directory. A file outside the state with no
+    /// correction of its own gets no hint.
     #[provenance_macros::rule("rule_state_parse_refusal_names_the_corrections")]
-    pub const fn hint(&self) -> Option<&'static str> {
-        if self.in_state {
-            Some(STATE_CORRECTIONS)
-        } else {
-            None
-        }
+    pub fn hint(&self) -> Option<&str> {
+        self.correction
+            .as_deref()
+            .or_else(|| self.in_state.then_some(STATE_CORRECTIONS))
     }
 
     /// The `invalid_state_file` read failure of the file, with its next step.
@@ -131,6 +185,21 @@ impl UnparsableStateFile {
         ReadFailure::InvalidStateFile {
             file: self.file.clone(),
             line: self.line,
+            message: self.message.clone(),
+            hint: self.hint().map(str::to_owned),
+        }
+    }
+
+    /// The `document_catch_up_failed` read failure of this line.
+    ///
+    /// It is the refusal of a document read whose catch-up stopped at this
+    /// line, with the same hint as [`Self::failure`].
+    pub fn catch_up_failure(&self) -> ReadFailure {
+        ReadFailure::DocumentCatchUpFailed {
+            location: Some(FileLine {
+                file: self.file.clone(),
+                line: self.line,
+            }),
             message: self.message.clone(),
             hint: self.hint().map(str::to_owned),
         }

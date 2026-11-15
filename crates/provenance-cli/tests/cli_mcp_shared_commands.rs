@@ -226,8 +226,8 @@ async fn materialize_action_refuses_an_argument_by_name() {
 }
 
 /// The dictionary import action over a dictionary reference that does not parse gives the
-/// `invalid_state_file` failure with the steps that correct the state as the hint, keeps the
-/// file and writes no index.
+/// `invalid_state_file` failure with the repair as the hint, keeps the file and writes no
+/// index.
 #[tokio::test]
 #[verifies("rule_ste_dictionary_reference_parse_refusal", examples)]
 async fn the_dictionary_import_action_refuses_a_reference_that_does_not_parse() {
@@ -252,7 +252,8 @@ async fn the_dictionary_import_action_refuses_a_reference_that_does_not_parse() 
         result["structuredContent"]["error"],
         json!({"kind":"invalid_state_file","file":"dictionary.json","line":1,
                "message":"EOF while parsing a value",
-               "hint":dictionary_support::STATE_CORRECTIONS}),
+               "hint":"get the file again from git or correct its JSON, and then do the \
+                       command again"}),
         "{result}"
     );
     assert_eq!(std::fs::read_to_string(&reference).unwrap(), "");
@@ -292,7 +293,7 @@ async fn the_materialize_action_names_a_record_line_that_does_not_parse() {
         result["structuredContent"]["error"],
         json!({"kind":"invalid_state_file","file":"scopes/default/requirements/req.jsonl",
                "line":1,"message":"EOF while parsing an object",
-               "hint":dictionary_support::STATE_CORRECTIONS}),
+               "hint":provenance_core::protocol::read_failure::STATE_CORRECTIONS}),
         "{result}"
     );
     wire.close().await;
