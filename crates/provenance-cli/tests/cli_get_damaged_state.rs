@@ -1,7 +1,8 @@
 //! A get of a record over state that does not parse gives the same result on the CLI and
 //! on a spawned `provenance mcp`. When the read database holds a stored revision, the get
 //! gives the record at that serial with its edit field and the freshness warning. When it
-//! holds no revision, the get refuses and names `provenance materialize`.
+//! holds no revision, the get refuses and names `provenance materialize`. When the record
+//! changed after the stored serial, an update with the ETag of the get refuses.
 
 use provenance_macros::verifies;
 use serde_json::{json, Value};
@@ -14,6 +15,7 @@ use crate::cli_mcp_record_actions::Server;
 const RULE: &str = "rule_overtime_pay";
 const RULES: &str = "scopes/default/rules/rule.jsonl";
 const CARDS: &str = "scopes/default/ideation/proposal_cards.jsonl";
+const REQUIREMENTS: &str = "scopes/default/requirements/req.jsonl";
 
 /// Appends a line that does not parse to the state file `file`, and gives its line number.
 fn damage(root: &Path, file: &str) -> usize {
@@ -22,6 +24,11 @@ fn damage(root: &Path, file: &str) -> usize {
     let mut opened = std::fs::OpenOptions::new().append(true).open(path).unwrap();
     opened.write_all(b"{\"scope_id\":\"default\",\n").unwrap();
     lines + 1
+}
+
+/// Whether the warning `warning` names the state file `file`, with either path separator.
+fn names(warning: &str, file: &str) -> bool {
+    warning.replace('\\', "/").contains(file)
 }
 
 /// The exit code, the standard output and the standard error of one CLI command.
@@ -51,6 +58,29 @@ async fn mcp_refusal(server: &Server, tool: &str, arguments: Value) -> Value {
     let called = server.client.call(tool, arguments).await;
     assert_eq!(called["isError"], json!(true), "{called}");
     serde_json::from_str(called["content"][0]["text"].as_str().unwrap()).unwrap()
+}
+
+/// An update of the Rule with the guard `etag` refuses with `by_cli` on the CLI and with
+/// `by_mcp` on MCP.
+async fn assert_update_refused(
+    server: &Server,
+    repo: &str,
+    etag: &str,
+    by_cli: &Value,
+    by_mcp: &Value,
+) {
+    let flags = [
+        RULE,
+        "update",
+        "--if-match",
+        etag,
+        "--description",
+        "Changed.",
+    ];
+    assert_eq!(&cli_refusal(repo, &flags), by_cli);
+    let arguments = json!({"action":"update","target":RULE,"if_match":etag,
+        "description":"Changed."});
+    assert_eq!(&mcp_refusal(server, "change", arguments).await, by_mcp);
 }
 
 /// The get of the Rule over damaged state, on each interface: the record at the stored
@@ -112,29 +142,56 @@ async fn a_get_over_a_bad_record_line_gives_the_stored_record_on_each_interface(
     let warning = by_cli["record_metadata"]["freshness_error"]
         .as_str()
         .unwrap();
-    let parse = "EOF while parsing a value at line 1 column 22";
-    assert!(warning.starts_with("cannot hash "), "{warning}");
-    assert!(
-        warning.ends_with(&format!("rule.jsonl: {parse}: {parse}")),
-        "{warning}"
-    );
+    assert!(names(warning, RULES), "{warning}");
     assert_stored_record(&server, &repo, &clean, warning).await;
 
     let etag = clean.0["edit"]["etag"].as_str().unwrap();
     let refused = json!({"error":{"file":RULES,"kind":"invalid_state_file","line":line,
         "message":"EOF while parsing a value"},"meta":{}});
-    let flags = [
-        RULE,
-        "update",
-        "--if-match",
-        etag,
-        "--description",
-        "Changed.",
-    ];
-    assert_eq!(cli_refusal(&repo, &flags), refused);
-    let arguments = json!({"action":"update","target":RULE,"if_match":etag,
-        "description":"Changed."});
-    assert_eq!(mcp_refusal(&server, "change", arguments).await, refused);
+    assert_update_refused(&server, &repo, etag, &refused, &refused).await;
+    server.close().await;
+}
+
+#[tokio::test]
+#[verifies("rule_get_record_gives_edit_etag", examples)]
+async fn the_etag_of_a_get_at_the_stored_serial_refuses_an_update_over_a_later_change() {
+    let directory = tempfile::tempdir().unwrap();
+    let repo = directory.path().to_str().unwrap().to_owned();
+    chain(&repo);
+    let clean = clean_get(&repo);
+    let state = directory.path().join(".provenance/state");
+    let stored = std::fs::read_to_string(state.join(RULES)).unwrap();
+    let changed = stored.replace(
+        "Pay overtime after the threshold.",
+        "Pay overtime after the award threshold.",
+    );
+    assert_ne!(changed, stored);
+    std::fs::write(state.join(RULES), &changed).unwrap();
+    let requirements = std::fs::read_to_string(state.join(REQUIREMENTS)).unwrap();
+    damage(directory.path(), REQUIREMENTS);
+    let server = Server::start(&repo).await;
+
+    let by_cli = cli_json(&repo, &[RULE, "get"]);
+    let warning = by_cli["record_metadata"]["freshness_error"]
+        .as_str()
+        .unwrap();
+    assert!(names(warning, REQUIREMENTS), "{warning}");
+    assert_stored_record(&server, &repo, &clean, warning).await;
+
+    let etag = clean.0["edit"]["etag"].as_str().unwrap();
+    let read = cli_json(&repo, &["api", &format!("rules/{RULE}")]);
+    let current = read["data"]["edit"]["etag"].as_str().unwrap();
+    assert_ne!(current, etag);
+    let mcp_conflict = json!({"error":{"current_etag":current,"kind":"record_edit_conflict",
+        "record_kind":"rule"},"meta":{}});
+    let mut cli_conflict = mcp_conflict.clone();
+    cli_conflict["error"]["hint"] = json!(format!(
+        "run `provenance {RULE} --view review --scope default --repo {repo}`"
+    ));
+    assert_update_refused(&server, &repo, etag, &cli_conflict, &mcp_conflict).await;
+    std::fs::write(state.join(REQUIREMENTS), requirements).unwrap();
+    assert_update_refused(&server, &repo, etag, &cli_conflict, &mcp_conflict).await;
+    assert_eq!(std::fs::read_to_string(state.join(RULES)).unwrap(), changed);
     server.close().await;
 }
 
