@@ -132,8 +132,7 @@ async fn get(http: &Http, path: String) -> Answer {
 /// The version ids of the record at the list path `list`.
 async fn versions(http: &Http, list: &str) -> Vec<String> {
     let body = get(http, format!("{list}?limit=200")).await.json();
-    body.pointer("/data/entries")
-        .or_else(|| body.pointer("/data"))
+    body.pointer("/data/items")
         .and_then(Value::as_array)
         .map_or_else(Vec::new, |entries| {
             entries
