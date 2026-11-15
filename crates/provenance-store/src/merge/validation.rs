@@ -34,8 +34,6 @@ use crate::statement_analysis::{analyze_changed_statements, StatementDiagnostic}
 /// they also match on the file name.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ShardFamily {
-    /// `.provenance/state/scopes/<scope>/ideation/landings.jsonl`
-    IdeationLandings,
     /// `.provenance/state/scopes/<scope>/threads/discussions.jsonl`
     Discussions,
     /// `.provenance/state/scopes/<scope>/sources/*.jsonl`
@@ -87,9 +85,6 @@ impl ShardFamily {
     /// resolve the same way.
     #[must_use]
     pub fn for_shard_path(path: &Utf8Path) -> Self {
-        let Some(directory) = path.parent() else {
-            return Self::Unrecognized;
-        };
         // The review rows are in the requirements directory, but they are not
         // Requirement records.
         if path.file_name() == Some("review.jsonl") && is_scoped_family(path, "requirements") {
@@ -104,22 +99,7 @@ impl ShardFamily {
         if path.file_name() == Some("discussions.jsonl") && is_scoped_family(path, "threads") {
             return Self::Discussions;
         }
-        if path.file_name() == Some("landings.jsonl")
-            && directory.file_name() == Some("ideation")
-            && directory
-                .parent()
-                .and_then(Utf8Path::parent)
-                .is_some_and(|directory| directory.file_name() == Some("scopes"))
-            && directory
-                .parent()
-                .and_then(Utf8Path::parent)
-                .and_then(Utf8Path::parent)
-                .is_some_and(|directory| directory.file_name() == Some("state"))
-        {
-            Self::IdeationLandings
-        } else {
-            Self::Unrecognized
-        }
+        Self::Unrecognized
     }
 }
 
@@ -147,9 +127,7 @@ pub fn validate_merged_records(
         ShardFamily::Rules => validate_typed_records::<Rule>(records, "rule"),
         ShardFamily::Topics => validate_typed_records::<Topic>(records, "topic"),
         ShardFamily::Questions => validate_typed_records::<Question>(records, "question"),
-        ShardFamily::IdeationLandings | ShardFamily::Discussions | ShardFamily::Unrecognized => {
-            Ok(())
-        }
+        ShardFamily::Discussions | ShardFamily::Unrecognized => Ok(()),
     }
 }
 
@@ -342,22 +320,6 @@ mod tests {
                 "{family:?} at {path}"
             );
         }
-    }
-
-    // No Rule binding: an aid to the implementation. The landings file is not
-    // in the store family table. The driver knows its path, but its rows have
-    // no `id`, so the driver cannot merge it (bead provenance-5mmu).
-    #[test]
-    fn cannot_merge_the_landings_file_because_its_rows_have_no_id() {
-        let path = Utf8Path::new(".provenance/state/scopes/default/ideation/landings.jsonl");
-        let kind = ShardFamily::for_shard_path(path);
-        assert_eq!(kind, ShardFamily::IdeationLandings);
-        assert_eq!(kind.record_key(), "id");
-
-        let batches = [serde_json::json!({ "contributions": [], "synthesis_packets": [] })];
-        let error =
-            super::super::merge_records(kind.record_key(), &[], &batches, &batches).unwrap_err();
-        assert_eq!(error.to_string(), "record is missing string id");
     }
 
     #[test]

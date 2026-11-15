@@ -11,8 +11,8 @@ use serde_json::{json, Value};
 ///
 /// The routes create the evidence. No route creates a proposal that a packet
 /// qualifies, so one store call creates the proposal and its assertion, as a
-/// swarm landing does. That call writes the landings file, and the proposal
-/// file and the assertion file do not hold the two records.
+/// swarm landing does. That call writes the proposal to the proposal file and
+/// the assertion to the assertion file.
 pub async fn create_asserted_proposal(repo: &Repository, proposal_id: &str) {
     let writer = host(repo, true);
     for (path, body) in evidence(proposal_id) {
@@ -38,7 +38,7 @@ pub async fn create_asserted_proposal(repo: &Repository, proposal_id: &str) {
 
 /// The stored row of the assertion `assertion_a` of the proposal
 /// `proposal_id`.
-pub fn assertion_row(proposal_id: &str) -> Value {
+fn assertion_row(proposal_id: &str) -> Value {
     json!({"scope_id":"default", "id":"assertion_a", "proposal_id":proposal_id,
         "synthesis_packet_id":"synthesis_evidence", "supporting_claim_ids":["claim_a"]})
 }
