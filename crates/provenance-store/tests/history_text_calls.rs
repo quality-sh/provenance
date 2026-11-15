@@ -7,10 +7,14 @@
 //! what it found for the last version list in the process, so these tests
 //! are in their own binary, and the tests that read a history to its end
 //! take `ONE_READER` so that no other test changes what the process keeps.
+//! `entry_edges` holds the entry reads at the edges of a page.
 
 mod discussion_support;
+#[path = "history_text_calls/entry_edges.rs"]
+mod entry_edges;
 use camino::Utf8Path;
 use discussion_support::*;
+use provenance_core::protocol::failure::ErasedFailure;
 use provenance_core::review::{ReviewHistoryPage, ReviewHistoryQuery};
 use provenance_core::{NodeType, StableId};
 use provenance_store::layout::ProvenanceLayout;
@@ -266,7 +270,7 @@ fn statement_edits(temp: &tempfile::TempDir, count: usize) -> Vec<Commit> {
 }
 
 /// The answer of `review-history-entry` for the entry `entry` of `req_a`.
-async fn history_entry(repository: &Repository, entry: &str) -> Value {
+async fn history_entry(repository: &Repository, entry: &str) -> Result<Value, ErasedFailure> {
     let binding = LocalRepository::bind(repository.clone(), "folder").unwrap();
     let request = json!({
         "context": {"repository": "folder", "scope": "default"},
@@ -275,7 +279,6 @@ async fn history_entry(repository: &Repository, entry: &str) -> Value {
     InProcessReadOperations::new(&binding)
         .run("review-history-entry", request)
         .await
-        .unwrap()
 }
 
 /// The entry operation reads the history of the record once, also when the
@@ -291,7 +294,7 @@ async fn an_entry_read_reads_the_history_once() {
         let versions = Counted::new_lists(&statement_edits(&temp, committed));
         let root = Utf8Path::from_path(temp.path()).unwrap();
         let repository = repository(root).with_file_versions(versions.clone());
-        let answer = history_entry(&repository, "working").await;
+        let answer = history_entry(&repository, "working").await.unwrap();
         assert_eq!(answer["id"], json!("working"));
         counts.push((committed, versions.calls()));
     }
