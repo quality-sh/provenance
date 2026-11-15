@@ -43,6 +43,8 @@ mod mcp_change_results;
 mod mcp_error_envelopes;
 #[path = "../mcp_guidance.rs"]
 mod mcp_guidance;
+#[path = "../mcp_instructions.rs"]
+mod mcp_instructions;
 #[path = "../mcp_plumbing_names.rs"]
 mod mcp_plumbing_names;
 #[path = "../mcp_read_tools_do_not_write.rs"]
@@ -75,6 +77,8 @@ mod porcelain_check_statement;
 mod porcelain_contracts;
 #[path = "../porcelain_discussion.rs"]
 mod porcelain_discussion;
+#[path = "../porcelain_import_review_guard.rs"]
+mod porcelain_import_review_guard;
 #[path = "../porcelain_schema_variants.rs"]
 mod porcelain_schema_variants;
 #[path = "../porcelain_search.rs"]

@@ -5,12 +5,11 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "apply": "node dist/apply.js",
-    "test": "npm run build && node test-fixture.mjs"
-  },
-  "dependencies": {
-    "@quality-sh/provenance": "file:../../packages/provenance"
+    "test": "npm run build && node test-fixture.mjs",
+    "test:production": "npm run build && node production-load.mjs"
   },
   "devDependencies": {
+    "@quality-sh/provenance": "file:../../packages/provenance",
     "typescript": "^5.9.3"
   }
 }

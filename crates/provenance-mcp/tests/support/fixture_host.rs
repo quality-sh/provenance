@@ -30,7 +30,8 @@ impl NotifyPort for FixtureNotify {
     }
 }
 
-fn access(repository: &Repository) -> FixtureAccess {
+/// The fixture access of the selected repository target, which only reads.
+pub fn access(repository: &Repository) -> FixtureAccess {
     FixtureAccess::new(
         vec![Target {
             id: "selected".into(),
