@@ -8,13 +8,14 @@ use provenance_porcelain::registry::{Command, GraphCommand, RepositoryCommand};
 
 /// Phrases that do not name a command, each with the start of the one line that holds
 /// it: the trace view of get, the claim of a Topic, the HTTP method of an API route, the
-/// file that import reads, and the checks of validate.
-const NOT_COMMANDS: [(&str, &str); 5] = [
+/// file that import reads, the checks of validate, and the verb of dictionary import.
+const NOT_COMMANDS: [(&str, &str); 6] = [
     ("- get: ", "trace view"),
     ("- release: ", "Topic claim"),
     ("- api: ", "GET /rules"),
     ("- import: ", "export file"),
     ("- validate: ", "Check one"),
+    ("- dictionary import: ", "Import the"),
 ];
 
 /// The writes of the change command of the consumer in these tests, other than the
