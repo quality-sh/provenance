@@ -108,12 +108,11 @@ async fn mcp_serves_the_tools_of_the_cli_repository() {
     // prime holds the guidance of the commands that the CLI shows, and adds its own first
     // steps.
     let prime = cli(&["prime", "--repo", &repo]);
-    let shared = guidance_for(provenance_cli::exposed::name, false).guidance;
+    let shared = guidance_for(&provenance_cli::exposed::forms(), &[], false).guidance;
     assert!(prime.starts_with(&shared), "{prime}");
-    assert_eq!(
-        client.instructions().as_deref(),
-        Some(provenance_mcp::instructions().as_str())
-    );
+    // The repository of the CLI gives the server its repository writes.
+    let instructions = client.instructions().unwrap();
+    assert!(instructions.contains("\n- dictionary_import: "), "{instructions}");
     let tools = client.tools().await;
     let names: Vec<&str> = tools
         .iter()

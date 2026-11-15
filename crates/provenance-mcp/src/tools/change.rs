@@ -110,14 +110,11 @@ pub fn tool(host: &StatementHost, input: &ActionInput) -> Option<Tool> {
     if actions.is_empty() {
         return None;
     }
-    let description = provenance_porcelain::guidance::change_description(
-        |command| {
-            commands(input)
-                .any(|write| write == command)
-                .then(|| crate::exposed::name(command))
-        },
-        notifies(input),
-    )?;
+    let writes: Vec<(Command, String)> = commands(input)
+        .map(|command| (command, crate::exposed::name(command).to_owned()))
+        .collect();
+    let description =
+        provenance_porcelain::guidance::change_description(&writes, notifies(input))?;
     Some(crate::surface::tool(
         crate::exposed::name(Command::Change),
         description,

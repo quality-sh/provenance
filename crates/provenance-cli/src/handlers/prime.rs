@@ -10,15 +10,19 @@ const FIRST_STEPS: &str = "\n\nFor a focused start, run:\n\n\
 - `provenance search --text <text> --scope <scope> --format json`\n\
 - `provenance <id> get --view children --depth <N> --scope <scope> --format json`";
 
-/// The CLI form of an action on a record, with the CLI names of the update and create
-/// actions, when the CLI shows them.
+/// The CLI form of an action on a record, with the update and create actions, when the
+/// CLI shows them.
 fn record_actions() -> Option<String> {
-    let update = exposed::name(Command::Action(Action::Update))?;
-    let create = exposed::name(Command::Action(Action::Create))?;
+    let shown = |action| {
+        let command = Command::Action(action);
+        exposed::shows(command).then(|| exposed::form(command))
+    };
+    let update = shown(Action::Update)?;
+    let create = shown(Action::Create)?;
     Some(format!(
         "\n\nTo do an action on a record, put the action after the record ID, as in \
-         `provenance <id> {update}`. An action that makes a record also needs its type, as in \
-         `provenance <id> {create} --type requirement`. Add `--help` to see the fields of an \
+         `provenance {update}`. An action that makes a record also needs its type, as in \
+         `provenance {create} --type requirement`. Add `--help` to see the fields of an \
          action."
     ))
 }
@@ -27,7 +31,7 @@ fn record_actions() -> Option<String> {
 /// first steps, and the CLI form of an action on a record.
 #[rule("rule_porcelain_cli_prime_teaches_domain")]
 pub(super) fn handle(format: PrimeFormat) -> anyhow::Result<()> {
-    let mut guidance = guidance::guidance_for(exposed::name, false);
+    let mut guidance = guidance::guidance_for(&exposed::forms(), &[], false);
     guidance.guidance.push_str(FIRST_STEPS);
     guidance.guidance.extend(record_actions());
     match format {

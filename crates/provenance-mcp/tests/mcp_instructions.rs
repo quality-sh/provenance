@@ -1,13 +1,13 @@
-//! The server instructions name only the tools that the server lists and the actions
-//! that the host grants. The test of the listed names verifies the Rule on the names in
-//! the guidance. The other tests have no Rule binding, because no Rule states which
-//! commands the instructions name for one grant.
+//! The full instructions text of hosts with different grants: the opening sentences, the
+//! order of the command lines, and the text of the change line for the writes that the
+//! host grants. These tests have no Rule binding: no Rule states the text or the order,
+//! and the tests in `mcp_instruction_names.rs` are the evidence for the names.
 #![cfg(feature = "test-fixture")]
 
 use crate::support::{fixture_host, mcp::Session, records::Repository};
 use provenance_porcelain::action::Action;
 use provenance_store::operations::catalog::{self, Operation as _};
-use provenance_transport::StatementHost;
+use provenance_transport::{repository::RepoContext, StatementHost};
 use rmcp::model::Tool;
 
 /// The domain text before the action lines.
@@ -85,6 +85,14 @@ const DISCUSSIONS: &str = "- discussions: List addressed Discussions in a scope 
 const DISCUSSION: &str = "- discussion: Read the addressed Discussion.";
 const DISCUSS: &str = "- discuss: Start a Discussion under the target record.";
 const REPLY: &str = "- reply: Reply to the addressed Discussion.";
+const MATERIALIZE: &str = "- materialize: Build the local query cache again from the graph \
+files of the repository";
+const IMPORT: &str = "- import: Replace the records of one scope with a scope export file and \
+delete each record that is not in the file";
+const DICTIONARY_IMPORT: &str =
+    "- dictionary_import: Import the ASD-STE100 Issue 9 dictionary from one local PDF file";
+const SWARM_BACKTRACE_LAND: &str = "- swarm_backtrace_land: Add the results of one swarm \
+backtrace run to the graph as proposals";
 
 /// The first steps that a server adds when it lists search and get.
 const FIRST_STEPS: &str = "\n\nFor a focused start, call search with {\"text\":\"<text>\"}, \
@@ -174,12 +182,12 @@ async fn a_host_with_every_tool_names_its_writes_and_gives_first_steps() {
         change.description.as_deref(),
         CHANGE_WITHOUT_REPOSITORY.strip_prefix("- change: ")
     );
-    let mut lines = [
+    let lines = [
         GET,
-        TRACE,
         SEARCH,
-        CHECK,
         API,
+        CHECK,
+        TRACE,
         CHANGE_WITHOUT_REPOSITORY,
         CREATE,
         UPDATE,
@@ -187,19 +195,49 @@ async fn a_host_with_every_tool_names_its_writes_and_gives_first_steps() {
         CLAIM,
         RELEASE,
         SUBMIT,
-        DISCUSSIONS,
-        DISCUSSION,
         DISCUSS,
         REPLY,
+        DISCUSSIONS,
+        DISCUSSION,
     ];
     assert_eq!(
         instructions,
         expected(&[SEARCH_THEN_GET, CREATE_TYPE], &lines, true)
     );
-    // A server that shows each command and each write gives the full guidance.
-    lines[5] = CHANGE;
+}
+
+/// A host with repository files adds the repository writes to the change line, and one
+/// line for each repository write after the other change actions.
+#[tokio::test]
+async fn a_host_with_repository_files_names_each_repository_write() {
+    let repository = Repository::new("The shared graph is readable.");
+    let root = repository.dir.path().to_str().unwrap().to_owned();
+    let host = fixture_host::full(&repository).with_repository(RepoContext::new(root, "default"));
+    let (_, instructions) = served(host).await;
+    let lines = [
+        GET,
+        SEARCH,
+        API,
+        CHECK,
+        TRACE,
+        CHANGE,
+        CREATE,
+        UPDATE,
+        ANSWER,
+        CLAIM,
+        RELEASE,
+        SUBMIT,
+        DISCUSS,
+        REPLY,
+        MATERIALIZE,
+        IMPORT,
+        DICTIONARY_IMPORT,
+        SWARM_BACKTRACE_LAND,
+        DISCUSSIONS,
+        DISCUSSION,
+    ];
     assert_eq!(
-        provenance_mcp::instructions(),
+        instructions,
         expected(&[SEARCH_THEN_GET, CREATE_TYPE], &lines, true)
     );
 }
@@ -239,10 +277,10 @@ async fn a_host_without_search_or_get_gives_no_first_steps() {
         API,
         CHANGE_CREATE_DISCUSS_REPLY,
         CREATE,
-        DISCUSSIONS,
-        DISCUSSION,
         DISCUSS,
         REPLY,
+        DISCUSSIONS,
+        DISCUSSION,
     ];
     assert_eq!(
         served(host).await,
@@ -263,8 +301,8 @@ async fn a_host_with_get_and_without_search_gives_no_first_steps() {
     let host = host_without(&repository, &[catalog::Search::NAME]);
     let lines = [
         GET,
-        TRACE,
         API,
+        TRACE,
         CHANGE_RECORD_AND_DISCUSSION,
         CREATE,
         UPDATE,
@@ -272,10 +310,10 @@ async fn a_host_with_get_and_without_search_gives_no_first_steps() {
         CLAIM,
         RELEASE,
         SUBMIT,
-        DISCUSSIONS,
-        DISCUSSION,
         DISCUSS,
         REPLY,
+        DISCUSSIONS,
+        DISCUSSION,
     ];
     let names = ["get", "api", "trace", "change", "discussions"];
     assert_eq!(
@@ -290,7 +328,7 @@ async fn a_host_with_get_and_without_search_gives_no_first_steps() {
 #[tokio::test]
 async fn a_read_only_host_gives_no_change_line() {
     let repository = Repository::new("The shared graph is readable.");
-    let lines = [GET, TRACE, SEARCH, CHECK, API, DISCUSSIONS, DISCUSSION];
+    let lines = [GET, SEARCH, API, CHECK, TRACE, DISCUSSIONS, DISCUSSION];
     let names = ["get", "search", "api", "check", "trace", "discussions"];
     assert_eq!(
         served(fixture_host::read_only(&repository)).await,
@@ -328,14 +366,14 @@ async fn a_change_tool_with_create_and_reply_names_only_those_actions() {
     );
     let lines = [
         GET,
-        TRACE,
         SEARCH,
         API,
+        TRACE,
         CHANGE_CREATE_REPLY,
         CREATE,
+        REPLY,
         DISCUSSIONS,
         DISCUSSION,
-        REPLY,
     ];
     assert_eq!(
         instructions,
@@ -348,9 +386,9 @@ async fn a_change_tool_with_create_and_reply_names_only_those_actions() {
 fn lines_without(without: &str) -> Vec<&'static str> {
     [
         GET,
-        TRACE,
         SEARCH,
         API,
+        TRACE,
         CHANGE_RECORD_AND_DISCUSSION,
         CREATE,
         UPDATE,
@@ -358,10 +396,10 @@ fn lines_without(without: &str) -> Vec<&'static str> {
         CLAIM,
         RELEASE,
         SUBMIT,
-        DISCUSSIONS,
-        DISCUSSION,
         DISCUSS,
         REPLY,
+        DISCUSSIONS,
+        DISCUSSION,
     ]
     .into_iter()
     .filter(|line| *line != without)

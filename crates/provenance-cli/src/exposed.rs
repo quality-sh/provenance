@@ -63,9 +63,23 @@ pub fn shows(command: Command) -> bool {
     EXPOSED.contains(&command)
 }
 
-/// The name with which the CLI shows `command`, or `None` when the CLI does not show it.
-pub fn name(command: Command) -> Option<&'static str> {
-    shows(command).then(|| command.declaration().name)
+/// The form that selects `command` on the CLI: the words of its name, or `<id>` and its
+/// name for a command that only acts on a record, as in `<id> update`.
+pub fn form(command: Command) -> String {
+    let declaration = command.declaration();
+    if declaration.grammar.takes_name() {
+        declaration.name.to_owned()
+    } else {
+        format!("<id> {}", declaration.name)
+    }
+}
+
+/// Each command that the CLI shows, in the order of [`EXPOSED`], with its CLI form.
+pub fn forms() -> Vec<(Command, String)> {
+    EXPOSED
+        .iter()
+        .map(|command| (*command, form(*command)))
+        .collect()
 }
 
 /// The porcelain command that the CLI root words select. A target action is not found

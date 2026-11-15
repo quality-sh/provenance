@@ -1,7 +1,8 @@
 //! Domain guidance shared by each consumer.
 
 use crate::action::Action;
-use crate::registry::{Command, GraphCommand, RepositoryCommand};
+use crate::registry::Command;
+use provenance_macros::rule;
 use serde::Serialize;
 use std::fmt::Write;
 
@@ -50,9 +51,10 @@ Give its `edit.etag` unchanged to the update as the if-match value.\n";
 const ACCESS: &str = "Available actions depend on the interface and its access. \
 Each interface lists the inputs and actions it supports.\n\n";
 
-/// The change description before the writes and after them.
+/// The change description after the change declaration description: the text before the
+/// writes and after them.
 const CHANGE: (&str, &str) = (
-    "Write to the graph. The action argument selects the write: ",
+    "The action argument selects the write: ",
     ". A call that lacks a field that the action and record kind need gets the schema of \
      their fields.",
 );
@@ -61,28 +63,17 @@ const CHANGE: (&str, &str) = (
 /// field.
 const NOTIFY: &str = "notify";
 
-/// The Discussion writes of the change command.
-const DISCUSSION_WRITES: [Command; 2] = [
-    Command::Action(Action::Discuss),
-    Command::Action(Action::Reply),
-];
-
-/// The repository writes of the change command.
-const REPOSITORY_WRITES: [Command; 4] = [
-    Command::Repository(RepositoryCommand::Materialize),
-    Command::Repository(RepositoryCommand::Import),
-    Command::Repository(RepositoryCommand::DictionaryImport),
-    Command::Graph(GraphCommand::SwarmBacktraceLand),
-];
-
-/// Produce the guidance of a consumer that shows the commands that `name` names.
-///
-/// `name` gives the name with which the consumer shows a command, or `None` for a command
-/// that it does not show. The notify write is shown when `notify` is true. A sentence or a command line names
-/// only shown commands, each line with the name of the consumer, and the change line names
-/// only the shown writes.
-pub fn guidance_for(name: impl Fn(Command) -> Option<&'static str>, notify: bool) -> Guidance {
-    let shown = |command: Command| name(command).is_some();
+/// Produce the guidance of an interface: one line for each command that it shows, in its
+/// order, with the name that selects it on the interface and its registry description.
+/// `writes` holds the commands that its change command selects, and notify is one of them
+/// when `notify` is true. An internal command gets no line.
+#[rule("rule_guidance_names_accepted_commands")]
+pub fn guidance_for(
+    commands: &[(Command, String)],
+    writes: &[(Command, String)],
+    notify: bool,
+) -> Guidance {
+    let shown = |command: Command| commands.iter().any(|(other, _)| *other == command);
     let mut text = String::from(DOMAIN);
     let opening: Vec<String> = [
         (shown(Command::Search) && shown(Command::Get)).then(|| SEARCH_THEN_GET.to_owned()),
@@ -99,35 +90,20 @@ pub fn guidance_for(name: impl Fn(Command) -> Option<&'static str>, notify: bool
         text.push_str(ETAG_BEFORE_UPDATE);
     }
     text.push_str(ACCESS);
-    let commands = [
-        Command::Get,
-        Command::Trace,
-        Command::Search,
-        Command::Check,
-        Command::Api,
-        Command::Change,
-    ]
-    .into_iter()
-    .chain(
-        Action::RECORD
-            .into_iter()
-            .chain(Action::DISCUSSION)
-            .map(Command::Action),
-    );
-    let names_shown = |command: &Command| also_named(*command).iter().all(|other| shown(*other));
-    for command in commands.filter(names_shown) {
-        let Some(shown_name) = name(command) else {
+    for (command, name) in commands {
+        let declaration = command.declaration();
+        if declaration.internal || !also_named(*command).iter().all(|other| shown(*other)) {
             continue;
-        };
-        let description = if command == Command::Change {
-            let Some(description) = change_description(&name, notify) else {
+        }
+        let description = if *command == Command::Change {
+            let Some(description) = change_description(writes, notify) else {
                 continue;
             };
             description
         } else {
-            command.declaration().description.to_owned()
+            declaration.description.to_owned()
         };
-        writeln!(text, "- {shown_name}: {description}").expect("writing to a String cannot fail");
+        writeln!(text, "- {name}: {description}").expect("writing to a String cannot fail");
     }
     text.truncate(text.trim_end().len());
     Guidance { guidance: text }
@@ -145,44 +121,53 @@ fn create_sentence(shown: impl Fn(Command) -> bool) -> Option<String> {
     })
 }
 
-/// The description of the change command that names only the shown writes.
+/// The description of a change command that selects `writes`, each with the name that
+/// selects it, and notify when `notify` is true.
 ///
-/// `name` gives the name with which the consumer shows a write, or `None` for a write that
-/// it does not show. Notify is shown when `notify` is true. With each write shown with its
-/// declaration name, it is the change declaration description. No write gives no
-/// description.
-pub fn change_description(
-    name: impl Fn(Command) -> Option<&'static str>,
-    notify: bool,
-) -> Option<String> {
-    let names = |commands: &[Command]| -> Vec<&'static str> {
-        commands
+/// The writes are in groups: the record actions, the other actions, which are the
+/// Discussion writes, and the repository writes. Each group keeps the order of `writes`.
+/// No write gives no description.
+pub fn change_description(writes: &[(Command, String)], notify: bool) -> Option<String> {
+    let group = |selected: fn(Command) -> bool| -> Vec<&str> {
+        writes
             .iter()
-            .filter_map(|command| name(*command))
+            .filter(|(command, _)| selected(*command))
+            .map(|(_, name)| name.as_str())
             .collect()
     };
     let groups = [
-        (
-            names(&Action::RECORD.map(Command::Action)),
-            "on the target record",
-        ),
-        (names(&DISCUSSION_WRITES), "for a Discussion"),
+        (group(is_record_action), "on the target record"),
+        (group(is_discussion_write), "for a Discussion"),
         (
             if notify { vec![NOTIFY] } else { Vec::new() },
             "to register a client thread for review changes",
         ),
-        (names(&REPOSITORY_WRITES), "on the repository files"),
+        (
+            group(|command| !matches!(command, Command::Action(_))),
+            "on the repository files",
+        ),
     ];
-    let mut writes: Vec<String> = groups
+    let mut parts: Vec<String> = groups
         .into_iter()
         .filter(|(names, _)| !names.is_empty())
         .map(|(names, words)| format!("{} {words}", alternatives(&names)))
         .collect();
-    if let [_, .., last] = writes.as_mut_slice() {
+    if let [_, .., last] = parts.as_mut_slice() {
         last.insert_str(0, "or ");
     }
     let (before, after) = CHANGE;
-    (!writes.is_empty()).then(|| format!("{before}{}{after}", writes.join("; ")))
+    let declared = Command::Change.declaration().description;
+    (!parts.is_empty()).then(|| format!("{declared} {before}{}{after}", parts.join("; ")))
+}
+
+/// Whether `command` is an action on a record.
+fn is_record_action(command: Command) -> bool {
+    matches!(command, Command::Action(action) if Action::RECORD.contains(&action))
+}
+
+/// Whether `command` is an action that is not an action on a record.
+fn is_discussion_write(command: Command) -> bool {
+    matches!(command, Command::Action(_)) && !is_record_action(command)
 }
 
 /// The names as alternatives: `a`, `a or b`, or `a, b, or c`.

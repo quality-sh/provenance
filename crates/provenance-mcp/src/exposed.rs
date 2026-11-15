@@ -59,11 +59,6 @@ pub fn tools() -> impl Iterator<Item = Command> {
         .map(|(command, _)| *command)
 }
 
-/// Whether MCP shows `command`.
-pub fn shows(command: Command) -> bool {
-    EXPOSED.iter().any(|(shown, _)| *shown == command)
-}
-
 /// The MCP spelling of each shown command name.
 static NAMES: LazyLock<Vec<(Command, String)>> = LazyLock::new(|| {
     EXPOSED

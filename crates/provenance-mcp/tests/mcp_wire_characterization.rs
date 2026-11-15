@@ -181,17 +181,17 @@ inputs and actions it supports.\n\n\
 - get: Read one repository record by its repository-local ID. Select its record view, \
 children view (records below this record), trace view (records above this record, up \
 to its Sources), impact view, or review view.\n\
-- trace: Read the records above this record, up to its Sources. The get trace view \
-gives the same records.\n\
 - search: Find records across the permitted kinds in the bound scope, or the Rules \
 bound to a source file and symbol.\n\
-- check: Check graph validity, statement quality, and binding coverage. Give a \
-statement to check that text with the project dictionary before a write.\n\
 - api: Call one public API path with an optional method, query, headers, and JSON \
 body. The body is the data object, without the HTTP {\"data\": ...} wrapper. Omit the \
 path to list the catalog routes with their methods and inputs. A filter that is the \
 method and path of one route, such as GET /rules, gives the request and response \
 schemas of that route.\n\
+- check: Check graph validity, statement quality, and binding coverage. Give a \
+statement to check that text with the project dictionary before a write.\n\
+- trace: Read the records above this record, up to its Sources. The get trace view \
+gives the same records.\n\
 - change: Write to the graph. The action argument selects the write: create, update, \
 answer, claim, release, or submit on the target record; or discuss or reply for a \
 Discussion. A call that lacks a field that the action and record kind need gets the \
@@ -203,10 +203,10 @@ schema of their fields.\n\
 - release: Release the target Topic claim.\n\
 - submit: Submit the target Source, Requirement, Resolution, Rule, Topic, or Question \
 for review.\n\
-- discussions: List addressed Discussions in a scope or under a record.\n\
-- discussion: Read the addressed Discussion.\n\
 - discuss: Start a Discussion under the target record.\n\
-- reply: Reply to the addressed Discussion.\n\n\
+- reply: Reply to the addressed Discussion.\n\
+- discussions: List addressed Discussions in a scope or under a record.\n\
+- discussion: Read the addressed Discussion.\n\n\
 For a focused start, call search with {\"text\":\"<text>\"}, then get with \
 {\"target\":\"<id>\",\"view\":\"children\",\"depth\":<N>}.";
 

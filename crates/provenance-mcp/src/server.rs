@@ -29,20 +29,11 @@ impl Server {
     }
 }
 
-/// The instructions of a server that shows every command and every write: the shared
-/// domain guidance followed by the first calls.
-pub fn instructions() -> String {
-    crate::guidance::instructions(crate::exposed::shows, true)
-}
-
 impl ServerHandler for Server {
     /// Supplies shared domain guidance through native MCP instructions.
     #[provenance_macros::rule("rule_porcelain_mcp_guidance_native")]
     fn get_info(&self) -> ServerConfig {
-        let instructions = crate::guidance::instructions(
-            |command| self.tools.shows(command),
-            self.tools.shows_notify(),
-        );
+        let instructions = crate::guidance::instructions(&self.tools);
         ServerConfig::new(ServerCapabilities::builder().enable_tools().build())
             .with_server_info(server_info())
             .with_instructions(instructions)

@@ -113,7 +113,7 @@ async fn cli_and_mcp_share_the_same_guidance() {
     let (client_io, server_io) = tokio::io::duplex(256 * 1024);
     let server = tokio::spawn(async move { provenance_mcp::serve(host, server_io).await.unwrap() });
     let client = Client::connect(client_io).await.unwrap();
-    let cli = guidance_for(provenance_cli::exposed::name, false).guidance;
+    let cli = guidance_for(&provenance_cli::exposed::forms(), &[], false).guidance;
     let (shared, _) = cli.split_once("\n## Actions\n").unwrap();
     let instructions = client.instructions().unwrap();
     assert!(text.starts_with(&cli), "{text}");
