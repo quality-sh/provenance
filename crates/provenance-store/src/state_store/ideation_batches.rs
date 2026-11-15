@@ -23,8 +23,7 @@ impl StateStore {
     }
 
     /// Checks the records of `incoming` with the records of `scope`, and
-    /// publishes the state file of each kind of these records in one write.
-    #[rule("rule_swarm_run_records_in_kind_files")]
+    /// publishes them with [`Self::publish_kind_files`].
     pub(super) fn write_ideation_batch(
         &self,
         scope: &ScopeId,
@@ -110,31 +109,42 @@ impl StateStore {
             for disposition in &dispositions {
                 canonical_artifacts.ensure_exists(disposition.canonical_artifact.as_ref())?;
             }
-            let layout = &held.layout;
-            let files = [
-                held.kind_file(
-                    shards::contributions_path(layout, scope),
-                    incoming.contributions,
-                )?,
-                held.kind_file(
-                    shards::synthesis_packets_path(layout, scope),
-                    incoming.synthesis_packets,
-                )?,
-                held.kind_file(
-                    shards::proposal_cards_path(layout, scope),
-                    incoming.proposals,
-                )?,
-                held.kind_file(
-                    shards::assertion_records_path(layout, scope),
-                    incoming.assertions,
-                )?,
-                held.kind_file(
-                    shards::dispositions_path(layout, scope),
-                    incoming.dispositions,
-                )?,
-            ];
-            held.publish_shards(files.into_iter().flatten().collect())
+            held.publish_kind_files(scope, incoming)
         })
+    }
+
+    /// Writes each record of `incoming` to the state file of its kind, and
+    /// publishes the changed files in one write.
+    #[rule("rule_swarm_run_records_in_kind_files")]
+    fn publish_kind_files(
+        &self,
+        scope: &ScopeId,
+        incoming: IdeationLandingBatch,
+    ) -> anyhow::Result<()> {
+        let layout = &self.layout;
+        let files = [
+            self.kind_file(
+                shards::contributions_path(layout, scope),
+                incoming.contributions,
+            )?,
+            self.kind_file(
+                shards::synthesis_packets_path(layout, scope),
+                incoming.synthesis_packets,
+            )?,
+            self.kind_file(
+                shards::proposal_cards_path(layout, scope),
+                incoming.proposals,
+            )?,
+            self.kind_file(
+                shards::assertion_records_path(layout, scope),
+                incoming.assertions,
+            )?,
+            self.kind_file(
+                shards::dispositions_path(layout, scope),
+                incoming.dispositions,
+            )?,
+        ];
+        self.publish_shards(files.into_iter().flatten().collect())
     }
 
     /// The new bytes of the state file at `path` with each of `records` in
