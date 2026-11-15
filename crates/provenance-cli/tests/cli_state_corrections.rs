@@ -166,13 +166,21 @@ async fn an_mcp_get_names_the_two_ways_out() {
     );
 }
 
-/// The second way: after the removal of the state directory, init gives a
-/// state that reads, and that state holds none of the records.
+/// The hint of the refusal of a `get` of `req_child`.
+fn hint(repo: &Path) -> Value {
+    let (code, _, stderr) = run(repo, &["req_child", "get", "--format", "json"]);
+    assert_eq!(code, Some(1), "{stderr}");
+    serde_json::from_str::<Value>(&stderr).unwrap()["error"]["hint"].take()
+}
+
+/// The second way: the refusal names the removal of the state directory and
+/// init. After them, the state reads, and it holds none of the records.
 #[test]
 #[verifies("rule_state_parse_refusal_names_the_corrections", examples)]
 fn init_after_the_removal_of_the_state_gives_a_state_that_reads() {
     let directory = unparsable();
     let repo = directory.path();
+    assert_eq!(hint(repo), json!(HINT));
 
     std::fs::remove_dir_all(repo.join(".provenance/state")).unwrap();
     passes(repo, &["init"]);
@@ -187,13 +195,14 @@ fn init_after_the_removal_of_the_state_gives_a_state_that_reads() {
     assert_eq!(read["record"]["id"], "req_new", "{read}");
 }
 
-/// The first way: the state directory of a commit where the state reads
-/// gives a state that reads, with the records of that commit.
+/// The first way: the refusal names the state of a commit where it reads.
+/// That state gives a state that reads, with the records of that commit.
 #[test]
 #[verifies("rule_state_parse_refusal_names_the_corrections", examples)]
 fn the_state_of_a_commit_where_it_reads_gives_a_state_that_reads() {
     let directory = unparsable();
     let repo = directory.path();
+    assert_eq!(hint(repo), json!(HINT));
 
     git(repo, &["checkout", "HEAD", "--", ".provenance/state"]);
 
@@ -203,22 +212,24 @@ fn the_state_of_a_commit_where_it_reads_gives_a_state_that_reads() {
     assert_eq!(refines, &json!(["req_parent"]), "{read}");
 }
 
-/// A line of a different record family that is not JSON gives the same two
-/// ways out.
+/// A line of a different record family that is not a record gives the same
+/// two ways out.
 #[test]
 #[verifies("rule_state_parse_refusal_names_the_corrections", examples)]
 fn a_bad_line_of_a_different_family_names_the_same_ways_out() {
     let directory = committed();
     let repo = directory.path();
-    let rules = repo.join(".provenance/state/scopes/default/rules/rule.jsonl");
-    std::fs::create_dir_all(rules.parent().unwrap()).unwrap();
-    std::fs::write(&rules, "{\n").unwrap();
+    let file = "scopes/default/ideation/proposal_cards.jsonl";
+    let path = repo.join(".provenance/state").join(file);
+    let mut text = std::fs::read_to_string(&path).unwrap();
+    let line = text.lines().count() + 1;
+    text.push_str("{\"not\":\"a record\"}\n");
+    std::fs::write(&path, text).unwrap();
 
     let answer = run(repo, &["req_child", "get", "--format", "json"]);
 
-    let refusal = json!({"error": {"kind": "invalid_state_file",
-        "file": "scopes/default/rules/rule.jsonl", "line": 1,
-        "message": "EOF while parsing an object", "hint": HINT}, "meta": {}});
+    let refusal = json!({"error": {"kind": "invalid_state_file", "file": file, "line": line,
+        "message": "missing field `scope_id`", "hint": HINT}, "meta": {}});
     assert_eq!(answer, (Some(1), String::new(), format!("{refusal}\n")));
 }
 
