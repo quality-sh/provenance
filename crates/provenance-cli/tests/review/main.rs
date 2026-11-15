@@ -9,6 +9,7 @@
 mod support {
     pub mod record_review;
     pub mod review_paths;
+    pub mod state_files;
 }
 #[path = "../cli_agent_review_paths.rs"]
 mod cli_agent_review_paths;

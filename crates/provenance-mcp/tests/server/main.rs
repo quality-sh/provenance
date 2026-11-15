@@ -91,5 +91,7 @@ mod resources_patches;
 mod review_write_transports;
 #[path = "../surface_names.rs"]
 mod surface_names;
+#[path = "../typed_plan_refusals.rs"]
+mod typed_plan_refusals;
 #[path = "../wire.rs"]
 mod wire;

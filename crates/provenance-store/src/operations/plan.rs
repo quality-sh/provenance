@@ -102,6 +102,8 @@ pub(super) fn typed_spec(
     })
 }
 
+/// The Rules that the apply of the reconciliation changes. A refused deletion
+/// changes no record, so it affects no Rule.
 fn affected_rule_ids(
     store: &StateStore,
     scope: &provenance_core::ScopeId,
@@ -110,7 +112,12 @@ fn affected_rule_ids(
     let changed = reconciliation
         .resources
         .iter()
-        .filter(|resource| resource.state != ReconcileState::Unchanged)
+        .filter(|resource| {
+            !matches!(
+                resource.state,
+                ReconcileState::Unchanged | ReconcileState::Refused
+            )
+        })
         .collect::<Vec<_>>();
     let changed_requirements = changed
         .iter()

@@ -11,6 +11,7 @@ mod support {
     pub mod merge_driver;
     pub mod record_review;
     pub mod review_paths;
+    pub mod state_files;
 }
 #[path = "../cli_approval_evidence.rs"]
 mod cli_approval_evidence;

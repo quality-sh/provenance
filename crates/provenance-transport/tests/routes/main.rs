@@ -13,9 +13,11 @@ mod support {
     pub mod asserted_proposal;
     pub mod catch_up_steps;
     pub mod ideation;
+    pub mod names;
     pub mod records;
     pub mod resource_http;
     pub mod transcript;
+    pub mod views;
 }
 #[path = "../caller_refusal_kinds.rs"]
 mod caller_refusal_kinds;
@@ -91,6 +93,8 @@ mod search_discovery;
 mod target_config;
 #[path = "../typed_spec_discussion_deletion.rs"]
 mod typed_spec_discussion_deletion;
+#[path = "../typed_spec_plan_refusals.rs"]
+mod typed_spec_plan_refusals;
 #[path = "../verification_runs_cache_lines.rs"]
 mod verification_runs_cache_lines;
 #[path = "../wire.rs"]
