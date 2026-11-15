@@ -67,7 +67,7 @@ async fn history(
 }
 
 /// Reads the version `entry` of one record from one read of its versions.
-pub(crate) async fn read_history_entry(
+pub async fn read_history_entry(
     repository: &Repository,
     policy: ReadPolicy,
     kind: NodeType,
