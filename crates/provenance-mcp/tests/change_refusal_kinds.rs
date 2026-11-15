@@ -67,7 +67,7 @@ async fn shared(host: &StatementHost, arguments: &Value) -> Value {
 }
 
 /// The change arguments of one notify call with these fields.
-fn notify_call(fields: Value) -> Value {
+fn notify_call(fields: &Value) -> Value {
     let mut arguments = json!({"action": "notify"});
     arguments
         .as_object_mut()
@@ -89,8 +89,8 @@ async fn notify_without_a_notify_port_answers_as_the_shared_operation() {
     let request = json!({"target": "req_shared", "notify": "codex", "thread": "thread-1"});
     let unknown = json!({"target": "req_missing", "notify": "codex", "thread": "thread-1"});
 
-    let no_host = answer(host(), notify_call(request.clone())).await;
-    let not_found = answer(host(), notify_call(unknown.clone())).await;
+    let no_host = answer(host(), notify_call(&request)).await;
+    let not_found = answer(host(), notify_call(&unknown)).await;
 
     let no_host_failure = shared(&host(), &request).await;
     assert_eq!(
@@ -130,8 +130,8 @@ async fn notify_without_a_notify_port_names_the_refused_field() {
 
     for (field, fields) in rows {
         let with_port = host().with_notify_port(Arc::new(FixtureNotify));
-        let listed = answer(with_port, notify_call(fields.clone())).await;
-        let unlisted = answer(host(), notify_call(fields.clone())).await;
+        let listed = answer(with_port, notify_call(&fields)).await;
+        let unlisted = answer(host(), notify_call(&fields)).await;
 
         assert_eq!(
             listed["structuredContent"]["error"]["field"], field,
@@ -149,7 +149,7 @@ async fn notify_on_a_read_only_host_without_a_notify_port_has_no_change_tool() {
     repository.all_kinds();
     let host = StatementHost::with_fixture_access(support::resource_http::access(&repository));
     let session = Session::start(host).await;
-    let arguments = notify_call(json!({"target": "req_shared", "notify": "codex",
+    let arguments = notify_call(&json!({"target": "req_shared", "notify": "codex",
                                        "thread": "thread-1"}));
 
     let refused = session
