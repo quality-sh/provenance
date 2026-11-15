@@ -154,9 +154,7 @@ fn expected(rule: &str) -> Vec<(String, String, Option<String>)> {
             Some("examples".to_owned()),
         )
     };
-    let implementation = |path: &str| {
-        (format!("{rule}/{path}"), "implementation".to_owned(), None)
-    };
+    let implementation = |path: &str| (format!("{rule}/{path}"), "implementation".to_owned(), None);
     let mut sites = vec![
         verification("attribute_test.rs"),
         implementation("comment_implementation.rs"),
@@ -181,7 +179,11 @@ fn a_test_comment_on_an_inactive_rule_is_a_verification_in_each_language() {
         let attribute_test = format!("#[test]\n{attribute}fn keeps_each_record() {{}}\n");
         write(repo, &format!("{rule}/attribute_test.rs"), &attribute_test);
         let implementation = format!("// @provenance rule: {rule}\npub fn keep_record() {{}}\n");
-        write(repo, &format!("{rule}/comment_implementation.rs"), &implementation);
+        write(
+            repo,
+            &format!("{rule}/comment_implementation.rs"),
+            &implementation,
+        );
     }
     let head = commit(repo, "bindings to inactive Rules");
 
