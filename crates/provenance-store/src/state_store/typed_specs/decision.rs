@@ -18,9 +18,11 @@ use super::{
     adopted_rule_ids, all_resources, cascade, publication, reconcile_implementations, refusals,
     spec_result, DesiredImplementations,
 };
-use crate::state_store::{
-    ReconciledResource, StateStore, TypedDeclarationKind, TypedSpecInput, TypedSpecResult,
+#[cfg(feature = "host")]
+use crate::state_store::requirement_reviews::{
+    requirement_statement_changes, rules_citing, RequirementStatementChange,
 };
+use crate::state_store::{StateStore, TypedDeclarationKind, TypedSpecInput, TypedSpecResult};
 use crate::write_error::{SourceFailure, WriteFailure};
 
 pub(super) struct CurrentTypedState {
@@ -52,8 +54,6 @@ enum Outcome {
     Conflicts(OwnershipDecision),
     Replace {
         replacement: Box<publication::Replacement>,
-        requirement_resources: Vec<ReconciledResource>,
-        rule_resources: Vec<ReconciledResource>,
     },
 }
 
@@ -72,6 +72,22 @@ impl TypedSpecDecision {
         }
     }
 
+    /// Each Requirement statement that the spec changes, with the Rules that cite the
+    /// Requirement after the reconciliation. A decision with conflicts changes no statement.
+    #[cfg(feature = "host")]
+    pub(crate) fn restatements(&self) -> Vec<(RequirementStatementChange, Vec<StableId>)> {
+        let Outcome::Replace { replacement } = &self.outcome else {
+            return Vec::new();
+        };
+        requirement_statement_changes(&self.result.resources)
+            .into_iter()
+            .map(|change| {
+                let rules = rules_citing(&replacement.rules, &change.requirement_id);
+                (change, rules)
+            })
+            .collect()
+    }
+
     /// Publishes the replacement, or refuses with the ownership conflicts.
     pub(super) fn publish(
         self,
@@ -83,18 +99,8 @@ impl TypedSpecDecision {
                 ownership.refuse()?;
                 unreachable!("ownership decision must reject reported conflicts");
             }
-            Outcome::Replace {
-                replacement,
-                requirement_resources,
-                rule_resources,
-            } => {
-                replacement.publish(
-                    store,
-                    scope_id,
-                    &self.result,
-                    &requirement_resources,
-                    &rule_resources,
-                )?;
+            Outcome::Replace { replacement } => {
+                replacement.publish(store, scope_id, &self.result)?;
                 Ok(self.result)
             }
         }
@@ -203,8 +209,6 @@ pub fn decide_typed_spec(
                 cascade,
                 refused: refused.into_iter().next(),
             }),
-            requirement_resources,
-            rule_resources,
         },
     })
 }
