@@ -2,8 +2,8 @@
 //! on a base that moved is refused before any key lands, whatever its keys.
 
 use super::{
-    expected, key, publish, read, A, Arc, Atomicity, B, Harness, PublishFailure, StateView,
-    WriteSet, X, Y,
+    expected, key, publish, read, Arc, Atomicity, Harness, PublishFailure, StateView, WriteSet, A,
+    B, X, Y,
 };
 
 /// A set on a view with the stored keys and bytes lands.

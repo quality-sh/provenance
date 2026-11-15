@@ -2,7 +2,7 @@
 //! other key.
 
 use super::{
-    expected, key, publish, read, A, Arc, Atomicity, B, C, Harness, PublishFailure, WriteSet, X,
+    expected, key, publish, read, Arc, Atomicity, Harness, PublishFailure, WriteSet, A, B, C, X,
 };
 
 /// A one-key set lands all of the new bytes of its key.
