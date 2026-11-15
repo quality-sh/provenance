@@ -187,6 +187,7 @@ fn replace_contents(
     let prepared = prepared
         .with_context(|| format!("failed to prepare replacement for {}", path.display()))?;
     before_commit();
+    crate::test_probes::at("project_file_prepared");
     commit_prepared(path, expected, &temporary)
         .with_context(|| format!("failed to replace {}", path.display()))?;
     Ok(prepared)
@@ -208,6 +209,7 @@ fn commit_prepared(path: &Path, expected: &FileSnapshot, temporary: &Path) -> an
             Some(backup)
         }
     };
+    crate::test_probes::at("project_file_compared");
 
     if let Err(error) = provenance_store::operations::files::rename_no_replace(temporary, path) {
         if let Some(backup) = &backup {
@@ -216,6 +218,7 @@ fn commit_prepared(path: &Path, expected: &FileSnapshot, temporary: &Path) -> an
         let _ = std::fs::remove_file(temporary);
         return Err(replacement_install_error(path, error));
     }
+    crate::test_probes::at("project_file_replaced");
     let _ = std::fs::remove_file(temporary);
     if let Some(backup) = backup {
         let _ = commit::remove_preserved(&backup);

@@ -299,5 +299,7 @@ fn init_through_the_port(
 }
 
 mod check_and_write_tests;
+mod edit_during_replacement_tests;
 mod moved_state_tests;
+mod replacement_stop_tests;
 mod stop_tests;

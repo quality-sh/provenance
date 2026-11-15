@@ -31,6 +31,8 @@ mod execution;
 mod failure;
 #[cfg(feature = "test-fixture")]
 pub mod fixture;
+#[cfg(all(feature = "host", any(test, feature = "dogfood")))]
+mod fixture_pdf;
 #[cfg_attr(not(feature = "host"), allow(dead_code))]
 mod gitignore;
 #[cfg(feature = "host")]
