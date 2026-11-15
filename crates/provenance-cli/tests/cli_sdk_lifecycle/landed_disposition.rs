@@ -15,8 +15,18 @@ const LANDINGS: &str = "scopes/default/ideation/landings.jsonl";
 /// which the scope does not have.
 fn land_disposition_of_missing_requirement(repo: &str) {
     let source = [
-        "source_anchor", "create", "--type", "source", "--repo", repo, "--name", "Anchor",
-        "--source-type", "document", "--format", "json",
+        "source_anchor",
+        "create",
+        "--type",
+        "source",
+        "--repo",
+        repo,
+        "--name",
+        "Anchor",
+        "--source-type",
+        "document",
+        "--format",
+        "json",
     ];
     assert_eq!(run(&source, None).code, Some(0));
     let batch = json!({
@@ -42,11 +52,13 @@ fn land_disposition_of_missing_requirement(repo: &str) {
     std::fs::write(path, format!("{batch}\n")).unwrap();
 }
 
-fn error(answer: &Answer) -> Value {
+/// The refusal that `answer` gives: the error object of the JSON form, else
+/// the text.
+fn refusal(answer: &Answer) -> Value {
     assert_eq!(answer.code, Some(1), "{}", answer.stdout);
     let text = answer.stderr.strip_prefix("Error: ").unwrap_or(&answer.stderr);
-    serde_json::from_str::<Value>(text).unwrap_or_else(|_| panic!("{}", answer.stderr))["error"]
-        .clone()
+    serde_json::from_str::<Value>(text)
+        .map_or_else(|_| json!(answer.stderr), |value| value["error"].clone())
 }
 
 #[test]
@@ -56,22 +68,24 @@ fn each_read_refuses_a_landed_disposition_of_a_missing_record_at_its_line() {
     land_disposition_of_missing_requirement(&repo);
     let kept_only = document(&[KEPT]);
 
-    let check = run(&["check", "--repo", &repo, "--format", "json"], None);
-    let materialize = run(&["materialize", "--repo", &repo, "--format", "json"], None);
-    let plan = route(&repo, "authoring-plans", &kept_only, true);
-    let apply = route(&repo, "authoring-changes", &kept_only, true);
+    let answers = [
+        ("check", run(&["check", "--repo", &repo, "--format", "json"], None)),
+        ("materialize", run(&["materialize", "--repo", &repo, "--format", "json"], None)),
+        ("plan", route(&repo, "authoring-plans", &kept_only, true)),
+        ("apply", route(&repo, "authoring-changes", &kept_only, true)),
+    ];
 
-    let fault = json!({
-        "kind": "invalid_state_file", "file": LANDINGS, "line": 1,
-        "message": "disposition disposition_a names requirement req_missing, \
-                    which the scope does not have"
-    });
-    for (surface, answer) in [
-        ("check", check),
-        ("materialize", materialize),
-        ("plan", plan),
-        ("apply", apply),
-    ] {
-        assert_eq!(error(&answer), fault, "{surface}");
-    }
+    let message = "disposition disposition_a names requirement req_missing, \
+                   which the scope does not have";
+    let fault =
+        json!({"kind": "invalid_state_file", "file": LANDINGS, "line": 1, "message": message});
+    assert_eq!(
+        answers.map(|(surface, answer)| (surface, refusal(&answer))),
+        [
+            ("check", json!(format!("Error: {LANDINGS} line 1: {message}"))),
+            ("materialize", fault.clone()),
+            ("plan", fault.clone()),
+            ("apply", fault),
+        ]
+    );
 }
