@@ -98,9 +98,7 @@ impl StateStore {
 
     /// Publishes a Requirement edit and the review state it opens together.
     pub fn save_requirement(&self, input: SaveRequirement) -> anyhow::Result<RequirementEditState> {
-        self.save_requirement_with_origin(input, None, |_, after| {
-            edit_state(&after.into())
-        })
+        self.save_requirement_with_origin(input, None, |_, after| edit_state(&after.into()))
     }
 
     #[cfg_attr(not(feature = "host"), allow(dead_code))]
@@ -121,9 +119,7 @@ impl StateStore {
         input: SaveRequirement,
         origin: &DiscussionOrigin,
     ) -> anyhow::Result<RequirementEditState> {
-        self.save_requirement_with_origin(input, Some(origin), |_, after| {
-            edit_state(&after.into())
-        })
+        self.save_requirement_with_origin(input, Some(origin), |_, after| edit_state(&after.into()))
     }
 
     fn save_requirement_with_origin<R>(

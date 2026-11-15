@@ -218,7 +218,11 @@ fn get(repo: &str, flags: &[&str]) -> (Option<i32>, String, String) {
         .output()
         .unwrap();
     let text = |bytes: Vec<u8>| String::from_utf8(bytes).unwrap();
-    (output.status.code(), text(output.stdout), text(output.stderr))
+    (
+        output.status.code(),
+        text(output.stdout),
+        text(output.stderr),
+    )
 }
 
 /// A line that is not a record in the Requirement shard. A get gives the

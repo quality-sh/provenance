@@ -202,7 +202,11 @@ fn a_committed_time_past_the_range_fails_as_a_malformed_field_fails() {
             "invalid value: integer `9007199254740992`, expected an integer from \
                 -9007199254740991 to 9007199254740991",
         ),
-        (&malformed, malformed_get, "invalid type: string \"soon\", expected i64"),
+        (
+            &malformed,
+            malformed_get,
+            "invalid type: string \"soon\", expected i64",
+        ),
     ] {
         let mut expected = get;
         let warning = format!("scopes/default/resolutions/res.jsonl line 1: {fault}");

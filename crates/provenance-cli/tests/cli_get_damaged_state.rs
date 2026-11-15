@@ -19,10 +19,7 @@ const CARDS: &str = "scopes/default/ideation/proposal_cards.jsonl";
 fn damage(root: &Path, file: &str) -> usize {
     let path = root.join(".provenance/state").join(file);
     let lines = std::fs::read_to_string(&path).unwrap().lines().count();
-    let mut opened = std::fs::OpenOptions::new()
-        .append(true)
-        .open(path)
-        .unwrap();
+    let mut opened = std::fs::OpenOptions::new().append(true).open(path).unwrap();
     opened.write_all(b"{\"scope_id\":\"default\",\n").unwrap();
     lines + 1
 }
@@ -35,7 +32,11 @@ fn run(repo: &str, args: &[&str]) -> (Option<i32>, String, String) {
         .output()
         .unwrap();
     let text = |bytes: Vec<u8>| String::from_utf8(bytes).unwrap();
-    (output.status.code(), text(output.stdout), text(output.stderr))
+    (
+        output.status.code(),
+        text(output.stdout),
+        text(output.stderr),
+    )
 }
 
 /// The refusal object of one CLI command that exits with code 1.
@@ -55,28 +56,37 @@ async fn mcp_refusal(server: &Server, tool: &str, arguments: Value) -> Value {
 /// The get of the Rule over damaged state, on each interface: the record at the stored
 /// serial with the freshness warning `warning`, and otherwise the answer of `clean`, the
 /// JSON and text of the get before the damage.
-async fn assert_stored_record(
-    server: &Server,
-    repo: &str,
-    clean: &(Value, String),
-    warning: &str,
-) {
+async fn assert_stored_record(server: &Server, repo: &str, clean: &(Value, String), warning: &str) {
     let by_cli = cli_json(repo, &[RULE, "get"]);
     let mut expected = clean.0.clone();
     expected["record_metadata"]["freshness_error"] = json!(warning);
     expected["record_metadata"]["stamp"]["policy"] = json!("catch_up_failed");
     assert_eq!(by_cli, expected);
-    assert_eq!(mcp(&server.client, "get", json!({"target":RULE})).await, by_cli);
+    assert_eq!(
+        mcp(&server.client, "get", json!({"target":RULE})).await,
+        by_cli
+    );
 
     let text = format!("{}\nwarning: record freshness: {warning}\n", clean.1);
-    assert_eq!(run(repo, &[RULE, "get"]), (Some(0), text.clone(), String::new()));
+    assert_eq!(
+        run(repo, &[RULE, "get"]),
+        (Some(0), text.clone(), String::new())
+    );
     let called = server.client.call("get", json!({"target":RULE})).await;
-    assert_eq!(called["content"][0]["text"].as_str(), text.strip_suffix('\n'));
+    assert_eq!(
+        called["content"][0]["text"].as_str(),
+        text.strip_suffix('\n')
+    );
 
     let link = cli_json(repo, &[RULE, "--review-link", "--no-open"]);
     let message = link["message"].as_str().unwrap();
     assert_eq!(link, json!({"review_url":null,"message":message}));
-    let linked = mcp(&server.client, "get", json!({"target":RULE,"review_link":true})).await;
+    let linked = mcp(
+        &server.client,
+        "get",
+        json!({"target":RULE,"review_link":true}),
+    )
+    .await;
     assert_eq!(linked["review_link"], link);
     assert_eq!(linked["edit"], clean.0["edit"]);
 }
@@ -99,16 +109,28 @@ async fn a_get_over_a_bad_record_line_gives_the_stored_record_on_each_interface(
     let server = Server::start(&repo).await;
 
     let by_cli = cli_json(&repo, &[RULE, "get"]);
-    let warning = by_cli["record_metadata"]["freshness_error"].as_str().unwrap();
+    let warning = by_cli["record_metadata"]["freshness_error"]
+        .as_str()
+        .unwrap();
     let parse = "EOF while parsing a value at line 1 column 22";
     assert!(warning.starts_with("cannot hash "), "{warning}");
-    assert!(warning.ends_with(&format!("rule.jsonl: {parse}: {parse}")), "{warning}");
+    assert!(
+        warning.ends_with(&format!("rule.jsonl: {parse}: {parse}")),
+        "{warning}"
+    );
     assert_stored_record(&server, &repo, &clean, warning).await;
 
     let etag = clean.0["edit"]["etag"].as_str().unwrap();
     let refused = json!({"error":{"file":RULES,"kind":"invalid_state_file","line":line,
         "message":"EOF while parsing a value"},"meta":{}});
-    let flags = [RULE, "update", "--if-match", etag, "--description", "Changed."];
+    let flags = [
+        RULE,
+        "update",
+        "--if-match",
+        etag,
+        "--description",
+        "Changed.",
+    ];
     assert_eq!(cli_refusal(&repo, &flags), refused);
     let arguments = json!({"action":"update","target":RULE,"if_match":etag,
         "description":"Changed."});
@@ -152,7 +174,10 @@ async fn a_get_over_a_bad_line_with_no_stored_revision_refuses_on_each_interface
     assert!(database.ends_with("provenance.db"), "{message}");
     let refused = json!({"error":{"kind":"operation_failed","message":message},"meta":{}});
     assert_eq!(by_cli, refused);
-    assert_eq!(mcp_refusal(&server, "get", json!({"target":RULE})).await, refused);
+    assert_eq!(
+        mcp_refusal(&server, "get", json!({"target":RULE})).await,
+        refused
+    );
     let flags = [RULE, "--review-link", "--no-open"];
     assert_eq!(cli_refusal(&repo, &flags), refused);
     let arguments = json!({"target":RULE,"review_link":true});
