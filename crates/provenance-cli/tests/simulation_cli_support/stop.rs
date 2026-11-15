@@ -8,9 +8,11 @@
 //! syncs it, and renames it to the key (`durability::write_synced_file`). The
 //! test lists the directory of the transactions, the directory of the marker
 //! and the state tree, and kills the write process when it sees the point of
-//! the stop. A kill does not let the process remove its transaction, its
-//! marker or its temporary file. So after the kill, these entries, the phase
-//! of the marker and the live state tell where the stop landed.
+//! the stop. A one-key write has one point: its temporary file appears. The
+//! rename comes one file sync later, so the kill can land before or after
+//! it. A kill does not let the process remove its transaction, its marker or
+//! its temporary file. So after the kill, these entries, the phase of the
+//! marker and the live state tell where the stop landed.
 
 use super::{answer, done, effect, layer, panicked, parse, refusal_kind, request, Running};
 use crate::fixture::state_entries;
@@ -37,8 +39,8 @@ pub enum Point {
     /// one-key write appears in the state tree.
     First,
     /// The publication marker appears while the transaction of the write
-    /// exists, or the temporary file of a one-key write goes: the rename
-    /// occurred.
+    /// exists. A one-key write has no second point: the stop kills it at
+    /// its first point.
     Second,
 }
 
@@ -101,12 +103,11 @@ pub enum Stop {
     NotSent,
     /// The stop killed the write before its answer.
     Landed(Landed),
-    /// The write gave its answer before the kill.
-    Answered,
-    /// The write ended before its stop point and changed no state.
-    EndedBeforePoint,
-    /// The write changed the state, and the test did not see its stop point.
-    PointNotSeen,
+    /// The write gave its answer before the kill. `before` is the state
+    /// before the write started.
+    Answered { before: Entries },
+    /// The write ended before the test saw a point.
+    Ended { before: Entries },
     /// The write did not end in the process limit, so its case breaks L0.
     Limit,
 }
@@ -118,14 +119,13 @@ const BEFORE_RENAME: &str = "stops before the rename of the key";
 const AFTER_RENAME: &str = "stops after the rename of the key and before the answer";
 const NO_LIVE_STATE: &str = "stops that left no live state";
 const ANSWERED: &str = "stops after the answer";
-const ENDED: &str = "stops of a write that ended before its stop point";
-const NOT_SEEN: &str = "stops whose point the test did not see";
+const ENDED: &str = "stops of a write that ended before the test saw a point";
 const UNSENT: &str = "stops of a write that the simulation did not send";
 const NO_WRITE: &str = "stops with no waiting write of the engine";
 const LIMIT: &str = "stops of a write that did not end in its limit";
 
 /// Each row of the job summary that counts stops.
-const ROWS: [&str; 12] = [
+const ROWS: [&str; 11] = [
     BEFORE_MARKER,
     BEFORE_INSTALL,
     AFTER_INSTALL,
@@ -134,7 +134,6 @@ const ROWS: [&str; 12] = [
     NO_LIVE_STATE,
     ANSWERED,
     ENDED,
-    NOT_SEEN,
     UNSENT,
     NO_WRITE,
     LIMIT,
@@ -154,9 +153,8 @@ impl Stop {
                 Landing::BeforeRename => BEFORE_RENAME,
                 Landing::AfterRename => AFTER_RENAME,
             },
-            Self::Answered => ANSWERED,
-            Self::EndedBeforePoint => ENDED,
-            Self::PointNotSeen => NOT_SEEN,
+            Self::Answered { .. } => ANSWERED,
+            Self::Ended { .. } => ENDED,
             Self::Limit => LIMIT,
         }
     }
@@ -202,12 +200,7 @@ pub fn run_stopped(
             Err(text) => return (Some(done(task, Err(text), false)), Stop::Limit),
         };
         let result = answer(&output).and_then(|data| effect(task, &request, &data));
-        let stop = if state_entries(root) == before {
-            Stop::EndedBeforePoint
-        } else {
-            Stop::PointNotSeen
-        };
-        return (Some(done(task, result, false)), stop);
+        return (Some(done(task, result, false)), Stop::Ended { before });
     };
     let output = running.kill(&what);
     // A process gives its answer at its end: the data of a success on
@@ -221,7 +214,7 @@ pub fn run_stopped(
             Ok(parse(&output.stdout)["data"].clone())
         };
         let result = result.and_then(|data| effect(task, &request, &data));
-        return (Some(done(task, result, false)), Stop::Answered);
+        return (Some(done(task, result, false)), Stop::Answered { before });
     }
     let landing = match &made {
         Made::Transaction(transaction) => landing(layout, transaction),
@@ -296,7 +289,8 @@ impl<'a> Watch<'a> {
     /// appeared: each entry to the publication section recovers a marker
     /// that an earlier stop left, before the write makes its transaction
     /// (`LocalSectionLock::acquire_checked`). A write that made a
-    /// transaction makes no temporary file in the state tree.
+    /// transaction makes no temporary file in the state tree. A one-key
+    /// write is reached when its temporary file appears, at each point.
     fn reach(&self, running: &mut Running, point: Point) -> Option<Made> {
         let mut made = None;
         while running.runs() {
@@ -310,9 +304,8 @@ impl<'a> Watch<'a> {
             });
             let reached = match &made {
                 None => false,
-                Some(_) if point == Point::First => true,
-                Some(Made::Transaction(_)) => self.marker(),
-                Some(Made::Temporary(temporary)) => !temporary.exists(),
+                Some(Made::Transaction(_)) if point == Point::Second => self.marker(),
+                Some(_) => true,
             };
             if reached {
                 return made;

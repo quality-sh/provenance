@@ -97,8 +97,9 @@ its transaction appears, an odd `at` when the marker appears while that
 transaction exists. The order of this publish is in
 `provenance_store::storage::local::whole_set::land`. A write of one key
 writes a temporary file next to the key in the state tree and renames it to
-the key: an even `at` stops it when the temporary file appears, an odd `at`
-when the temporary file goes after the rename. After the kill, the
+the key: each `at` stops it when the temporary file appears. The rename
+comes one file sync later, so the stop can land before or after it, or the
+write can end before the kill. After the kill, the
 transaction, the marker, the phase of the marker, the temporary file and
 the live state tell where the stop landed. Each stop that a case draws adds
 1 to one of these rows:
@@ -111,8 +112,7 @@ the live state tell where the stop landed. Each stop that a case draws adds
 | stops before the rename of the key | It killed a one-key write while its temporary file existed, before the rename. |
 | stops after the rename of the key and before the answer | It killed a one-key write after the rename of its temporary file to the key. |
 | stops after the answer | The write gave its answer, a success or a refusal, before the kill. |
-| stops of a write that ended before its stop point | The write ended before the test saw its point, and the state did not change. |
-| stops whose point the test did not see | The write ended and changed the state, but the test did not see its point. |
+| stops of a write that ended before the test saw a point | The write ended before the test saw a point of its publish. |
 | stops of a write that the simulation did not send | The CLI layer has no route for the write, or the read of its etag refused. |
 | stops with no waiting write of the engine | No write of the engine waited, so the stop had no write. |
 | stops of a write that did not end in its limit | The write did not end in the process limit; the case breaks L0. |
