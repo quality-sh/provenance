@@ -1,9 +1,10 @@
-//! The HTTP API of a started review host when its manifest stops parsing: a
-//! read, a write and the page configuration each refuse with
-//! `invalid_state_file`, the line of the manifest and the two procedures that
-//! correct the state.
+//! A manifest that does not parse in the review library. The open of a
+//! repository keeps the fault of the manifest as its cause. The HTTP API of a
+//! started review host whose manifest stops parsing refuses a read, a write
+//! and the page configuration with `invalid_state_file`, the line of the
+//! manifest and the two procedures that correct the state.
 
-use provenance_core::protocol::read_failure::STATE_CORRECTIONS;
+use provenance_core::protocol::read_failure::{ReadFailure, UnparsableStateFile, STATE_CORRECTIONS};
 use provenance_macros::verifies;
 use provenance_porcelain::check::{Category, CheckPort, PortFuture};
 use provenance_review::{HostOptions, RepositoryScope};
@@ -65,6 +66,26 @@ async fn a_manifest_that_stops_parsing_refuses_each_read_and_write_with_the_corr
         answers,
         ["GET /requirements/req_shared", "POST /requirements", "GET /review-config"]
             .map(|call| json!({"call": call, "status": 500, "error": refusal}))
+    );
+}
+
+#[test]
+#[verifies("rule_state_parse_refusal_names_the_corrections", examples)]
+fn the_open_of_a_manifest_that_does_not_parse_has_the_fault_as_its_cause() {
+    let repository = Repository::new("The review library opens the repository for a read.");
+    std::fs::write(repository.layout.manifest_path(), "{\"scopes\":\"default\"}\n").unwrap();
+    let place = RepositoryScope::new(repository.dir.path().to_str().unwrap(), "default");
+
+    let error = place.open().unwrap_err();
+    let fault = UnparsableStateFile::find(error.as_ref()).map(UnparsableStateFile::failure);
+    assert_eq!(
+        fault,
+        Some(ReadFailure::InvalidStateFile {
+            file: "manifest.json".to_owned(),
+            line: 1,
+            message: "invalid type: string \"default\", expected a sequence".to_owned(),
+            hint: Some(STATE_CORRECTIONS.to_owned()),
+        })
     );
 }
 
