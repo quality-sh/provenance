@@ -77,9 +77,7 @@ impl Harness for Git {
                     Entry::Submodule(commit) => {
                         format!("160000,{},{path}", ids.get(commit).unwrap_or(commit))
                     }
-                    Entry::Directory => {
-                        format!("100644,{},{inner}", blob(INNER_TEXT.as_bytes()))
-                    }
+                    Entry::Directory => format!("100644,{},{inner}", blob(INNER_TEXT.as_bytes())),
                 };
                 git(
                     root,
