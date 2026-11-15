@@ -24,7 +24,7 @@ fn target() -> Value {
     json!({"artifact_type":"requirement","artifact_id":"req_expiry"})
 }
 
-fn contribution(id: &str, claims: Value, evidence: Value) -> Value {
+fn contribution(id: &str, claims: &Value, evidence: &Value) -> Value {
     json!({
         "scope_id":"default", "id":id, "target":target(), "participant_slot":"reviewer",
         "stance":"support", "strongest_finding":"Observed", "evidence_references":evidence,
@@ -34,7 +34,7 @@ fn contribution(id: &str, claims: Value, evidence: Value) -> Value {
     })
 }
 
-fn packet(id: &str, suggested: Value) -> Value {
+fn packet(id: &str, suggested: &Value) -> Value {
     json!({
         "scope_id":"default", "id":id, "target":target(), "summary":"Adjudicated",
         "consensus":[], "contested_claims":[], "minority_objections":[], "evidence_gaps":[],
@@ -43,7 +43,7 @@ fn packet(id: &str, suggested: Value) -> Value {
     })
 }
 
-fn proposal(id: &str, claims: Value) -> Value {
+fn proposal(id: &str, claims: &Value) -> Value {
     json!({
         "scope_id":"default", "id":id, "proposal_key":id,
         "proposal_type":"requirement_candidate", "title":"Candidate",
@@ -67,12 +67,15 @@ fn entries() -> BTreeMap<StateKey, Vec<u8>> {
     for (file, row) in [
         (
             "contributions",
-            contribution("contribution_evidence", claim, evidence),
+            contribution("contribution_evidence", &claim, &evidence),
         ),
-        ("synthesis_packets", packet("synthesis_evidence", suggested)),
+        (
+            "synthesis_packets",
+            packet("synthesis_evidence", &suggested),
+        ),
         (
             "proposal_cards",
-            proposal("proposal_one", json!(["claim_a"])),
+            proposal("proposal_one", &json!(["claim_a"])),
         ),
     ] {
         let path = format!("scopes/default/ideation/{file}.jsonl");
@@ -101,8 +104,8 @@ fn six_writes(store: &StateStore) {
     store
         .create_contribution(input(contribution(
             "contribution_two",
-            json!([]),
-            json!([]),
+            &json!([]),
+            &json!([]),
         )))
         .unwrap();
     store
@@ -111,7 +114,7 @@ fn six_writes(store: &StateStore) {
         })))
         .unwrap();
     store
-        .create_synthesis_packet(input(packet("synthesis_two", json!([]))))
+        .create_synthesis_packet(input(packet("synthesis_two", &json!([]))))
         .unwrap();
     store
         .update_synthesis_packet(input(json!({
@@ -119,7 +122,7 @@ fn six_writes(store: &StateStore) {
         })))
         .unwrap();
     store
-        .create_proposal_card(input(proposal("proposal_two", json!([]))))
+        .create_proposal_card(input(proposal("proposal_two", &json!([]))))
         .unwrap();
 }
 
@@ -221,7 +224,7 @@ fn six_writes_on_a_folder_leave_these_files() {
 }
 
 fn contribution_input(id: &str) -> provenance_store::state_store::CreateContributionInput {
-    input(contribution(id, json!([]), json!([])))
+    input(contribution(id, &json!([]), &json!([])))
 }
 
 /// Characterization: two writers on two handles of one folder repository
