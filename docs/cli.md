@@ -460,8 +460,8 @@ The old `--repo`, `--scope`, and `--include-threads` options remain accepted for
 compatibility but have no effect on guidance. MCP supplies the same domain
 content in server instructions and shared tool descriptions. The instructions
 have one line for each tool and each action that the server lists, with its MCP
-name, for example `dictionary_import`. MCP has no prime
-tool. Each MCP client controls how it presents server instructions.
+name, for example `dictionary_import`. MCP has no prime tool. Each MCP client
+controls how it presents server instructions.
 
 ## Dictionary setup
 
