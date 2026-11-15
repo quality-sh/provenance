@@ -198,7 +198,6 @@ fn message(rows: &StoredRows, fault: &ReviewRowFault) -> String {
 /// The repair of a fault, which the refusal gives as its correction. It names
 /// each line that the person removes, or the lines of the message from which
 /// the person keeps one choice, so that one repair is sufficient.
-#[rule("rule_review_row_refusal_gives_repair")]
 fn repair(rows: &StoredRows, fault: &ReviewRowFault) -> String {
     let step = match fault {
         ReviewRowFault::IdOnTwoLines { .. } => "keep one of these lines and remove the others",
@@ -221,8 +220,10 @@ fn repair(rows: &StoredRows, fault: &ReviewRowFault) -> String {
     format!("To repair, {step}, then commit.")
 }
 
-/// `invalid_state_file` at the line of the row that the fault names.
+/// `invalid_state_file` at the line of the row that the fault names, with the
+/// message that names the lines of the rows and the repair of the fault.
 #[rule("rule_inconsistent_records_refusal_names_records")]
+#[rule("rule_review_row_refusal_gives_repair")]
 pub(super) fn refusal(rows: &StoredRows, fault: &ReviewRowFault) -> anyhow::Error {
     corrected_state_fault(
         rows.line(fault.at()),
