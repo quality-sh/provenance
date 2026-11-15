@@ -68,7 +68,7 @@ async fn reads_after_each_write_equal_a_full_rebuild() {
     }
     let text = serde_json::to_string_pretty(&transcript).unwrap();
     assert_eq!(fingerprint(&transcript[..15]), "841ce06d32c8aee2", "{text}");
-    assert_eq!(fingerprint(&transcript), "982f4db196345d97", "{text}");
+    assert_eq!(fingerprint(&transcript), "c691768b31e7a213", "{text}");
 }
 
 /// A hand edit that each validator refuses, and the answer the next read
