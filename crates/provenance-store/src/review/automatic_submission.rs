@@ -9,9 +9,6 @@ use provenance_macros::rule;
 /// submission of a record at the read budget stays inside the budget.
 const SUMMARY_CHARS: usize = 1000;
 
-/// The submission actor of a server write that names no actor.
-pub(super) const AUTHORING_ACTOR: &str = "authoring";
-
 impl StateStore {
     /// Opens the review submission of a new record in the same write.
     #[rule("rule_native_create_opens_review_submission")]

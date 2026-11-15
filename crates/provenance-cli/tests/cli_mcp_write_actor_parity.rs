@@ -74,6 +74,9 @@ async fn create_and_update(actor: Option<&str>) -> [Value; 2] {
         arguments["actor"] = json!(actor);
     }
     let mcp_updated = server.client.call("change", arguments).await;
+    for answer in [&mcp_created, &mcp_updated] {
+        assert_ne!(answer["isError"], json!(true), "{answer}");
+    }
     let mcp_stored = mcp_review(&server).await["decision"]["pending"]["actor"].clone();
     server.close().await;
 

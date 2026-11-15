@@ -75,6 +75,7 @@ mod discussion_writes;
 
 mod create;
 pub use create::CreateReviewRequirement;
+pub(crate) mod write_actor;
 mod authoring;
 mod native_batch;
 pub(crate) use native_batch::NativeRecordBatch;

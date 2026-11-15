@@ -61,7 +61,10 @@ macro_rules! review_read {
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 pub struct StartDiscussionData {
-    pub actor: String,
+    #[doc = "The actor of the write. It is optional for a write that makes or changes a \
+             Requirement and for a write that starts or replies to a Discussion. A write that \
+             gives no actor records the actor `authoring`."]
+    pub actor: Option<String>,
     pub declared_by: Option<String>,
     pub role: provenance_core::MessageRole,
     pub body: String,
@@ -70,7 +73,10 @@ pub struct StartDiscussionData {
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 pub struct ReplyDiscussionData {
-    pub actor: String,
+    #[doc = "The actor of the write. It is optional for a write that makes or changes a \
+             Requirement and for a write that starts or replies to a Discussion. A write that \
+             gives no actor records the actor `authoring`."]
+    pub actor: Option<String>,
     pub declared_by: Option<String>,
     pub role: provenance_core::MessageRole,
     pub body: String,

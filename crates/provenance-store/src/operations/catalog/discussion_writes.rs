@@ -11,7 +11,9 @@ use serde::Deserialize;
 pub struct WriteDiscussionRequest {
     pub scope_id: ScopeId,
     pub parent: ThreadParent,
-    pub actor: String,
+    /// The actor of the write. A status change must give an actor. A start or a reply that
+    /// gives no actor records the actor `authoring`.
+    pub actor: Option<String>,
     pub declared_by: Option<String>,
     pub action: review::DiscussionAction,
 }
@@ -24,11 +26,21 @@ scoped_write_operation!(
     &[409],
     &[ExecutionNeed::GraphStorage],
     scope = scope_id,
-    |store, _scope, request| store.write_discussion(review::WriteDiscussion {
-        scope_id: request.scope_id,
-        parent: request.parent,
-        actor: request.actor,
-        declared_by: request.declared_by,
-        action: request.action,
-    })
+    |store, _scope, request| {
+        let actor = match request.action {
+            review::DiscussionAction::SetStatus { .. } => {
+                review::write_actor::named_actor(request.actor)?
+            }
+            review::DiscussionAction::Start { .. } | review::DiscussionAction::Reply { .. } => {
+                review::write_actor::recorded_actor(request.actor)
+            }
+        };
+        store.write_discussion(review::WriteDiscussion {
+            scope_id: request.scope_id,
+            parent: request.parent,
+            actor,
+            declared_by: request.declared_by,
+            action: request.action,
+        })
+    }
 );

@@ -2,7 +2,7 @@
 //! contracts: an action shows only the fields that it accepts.
 use super::fields;
 use serde_json::Value;
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 
 #[provenance_macros::rule("rule_create_help_accepted_fields")]
 pub(super) fn target(
@@ -27,12 +27,19 @@ pub(super) fn target(
             if action == provenance_contract::TargetAction::Create {
                 allowed.insert("type".into());
             }
+            let mut help = BTreeMap::new();
             for (_, definition) in
                 provenance_contract::target_definitions(action).filter(|(registered, _)| {
                     !needs_type && kind.is_none_or(|kind| *registered == kind)
                 })
             {
-                allowed.extend(fields::accepted_flags(&fields::declared(definition)?));
+                let declared = fields::declared(definition)?;
+                allowed.extend(fields::accepted_flags(&declared));
+                for field in &declared {
+                    if let Some(description) = fields::description(field) {
+                        help.entry(field.name.clone()).or_insert_with(|| description.to_owned());
+                    }
+                }
             }
             if action == provenance_contract::TargetAction::Update
                 && kind.is_none_or(|kind| kind == provenance_core::NodeType::Requirement)
@@ -45,7 +52,11 @@ pub(super) fn target(
                 let hidden = !allowed.contains(arg.get_id().as_str());
                 // The per-type help already has the type, so it does not list the types.
                 let given_type = kind.is_some() && arg.get_id() == "type";
-                arg.hide(hidden).hide_possible_values(given_type)
+                let arg = arg.hide(hidden).hide_possible_values(given_type);
+                match help.get(arg.get_id().as_str()) {
+                    Some(description) => arg.help(description.clone()),
+                    None => arg,
+                }
             });
             let create = action == provenance_contract::TargetAction::Create;
             if needs_type {
@@ -73,8 +84,8 @@ fn description(action: crate::invocation::grammar::TargetVerb) -> Option<&'stati
         .map(|command| command.declaration().description)
 }
 
-/// Discussion action help lists the typed input fields of that action and
-/// marks the ones the action cannot run without.
+/// Discussion action help lists the typed input fields of that action with their
+/// descriptions, and marks the ones the action cannot run without.
 fn discussion_help(
     command: clap::Command,
     action: provenance_porcelain::action::Action,
@@ -86,10 +97,13 @@ fn discussion_help(
         .and_then(Value::as_object)
         .map_or_default(|properties| {
             properties
-                .keys()
-                .filter(|field| !bound.contains(&field.as_str()))
-                .map(|field| fields::cli_name(field))
-                .collect::<BTreeSet<_>>()
+                .iter()
+                .filter(|(field, _)| !bound.contains(&field.as_str()))
+                .map(|(field, property)| {
+                    let description = property.get("description").and_then(Value::as_str);
+                    (fields::cli_name(field), description.map(str::to_owned))
+                })
+                .collect::<BTreeMap<_, _>>()
         });
     let required = required_discussion_flags(&schema);
     let mut allowed = super::COMMON
@@ -98,18 +112,22 @@ fn discussion_help(
         .chain(["stdin", "help"])
         .map(str::to_owned)
         .collect::<BTreeSet<_>>();
-    allowed.extend(properties);
+    allowed.extend(properties.keys().cloned());
     command.mut_args(|arg| {
         let name = arg.get_id().as_str().to_owned();
         let hidden = !allowed.contains(&name);
-        arg.hide(hidden).required(required.contains(&name))
+        let arg = arg.hide(hidden).required(required.contains(&name));
+        match properties.get(&name) {
+            Some(Some(description)) => arg.help(description.clone()),
+            _ => arg,
+        }
     })
 }
 
 /// The flags a Discussion action needs on the command line: the required
 /// schema fields that neither the target nor a CLI default supplies.
 pub fn required_discussion_flags(schema: &Value) -> BTreeSet<String> {
-    let supplied = ["target", "actor", "role"];
+    let supplied = ["target", "role"];
     schema
         .get("required")
         .and_then(Value::as_array)

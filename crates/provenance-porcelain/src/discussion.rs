@@ -147,7 +147,10 @@ pub struct ConversationInput {
 #[serde(deny_unknown_fields)]
 pub struct StartInput {
     pub parent: ThreadParent,
-    pub actor: String,
+    #[doc = "The actor of the write. It is optional for a write that makes or changes a \
+             Requirement and for a write that starts or replies to a Discussion. A write that \
+             gives no actor records the actor `authoring`."]
+    pub actor: Option<String>,
     pub declared_by: Option<String>,
     pub role: MessageRole,
     pub body: String,
@@ -158,7 +161,10 @@ pub struct StartInput {
 #[serde(deny_unknown_fields)]
 pub struct ReplyInput {
     pub discussion_id: StableId,
-    pub actor: String,
+    #[doc = "The actor of the write. It is optional for a write that makes or changes a \
+             Requirement and for a write that starts or replies to a Discussion. A write that \
+             gives no actor records the actor `authoring`."]
+    pub actor: Option<String>,
     pub declared_by: Option<String>,
     pub expected_version: u64,
     pub role: MessageRole,

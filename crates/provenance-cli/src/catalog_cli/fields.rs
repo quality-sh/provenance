@@ -29,6 +29,15 @@ pub(super) fn accepted_flags(declared: &[Field]) -> BTreeSet<String> {
     names
 }
 
+/// The description that the request schema gives to a body field, which the help of its
+/// flag shows.
+pub(super) fn description(field: &Field) -> Option<&str> {
+    match &field.source {
+        Source::Body { value_schema, .. } => value_schema.get("description")?.as_str(),
+        Source::Parameter(_) => None,
+    }
+}
+
 /// The CLI fields of one operation: its contract arguments, each spelled as a flag.
 pub(super) fn declared(definition: &Definition) -> anyhow::Result<Vec<Field>> {
     let arguments = definition

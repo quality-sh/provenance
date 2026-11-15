@@ -33,7 +33,10 @@ fn resource_from(snapshot: review::RequirementResourceSnapshot) -> RequirementRe
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 pub struct CreateRequirementRequest {
-    pub actor: String,
+    #[doc = "The actor of the write. It is optional for a write that makes or changes a \
+             Requirement and for a write that starts or replies to a Discussion. A write that \
+             gives no actor records the actor `authoring`."]
+    pub actor: Option<String>,
     pub id: StableId,
     pub statement: String,
     pub description: Option<String>,
@@ -59,7 +62,7 @@ scoped_write_operation!(
     |store, scope, request| {
         let snapshot = store.create_review_requirement_resource(
             review::CreateReviewRequirement {
-                actor: request.actor,
+                actor: review::write_actor::recorded_actor(request.actor),
                 origin: request.origin,
                 create: CreateRequirementInput {
                     scope_id: scope,
@@ -84,7 +87,10 @@ scoped_write_operation!(
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 pub struct UpdateRequirementRequest {
-    pub actor: String,
+    #[doc = "The actor of the write. It is optional for a write that makes or changes a \
+             Requirement and for a write that starts or replies to a Discussion. A write that \
+             gives no actor records the actor `authoring`."]
+    pub actor: Option<String>,
     pub expected_etag: String,
     pub declared_by: Option<String>,
     pub statement: Option<String>,
@@ -107,7 +113,7 @@ scoped_write_operation!(
     scope = none,
     |store, scope, request| {
         let snapshot = store.save_requirement_resource(review::SaveRequirement {
-                actor: request.actor,
+                actor: review::write_actor::recorded_actor(request.actor),
                 expected_etag: request.expected_etag,
                 relationships: request.relationships,
                 update: UpdateRequirementInput {
