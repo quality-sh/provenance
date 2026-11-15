@@ -2,6 +2,8 @@ use assert_cmd::Command;
 use provenance_macros::verifies;
 use serde_json::Value;
 
+use crate::support::record_review::accept_status_request;
+
 fn provenance() -> Command {
     Command::new(assert_cmd::cargo::cargo_bin!("provenance"))
 }
@@ -33,6 +35,8 @@ fn seed(repo: &str) {
         "default",
         "--path-prefix",
         ".",
+        "--disposition-actor-id",
+        "reviewer",
     ]);
     success(&[
         "source_search",
@@ -70,6 +74,7 @@ fn seed(repo: &str) {
         "--severity",
         "medium",
     ]);
+    accept_status_request(repo, "rules", "rule", "rule_search");
 }
 
 fn ids(page: &Value) -> Vec<&str> {
@@ -269,6 +274,7 @@ fn seed_code(repo: &str) {
         "Pay overtime after the threshold.",
         "active",
     );
+    accept_status_request(repo, "rules", "rule", "rule_pay");
     rule(repo, "rule_other", "Other pay rule.", "deprecated");
     std::fs::write(
         std::path::Path::new(repo).join("code.rs"),

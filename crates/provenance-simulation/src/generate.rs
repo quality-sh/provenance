@@ -110,8 +110,13 @@ pub enum Operation {
     },
     /// Archives a Requirement. The archive of its dependents lands in a
     /// stage.
+    ///
+    /// The archive is a status request. The allowed reviewer accepts it,
+    /// unless `leave_open`: then the request stays open, so a later
+    /// withdrawal or rejection can take it.
     ArchiveRequirement {
         n: u8,
+        leave_open: bool,
     },
     ClaimTopic,
     ReleaseTopic,
@@ -297,7 +302,10 @@ impl Operation {
             ),
             Self::ClaimTopic => (Target::Topic, topic(TopicStatus::Open, Some(actor(engine)))),
             Self::ReleaseTopic => (Target::Topic, topic(TopicStatus::Open, None)),
-            Self::ArchiveRequirement { n } if requirement_id(*n) == FIRST_REQUIREMENT => {
+            Self::ArchiveRequirement {
+                n,
+                leave_open: false,
+            } if requirement_id(*n) == FIRST_REQUIREMENT => {
                 (Target::Topic, topic(TopicStatus::Archived, None))
             }
             _ => return Vec::new(),

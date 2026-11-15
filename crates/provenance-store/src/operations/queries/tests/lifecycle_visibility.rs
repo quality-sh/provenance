@@ -38,8 +38,9 @@ impl ContextResolver for Target {
 }
 
 fn add_rule(store: &StateStore, scope: &ScopeId, id: &str, status: RuleStatus) {
-    store
-        .create_rule(CreateRuleInput {
+    crate::test_support::create_rule(
+        store,
+        CreateRuleInput {
             archived_in_commit: (status == RuleStatus::Archived).then(|| ArchivedStamp {
                 commit: "a".repeat(40),
                 at: None,
@@ -57,8 +58,8 @@ fn add_rule(store: &StateStore, scope: &ScopeId, id: &str, status: RuleStatus) {
             source_section: None,
             origin_thread: None,
             origin_message: None,
-        })
-        .unwrap();
+        },
+    );
 }
 
 fn add_resolution(store: &StateStore, scope: &ScopeId, id: &str, status: ResolutionStatus) {

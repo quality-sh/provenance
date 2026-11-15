@@ -18,7 +18,7 @@ fn equal_review_content_has_equal_revision() {
     assert_ne!(a.revision, b.revision);
     assert_eq!(a.revision, again.revision);
     let lifecycle = store
-        .save_requirement(save(&store, json!({"status":"active"})))
+        .save_requirement(save(&store, json!({"status":"refinement"})))
         .unwrap();
     assert_ne!(lifecycle.etag, again.etag);
     assert_eq!(lifecycle.revision, again.revision);
@@ -30,7 +30,7 @@ fn stale_etag_and_wrong_owner_refuse_without_changing_state() {
     store.save_requirement(save(&store, json!({}))).unwrap();
     let stale = save(&store, json!({"description":"stale"}));
     store
-        .save_requirement(save(&store, json!({"status":"active"})))
+        .save_requirement(save(&store, json!({"status":"refinement"})))
         .unwrap();
     assert!(store.save_requirement(stale).is_err());
     let before = store.list_requirements(&scope()).unwrap();

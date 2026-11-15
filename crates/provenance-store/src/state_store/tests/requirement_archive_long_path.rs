@@ -18,6 +18,7 @@ fn requirement_archive_under_a_long_repository_path_archives_the_parent_and_chil
     let root = camino::Utf8PathBuf::from_path_buf(directory.path().join("r".repeat(60))).unwrap();
     std::fs::create_dir(&root).unwrap();
     let (store, scope) = initialized_store_in(root);
+    crate::test_support::allow_reviewer(&store.layout);
     store
         .create_requirement(
             serde_json::from_value(json!({

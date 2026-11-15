@@ -302,6 +302,12 @@ fn strict_base_check_refuses_a_warning_severity_bindings_finding() {
     let directory = repository();
     let repo = directory.path();
     create_rule(repo, "rule_unbound", "Original rule");
+    crate::support::record_review::accept_status_request(
+        repo.to_str().unwrap(),
+        "rules",
+        "rule",
+        "rule_unbound",
+    );
     let base = commit(repo, "base");
     std::fs::write(repo.join("README.md"), "Unrelated candidate change.\n").unwrap();
     commit(repo, "candidate");

@@ -19,6 +19,7 @@ mod report;
 mod schema;
 mod search_port;
 mod skills;
+mod status_request;
 mod swarm_backtrace;
 mod validate;
 pub use api_port::HostApiPort;
@@ -32,6 +33,7 @@ pub use host::HostPorcelain;
 pub use merge_jsonl::MergeFailure;
 pub use parent_replacement::{ParentReplacement, Replaced, ReplacementError};
 pub use search_port::HostSearchPort;
+pub use status_request::OpenStatusRequest;
 
 use crate::repository::RepoContext;
 

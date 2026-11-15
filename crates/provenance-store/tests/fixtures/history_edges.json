@@ -200,7 +200,7 @@
       "freshness_error": null,
       "result": {
         "field": null,
-        "json_text": "{\"id\":\"rule_a\",\"requirement_ids\":[\"req_a\"],\"scope_id\":\"default\",\"severity\":\"high\",\"statement\":\"Each record is stored.\",\"status\":\"active\"}",
+        "json_text": "{\"id\":\"rule_a\",\"requirement_ids\":[\"req_a\"],\"scope_id\":\"default\",\"severity\":\"high\",\"statement\":\"Each record is stored.\",\"status\":\"review\"}",
         "next_offset": null,
         "offset": 0,
         "version": "create"
@@ -288,7 +288,7 @@
       "freshness_error": null,
       "result": {
         "field": null,
-        "json_text": "{\"description\":\"Alice describes the rule.\",\"id\":\"rule_a\",\"requirement_ids\":[\"req_a\"],\"scope_id\":\"default\",\"severity\":\"high\",\"statement\":\"Each record is stored once.\",\"status\":\"active\"}",
+        "json_text": "{\"description\":\"Alice describes the rule.\",\"id\":\"rule_a\",\"requirement_ids\":[\"req_a\"],\"scope_id\":\"default\",\"severity\":\"high\",\"statement\":\"Each record is stored once.\",\"status\":\"review\"}",
         "next_offset": null,
         "offset": 0,
         "version": "merge"
@@ -327,7 +327,7 @@
       "freshness_error": null,
       "result": {
         "field": null,
-        "json_text": "{\"id\":\"rule_a\",\"requirement_ids\":[\"req_a\"],\"scope_id\":\"default\",\"severity\":\"high\",\"statement\":\"Each record is stored.\",\"status\":\"active\"}",
+        "json_text": "{\"id\":\"rule_a\",\"requirement_ids\":[\"req_a\"],\"scope_id\":\"default\",\"severity\":\"high\",\"statement\":\"Each record is stored.\",\"status\":\"review\"}",
         "next_offset": null,
         "offset": 0,
         "version": "create"
