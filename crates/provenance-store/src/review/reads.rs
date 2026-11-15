@@ -40,9 +40,12 @@ async fn history(
     let mut entries = Vec::new();
     let mut bytes = 0;
     let mut counter = position.counter;
+    // A version larger than the page bytes is alone on its page, so that
+    // each page moves the cursor. The response budget check refuses it
+    // when the answer is too large.
     for versioned in versions.into_iter().skip(skip).take(query.limit) {
         let size = serde_json::to_vec(&versioned.version)?.len();
-        if bytes + size > PAGE_BYTES - 16_384 {
+        if !entries.is_empty() && bytes + size > PAGE_BYTES - 16_384 {
             more = true;
             break;
         }
