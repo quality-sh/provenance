@@ -49,7 +49,11 @@ fn refusal(repo: &str, args: &[&str]) -> Value {
 fn assert_names_the_line(refusal: &Value) {
     let error = refusal["error"].as_object().unwrap();
     let keys: Vec<&str> = error.keys().map(String::as_str).collect();
-    assert_eq!(keys, ["file", "hint", "kind", "line", "message"], "{refusal}");
+    assert_eq!(
+        keys,
+        ["file", "hint", "kind", "line", "message"],
+        "{refusal}"
+    );
     assert_eq!(error["kind"], "invalid_state_file", "{refusal}");
     assert_eq!(error["file"], CARDS, "{refusal}");
     assert_eq!(error["line"], 1, "{refusal}");
