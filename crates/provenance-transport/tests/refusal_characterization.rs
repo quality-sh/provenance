@@ -8,7 +8,7 @@ use crate::support;
 
 use serde_json::{json, Value};
 use support::records::Repository;
-use support::resource_http::{call, call_with_headers, host};
+use support::resource_http::{accept_pending, call, call_with_headers, host};
 
 const REQUIREMENTS: &str = ".provenance/state/scopes/default/requirements/req.jsonl";
 
@@ -27,31 +27,6 @@ async fn etag(host: &provenance_transport::StatementHost, id: &str) -> String {
     let (status, read) = call(host, "GET", &format!("/requirements/{id}"), None).await;
     assert_eq!(status, 200, "{read}");
     read["data"]["edit"]["etag"].as_str().unwrap().to_owned()
-}
-
-/// Accepts the pending submission of one Requirement as the reviewer: its
-/// creation submission, or the status request that sets an archived status.
-async fn accept_pending(host: &provenance_transport::StatementHost, id: &str) {
-    let path = format!("/requirements/{id}");
-    let (status, read) = call(host, "GET", &path, None).await;
-    assert_eq!(status, 200, "{read}");
-    let proposal = read["data"]["decision"]["pending"]["proposal_id"]
-        .as_str()
-        .unwrap_or_else(|| panic!("no pending submission: {read}"))
-        .to_owned();
-    let (status, decided) = call(
-        host,
-        "POST",
-        &format!("{path}/submissions/{proposal}/decide"),
-        Some(json!({"data":{
-            "actor":{"identity_type":"human","id":"reviewer"},
-            "decision":"accepted", "rationale":null,
-            "canonical_artifact":{"artifact_type":"requirement","artifact_id":id},
-            "feedback":null, "declared_by":null
-        }})),
-    )
-    .await;
-    assert_eq!(status, 200, "{decided}");
 }
 
 /// One refusal row: its name, the status and the `error` object.
@@ -117,7 +92,7 @@ async fn write_rows(repo: &Repository) -> Vec<Value> {
     )
     .await;
     assert_eq!(status, 200, "{created}");
-    accept_pending(&host, "req_old").await;
+    accept_pending(&host, "requirements", "requirement", "req_old").await;
     let guard = etag(&host, "req_old").await;
     let (status, archived) = call_with_headers(
         &host,
@@ -130,7 +105,7 @@ async fn write_rows(repo: &Repository) -> Vec<Value> {
     .await;
     assert_eq!(status, 200, "{archived}");
     // The archive is a status request: the reviewer accepts it.
-    accept_pending(&host, "req_old").await;
+    accept_pending(&host, "requirements", "requirement", "req_old").await;
     rows.push(row(
         "create under an archived parent",
         call(
