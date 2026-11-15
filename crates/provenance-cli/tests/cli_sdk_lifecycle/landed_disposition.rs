@@ -47,7 +47,9 @@ fn land_disposition_of_missing_requirement(repo: &str) {
             "canonical_artifact": {"artifact_type": "requirement", "artifact_id": "req_missing"}
         }]
     });
-    let path = std::path::Path::new(repo).join(".provenance/state").join(LANDINGS);
+    let path = std::path::Path::new(repo)
+        .join(".provenance/state")
+        .join(LANDINGS);
     std::fs::create_dir_all(path.parent().unwrap()).unwrap();
     std::fs::write(path, format!("{batch}\n")).unwrap();
 }
@@ -56,7 +58,10 @@ fn land_disposition_of_missing_requirement(repo: &str) {
 /// the text. `check` and `materialize` give the text form.
 fn refusal(answer: &Answer) -> Value {
     assert_eq!(answer.code, Some(1), "{}", answer.stdout);
-    let text = answer.stderr.strip_prefix("Error: ").unwrap_or(&answer.stderr);
+    let text = answer
+        .stderr
+        .strip_prefix("Error: ")
+        .unwrap_or(&answer.stderr);
     serde_json::from_str::<Value>(text)
         .map_or_else(|_| json!(answer.stderr), |value| value["error"].clone())
 }
@@ -69,8 +74,14 @@ fn each_read_refuses_a_landed_disposition_of_a_missing_record_at_its_line() {
     let kept_only = document(&[KEPT]);
 
     let answers = [
-        ("check", run(&["check", "--repo", &repo, "--format", "json"], None)),
-        ("materialize", run(&["materialize", "--repo", &repo, "--format", "json"], None)),
+        (
+            "check",
+            run(&["check", "--repo", &repo, "--format", "json"], None),
+        ),
+        (
+            "materialize",
+            run(&["materialize", "--repo", &repo, "--format", "json"], None),
+        ),
         ("plan", route(&repo, "authoring-plans", &kept_only, true)),
         ("apply", route(&repo, "authoring-changes", &kept_only, true)),
     ];

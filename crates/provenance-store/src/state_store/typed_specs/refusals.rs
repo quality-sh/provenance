@@ -60,7 +60,10 @@ pub(super) fn refused_deletions(
         let Some(artifact) = &disposition.canonical_artifact else {
             continue;
         };
-        let (kind, id) = (NodeType::from(artifact.artifact_type), &artifact.artifact_id);
+        let (kind, id) = (
+            NodeType::from(artifact.artifact_type),
+            &artifact.artifact_id,
+        );
         if survivors.contain(kind, None, id) || is_refused(&refused, kind, id) {
             continue;
         }

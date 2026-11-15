@@ -73,9 +73,16 @@ fn a_question_that_two_deleted_requirements_keep_names_them_with_and() {
     let ids = apply(&repo, &[FIRST, SECOND, KEPT]);
     let (first, second) = (ids["first"].as_str(), ids["second"].as_str());
     let files = tempfile::tempdir().unwrap();
-    let export = files.path().join("export.json").to_string_lossy().into_owned();
+    let export = files
+        .path()
+        .join("export.json")
+        .to_string_lossy()
+        .into_owned();
     let scope = ["--repo", &repo, "--scope", "default", "--format", "json"];
-    let exported = run(&[&["export"], &scope[..], &["--output", &export]].concat(), None);
+    let exported = run(
+        &[&["export"], &scope[..], &["--output", &export]].concat(),
+        None,
+    );
     assert_eq!(exported.code, Some(0), "{}", exported.stderr);
     let mut exported: Value = serde_json::from_slice(&std::fs::read(&export).unwrap()).unwrap();
     exported["topics"] = json!([{
@@ -88,7 +95,10 @@ fn a_question_that_two_deleted_requirements_keep_names_them_with_and() {
         "resolution_method": "research", "status": "open", "links": []
     }]);
     std::fs::write(&export, serde_json::to_vec(&exported).unwrap()).unwrap();
-    let imported = run(&[&["import"], &scope[..], &["--input", &export]].concat(), None);
+    let imported = run(
+        &[&["import"], &scope[..], &["--input", &export]].concat(),
+        None,
+    );
     assert_eq!(imported.code, Some(0), "{}", imported.stderr);
     submit(&repo, "question_first", None);
 

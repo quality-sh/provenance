@@ -113,7 +113,10 @@ fn affected_rule_ids(
         .resources
         .iter()
         .filter(|resource| {
-            !matches!(resource.state, ReconcileState::Unchanged | ReconcileState::Refused)
+            !matches!(
+                resource.state,
+                ReconcileState::Unchanged | ReconcileState::Refused
+            )
         })
         .collect::<Vec<_>>();
     let changed_requirements = changed

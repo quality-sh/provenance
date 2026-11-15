@@ -193,12 +193,10 @@ fn check_rejects_missing_wrong_kind_and_wrong_scope_canonical_artifacts() {
             ),
         );
 
-        provenance(dir.path())
-            .failure()
-            .stderr(contains(format!(
-                "scopes/default/ideation/dispositions.jsonl line 1: disposition disposition_a \
+        provenance(dir.path()).failure().stderr(contains(format!(
+            "scopes/default/ideation/dispositions.jsonl line 1: disposition disposition_a \
                  names {artifact_type} {artifact_id}, which the scope does not have"
-            )));
+        )));
     }
 }
 
