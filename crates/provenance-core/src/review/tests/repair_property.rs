@@ -8,7 +8,15 @@ use crate::review::{
 };
 use crate::{DispositionRecord, NodeType, ProposalCard, StableId, Withdrawal};
 use provenance_macros::verifies;
-use std::collections::HashSet;
+use std::collections::HashMap;
+
+/// One fault of a reading of the fixture lines.
+#[derive(Debug)]
+struct Fault {
+    key: String,
+    records: Vec<String>,
+    options: Vec<Vec<usize>>,
+}
 
 /// The stored rows of the lines that `kept` holds, with the fixture index of
 /// each row by family. The fixture lines are the submissions, then the
@@ -54,10 +62,10 @@ impl State {
         at.into_iter().map(|at| self.line(at)).collect()
     }
 
-    /// Each fault, as a key that does not depend on the line positions and
-    /// that holds the records of the fault, with the fixture lines that each
-    /// option of its repair step removes.
-    fn faults(&self) -> Vec<(String, Vec<Vec<usize>>)> {
+    /// Each fault, with a key that does not depend on the line positions,
+    /// the records of the fault and the fixture lines that each option of
+    /// its repair step removes.
+    fn faults(&self) -> Vec<Fault> {
         let reading = read_review_rows(StoredReviewRows {
             proposals: &self.proposals,
             dispositions: &self.dispositions,
@@ -68,7 +76,11 @@ impl State {
             .map(|fault| {
                 let (key, options) = self.repair(fault);
                 let records = self.records(&reading, fault);
-                (format!("{key} on {records:?}"), options)
+                Fault {
+                    key,
+                    records: records.into_iter().map(String::from).collect(),
+                    options,
+                }
             })
             .collect()
     }
@@ -182,9 +194,10 @@ fn removed(kept: &[bool], remove: &[usize]) -> Vec<bool> {
 }
 
 /// Property: for each set of the lines of the fixture, the repair step of a
-/// fault, with each of its options, shows no fault on a record that the
-/// reading before it did not give, and the repair steps of all faults
-/// together leave no fault. The lines of `sub_a` name two records.
+/// fault, with each of its options, shows no fault that the reading before
+/// it did not give, and no record of a fault that the fault did not have
+/// before. The repair steps of all faults together leave no fault. The
+/// lines of `sub_a` name two records.
 #[test]
 #[verifies("rule_check_reports_review_row_faults", property)]
 #[verifies("rule_review_row_refusal_gives_repair", property)]
@@ -216,16 +229,21 @@ fn a_repair_step_shows_no_new_fault_and_all_steps_leave_none() {
             .map(|line| (set >> line) & 1 == 1)
             .collect::<Vec<_>>();
         let before = State::new(&fixture, &kept).faults();
-        let keys = before.iter().map(|(key, _)| key).collect::<HashSet<_>>();
+        let records = before
+            .iter()
+            .map(|fault| (fault.key.as_str(), fault.records.as_slice()))
+            .collect::<HashMap<_, _>>();
         let mut all_steps = Vec::new();
-        for (key, options) in &before {
-            for option in options {
-                let after = State::new(&fixture, &removed(&kept, option)).faults();
-                for (new, _) in &after {
-                    assert!(keys.contains(new), "set {set:b}, repair of {key}: {new}");
+        for fault in &before {
+            for option in &fault.options {
+                for new in State::new(&fixture, &removed(&kept, option)).faults() {
+                    let known = records.get(new.key.as_str()).is_some_and(|before| {
+                        new.records.iter().all(|record| before.contains(record))
+                    });
+                    assert!(known, "set {set:b}, repair of {fault:?}: {new:?}");
                 }
             }
-            all_steps.extend(options[0].iter().copied());
+            all_steps.extend(fault.options[0].iter().copied());
         }
         let repaired = State::new(&fixture, &removed(&kept, &all_steps)).faults();
         assert!(repaired.is_empty(), "set {set:b}: {repaired:?}");
