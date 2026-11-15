@@ -34,9 +34,11 @@ fn run() -> IdeationLandingBatch {
         "contributions": [{
             "scope_id": "default", "id": "contribution_a", "target": target,
             "participant_slot": "reviewer", "stance": "support",
-            "strongest_finding": "Observed", "evidence_references": [],
+            "strongest_finding": "Observed",
+            "evidence_references": [{"reference_id": "evidence_a", "evidence_type": "source",
+                "summary": "Pinned"}],
             "material_claims": [{"claim_id": "claim_a", "statement": "Observed",
-                "evidence_type": "source", "evidence_reference_ids": []}],
+                "evidence_type": "source", "evidence_reference_ids": ["evidence_a"]}],
             "risks": [], "objections": [], "challenges": [], "suggested_artifact_changes": [],
             "unsupported_recommendations": [],
             "uncertainty": {"level": "low", "rationale": "Direct"}, "open_questions": []
