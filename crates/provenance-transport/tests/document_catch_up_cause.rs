@@ -26,7 +26,7 @@ async fn read_once() -> (Repository, provenance_transport::StatementHost) {
 }
 
 /// The refusal of a document read whose catch-up failed with `cause`.
-fn refusal(cause: Value) -> Value {
+fn refusal(cause: &Value) -> Value {
     let mut error = cause.as_object().unwrap().clone();
     error.insert("kind".to_owned(), json!("document_catch_up_failed"));
     json!({"error": error, "meta": {}})
@@ -44,7 +44,7 @@ async fn a_document_read_gives_the_line_that_stops_its_catch_up() {
     assert_eq!(status, 409);
     assert_eq!(
         refused,
-        refusal(json!({
+        refusal(&json!({
             "file": "scopes/default/requirements/req.jsonl",
             "line": 1,
             "message": "invalid type: string \"req_parent\", expected a sequence"
@@ -65,7 +65,7 @@ async fn a_document_read_gives_the_fault_with_no_file_that_stops_its_catch_up() 
     assert_eq!(status, 409);
     assert_eq!(
         refused,
-        refusal(json!({"message": "depends_on forms a cycle: req_c -> req_d -> req_c"}))
+        refusal(&json!({"message": "depends_on forms a cycle: req_c -> req_d -> req_c"}))
     );
 }
 
@@ -88,7 +88,7 @@ async fn a_document_read_gives_no_absolute_path_in_the_cause() {
     assert_eq!(status, 409);
     assert_eq!(
         refused,
-        refusal(json!({"message": format!("unsupported state entry: {shown}")}))
+        refusal(&json!({"message": format!("unsupported state entry: {shown}")}))
     );
 }
 
