@@ -91,17 +91,29 @@ impl StateStorage for LocalStateStorage {
     /// state. A whole set lands as one swap of the state directory; see
     /// `whole_set`.
     fn publish(&self, writes: WriteSet) -> Result<(), PublishFailure> {
-        self.publish_with(&writes, &mut whole_set::StatePublication)
+        self.ensure_publishable(&writes)?;
+        self.land(&writes)
     }
 }
 
 impl LocalStateStorage {
+    /// Lands a set that passed its checks. A set with no key returns before
+    /// it lands, so it makes no transaction, file or marker.
     #[rule("rule_empty_write_set_writes_no_data")]
-    fn publish_with(
-        &self,
-        writes: &WriteSet,
-        hook: &mut dyn whole_set::WholeSetHook,
-    ) -> Result<(), PublishFailure> {
+    fn land(&self, writes: &WriteSet) -> Result<(), PublishFailure> {
+        if writes.key_count() == 0 {
+            return Ok(());
+        }
+        match writes.atomicity() {
+            Atomicity::WholeSet => self.land_whole_set(writes, &mut whole_set::StatePublication),
+            Atomicity::PerKey => self.land_per_key(writes),
+        }
+    }
+
+    /// Refuses a set whose puts and deletes share a key, and, under the lock,
+    /// a set whose base is not the stored tree. A set with no base reads
+    /// nothing.
+    fn ensure_publishable(&self, writes: &WriteSet) -> Result<(), PublishFailure> {
         writes.ensure_disjoint()?;
         if writes.base_view().is_some() {
             let view = self
@@ -109,15 +121,7 @@ impl LocalStateStorage {
                 .map_err(|error| PublishFailure::Refused(error.into()))?;
             writes.ensure_base(view.entries())?;
         }
-        // A source edit installs its working-tree file also when its state
-        // has no key.
-        if writes.key_count() == 0 && matches!(hook.kind(), TransactionKind::Import) {
-            return Ok(());
-        }
-        match writes.atomicity() {
-            Atomicity::WholeSet => self.land_whole_set(writes, hook),
-            Atomicity::PerKey => self.land_per_key(writes),
-        }
+        Ok(())
     }
 
     /// A failure that leaves the marker of the transaction began to land:

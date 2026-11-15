@@ -62,5 +62,7 @@ fn the_simulated_storage_keeps_the_storage_contract() {
     contract::a_failed_whole_set_lands_no_key(Simulated::default());
     contract::an_empty_set_changes_nothing(Simulated::default());
     contract::an_empty_set_on_a_moved_base_is_refused(Simulated::default());
+    contract::an_empty_set_lands_while_each_stored_key_is_broken(Simulated::default());
+    contract::a_one_key_set_lands_while_each_other_key_is_broken(Simulated::default());
     contract::a_per_key_set_that_fails_at_its_first_key_is_refused(Simulated::default());
 }

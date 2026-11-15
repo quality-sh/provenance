@@ -50,6 +50,8 @@ pub struct Publish {
     pub outside_writes: usize,
     /// The set lands as one whole set: only a stage gives one.
     pub whole_set: bool,
+    /// The number of keys that the set puts or deletes.
+    pub keys: usize,
     /// The set names the revision that it was made on.
     pub on_base: bool,
 }
@@ -163,12 +165,15 @@ impl World {
         after: &BTreeMap<StateKey, Vec<u8>>,
     ) {
         let mut state = self.lock();
+        let mut keys = 0;
         for key in before.keys().filter(|key| !after.contains_key(*key)) {
             state.entries.remove(key);
+            keys += 1;
         }
         for (key, bytes) in after {
             if before.get(key) != Some(bytes) {
                 state.entries.insert(key.clone(), bytes.clone());
+                keys += 1;
             }
         }
         state.outside_writes += 1;
@@ -179,6 +184,7 @@ impl World {
             outcome: Outcome::Landed,
             outside_writes,
             whole_set: false,
+            keys,
             on_base: false,
         });
     }

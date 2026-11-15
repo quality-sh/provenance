@@ -345,14 +345,28 @@ def layer_reports(layer, log, failures, run_url=None, environment=""):
 
 
 def counts(stats_dir, layer):
-    """The counts of the random cases of `layer` as a Markdown table."""
-    path = Path(stats_dir) / f"{layer}.json" if stats_dir else None
-    if path is None or not path.is_file():
+    """The counts of the random cases of `layer` as a Markdown table, and
+    the stops of each probe of `layer` in rows of their own."""
+    if not stats_dir:
         return ""
-    rows = json.loads(path.read_text())
-    lines = [f"### Counts of the {layer} layer", "", "| Count | Value |", "| --- | --- |"]
-    lines += [f"| {name} | {value} |" for name, value in rows.items()]
-    return "\n".join(lines) + "\n\n"
+    text = ""
+    path = Path(stats_dir) / f"{layer}.json"
+    if path.is_file():
+        rows = json.loads(path.read_text())
+        lines = [f"### Counts of the {layer} layer", "", "| Count | Value |", "| --- | --- |"]
+        lines += [f"| {name} | {value} |" for name, value in rows.items()]
+        text += "\n".join(lines) + "\n\n"
+    prefix = f"{layer}.probe."
+    probes = sorted(Path(stats_dir).glob(f"{prefix}*.json")) if Path(stats_dir).is_dir() else []
+    if probes:
+        lines = [f"### Stops of the probes of the {layer} layer", "",
+                 "| Probe | Stop | Count |", "| --- | --- | --- |"]
+        for probe in probes:
+            name = probe.name[len(prefix):-len(".json")]
+            rows = json.loads(probe.read_text())
+            lines += [f"| {name} | {stop} | {value} |" for stop, value in rows.items()]
+        text += "\n".join(lines) + "\n\n"
+    return text
 
 
 def summary(layer, log_path, failures_dir, stats_dir=None, succeeded=False, environ=os.environ):

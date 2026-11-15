@@ -125,7 +125,9 @@ fn two_updates_at_once_have_one_winner() {
 /// `stopped`, with only the Topic key changed for a stop after a rename or a
 /// write that ended. The temporary file of a one-key write stays only for a
 /// stop before its rename, and no read sees it. The run must keep the laws.
-fn stop_probe(stopped: Operation, at: u8, landings: &[Landing]) {
+/// The job summary counts the landing of the stop under `probe`.
+fn stop_probe(probe: &'static str, stopped: Operation, at: u8, landings: &[Landing]) {
+    provenance_simulation::stats::record_probe(probe);
     let started = Instant::now();
     let steps = vec![
         write(0, update(0)),
@@ -209,7 +211,7 @@ fn stop_probe(stopped: Operation, at: u8, landings: &[Landing]) {
 #[test]
 #[ignore = "a probe of the nightly simulation"]
 fn a_merged_branch_and_a_stop_before_the_marker_keep_the_laws() {
-    stop_probe(update(0), 0, &[Landing::BeforeMarker]);
+    stop_probe("stop-before-marker", update(0), 0, &[Landing::BeforeMarker]);
 }
 
 // No Rule: a probe of the nightly simulation. It runs `stop_probe` on an
@@ -219,7 +221,7 @@ fn a_merged_branch_and_a_stop_before_the_marker_keep_the_laws() {
 #[test]
 #[ignore = "a probe of the nightly simulation"]
 fn a_merged_branch_and_a_stop_after_the_marker_keep_the_laws() {
-    stop_probe(update(0), 1, &[Landing::BeforeInstall]);
+    stop_probe("stop-after-marker", update(0), 1, &[Landing::BeforeInstall]);
 }
 
 // No Rule: a probe of the nightly simulation. It runs `stop_probe` on a
@@ -230,6 +232,7 @@ fn a_merged_branch_and_a_stop_after_the_marker_keep_the_laws() {
 #[ignore = "a probe of the nightly simulation"]
 fn a_merged_branch_and_a_stop_of_a_one_key_write_keep_the_laws() {
     stop_probe(
+        "one-key-write",
         Operation::ClaimTopic,
         0,
         &[Landing::BeforeRename, Landing::AfterRename],
@@ -247,6 +250,7 @@ fn a_merged_branch_and_a_stop_of_a_one_key_write_keep_the_laws() {
 #[test]
 #[ignore = "a probe of the nightly simulation"]
 fn a_stop_at_the_first_point_of_each_kind_of_write_keeps_the_laws() {
+    provenance_simulation::stats::record_probe("each-kind");
     let stop = Step::Fault(Fault::Stop { engine: 1, at: 0 });
     let steps = vec![
         write(1, Operation::CreateRequirement { n: 0 }),

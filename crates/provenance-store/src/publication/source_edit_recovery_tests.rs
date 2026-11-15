@@ -396,10 +396,11 @@ fn a_stop_in_the_write_of_the_source_edit_marker_leaves_no_file_after_the_next_s
     assert_eq!(published(root), (BEFORE.to_vec(), BEFORE.to_vec()));
 }
 
-/// A source edit whose stage changes no state key still installs its file,
-/// and leaves no transaction and no marker.
+/// A source edit whose stage changes no state key installs its file, and
+/// leaves no transaction and no marker. No Rule: the graph has no active Rule
+/// that a source edit replaces its file; this test pins the exception to
+/// `rule_empty_write_set_writes_no_data` that its description states.
 #[test]
-#[verifies("rule_empty_write_set_writes_no_data", examples)]
 fn a_source_edit_with_no_state_key_replaces_its_file() {
     let temp = fixture();
     let root_path = canonical_root(&temp);

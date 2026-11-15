@@ -37,6 +37,10 @@ fn an_update_to_the_stored_content_writes_nothing() {
     let transactions = cache.join("import-transactions");
     std::fs::create_dir_all(&transactions).unwrap();
     std::fs::set_permissions(&transactions, std::fs::Permissions::from_mode(0o500)).unwrap();
+    assert!(
+        std::fs::create_dir(transactions.join("probe")).is_err(),
+        "the test user can write a read-only folder"
+    );
 
     let updated = update_description(&repo).output().unwrap();
 
