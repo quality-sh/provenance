@@ -1,8 +1,9 @@
 //! A document read on the HTTP route whose catch-up fails gives the cause:
 //! the file, the line, the parse message and the steps that correct the state
 //! for a state line that does not parse, and the text of a cause that has no
-//! file, with no hint. A read with no stored
-//! revision refuses with `no_projection` first.
+//! file, with no hint. A read with no stored revision refuses with
+//! `no_projection` first. A link where a record file must be refuses the read
+//! before its catch-up, with `read_failed` and a cause with no absolute path.
 #![cfg(feature = "test-fixture")]
 
 use crate::support;
@@ -73,9 +74,10 @@ async fn a_document_read_gives_the_fault_with_no_file_that_stops_its_catch_up() 
     );
 }
 
-/// A link where a record file must be stops the catch-up with an error that
-/// names the link by its absolute path. The refusal gives that path relative
-/// to the repository.
+/// A link where a record file must be stops the check that the manifest
+/// declares the scope of the read, with an error that names the link by its
+/// absolute path. The read refuses with `read_failed`, and its cause gives that
+/// path relative to the repository.
 #[cfg(unix)]
 #[tokio::test]
 #[verifies("rule_unclassified_refusal_gives_cause", examples)]
@@ -89,10 +91,13 @@ async fn a_document_read_gives_no_absolute_path_in_the_cause() {
 
     let (status, refused) = call(&host, "GET", DOCUMENT, None).await;
 
-    assert_eq!(status, 409);
     assert_eq!(
-        refused,
-        refusal(&json!({"message": format!("unsupported state entry: {shown}")}))
+        (status, refused),
+        (
+            500,
+            json!({"error": {"kind": "read_failed",
+                "cause": format!("unsupported state entry: {shown}")}, "meta": {}})
+        )
     );
 }
 
