@@ -70,7 +70,7 @@ fn a_submission_id_on_lines_that_disagree_refuses_only_its_record() {
     read(&repo, &["api", "requirements/req_b/document"]);
     fresh_list(&repo, "proposals");
     fresh_list(&repo, "dispositions");
-    create(&repo, "req_c");
+    create(&repo, "req_d");
     let addressed = format!("requirements/req_a/submissions/{submission}");
     let decision = super::review_cycle::decision("accepted", "req_a", None);
     assert_eq!(
