@@ -40,7 +40,7 @@ impl FileRollbackJournal {
         contents: &[u8],
     ) -> anyhow::Result<()> {
         self.create_dir_all(path.parent().unwrap_or_else(|| Path::new(".")))?;
-        let after = super::atomic_replace_with_hook(path, before, contents, || {})?;
+        let after = super::replace_file(path, before, contents, before.permissions())?;
         self.changes.push(FileChange::File {
             path: path.to_path_buf(),
             before: before.clone(),

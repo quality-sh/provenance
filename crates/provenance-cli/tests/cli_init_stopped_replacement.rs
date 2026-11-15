@@ -77,7 +77,7 @@ fn the_next_init_removes_the_temporary_file_of_a_stopped_init() {
     let agents = std::fs::read_to_string(repo.join("AGENTS.md")).unwrap();
     assert!(agents.starts_with(PERSON_AGENTS), "{agents}");
     assert!(agents.contains("## Provenance"), "{agents}");
-    let mut near: Vec<String> = NEAR_NAMES.iter().map(|name| (*name).to_owned()).collect();
+    let mut near = NEAR_NAMES.map(str::to_owned).to_vec();
     near.sort();
     assert_eq!(names_near_init_files(&repo), near);
     for name in NEAR_NAMES {

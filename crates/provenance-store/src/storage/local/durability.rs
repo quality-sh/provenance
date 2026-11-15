@@ -1,5 +1,9 @@
 use camino::{Utf8Path, Utf8PathBuf};
 use std::io::Write;
+use std::path::{Path, PathBuf};
+
+mod checked;
+pub use checked::write_synced_file_checked;
 
 /// A failure of [`replace_file`]. It has the text of a `tempfile` persist
 /// failure, and its source is the I/O error.
@@ -182,19 +186,32 @@ fn sync_failure(path: &Utf8Path) -> impl FnOnce(std::io::Error) -> anyhow::Error
 /// does not sync: its caller syncs the staged tree after all of its writes.
 fn replace_file(temporary: tempfile::NamedTempFile, target: &Utf8Path) -> anyhow::Result<()> {
     let target = crate::long_path::extended(target)?;
-    // On Windows, `keep` clears the temporary attribute that `tempfile` sets.
-    // A rename keeps the attributes of the file, and with that attribute the
-    // system can keep the bytes in memory and not write them to the disk.
-    let (file, path) = temporary
+    let (file, path) = keep(temporary)?;
+    rename_kept(file, &path, &target)?;
+    Ok(())
+}
+
+/// Keeps `temporary` after its handle drops, and gives the open file and
+/// its path. On Windows, `keep` clears the temporary attribute that
+/// `tempfile` sets. A rename keeps the attributes of the file, and with that
+/// attribute the system can keep the bytes in memory and not write them to
+/// the disk. After a failure, the temporary file is deleted.
+fn keep(temporary: tempfile::NamedTempFile) -> Result<(std::fs::File, PathBuf), ReplaceFailed> {
+    temporary
         .keep()
-        .map_err(|failure| ReplaceFailed(failure.error))?;
-    let renamed = std::fs::rename(&path, target);
+        .map_err(|failure| ReplaceFailed(failure.error))
+}
+
+/// Renames the kept temporary file `path` onto `target`, as
+/// [`replace_file`] does, and closes `file`, the open temporary file, after
+/// the rename returns.
+fn rename_kept(file: std::fs::File, path: &Path, target: &Path) -> Result<(), ReplaceFailed> {
+    let renamed = std::fs::rename(path, target);
     drop(file);
     renamed.map_err(|error| {
-        let _ = std::fs::remove_file(&path);
+        let _ = std::fs::remove_file(path);
         ReplaceFailed(error)
-    })?;
-    Ok(())
+    })
 }
 
 /// Flushes directory metadata where the platform supports it.

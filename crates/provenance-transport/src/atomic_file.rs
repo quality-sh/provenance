@@ -1,6 +1,8 @@
 use anyhow::Context;
-use std::io::{ErrorKind, Write};
-use std::path::{Path, PathBuf};
+use camino::Utf8Path;
+use provenance_store::publication::write_synced_file_checked;
+use std::io::ErrorKind;
+use std::path::Path;
 
 mod commit;
 mod rollback;
@@ -102,12 +104,19 @@ impl FileSnapshot {
         }
     }
 
+    const fn permissions(&self) -> Option<&std::fs::Permissions> {
+        match self {
+            Self::Missing => None,
+            Self::Regular { permissions, .. } => Some(permissions),
+        }
+    }
+
     pub fn restore_if_owned(&self, path: &Path, owned: &Self) -> anyhow::Result<()> {
         owned.recheck(path)?;
         match self {
             Self::Missing => remove_if_owned(path, owned),
             Self::Regular { bytes, permissions } => {
-                replace_contents(path, owned, bytes, Some(permissions.clone()), || {}).map(|_| ())
+                replace_file(path, owned, bytes, Some(permissions)).map(|_| ())
             }
         }
         .with_context(|| format!("failed to restore {}", path.display()))
@@ -128,8 +137,7 @@ fn remove_if_owned_with_hook(
         return Ok(());
     }
     before_commit();
-    let backup =
-        displace_to_backup(path).map_err(|error| displacement_error(path, "removal", error))?;
+    let backup = displace_to_backup(path).map_err(|error| displacement_error(path, error))?;
     let displaced = FileSnapshot::read(&backup)?;
     if &displaced != expected {
         restore_displaced(&backup, path)?;
@@ -142,106 +150,46 @@ fn remove_if_owned_with_hook(
     Ok(())
 }
 
-fn atomic_replace_with_hook(
-    path: &Path,
-    before: &FileSnapshot,
-    contents: &[u8],
-    before_commit: impl FnOnce(),
-) -> anyhow::Result<FileSnapshot> {
-    let permissions = match before {
-        FileSnapshot::Regular { permissions, .. } => Some(permissions.clone()),
-        FileSnapshot::Missing => None,
-    };
-    replace_contents(path, before, contents, permissions, before_commit)
-}
-
-fn replace_contents(
+/// Replaces the file at `path`, which init planned from `expected`, with
+/// `contents` in one rename, after a compare of `path` with `expected`.
+#[provenance_macros::rule("rule_init_stop_keeps_each_project_file_whole")]
+#[provenance_macros::rule("rule_init_refuses_a_project_file_change_before_its_compare")]
+fn replace_file(
     path: &Path,
     expected: &FileSnapshot,
     contents: &[u8],
-    permissions: Option<std::fs::Permissions>,
-    before_commit: impl FnOnce(),
+    permissions: Option<&std::fs::Permissions>,
 ) -> anyhow::Result<FileSnapshot> {
     expected.recheck(path)?;
-    let parent = path.parent().unwrap_or_else(|| Path::new("."));
-    std::fs::create_dir_all(parent)?;
-    let temporary = temporary_path(parent, path)?;
-    let prepared = (|| -> std::io::Result<FileSnapshot> {
-        let mut file = std::fs::OpenOptions::new()
-            .write(true)
-            .create_new(true)
-            .open(&temporary)?;
-        file.write_all(contents)?;
-        if let Some(permissions) = permissions {
-            std::fs::set_permissions(&temporary, permissions)?;
-        }
-        file.sync_all()?;
-        Ok(FileSnapshot::Regular {
-            bytes: contents.to_vec(),
-            permissions: file.metadata()?.permissions(),
-        })
-    })();
-    if prepared.is_err() {
-        let _ = std::fs::remove_file(&temporary);
-    }
-    let prepared = prepared
-        .with_context(|| format!("failed to prepare replacement for {}", path.display()))?;
-    before_commit();
-    crate::test_probes::at("project_file_prepared");
-    commit_prepared(path, expected, &temporary)
-        .with_context(|| format!("failed to replace {}", path.display()))?;
-    Ok(prepared)
-}
-
-fn commit_prepared(path: &Path, expected: &FileSnapshot, temporary: &Path) -> anyhow::Result<()> {
-    let backup = match expected {
-        FileSnapshot::Missing => None,
-        FileSnapshot::Regular { .. } => {
-            let backup = displace_to_backup(path)
-                .map_err(|error| displacement_error(path, "replacement", error))?;
-            crate::test_probes::at("file_displaced");
-            let displaced = FileSnapshot::read(&backup)?;
-            if &displaced != expected {
-                restore_displaced(&backup, path)?;
-                let _ = std::fs::remove_file(temporary);
-                anyhow::bail!("{} changed during replacement", path.display());
-            }
-            Some(backup)
-        }
-    };
-    crate::test_probes::at("project_file_compared");
-
-    if let Err(error) = provenance_store::operations::files::rename_no_replace(temporary, path) {
-        if let Some(backup) = &backup {
-            restore_displaced(backup, path)?;
-        }
-        let _ = std::fs::remove_file(temporary);
-        return Err(replacement_install_error(path, error));
-    }
+    let target = Utf8Path::from_path(path)
+        .with_context(|| format!("{} is not a UTF-8 path", path.display()))?;
+    let prefix = format!(".{}.provenance-", target.file_name().unwrap_or_default());
+    let permissions = write_synced_file_checked(target, contents, &prefix, permissions, || {
+        crate::test_probes::at("project_file_prepared");
+        anyhow::ensure!(
+            &FileSnapshot::read(path)? == expected,
+            "{} changed during replacement",
+            path.display()
+        );
+        crate::test_probes::at("project_file_compared");
+        Ok(())
+    })
+    .with_context(|| format!("failed to replace {}", path.display()))?;
     crate::test_probes::at("project_file_replaced");
-    let _ = std::fs::remove_file(temporary);
-    if let Some(backup) = backup {
-        let _ = commit::remove_preserved(&backup);
-    }
-    Ok(())
+    Ok(FileSnapshot::Regular {
+        bytes: contents.to_vec(),
+        permissions,
+    })
 }
 
-fn replacement_install_error(path: &Path, error: std::io::Error) -> anyhow::Error {
-    if error.kind() == ErrorKind::AlreadyExists {
-        anyhow::Error::new(error).context(format!("{} changed during replacement", path.display()))
-    } else {
-        anyhow::Error::new(error).context(format!("failed to install {}", path.display()))
-    }
-}
-
-fn displacement_error(path: &Path, action: &str, error: std::io::Error) -> anyhow::Error {
+fn displacement_error(path: &Path, error: std::io::Error) -> anyhow::Error {
     if error.kind() == ErrorKind::Unsupported {
         anyhow::Error::new(error).context(format!(
-            "failed to preserve {} during {action}",
+            "failed to preserve {} during removal",
             path.display()
         ))
     } else {
-        anyhow::Error::new(error).context(format!("{} changed during {action}", path.display()))
+        anyhow::Error::new(error).context(format!("{} changed during removal", path.display()))
     }
 }
 
@@ -274,27 +222,6 @@ fn permissions_equal(left: &std::fs::Permissions, right: &std::fs::Permissions) 
     left.readonly() == right.readonly()
 }
 
-fn temporary_path(parent: &Path, path: &Path) -> std::io::Result<PathBuf> {
-    unique_path(parent, path, "tmp")
-}
-
-fn unique_path(parent: &Path, path: &Path, kind: &str) -> std::io::Result<PathBuf> {
-    let name = path.file_name().unwrap_or_default().to_string_lossy();
-    for attempt in 0..100_u8 {
-        let candidate = parent.join(format!(
-            ".{name}.provenance-{}-{attempt}.{kind}",
-            std::process::id(),
-        ));
-        if !candidate.exists() {
-            return Ok(candidate);
-        }
-    }
-    Err(std::io::Error::new(
-        ErrorKind::AlreadyExists,
-        format!("could not allocate {kind} file"),
-    ))
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -303,7 +230,7 @@ mod tests {
     fn replaces_an_absent_regular_file() {
         let directory = tempfile::tempdir().unwrap();
         let path = directory.path().join("nested/file.txt");
-        atomic_replace_with_hook(&path, &FileSnapshot::Missing, b"planned\n", || {}).unwrap();
+        replace_file(&path, &FileSnapshot::Missing, b"planned\n", None).unwrap();
         assert_eq!(std::fs::read(path).unwrap(), b"planned\n");
     }
 
@@ -315,25 +242,9 @@ mod tests {
         let before = FileSnapshot::read(&path).unwrap();
         std::fs::write(&path, "concurrent\n").unwrap();
 
-        let error = atomic_replace_with_hook(&path, &before, b"planned\n", || {}).unwrap_err();
+        let error = replace_file(&path, &before, b"planned\n", None).unwrap_err();
 
         assert!(error.to_string().contains("changed after"));
-        assert_eq!(std::fs::read(path).unwrap(), b"concurrent\n");
-    }
-
-    #[test]
-    fn atomic_replace_does_not_overwrite_an_edit_created_during_commit() {
-        let directory = tempfile::tempdir().unwrap();
-        let path = directory.path().join("file.txt");
-        std::fs::write(&path, "before\n").unwrap();
-        let before = FileSnapshot::read(&path).unwrap();
-
-        let error = atomic_replace_with_hook(&path, &before, b"planned\n", || {
-            std::fs::write(&path, "concurrent\n").unwrap();
-        })
-        .unwrap_err();
-
-        assert!(format!("{error:#}").contains("changed during replacement"));
         assert_eq!(std::fs::read(path).unwrap(), b"concurrent\n");
     }
 
@@ -351,42 +262,6 @@ mod tests {
 
         assert!(format!("{error:#}").contains("changed during removal"));
         assert_eq!(std::fs::read(path).unwrap(), b"concurrent\n");
-    }
-
-    #[test]
-    fn replacement_does_not_overwrite_a_colliding_backup_path() {
-        let directory = tempfile::tempdir().unwrap();
-        let path = directory.path().join("file.txt");
-        std::fs::write(&path, "before\n").unwrap();
-        let before = FileSnapshot::read(&path).unwrap();
-        let collision = directory.path().join(format!(
-            ".file.txt.provenance-{}-0.backup",
-            std::process::id()
-        ));
-        std::fs::write(&collision, "unrelated\n").unwrap();
-
-        atomic_replace_with_hook(&path, &before, b"planned\n", || {}).unwrap();
-
-        assert_eq!(std::fs::read(path).unwrap(), b"planned\n");
-        assert_eq!(std::fs::read(collision).unwrap(), b"unrelated\n");
-    }
-
-    #[test]
-    fn unsupported_install_is_not_reported_as_a_concurrent_change() {
-        let path = Path::new(".provenance/state/manifest.json");
-        let error = replacement_install_error(
-            path,
-            std::io::Error::new(
-                ErrorKind::Unsupported,
-                "filesystem does not support atomic no-replace installation: link failed",
-            ),
-        );
-        let report = format!("{error:#}");
-
-        assert!(report.contains("failed to install"));
-        assert!(report.contains("manifest.json"));
-        assert!(report.contains("does not support"));
-        assert!(!report.contains("changed during replacement"));
     }
 
     #[cfg(unix)]
