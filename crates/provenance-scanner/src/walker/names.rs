@@ -2,10 +2,11 @@
 //! line of each site is known.
 //!
 //! The read of a comment site stops at the next comment site, and the read of
-//! an attribute or a decorator stops at the next site. So the reads of the
-//! comment sites of a file do not overlap, the reads of the other sites do not
-//! overlap, and a bracket that does not close costs one read of the file and
-//! not one read for each site.
+//! an attribute or a decorator stops at the next site. An attribute or a
+//! decorator directly above the next site, as in a stack of attributes, takes
+//! the name of that site. So the reads of the comment sites of a file do not
+//! overlap, the reads of the other sites do not overlap, and a bracket that
+//! does not close costs one read of the file and not one read for each site.
 
 use std::ops::Range;
 
@@ -24,6 +25,7 @@ pub(super) struct Sites<'a> {
 }
 
 struct Unnamed<'a> {
+    line: usize,
     /// The index of the first line below the site.
     below: usize,
     start: LineStart<'a>,
@@ -43,6 +45,7 @@ impl<'a> Sites<'a> {
         self.comment_lines.push(line);
         self.site_lines.push(line);
         self.unnamed.push(Unnamed {
+            line,
             below: line + 1,
             start,
             site: Site::Comment(annotations),
@@ -60,6 +63,7 @@ impl<'a> Sites<'a> {
     ) {
         self.site_lines.push(line);
         self.unnamed.push(Unnamed {
+            line,
             below: last + 1,
             start,
             site: Site::Binding(binding),
@@ -77,7 +81,8 @@ impl<'a> Sites<'a> {
         annotations: &mut [AnnotationLocation],
         bindings: &mut [AttributeBinding],
     ) {
-        for unnamed in self.unnamed {
+        let mut next_site: Option<(usize, Option<String>)> = None;
+        for unnamed in self.unnamed.into_iter().rev() {
             let boundaries = match unnamed.site {
                 Site::Comment(_) => &self.comment_lines,
                 Site::Binding(_) => &self.site_lines,
@@ -85,12 +90,21 @@ impl<'a> Sites<'a> {
             let next = boundaries.partition_point(|line| *line < unnamed.below);
             let end = boundaries.get(next).map_or(lines.len(), |line| *line);
             let below = &lines[unnamed.below.min(end)..end];
-            let name = match unnamed.site {
-                Site::Binding(index) if !matches!(language, Language::Rust | Language::Python) => {
+            let binding = match unnamed.site {
+                Site::Binding(index) => Some(index),
+                Site::Comment(_) => None,
+            };
+            let stacked = next_site
+                .take()
+                .filter(|(line, _)| binding.is_some() && *line == unnamed.below);
+            let name = match (binding, stacked) {
+                (Some(index), _) if !matches!(language, Language::Rust | Language::Python) => {
                     script_call_name(lines, unnamed.below - 1, bindings[index].verification)
                 }
+                (_, Some((_, name))) => name,
                 _ => declaration::item_name(language, below, unnamed.start),
             };
+            next_site = Some((unnamed.line, name.clone()));
             match unnamed.site {
                 Site::Comment(range) => {
                     for annotation in &mut annotations[range] {

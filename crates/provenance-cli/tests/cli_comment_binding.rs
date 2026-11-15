@@ -154,6 +154,8 @@ fn a_rust_binding_names_the_function_or_type_below_it() {
         ("rule_inline_comment", Some("inline_after_comment")),
         ("rule_deref_statement", None),
         ("rule_nested_comment", Some("after_nested")),
+        ("rule_stacked_first", Some("stacked")),
+        ("rule_stacked_second", Some("stacked")),
         ("rule_end", None),
     ]);
     assert_eq!(item_names(&report), expected, "{report}");

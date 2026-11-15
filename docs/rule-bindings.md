@@ -55,8 +55,10 @@ or a type, its name is the item name. In JavaScript and TypeScript, a `const`,
 first name, `first`. The read stops where the grammar decides, so a
 declaration can take any number of lines. The read of a comment also stops at
 the next binding comment, and the read of an attribute or a decorator stops at
-the next binding (a comment, an attribute, a decorator, or a call). So a comment
-above a `@rule` decorator and the decorator name the same `def`. The forms are:
+the next binding (a comment, an attribute, a decorator, or a call). An attribute
+or a decorator directly above the next binding takes the item name of that
+binding. So a stack of `#[rule]` attributes names one `fn`, and a comment above a
+`@rule` decorator and the decorator name the same `def`. The forms are:
 
 - Rust: `fn`, `struct`, `enum`, `union`, `trait`, or `type`, after `pub` or
   `pub(...)`, and `const`, `async`, `unsafe`, `extern`, or `default`. A raw

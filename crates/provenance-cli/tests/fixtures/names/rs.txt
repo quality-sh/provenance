@@ -118,4 +118,8 @@ pub fn counts() {
 /* outer /* inner */ fn commented() {} */
 pub fn after_nested() {}
 
+#[rule("rule_stacked_first")]
+#[rule("rule_stacked_second")]
+pub fn stacked() {}
+
 // @provenance rule: rule_end
