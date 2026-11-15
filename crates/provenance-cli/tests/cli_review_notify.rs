@@ -136,6 +136,36 @@ fn unaccepted_registration_fails_and_leaves_no_registration() {
     setup.quiet(&setup.thread, 0);
 }
 
+/// A registration whose document read cannot catch up refuses with the text of that
+/// refusal, which holds no path.
+#[test]
+#[verifies("rule_review_partial_reads_remain_explicit", examples)]
+fn registration_whose_catch_up_fails_refuses_with_no_path() {
+    let setup = Setup::start();
+    page_rule(&setup.host, "rule_before_failure", "req_notify");
+    let shard = setup
+        .path()
+        .join(".provenance/state/scopes/default/rules/rule.jsonl");
+    let text = std::fs::read_to_string(&shard).unwrap();
+    std::fs::write(&shard, format!("{text}invalid JSON\n")).unwrap();
+
+    let output = notify(
+        &setup.host,
+        &setup.codex,
+        setup.path(),
+        "req_notify",
+        "codex",
+        &setup.thread,
+    );
+
+    assert_eq!(
+        refusal(&output),
+        json!({"kind": "operation_failed",
+            "message": "catch-up failed; restart the document read"})
+    );
+    setup.quiet(&setup.thread, 0);
+}
+
 /// Adds rules and starts a registration that reads one record on each page, so each read
 /// of the document takes many pages.
 fn register_in_pages(setup: &Setup, rules: usize) -> JoinHandle<Output> {
