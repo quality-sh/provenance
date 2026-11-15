@@ -114,16 +114,14 @@ impl FileSnapshot {
     /// error after the file changed tells that the file was restored and
     /// that its folder was not synced.
     pub fn restore_if_owned(&self, path: &Path, owned: &Self) -> anyhow::Result<()> {
-        let synced = owned
-            .recheck(path)
-            .and_then(|()| match self {
-                Self::Missing => remove_if_owned(path, owned),
-                Self::Regular { bytes, permissions } => {
-                    replace_file(path, owned, bytes, Some(permissions))
-                        .map(|replaced| replaced.synced)
-                }
-            })
-            .with_context(|| format!("failed to restore {}", path.display()))?;
+        owned.recheck(path)?;
+        let synced = match self {
+            Self::Missing => remove_if_owned(path, owned),
+            Self::Regular { bytes, permissions } => {
+                replace_file(path, owned, bytes, Some(permissions)).map(|replaced| replaced.synced)
+            }
+        }
+        .with_context(|| format!("failed to restore {}", path.display()))?;
         synced.map_err(|unsynced| unsynced_error(path, "restored", unsynced))
     }
 }
