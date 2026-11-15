@@ -1,5 +1,6 @@
-//! A manifest that does not parse in the review library. The open of a
-//! repository keeps the fault of the manifest as its cause. The HTTP API of a
+//! A manifest that does not parse in the review library. The failure of the
+//! open of a repository has the text of the fault of the manifest, and its
+//! error is that fault. The HTTP API of a
 //! started review host whose manifest stops parsing refuses a read, a write
 //! and the page configuration with `invalid_state_file`, the line of the
 //! manifest and the two procedures that correct the state.
@@ -10,6 +11,7 @@ use provenance_core::protocol::read_failure::{
 use provenance_macros::verifies;
 use provenance_porcelain::check::{Category, CheckPort, PortFuture};
 use provenance_review::{HostOptions, RepositoryScope};
+use provenance_store::repository::OpenFailure;
 use provenance_transport::fixture::records::Repository;
 use serde_json::{json, Value};
 use std::{path::Path, sync::Arc};
@@ -81,7 +83,7 @@ async fn a_manifest_that_stops_parsing_refuses_each_read_and_write_with_the_corr
 
 #[test]
 #[verifies("rule_state_parse_refusal_names_the_corrections", examples)]
-fn the_open_of_a_manifest_that_does_not_parse_has_the_fault_as_its_cause() {
+fn the_open_failure_of_a_manifest_that_does_not_parse_is_the_fault() {
     let repository = Repository::new("The review library opens the repository for a read.");
     std::fs::write(
         repository.layout.manifest_path(),
@@ -91,7 +93,17 @@ fn the_open_of_a_manifest_that_does_not_parse_has_the_fault_as_its_cause() {
     let place = RepositoryScope::new(repository.dir.path().to_str().unwrap(), "default");
 
     let error = place.open().unwrap_err();
-    let fault = UnparsableStateFile::find(error.as_ref()).map(UnparsableStateFile::failure);
+    assert_eq!(
+        error.to_string(),
+        format!(
+            "manifest.json line 1: invalid type: string \"default\", expected a sequence; \
+             {STATE_CORRECTIONS}"
+        )
+    );
+    let Some(OpenFailure::Io(cause)) = error.downcast_ref::<OpenFailure>() else {
+        panic!("{error:?}");
+    };
+    let fault = UnparsableStateFile::find(cause.as_ref()).map(UnparsableStateFile::failure);
     assert_eq!(
         fault,
         Some(ReadFailure::InvalidStateFile {
