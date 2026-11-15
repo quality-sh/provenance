@@ -109,7 +109,9 @@ impl LocalStateStorage {
                 .map_err(|error| PublishFailure::Refused(error.into()))?;
             writes.ensure_base(view.entries())?;
         }
-        if writes.key_count() == 0 {
+        // A source edit installs its working-tree file also when its state
+        // has no key.
+        if writes.key_count() == 0 && matches!(hook.kind(), TransactionKind::Import) {
             return Ok(());
         }
         match writes.atomicity() {
