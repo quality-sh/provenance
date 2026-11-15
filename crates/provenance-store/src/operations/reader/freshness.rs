@@ -60,11 +60,11 @@ impl<R> Completed<R> {
 
     /// The answer of a read that needs a current answer. A failed catch-up
     /// refuses with [`CatchUpFailed`], before an error of the operation.
-    pub(super) fn current(self) -> anyhow::Result<Stamped<R>> {
-        match self.failure {
-            Some(failure) => Err(CatchUpFailed(failure).into()),
-            None => self.answer(),
+    pub(super) fn current(mut self) -> anyhow::Result<Stamped<R>> {
+        if let Some(failure) = self.failure.take() {
+            return Err(CatchUpFailed(failure).into());
         }
+        self.answer()
     }
 }
 

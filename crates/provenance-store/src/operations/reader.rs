@@ -84,9 +84,10 @@ pub enum ReadRefusal {
     HalfMigrated { database: Utf8PathBuf },
 }
 
-/// The refusal of a [`current`] read whose catch-up failed. The error of
-/// the catch-up is a field and not a source, so the text of the refusal is
-/// this text alone and holds no path.
+/// The refusal of a [`current`] read whose catch-up failed.
+///
+/// The error of the catch-up is a field and not a source, so the text of the
+/// refusal is this text alone and holds no path.
 #[derive(Debug, thiserror::Error)]
 #[error("catch-up failed; restart the document read")]
 pub struct CatchUpFailed(pub anyhow::Error);
@@ -195,9 +196,10 @@ pub async fn answer<R: Send>(
         .answer()
 }
 
-/// Runs one read as [`answer`] does, but refuses with [`CatchUpFailed`]
-/// when the catch-up fails. A read with no stored revision refuses with
-/// [`ReadRefusal::NoProjection`] first, as under [`answer`].
+/// Runs one read as [`answer`] does, but refuses when the catch-up fails.
+///
+/// The refusal is [`CatchUpFailed`]. A read with no stored revision refuses
+/// with [`ReadRefusal::NoProjection`] first, as under [`answer`].
 pub async fn current<R: Send>(
     repository: &Repository,
     policy: ReadPolicy,

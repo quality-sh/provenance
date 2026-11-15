@@ -65,8 +65,9 @@ pub enum ReadFailure {
     ReadFailed { cause: String },
 }
 
-/// The location of a state line that does not parse. A failure gives `file`
-/// and `line` together, or neither.
+/// The location of a state line that does not parse.
+///
+/// A failure gives `file` and `line` together, or neither.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct FileLine {
@@ -135,8 +136,10 @@ impl UnparsableStateFile {
         }
     }
 
-    /// The `document_catch_up_failed` read failure of a document read whose
-    /// catch-up stopped at this line. The failure has no hint.
+    /// The `document_catch_up_failed` read failure of this line.
+    ///
+    /// It is the refusal of a document read whose catch-up stopped at this
+    /// line. The failure has no hint.
     pub fn catch_up_failure(&self) -> ReadFailure {
         ReadFailure::DocumentCatchUpFailed {
             location: Some(FileLine {
