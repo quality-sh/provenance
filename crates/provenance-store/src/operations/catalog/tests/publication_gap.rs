@@ -1,5 +1,5 @@
 //! The grant check of a scoped call in the gap of a publication.
-use super::super::{ContextResolver, RequestedContext};
+use super::super::{ContextResolver, PreparedContext, RequestedContext};
 use crate::{layout::ProvenanceLayout, operations::LocalRepository, repository::Repository};
 use provenance_core::{protocol::repository::RepositoryContext, Manifest, RepoPathPrefix, ScopeId};
 use provenance_macros::verifies;
@@ -46,7 +46,7 @@ fn the_grant_check_in_the_publication_gap_succeeds_after_the_publication() {
                 let scope = binding
                     .prepare("search", context, &[])
                     .map_err(anyhow::Error::from)
-                    .and_then(|prepared| prepared.scope())
+                    .and_then(PreparedContext::scope)
                     .map(|_| ())
                     .map_err(|error| format!("{error:#}"));
                 let _ = done.send(());
