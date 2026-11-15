@@ -4,6 +4,7 @@
 //! holds no revision, the get refuses and names `provenance materialize`. When the record
 //! changed after the stored serial, an update with the `ETag` of the get refuses.
 
+use provenance_core::protocol::read_failure::STATE_CORRECTIONS;
 use provenance_macros::verifies;
 use serde_json::{json, Value};
 use std::io::Write as _;
@@ -148,7 +149,7 @@ async fn a_get_over_a_bad_record_line_gives_the_stored_record_on_each_interface(
     let etag = clean.0["edit"]["etag"].as_str().unwrap();
     let refused = json!({"error":{"file":RULES,"kind":"invalid_state_file","line":line,
         "message":"EOF while parsing a value",
-        "hint":provenance_core::protocol::read_failure::STATE_CORRECTIONS},"meta":{}});
+        "hint":STATE_CORRECTIONS},"meta":{}});
     assert_update_refused(&server, &repo, etag, &refused, &refused).await;
     server.close().await;
 }
@@ -207,7 +208,7 @@ async fn a_get_over_a_bad_review_history_line_gives_the_stored_record_on_each_in
     let line = damage(directory.path(), CARDS);
     let server = Server::start(&repo).await;
 
-    let warning = format!("{CARDS} line {line}: EOF while parsing a value");
+    let warning = format!("{CARDS} line {line}: EOF while parsing a value; {STATE_CORRECTIONS}");
     assert_stored_record(&server, &repo, &clean, &warning).await;
     server.close().await;
 }
@@ -224,7 +225,9 @@ async fn a_get_over_a_bad_line_with_no_stored_revision_refuses_on_each_interface
 
     let by_cli = cli_refusal(&repo, &[RULE, "get"]);
     let message = by_cli["error"]["message"].as_str().unwrap();
-    let cause = format!("catch-up failed: {RULES} line {line}: EOF while parsing a value");
+    let cause = format!(
+        "catch-up failed: {RULES} line {line}: EOF while parsing a value; {STATE_CORRECTIONS}"
+    );
     let database = message
         .strip_prefix("no projection revision in ")
         .and_then(|rest| rest.strip_suffix(&format!("; run `provenance materialize` ({cause})")))

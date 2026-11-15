@@ -240,7 +240,10 @@ fn a_bad_state_line_gives_the_stored_record_and_refuses_a_create() {
     state.push_str("{\"not\":\"a record\"}\n");
     std::fs::write(&path, state).unwrap();
 
-    let warning = "scopes/default/requirements/req.jsonl line 2: missing field `scope_id`";
+    let warning = format!(
+        "scopes/default/requirements/req.jsonl line 2: missing field `scope_id`; {}",
+        provenance_core::protocol::read_failure::STATE_CORRECTIONS
+    );
     let text = format!("{text}\nwarning: record freshness: {warning}\n");
     assert_eq!(get(&repo, &[]), (Some(0), text, String::new()));
     let mut expected: Value = serde_json::from_str(&record).unwrap();
