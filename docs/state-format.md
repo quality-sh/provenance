@@ -142,8 +142,8 @@ artifact type and ID; missing, cross-scope, and cross-kind collisions fail close
 write or import publication and during repository checking and cache materialization.
 
 Repository access first takes `.provenance/cache/locks/repository.publication.lock`. Writers then
-take a scope lifecycle lock when applicable and finally a shard lock; this repository, lifecycle,
-shard order is mandatory. Multi-shard writers hold the publication lock for their complete
+take a shard lock; this repository, shard order is mandatory. Ideation writes take no other lock:
+the publication lock is the lock of their read, check and write. Multi-shard writers hold the publication lock for their complete
 operation, and aggregate readers hold it for their complete view or copy one locked snapshot.
 Import holds the publication lock across recovery, snapshot, staged validation, and publication,
 so cooperative readers and writers cannot observe or modify the brief directory-rename gap. Lock
