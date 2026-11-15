@@ -69,6 +69,15 @@ fn seeded_requirement_store() -> (tempfile::TempDir, StateStore, ScopeId) {
     (dir, store, scope)
 }
 
+/// A seeded store whose manifest names the reviewer, for the tests that
+/// accept a status request.
+#[cfg(feature = "host")]
+fn reviewed_requirement_store() -> (tempfile::TempDir, StateStore, ScopeId) {
+    let (dir, store, scope) = seeded_requirement_store();
+    crate::test_support::allow_reviewer(&store.layout);
+    (dir, store, scope)
+}
+
 #[cfg(feature = "host")]
 pub(super) fn seeded_source_requirement_store() -> (tempfile::TempDir, StateStore, ScopeId) {
     let (dir, store, scope) = seeded_requirement_store();

@@ -2,6 +2,8 @@ use assert_cmd::Command;
 use serde_json::json;
 use std::path::Path;
 
+use crate::support::record_review::{activate_rule, archive_rule};
+
 pub fn init_repo(repo: &Path) {
     Command::cargo_bin("provenance")
         .unwrap()
@@ -13,6 +15,8 @@ pub fn init_repo(repo: &Path) {
             "default",
             "--path-prefix",
             ".",
+            "--disposition-actor-id",
+            "reviewer",
         ])
         .assert()
         .success();
@@ -34,7 +38,10 @@ pub fn init_repo(repo: &Path) {
         .success();
 }
 
+/// Creates a Rule with `status`. An active or archived Rule is created as a
+/// draft, and the reviewer accepts its status request.
 pub fn create_rule(repo: &Path, id: &str, status: &str) {
+    let requested = matches!(status, "active" | "archived");
     let mut command = Command::cargo_bin("provenance").unwrap();
     command.args([
         "api",
@@ -48,8 +55,6 @@ pub fn create_rule(repo: &Path, id: &str, status: &str) {
         "--scope",
         "default",
     ]);
-    let archived = (status == "archived")
-        .then(|| json!({"commit":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}));
     command
         .write_stdin(
             json!({
@@ -57,12 +62,18 @@ pub fn create_rule(repo: &Path, id: &str, status: &str) {
                 "requirement_ids": ["req_anchor"],
                 "resolution_ids": [],
                 "statement": "Payroll follows the current policy",
-                "status": status,
+                "status": if requested { "draft" } else { status },
                 "severity": "high",
-                "archived_in_commit": archived
+                "archived_in_commit": null
             })
             .to_string(),
         )
         .assert()
         .success();
+    let repo = repo.to_str().unwrap();
+    match status {
+        "active" => activate_rule(repo, id),
+        "archived" => archive_rule(repo, id, "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"),
+        _ => {}
+    }
 }
