@@ -1,9 +1,10 @@
 //! The refusal of a scope import or a scope export of a scope that holds review state that a
 //! scope export file cannot hold.
 
+use crate::cli_ste_statement_paths::support::provenance_tree;
 use crate::support::import_reviews::{
     document, export, import, import_with, patch_statement, refusal, repository,
-    restated_repository, reviews, state_files, verify, AFTER, BEFORE,
+    restated_repository, reviews, verify, AFTER, BEFORE,
 };
 use provenance_macros::verifies;
 
@@ -23,12 +24,12 @@ const REVIEW_HISTORY_REFUSAL: &str = "Error: scope `default` holds a review subm
 fn an_import_on_a_scope_with_a_requirement_review_record_is_refused_and_changes_no_file() {
     let dir = tempfile::tempdir().unwrap();
     let repo = restated_repository(dir.path());
-    let before = state_files(&repo);
+    let before = provenance_tree(&repo);
 
     let refused = refusal(import(&repo, &document(BEFORE, &["rule_a", "rule_b"])));
 
     assert_eq!(refused, (Some(1), REQUIREMENT_REVIEW_REFUSAL.to_owned()));
-    assert_eq!(state_files(&repo), before);
+    assert_eq!(provenance_tree(&repo), before);
 }
 
 #[test]
@@ -36,7 +37,7 @@ fn an_import_on_a_scope_with_a_requirement_review_record_is_refused_and_changes_
 fn a_dry_run_of_an_import_on_a_scope_with_a_requirement_review_record_is_refused() {
     let dir = tempfile::tempdir().unwrap();
     let repo = restated_repository(dir.path());
-    let before = state_files(&repo);
+    let before = provenance_tree(&repo);
 
     let refused = refusal(import_with(
         &repo,
@@ -45,7 +46,7 @@ fn a_dry_run_of_an_import_on_a_scope_with_a_requirement_review_record_is_refused
     ));
 
     assert_eq!(refused, (Some(1), REQUIREMENT_REVIEW_REFUSAL.to_owned()));
-    assert_eq!(state_files(&repo), before);
+    assert_eq!(provenance_tree(&repo), before);
 }
 
 #[test]

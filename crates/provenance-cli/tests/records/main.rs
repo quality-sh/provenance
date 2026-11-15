@@ -123,6 +123,8 @@ mod cli_typed_deletion_mixed_ids;
 mod cli_typed_deletion_month_shards;
 #[path = "../cli_typed_deletion_origins.rs"]
 mod cli_typed_deletion_origins;
+#[path = "../cli_typed_spec_review_plan.rs"]
+mod cli_typed_spec_review_plan;
 #[path = "../cli_unclassified_cause.rs"]
 mod cli_unclassified_cause;
 #[path = "../cli_unparsable_state.rs"]

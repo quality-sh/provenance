@@ -8,4 +8,4 @@ mod merge;
 #[path = "cli_ste_statement_paths/strict.rs"]
 mod strict;
 #[path = "cli_ste_statement_paths/support.rs"]
-mod support;
+pub(crate) mod support;

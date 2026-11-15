@@ -1,13 +1,14 @@
 //! The Requirement review records that a scope import and a typed-spec apply write when they
 //! change the statement of a Requirement.
 
+use crate::cli_ste_statement_paths::support::provenance_tree;
 use crate::support::import_reviews::{
-    apply_spec, document, import, import_with, patch_statement, provenance, reason, reasons,
-    repository, requirement, reviews, rule, state_files, AFTER, BEFORE,
+    apply_spec, document, import, import_with, patch_statement, reason, reasons, repository,
+    requirement, reviews, rule, typed_spec, AFTER, BEFORE,
 };
 use provenance_macros::verifies;
 use serde_json::{json, Value};
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeSet;
 
 #[test]
 #[verifies("rule_review_record_per_rule", examples)]
@@ -135,17 +136,19 @@ fn an_import_that_removes_a_requirement_and_its_rules_writes_no_record() {
     assert_eq!(reviews(&repo), Vec::<Value>::new());
 }
 
+/// Implementation aid with no Rule binding: no Rule states that a dry run of an import changes
+/// no file. The test shows that the review records of an import are written in the stage that a
+/// dry run discards.
 #[test]
-#[verifies("rule_review_record_per_rule", examples)]
 fn a_dry_run_of_an_import_that_restates_a_requirement_changes_no_file() {
     let dir = tempfile::tempdir().unwrap();
     let repo = repository(dir.path(), "repo");
     import(&repo, &document(BEFORE, &["rule_a"])).success();
-    let before = state_files(&repo);
+    let before = provenance_tree(&repo);
 
     import_with(&repo, &document(AFTER, &["rule_a"]), &["--dry-run"]).success();
 
-    assert_eq!(state_files(&repo), before);
+    assert_eq!(provenance_tree(&repo), before);
 }
 
 #[test]
@@ -153,9 +156,15 @@ fn a_dry_run_of_an_import_that_restates_a_requirement_changes_no_file() {
 fn a_typed_spec_apply_that_restates_a_requirement_writes_no_record_for_a_rule_that_it_removes() {
     let dir = tempfile::tempdir().unwrap();
     let repo = repository(dir.path(), "repo");
-    apply_spec(&repo, &spec(BEFORE, &["rule_a", "rule_b"]));
+    apply_spec(
+        &repo,
+        &typed_spec(BEFORE, &[("rule_a", "record"), ("rule_b", "record")]),
+    );
 
-    apply_spec(&repo, &spec(AFTER, &["rule_a", "rule_c"]));
+    apply_spec(
+        &repo,
+        &typed_spec(AFTER, &[("rule_a", "record"), ("rule_c", "record")]),
+    );
 
     assert_eq!(
         reasons(&reviews(&repo)),
@@ -164,56 +173,6 @@ fn a_typed_spec_apply_that_restates_a_requirement_writes_no_record_for_a_rule_th
             reason("rule_c", BEFORE, AFTER),
         ])
     );
-}
-
-#[test]
-#[verifies("rule_workflowd_plan_explains_impact", examples)]
-fn a_typed_spec_plan_that_restates_a_requirement_asks_no_review_for_a_rule_that_it_removes() {
-    let dir = tempfile::tempdir().unwrap();
-    let repo = repository(dir.path(), "repo");
-    apply_spec(&repo, &spec(BEFORE, &["rule_a", "rule_b"]));
-
-    let plan = provenance()
-        .args(["api", "authoring-plans", "--method", "post", "--input", "-"])
-        .args(["--repo", repo.to_str().unwrap()])
-        .args(["--scope", "default", "--format", "json"])
-        .write_stdin(spec(AFTER, &["rule_a", "rule_c"]).to_string())
-        .assert()
-        .success();
-
-    let plan: Value = serde_json::from_slice(&plan.get_output().stdout).unwrap();
-    let review_required = plan["data"]["affected_rules"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .map(|rule| {
-            let id = rule["id"].as_str().unwrap().to_owned();
-            (id, rule["evidence"]["review_required"].as_bool().unwrap())
-        })
-        .collect::<BTreeMap<_, _>>();
-    assert_eq!(
-        review_required,
-        BTreeMap::from([
-            ("rule_a".to_owned(), true),
-            ("rule_b".to_owned(), false),
-            ("rule_c".to_owned(), true),
-        ])
-    );
-}
-
-/// A typed authoring document with the Requirement `req_record` of `statement` and a Rule of
-/// that Requirement for each id of `rules`.
-fn spec(statement: &str, rules: &[&str]) -> Value {
-    let rules = rules
-        .iter()
-        .map(|id| json!({"key": id, "id": id, "requirement": "record", "statement": BEFORE}))
-        .collect::<Vec<_>>();
-    json!({
-        "spec": "records",
-        "declared_by": "spec://records",
-        "requirements": [{"key": "record", "id": "req_record", "statement": statement}],
-        "rules": rules
-    })
 }
 
 /// Adds the Requirement `req_other`, which no Rule cites, to `document`.

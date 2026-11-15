@@ -1,9 +1,9 @@
 //! Repositories and reads for the tests of the Requirement review records that a scope import
 //! writes and of the refusal of an import or an export of a scope that holds review state.
 
-use assert_cmd::Command;
+use super::review_paths::provenance;
 use serde_json::{json, Value};
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
 pub const BEFORE: &str = "The system keeps the record.";
@@ -40,10 +40,6 @@ pub fn rule(id: &str, requirement: &str) -> Value {
         "severity": "medium",
         "requirement_ids": [requirement]
     })
-}
-
-pub fn provenance() -> Command {
-    Command::cargo_bin("provenance").unwrap()
 }
 
 /// A new repository `name` below `dir` with the scope `default`.
@@ -107,6 +103,27 @@ pub fn apply_spec(repo: &Path, spec: &Value) {
         .write_stdin(spec.to_string())
         .assert()
         .success();
+}
+
+/// A typed authoring document with the Requirement `req_record` (key `record`) of `statement`,
+/// the Requirement `req_other` (key `other`), and one Rule for each pair of `rules`: the id
+/// and the key of the Requirement that the Rule cites.
+pub fn typed_spec(statement: &str, rules: &[(&str, &str)]) -> Value {
+    let rules = rules
+        .iter()
+        .map(|(id, requirement)| {
+            json!({"key": id, "id": id, "requirement": requirement, "statement": BEFORE})
+        })
+        .collect::<Vec<_>>();
+    json!({
+        "spec": "records",
+        "declared_by": "spec://records",
+        "requirements": [
+            {"key": "record", "id": "req_record", "statement": statement},
+            {"key": "other", "id": "req_other", "statement": BEFORE}
+        ],
+        "rules": rules
+    })
 }
 
 /// Changes the statement of `req_record` through the API.
@@ -179,25 +196,6 @@ pub fn reasons(records: &[Value]) -> BTreeSet<(String, String, String, String)> 
 pub fn reason(rule: &str, before: &str, after: &str) -> (String, String, String, String) {
     let text = str::to_owned;
     (text(rule), text("statement"), text(before), text(after))
-}
-
-/// The bytes of each file below the state folder of `repo`, by relative path.
-pub fn state_files(repo: &Path) -> BTreeMap<PathBuf, Vec<u8>> {
-    let root = repo.join(".provenance/state");
-    let mut files = BTreeMap::new();
-    let mut folders = vec![root.clone()];
-    while let Some(folder) = folders.pop() {
-        for entry in std::fs::read_dir(folder).unwrap() {
-            let path = entry.unwrap().path();
-            if path.is_dir() {
-                folders.push(path);
-            } else {
-                let bytes = std::fs::read(&path).unwrap();
-                files.insert(path.strip_prefix(&root).unwrap().to_owned(), bytes);
-            }
-        }
-    }
-    files
 }
 
 /// The exit code and the standard error of a refused command, which writes no standard output.
