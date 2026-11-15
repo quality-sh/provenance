@@ -35,87 +35,72 @@ const fn row(
     }
 }
 
+// The records of `default` that each kind reads.
+const REQUIREMENT: &[&str] = &["req_a"];
+const RULE: &[&str] = &["rule_a"];
+const SOURCE: &[&str] = &["source_a", "source_gone"];
+const TOPIC: &[&str] = &["topic_a"];
+const QUESTION: &[&str] = &["question_a"];
+const RESOLUTION: &[&str] = &["resolution_a"];
+
 /// Each history route of the contract.
 pub const ROWS: [Row; 18] = [
-    row("list-requirement-history", &["req_a"], "req_b", "statement"),
+    row(
+        "list-requirement-history",
+        REQUIREMENT,
+        "req_b",
+        "statement",
+    ),
     row(
         "get-requirement-history-entry",
-        &["req_a"],
+        REQUIREMENT,
         "req_b",
         "statement",
     ),
     row(
         "get-requirement-history-evidence",
-        &["req_a"],
+        REQUIREMENT,
         "req_b",
         "statement",
     ),
-    row("list-rule-history", &["rule_a"], "rule_a", "statement"),
-    row("get-rule-history-entry", &["rule_a"], "rule_a", "statement"),
-    row(
-        "get-rule-history-evidence",
-        &["rule_a"],
-        "rule_a",
-        "statement",
-    ),
-    row(
-        "list-source-history",
-        &["source_a", "source_gone"],
-        "source_a",
-        "name",
-    ),
-    row(
-        "get-source-history-entry",
-        &["source_a", "source_gone"],
-        "source_a",
-        "name",
-    ),
-    row(
-        "get-source-history-evidence",
-        &["source_a", "source_gone"],
-        "source_a",
-        "name",
-    ),
-    row("list-topic-history", &["topic_a"], "topic_a", "title"),
-    row("get-topic-history-entry", &["topic_a"], "topic_a", "title"),
-    row(
-        "get-topic-history-evidence",
-        &["topic_a"],
-        "topic_a",
-        "title",
-    ),
-    row(
-        "list-question-history",
-        &["question_a"],
-        "question_a",
-        "question",
-    ),
+    row("list-rule-history", RULE, "rule_a", "statement"),
+    row("get-rule-history-entry", RULE, "rule_a", "statement"),
+    row("get-rule-history-evidence", RULE, "rule_a", "statement"),
+    row("list-source-history", SOURCE, "source_a", "name"),
+    row("get-source-history-entry", SOURCE, "source_a", "name"),
+    row("get-source-history-evidence", SOURCE, "source_a", "name"),
+    row("list-topic-history", TOPIC, "topic_a", "title"),
+    row("get-topic-history-entry", TOPIC, "topic_a", "title"),
+    row("get-topic-history-evidence", TOPIC, "topic_a", "title"),
+    row("list-question-history", QUESTION, "question_a", "question"),
     row(
         "get-question-history-entry",
-        &["question_a"],
+        QUESTION,
         "question_a",
         "question",
     ),
     row(
         "get-question-history-evidence",
-        &["question_a"],
+        QUESTION,
         "question_a",
         "question",
     ),
     row(
         "list-resolution-history",
-        &["resolution_a"],
+        RESOLUTION,
         "resolution_a",
         "position",
     ),
     row(
         "get-resolution-history-entry",
-        &["resolution_a"],
+        RESOLUTION,
+        "resolution_a",
         "position",
     ),
     row(
         "get-resolution-history-evidence",
-        &["resolution_a"],
+        RESOLUTION,
+        "resolution_a",
         "position",
     ),
 ];
