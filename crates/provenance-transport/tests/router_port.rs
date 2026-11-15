@@ -8,6 +8,8 @@
 //! - `failures`: the failures through the port, the work slot and the
 //!   preparation before it, and the cursor of a second page.
 //! - `answers`: the check of each answer that a port gives.
+//! - `long_history`: the entry route past the first page of 200 versions
+//!   over memory storage gives the answers over a folder's Git history.
 //!
 //! Implementation aids: no Rule in the graph covers the port. The plan
 //! proposes `rule_contract_router_serves_any_storage` for the owner.
@@ -21,6 +23,8 @@ mod any_storage;
 mod characterization;
 #[path = "router_port/failures.rs"]
 mod failures;
+#[path = "router_port/long_history.rs"]
+mod long_history;
 
 /// One test of this binary at a time. `any_storage` sets the home, the
 /// temporary and the working directory of the process, and each other test
@@ -41,6 +45,8 @@ mod support {
     pub mod history_fixture;
     #[path = "../../../provenance-store/tests/support/history_folder.rs"]
     pub mod history_folder;
+    #[path = "../../../provenance-store/tests/support/history_long.rs"]
+    pub mod history_long;
     #[path = "../support/history_routes.rs"]
     pub mod history_routes;
     #[path = "../support/memory_host.rs"]
