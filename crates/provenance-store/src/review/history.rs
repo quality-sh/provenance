@@ -80,7 +80,7 @@ impl StateStore {
         let (working, discussions) = self.with_repository_publication(|held| {
             Ok((held.state_text(&path)?, held.list_discussions(scope)?))
         })?;
-        let history = self.file_versions()?;
+        let history = self.file_versions();
         let records = self.relative(&path)?;
         let files = history.versions(&records).await?;
         let paths = found::Paths {

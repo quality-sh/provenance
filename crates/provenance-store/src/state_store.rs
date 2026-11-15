@@ -105,24 +105,22 @@ impl StateStore {
     /// The committed file versions that the history reads of this store
     /// read: the ones that the repository was given, or else the Git
     /// history of the layout root. Without `host` a repository that was
-    /// given none has no history to read, and the read fails.
-    pub(crate) fn file_versions(
-        &self,
-    ) -> anyhow::Result<std::sync::Arc<dyn crate::review::history::FileVersions>> {
+    /// given none has no committed history, as a layout root that is not a
+    /// Git work tree has none, so its history lists the saved version only.
+    pub(crate) fn file_versions(&self) -> std::sync::Arc<dyn crate::review::history::FileVersions> {
         let given = self
             .identity
             .as_ref()
             .and_then(RepositoryIdentity::file_versions)
             .cloned();
-        #[cfg(feature = "host")]
-        let given = given.or_else(|| {
-            Some(
-                std::sync::Arc::new(crate::review::history::GitFileVersions::new(
-                    self.layout.root().to_owned(),
-                )) as _,
-            )
-        });
-        given.ok_or_else(|| crate::refusal::fault!("the repository has no file versions"))
+        given.unwrap_or_else(|| {
+            #[cfg(feature = "host")]
+            let history =
+                crate::review::history::GitFileVersions::new(self.layout.root().to_owned());
+            #[cfg(not(feature = "host"))]
+            let history = crate::review::history::contract::MemoryFileVersions::new(&[]);
+            std::sync::Arc::new(history) as _
+        })
     }
 
     /// The clock that the writes of this store read: the one of the
