@@ -32,7 +32,10 @@ fn init(repo: &Path, args: &[&str]) -> (i32, String) {
         String::from_utf8_lossy(&output.stdout),
         String::from_utf8_lossy(&output.stderr)
     );
-    eprintln!("$ provenance init {}\n{text}[exit {code}]\n", args.join(" "));
+    eprintln!(
+        "$ provenance init {}\n{text}[exit {code}]\n",
+        args.join(" ")
+    );
     (code, text)
 }
 

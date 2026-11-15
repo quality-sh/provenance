@@ -55,12 +55,12 @@ mod cli_init_review_guidance;
 mod cli_init_reviewer;
 #[path = "../cli_init_scope_guidance.rs"]
 mod cli_init_scope_guidance;
-#[path = "../cli_init_stopped_replacement.rs"]
-mod cli_init_stopped_replacement;
 #[path = "../cli_init_skill_guidance.rs"]
 mod cli_init_skill_guidance;
 #[path = "../cli_init_state.rs"]
 mod cli_init_state;
+#[path = "../cli_init_stopped_replacement.rs"]
+mod cli_init_stopped_replacement;
 #[path = "../cli_init_typescript_commands.rs"]
 mod cli_init_typescript_commands;
 #[path = "../cli_init_typescript_missing_package.rs"]

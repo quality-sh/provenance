@@ -107,7 +107,11 @@ fn a_stop_at_each_file_replacement_of_a_second_init_leaves_the_old_manifest() {
         let after_stop = reviewers(&repo).unwrap_or_else(|error| {
             panic!("after a stop at replacement {stop_at}, the read got an error: {error:#}")
         });
-        assert_eq!(after_stop, ["reviewer"], "after a stop at replacement {stop_at}");
+        assert_eq!(
+            after_stop,
+            ["reviewer"],
+            "after a stop at replacement {stop_at}"
+        );
         let mut bare = init_input(&repo, &[]);
         bare.scope = None;
         bare.path_prefix = None;

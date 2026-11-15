@@ -112,7 +112,10 @@ fn remove_stopped_temporaries(path: &Utf8Path, prefix: &str) -> anyhow::Result<(
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
             Err(error) => {
                 let file = entry.path();
-                return Err(crate::refusal::caused(error, format!("remove {}", file.display())));
+                return Err(crate::refusal::caused(
+                    error,
+                    format!("remove {}", file.display()),
+                ));
             }
         }
     }

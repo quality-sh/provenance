@@ -210,7 +210,10 @@ fn stop_at_each_replacement(point: &str) {
     init_through_the_port(second_init_input(&reference, &pdf), || {}).unwrap();
     let after = targets(&reference);
     for target in REPLACED {
-        assert_ne!(before[target], after[target], "init did not replace {target}");
+        assert_ne!(
+            before[target], after[target],
+            "init did not replace {target}"
+        );
     }
     for name in NEAR_NAMES {
         assert_eq!(after.get(name), before.get(name), "init changed {name}");
@@ -252,8 +255,8 @@ fn stop_at_each_replacement(point: &str) {
         let dictionary = std::fs::read_to_string(repo.join(DICTIONARY)).unwrap();
         assert!(dictionary.contains(PERSON_TERM), "{dictionary}");
 
-        let next = init_through_the_port(second_init_input(&repo, &pdf), || {})
-            .unwrap_or_else(|error| {
+        let next =
+            init_through_the_port(second_init_input(&repo, &pdf), || {}).unwrap_or_else(|error| {
                 panic!("the init after stop {stop_at} at {point} failed: {error:#}")
             });
         eprintln!("--- the next init\n{}", next.summary);
