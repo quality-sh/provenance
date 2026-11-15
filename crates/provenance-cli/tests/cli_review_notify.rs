@@ -3,6 +3,7 @@
 #![cfg(target_os = "linux")]
 
 use crate::codex;
+use crate::depends_on_cycle::add_a_depends_on_cycle;
 use crate::review_host_support;
 
 use codex::{notify, parts, registration, replay, Codex};
@@ -137,17 +138,13 @@ fn unaccepted_registration_fails_and_leaves_no_registration() {
 }
 
 /// A registration whose document read cannot catch up refuses with the text of that
-/// refusal, which holds no path.
+/// refusal, which holds no path. Records that do not agree stop the catch-up, and the
+/// observation of the host reads them.
 #[test]
 #[verifies("rule_review_partial_reads_remain_explicit", examples)]
 fn registration_whose_catch_up_fails_refuses_with_no_path() {
     let setup = Setup::start();
-    page_rule(&setup.host, "rule_before_failure", "req_notify");
-    let shard = setup
-        .path()
-        .join(".provenance/state/scopes/default/rules/rule.jsonl");
-    let text = std::fs::read_to_string(&shard).unwrap();
-    std::fs::write(&shard, format!("{text}invalid JSON\n")).unwrap();
+    add_a_depends_on_cycle(setup.path());
 
     let output = notify(
         &setup.host,

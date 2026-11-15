@@ -9,11 +9,11 @@ use crate::support;
 use provenance_macros::verifies;
 use serde_json::{json, Value};
 use support::records::Repository;
+use support::depends_on_cycle::add_a_depends_on_cycle;
 use support::resource_http::{call, host};
 use support::state_lines::give_refines_a_string;
 
 const DOCUMENT: &str = "/requirements/req_shared/document";
-const REQUIREMENTS: &str = ".provenance/state/scopes/default/requirements/req.jsonl";
 
 /// A repository whose document was read one time, so that the projection
 /// holds a revision.
@@ -52,25 +52,13 @@ async fn a_document_read_gives_the_line_that_stops_its_catch_up() {
     );
 }
 
-/// Appends a Requirement line that depends on `depends_on`.
-fn append_requirement(repo: &Repository, id: &str, depends_on: &str) {
-    let path = repo.dir.path().join(REQUIREMENTS);
-    let line = json!({
-        "scope_id": "default", "id": id, "statement": "The record is readable.",
-        "status": "discovery", "depends_on": [depends_on], "supersedes": []
-    });
-    let text = std::fs::read_to_string(&path).unwrap();
-    std::fs::write(&path, format!("{text}{line}\n")).unwrap();
-}
-
 /// A cycle in the stored records has no file and no line: the document read
 /// gives no file and no line, and the cycle as the message.
 #[tokio::test]
 #[verifies("rule_document_catch_up_refusal_gives_typed_cause", examples)]
 async fn a_document_read_gives_the_fault_with_no_file_that_stops_its_catch_up() {
     let (repo, host) = read_once().await;
-    append_requirement(&repo, "req_c", "req_d");
-    append_requirement(&repo, "req_d", "req_c");
+    add_a_depends_on_cycle(repo.dir.path());
 
     let (status, refused) = call(&host, "GET", DOCUMENT, None).await;
 
