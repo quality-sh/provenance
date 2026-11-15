@@ -262,7 +262,7 @@ struct State {
 }
 
 impl State {
-    fn new(fixture: &State, kept: &[bool]) -> Self {
+    fn new(fixture: &Self, kept: &[bool]) -> Self {
         fn keep<T: Clone>(rows: &[T], first: usize, kept: &[bool]) -> (Vec<T>, Vec<usize>) {
             (first..first + rows.len())
                 .filter(|&line| kept[line])
