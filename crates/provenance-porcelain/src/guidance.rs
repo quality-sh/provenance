@@ -75,9 +75,10 @@ pub fn guidance() -> Guidance {
     guidance_for(|_| true, true)
 }
 
-/// Produce the guidance of a consumer that shows each command for which `shown` is
-/// true, and the notify write when `notify` is true. A sentence or a command line
-/// names only shown commands, and the change line names only the shown writes.
+/// Produce the guidance of a consumer that shows the commands for which `shown` is true.
+///
+/// The notify write is shown when `notify` is true. A sentence or a command line names
+/// only shown commands, and the change line names only the shown writes.
 pub fn guidance_for(shown: impl Fn(Command) -> bool, notify: bool) -> Guidance {
     let mut text = String::from(DOMAIN);
     let opening: Vec<String> = [
@@ -138,10 +139,11 @@ fn create_sentence(shown: impl Fn(Command) -> bool) -> Option<String> {
     })
 }
 
-/// The description of the change command that names only the writes that the consumer
-/// shows: each command for which `shown` is true, and notify when `notify` is true.
-/// With each write shown, it is the change declaration description. No write gives
-/// no description.
+/// The description of the change command that names only the shown writes.
+///
+/// A write is shown when `shown` is true for its command, and notify is shown when
+/// `notify` is true. With each write shown, it is the change declaration description.
+/// No write gives no description.
 pub fn change_description(shown: impl Fn(Command) -> bool, notify: bool) -> Option<String> {
     let names = |commands: &[Command]| -> Vec<&'static str> {
         commands
