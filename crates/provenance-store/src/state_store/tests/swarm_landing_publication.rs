@@ -9,20 +9,25 @@ use crate::state_store::IdeationLandingBatch;
 use crate::stopped_child::{copy_state, run_as_child, state_tree, stop_in_child, CRASH_PHASES};
 use crate::test_probes;
 use camino::{Utf8Path, Utf8PathBuf};
-use provenance_core::ScopeId;
+use provenance_core::{IdeationRecord, ScopeId};
 use provenance_macros::verifies;
 use serde_json::json;
 use std::collections::BTreeMap;
 
 const CHILD: &str = "state_store::tests::swarm_landing_publication::landing_child";
 
-/// The files below the state directory that a landing of [`run`] writes.
-const LANDED: [&str; 2] = [
+/// The files below the state directory that a landing of [`run`] writes:
+/// the file of each kind of record that a swarm gives.
+const LANDED: [&str; 4] = [
+    "scopes/default/ideation/assertions.jsonl",
     "scopes/default/ideation/contributions.jsonl",
+    "scopes/default/ideation/proposal_cards.jsonl",
     "scopes/default/ideation/synthesis_packets.jsonl",
 ];
 
-/// A run with one contribution and one synthesis packet.
+/// A run with one record of each kind that a swarm gives: the contribution
+/// `contribution_a`, the synthesis packet `packet_a`, and the proposal
+/// `proposal_a`, which `assertion_a` asserts on the claim `claim_a`.
 fn run() -> IdeationLandingBatch {
     let target = json!({"artifact_type": "requirement", "artifact_id": "req_schads_overtime"});
     serde_json::from_value(json!({
@@ -40,7 +45,21 @@ fn run() -> IdeationLandingBatch {
             "scope_id": "default", "id": "packet_a", "target": target, "summary": "Adjudicated",
             "consensus": [], "contested_claims": [], "minority_objections": [],
             "evidence_gaps": [], "unsupported_speculation": [], "open_questions": [],
-            "suggested_artifacts": [], "required_human_decisions": []
+            "suggested_artifacts": [{"proposal_id": "proposal_a", "proposal_key": "a",
+                "proposal_type": "requirement_candidate", "summary": "Candidate",
+                "origin_participant_slots": ["reviewer"]}],
+            "required_human_decisions": []
+        }],
+        "proposals": [{
+            "scope_id": "default", "id": "proposal_a", "proposal_key": "a",
+            "proposal_type": "requirement_candidate", "title": "A", "summary": "Candidate",
+            "traceability": {"target": target, "source_ids": [], "evidence_references": [],
+                "supporting_claim_ids": ["claim_a"]},
+            "promotion_state": "proposed"
+        }],
+        "assertions": [{
+            "scope_id": "default", "id": "assertion_a", "proposal_id": "proposal_a",
+            "synthesis_packet_id": "packet_a", "supporting_claim_ids": ["claim_a"]
         }]
     }))
     .unwrap()
@@ -80,16 +99,29 @@ fn fixture() -> Fixture {
     }
 }
 
+/// Whether the read `records` holds the record `id`.
+fn holds<T: IdeationRecord>(records: anyhow::Result<Vec<T>>, id: &str) -> bool {
+    records
+        .unwrap()
+        .iter()
+        .any(|record| record.immutable_id() == id)
+}
+
 /// After the next section entry, the state tree is the complete old or the
 /// complete new tree, and the read of the store agrees.
 fn assert_reopened(fixture: &Fixture, landed: bool, phase: &str) {
     let repository = open(&ProvenanceLayout::new(fixture.root.clone()));
+    let store = repository.store();
     let scope = ScopeId::new("default").unwrap();
-    let contributions = repository.store().list_contributions(&scope).unwrap();
-    let packets = repository.store().list_synthesis_packets(&scope).unwrap();
+    let held = [
+        holds(store.list_contributions(&scope), "contribution_a"),
+        holds(store.list_synthesis_packets(&scope), "packet_a"),
+        holds(store.list_proposal_definitions(&scope), "proposal_a"),
+        holds(store.list_assertion_records(&scope), "assertion_a"),
+    ];
     assert_eq!(
-        (contributions.len(), packets.len()),
-        if landed { (1, 1) } else { (0, 0) },
+        held,
+        [landed; 4],
         "{phase}: the read holds each record of the landing or none"
     );
     let expected = if landed { &fixture.new } else { &fixture.old };
