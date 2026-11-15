@@ -192,3 +192,21 @@ fn an_edit_after_the_compare_of_the_removal_is_removed() {
     assert_eq!(legacy_folder(&repo), ["notes.md"]);
     assert_eq!(init_names(&repo), Vec::<String>::new());
 }
+
+/// On Windows, init removes a read-only legacy skill file.
+/// This test has no Rule binding: it checks a platform behaviour of the
+/// removal.
+#[cfg(windows)]
+#[test]
+fn a_read_only_legacy_skill_file_is_removed() {
+    let (_directory, repo) = repository_with_legacy_skill();
+    let legacy = legacy_path(&repo);
+    let mut permissions = std::fs::metadata(&legacy).unwrap().permissions();
+    permissions.set_readonly(true);
+    std::fs::set_permissions(&legacy, permissions).unwrap();
+
+    init_through_the_port(init_input(&repo, &["reviewer"]), || {}).unwrap();
+
+    assert_eq!(legacy_folder(&repo), ["notes.md"]);
+    assert_eq!(init_names(&repo), Vec::<String>::new());
+}

@@ -90,3 +90,42 @@ fn the_next_init_removes_the_temporary_file_of_a_stopped_init() {
         );
     }
 }
+
+/// Sets the read-only attribute of the file at `path`.
+#[cfg(windows)]
+fn set_read_only(path: &Path) {
+    let mut permissions = std::fs::metadata(path).unwrap().permissions();
+    permissions.set_readonly(true);
+    std::fs::set_permissions(path, permissions).unwrap();
+}
+
+/// On Windows, a stop after init set the permissions of a read-only
+/// AGENTS.md on its temporary file leaves a read-only temporary file. The
+/// next init removes it and replaces AGENTS.md.
+#[cfg(windows)]
+#[test]
+#[verifies("rule_init_stop_keeps_each_project_file_whole", examples)]
+fn the_next_init_removes_a_read_only_temporary_file_of_a_stopped_init() {
+    let directory = tempfile::tempdir().unwrap();
+    let repo = directory.path().join("repo");
+    let (code, text) = init(&repo, &["--disposition-actor-id", "reviewer"]);
+    assert_eq!(code, 0, "{text}");
+    std::fs::write(repo.join("AGENTS.md"), PERSON_AGENTS).unwrap();
+    set_read_only(&repo.join("AGENTS.md"));
+    std::fs::write(
+        repo.join(STOPPED_TEMPORARY),
+        "# Team notes\n\nKeep this text of the person.\n\n## Prov",
+    )
+    .unwrap();
+    set_read_only(&repo.join(STOPPED_TEMPORARY));
+
+    let (code, text) = init(&repo, &[]);
+
+    assert_eq!(code, 0, "{text}");
+    assert_eq!(names_near_init_files(&repo), Vec::<String>::new());
+    let agents = std::fs::read_to_string(repo.join("AGENTS.md")).unwrap();
+    assert!(agents.starts_with(PERSON_AGENTS), "{agents}");
+    assert!(agents.contains("## Provenance"), "{agents}");
+    let metadata = std::fs::metadata(repo.join("AGENTS.md")).unwrap();
+    assert!(metadata.permissions().readonly(), "AGENTS.md is not read-only");
+}

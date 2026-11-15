@@ -80,6 +80,8 @@ mod cli_repo_context_help;
 mod cli_routing;
 #[path = "../cli_sdk_lifecycle.rs"]
 mod cli_sdk_lifecycle;
+#[path = "../cli_skills_non_utf8_folder.rs"]
+mod cli_skills_non_utf8_folder;
 #[path = "../command_surface.rs"]
 mod command_surface;
 #[allow(dead_code)]
