@@ -4,7 +4,9 @@
 use crate::shards;
 use crate::state_store::{message_ids::ShardLine, readers::read_jsonl_located, StateStore};
 use provenance_core::{
-    review::{read_review_rows, RecordReview, ReviewReading, StoredReviewRows},
+    review::{
+        is_review_submission, read_review_rows, RecordReview, ReviewReading, StoredReviewRows,
+    },
     DispositionRecord, NodeType, ProposalCard, ScopeId, StableId, Withdrawal,
 };
 use provenance_macros::rule;
@@ -71,6 +73,12 @@ impl StoredRows {
         })
     }
 
+    /// Whether a line of the scope holds a review submission or a
+    /// withdrawal, also when the lines of its ID do not agree.
+    pub(super) fn has_review_rows(&self) -> bool {
+        !self.withdrawals.is_empty() || self.proposals.iter().any(is_review_submission)
+    }
+
     /// The review state of the scope. Refuses, at its line, a withdrawal that
     /// names no review submission.
     pub(super) fn facts(&self) -> anyhow::Result<CycleFacts<'_>> {
@@ -105,13 +113,22 @@ impl CycleFacts<'_> {
             .map_err(|fault| super::review_row_refusal::refusal(self.rows, fault))
     }
 
+    /// The review submission with this ID. Refuses with the fault of a
+    /// record that a line of the ID names when the review rows of that
+    /// record do not agree. `None` when no review submission has the ID.
+    pub(super) fn submission(&self, id: &StableId) -> anyhow::Result<Option<&ProposalCard>> {
+        self.reading
+            .submission(id)
+            .map_err(|fault| super::review_row_refusal::refusal(self.rows, fault))
+    }
+
     /// The kind and the ID of the record of each review submission line, in
     /// line order. A submission whose ID is on lines that disagree counts.
     pub(super) fn submitted_records(&self) -> impl Iterator<Item = (NodeType, &StableId)> + '_ {
         self.rows
             .proposals
             .iter()
-            .filter(|proposal| self.is_submission(&proposal.id))
+            .filter(|proposal| is_review_submission(proposal))
             .map(|submission| {
                 let target = &submission.traceability.target;
                 (NodeType::from(target.artifact_type), &target.artifact_id)
@@ -177,6 +194,18 @@ impl CycleFacts<'_> {
 }
 
 impl StateStore {
+    /// The review submission with this ID, as [`CycleFacts::submission`]
+    /// gives it, from one read of the review rows of `scope`.
+    pub(crate) fn stored_review_submission(
+        &self,
+        scope: &ScopeId,
+        id: &StableId,
+    ) -> anyhow::Result<Option<ProposalCard>> {
+        let stored = StoredRows::read(self, scope)?;
+        let facts = stored.facts()?;
+        Ok(facts.submission(id)?.cloned())
+    }
+
     /// Each fault of the stored review rows of `scope`, as the text of its
     /// refusal: the file, the line and the message that a read of the
     /// record gives. A withdrawal that names no review submission is one of

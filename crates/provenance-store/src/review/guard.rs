@@ -15,13 +15,7 @@ impl crate::state_store::StateStore {
                 "review-bearing scopes require lossless import/export support"
             );
             let has_review_state = !held.list_discussions(scope)?.is_empty()
-                || !held.list_withdrawals(scope)?.is_empty()
-                || held
-                    .list_proposal_definitions(scope)?
-                    .iter()
-                    .any(|proposal| {
-                        proposal.proposal_type == provenance_core::ProposalType::RecordRevision
-                    });
+                || super::review_rows::StoredRows::read(held, scope)?.has_review_rows();
             crate::write_error::ensure!(
                 InvalidUpdate,
                 !has_review_state,

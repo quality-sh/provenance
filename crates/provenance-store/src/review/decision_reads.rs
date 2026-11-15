@@ -79,8 +79,10 @@ fn rejected_before_acceptance(state: &RequirementDecisionState, facts: &CycleFac
 
 impl StateStore {
     /// Builds the current review outcome for each entry and the totals for the document.
+    /// Refuses the whole document when the review rows of one of its records do not agree.
     #[rule("rule_document_entry_has_review_outcome")]
     #[rule("rule_document_has_review_totals")]
+    #[rule("rule_document_read_refuses_with_record")]
     pub(crate) fn document_review_state(
         &self,
         scope: &ScopeId,
@@ -204,7 +206,8 @@ impl StateStore {
 
     /// The draft, review and proposed Resolutions among `resolutions` whose current
     /// revision a reviewer accepted. A citation check reads them as approved, because an
-    /// approval does not change the lifecycle status.
+    /// approval does not change the lifecycle status. Refuses when the review rows of one
+    /// of them do not agree, with the refusal of a read of that Resolution.
     #[rule("rule_review_acceptance_approves_resolution_citation")]
     pub(crate) fn accepted_resolution_ids(
         &self,
@@ -227,11 +230,8 @@ impl StateStore {
         let stored = StoredRows::read(self, scope)?;
         let facts = stored.facts()?;
         for resolution in candidates {
-            // A Resolution whose review rows do not agree has no accepted
-            // revision; its own read names the rows.
-            if facts.record(NodeType::Resolution, &resolution.id).is_err() {
-                continue;
-            }
+            // Refuses with the fault of a Resolution whose review rows do not
+            // agree: the citation needs its review state.
             let record = ReviewRecord::Resolution(resolution.clone());
             if Self::record_decision_state_from_parts(&record, &facts)?
                 .current_acceptance

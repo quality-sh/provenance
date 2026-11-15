@@ -55,9 +55,9 @@ impl StateStore {
         let scope = input.scope_id.clone();
         self.with_repository_publication(move |held| {
             crate::review::ensure_manifest_scope(held, &scope)?;
-            let proposal = review_submission(held, &scope, &input.proposal_id)?;
             let stored = StoredRows::read(held, &scope)?;
             let facts = stored.facts()?;
+            let proposal = review_submission(held, &scope, &facts, &input.proposal_id)?;
             validate_submission_address(
                 &proposal,
                 addressed.as_ref().map(|(kind, id)| (*kind, id)),
@@ -99,7 +99,9 @@ impl StateStore {
 
     /// Writes the Withdrawal record of one review submission.
     fn commit_withdrawal(&self, input: WithdrawRecordReview) -> anyhow::Result<CycleEntry> {
-        let proposal = review_submission(self, &input.scope_id, &input.proposal_id)?;
+        let stored = StoredRows::read(self, &input.scope_id)?;
+        let facts = stored.facts()?;
+        let proposal = review_submission(self, &input.scope_id, &facts, &input.proposal_id)?;
         let kind = NodeType::from(proposal.traceability.target.artifact_type);
         let record_id = proposal.traceability.target.artifact_id.clone();
         let path = shards::withdrawals_path(&self.layout, &input.scope_id);

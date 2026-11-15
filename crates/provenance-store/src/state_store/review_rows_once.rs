@@ -1,8 +1,9 @@
 //! The stored review rows of a scope, each ID one time, for the list reads,
 //! the checks of the ideation records and the cache catch-up. The core
 //! reading decides which rows read as one: an ID on two equal lines gives
-//! one row, and no line of an ID on two lines that disagree is in the list.
-//! The read of the record that such rows name refuses with the lines.
+//! one row. No line of an ID on lines that disagree is in the list, and no
+//! decision or withdrawal that names a submission with such an ID. The read
+//! of the record that such rows name refuses with the lines.
 
 use super::shared_parses::read_jsonl_shared;
 use super::StateStore;
@@ -56,10 +57,14 @@ pub(super) fn dispositions_once(
     select(dispositions, &keep)
 }
 
-/// The Withdrawal rows, each ID one time.
-pub(super) fn withdrawals_once(withdrawals: Vec<Withdrawal>) -> Vec<Withdrawal> {
+/// The Withdrawal rows, each ID one time. `proposals` are the rows of the
+/// Proposal file.
+pub(super) fn withdrawals_once(
+    proposals: &[ProposalCard],
+    withdrawals: Vec<Withdrawal>,
+) -> Vec<Withdrawal> {
     let keep = read_review_rows(StoredReviewRows {
-        proposals: &[],
+        proposals,
         dispositions: &[],
         withdrawals: &withdrawals,
     })

@@ -387,26 +387,36 @@ two decisions on one submission with the same result, and two withdrawals of
 one submission. Rows that do not agree make each read and each review write of
 their record refuse with `invalid_state_file`:
 
-- One row ID is on two lines with different contents.
-- Two decisions on one submission have different results.
+- One row ID is on more than one line, and the lines do not have equal
+  contents.
+- The decisions on one submission have different results.
 - One submission has an approval and a withdrawal.
-- Two submissions of one record have the same review cycle.
+- More than one submission of one record has the same review cycle.
 
-The refusal names the file and the line of the second row, and its message
-names the two rows and the repair. For example:
+A decision or a withdrawal that names a submission whose ID is on lines that
+do not agree is a part of the same fault. A write that needs the review state
+of the record, such as an active Rule that cites a Resolution, gives the same
+refusal.
+
+The refusal names the file and the line of one row, and its message names the
+rows and each line that the repair removes. For example:
 
 ```text
-review submission S of requirement req_a has two decisions with different results: accepted D1 at ideation/dispositions.jsonl line 1 and rejected D2 at line 2. To repair, remove the line of the decision that you do not keep, then commit.
+review submission S of requirement req_a has decisions with different results in ideation/dispositions.jsonl: accepted D1 at line 1 and rejected D2 at line 2. To repair, remove each of these lines that has a result that you do not keep, then commit.
 ```
 
 Other records, the documents that do not hold the record, and the reads of all
-records of a type continue. `provenance check` reports each of these rows with
-its file and its line.
+records of a type continue. `provenance check` reports each of these faults
+with its file and its line.
 
-To repair the rows, remove the line that the message names, then commit. When
-you remove a submission, also remove each line of `ideation/dispositions.jsonl`
-and `ideation/withdrawals.jsonl` that names it. This is the only hand edit of
-`.provenance/state` that the generated AGENTS.md permits.
+A withdrawal that names no review submission makes each review read of the
+scope refuse. Its message names the line of the withdrawal.
+
+To repair the rows, remove each line that the message names, then commit.
+When the message gives a choice, such as the decisions of one result or the
+lines of one submission, remove each line of the choice that you do not keep.
+After this, the reads of the record and `provenance check` pass. This is the
+only hand edit of `.provenance/state` that the generated AGENTS.md permits.
 
 ## Agent guidance
 

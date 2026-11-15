@@ -3,10 +3,10 @@
 
 use super::row_groups::{group_by_id, IdGroup};
 use super::{
-    review_cycle, submission_order, target, RecordKey, RecordRows, ReviewReading, ReviewRowFamily,
-    ReviewRowFault, RowAt, SubmissionRows,
+    is_review_submission, review_cycle, submission_order, target, RecordKey, RecordRows,
+    ReviewReading, ReviewRowFamily, ReviewRowFault, RowAt, SubmissionLines, SubmissionRows,
 };
-use crate::{DispositionDecision, DispositionRecord, ProposalCard, ProposalType, StableId};
+use crate::{DispositionDecision, StableId};
 use provenance_macros::rule;
 use std::collections::HashMap;
 
@@ -27,7 +27,7 @@ impl<'a> ReviewReading<'a> {
     }
 
     /// The records that the submissions with this ID name.
-    fn records_of_submission(&self, id: &str) -> Vec<RecordKey<'a>> {
+    pub(super) fn records_of_submission(&self, id: &str) -> Vec<RecordKey<'a>> {
         let proposals = self.rows.proposals;
         let mut records = Vec::new();
         for &position in self.submission_ids.get(id).into_iter().flatten() {
@@ -58,11 +58,9 @@ impl<'a> ReviewReading<'a> {
 
     pub(super) fn read_submissions(&mut self) {
         let proposals = self.rows.proposals;
-        let review =
-            |proposal: &ProposalCard| proposal.proposal_type == ProposalType::RecordRevision;
         let mut kept = Vec::new();
         for (position, proposal) in proposals.iter().enumerate() {
-            if review(proposal) {
+            if is_review_submission(proposal) {
                 self.submission_ids
                     .entry(proposal.id.as_str())
                     .or_default()
@@ -72,21 +70,19 @@ impl<'a> ReviewReading<'a> {
             }
         }
         let groups = group_by_id(proposals, |proposal| {
-            review(proposal).then_some(proposal.id.as_str())
+            is_review_submission(proposal).then_some(proposal.id.as_str())
         });
         for group in groups {
             let first = proposals[group.positions[0]].id.as_str();
             if let Some(second) = group.differing {
                 let records = self.records_of_submission(first);
-                self.fault(
-                    id_on_two_lines(
-                        &proposals[group.positions[0]].id,
-                        ReviewRowFamily::Submission,
-                        group.positions[0],
-                        second,
-                    ),
-                    &records,
+                let fault = id_on_lines(
+                    &proposals[group.positions[0]].id,
+                    ReviewRowFamily::Submission,
+                    &group.positions,
+                    second,
                 );
+                self.fault(fault, &records);
                 continue;
             }
             let position = group.positions[0];
@@ -125,21 +121,17 @@ impl<'a> ReviewReading<'a> {
             if let Some(second) = group.differing {
                 let records =
                     self.records_of_lines(dispositions, &group, |row| row.proposal_id.as_str());
-                let fault = id_on_two_lines(
-                    &dispositions[first].id,
-                    ReviewRowFamily::Decision,
-                    first,
-                    second,
-                );
+                let family = ReviewRowFamily::Decision;
+                let fault = id_on_lines(&dispositions[first].id, family, &group.positions, second);
                 self.fault(fault, &records);
                 continue;
             }
-            kept.push(first);
-            if let Some((_, rows)) = self
-                .submissions
-                .get_mut(dispositions[first].proposal_id.as_str())
-            {
+            // A decision on a submission whose ID is on lines that disagree
+            // is a part of the fault of that submission.
+            let submission = dispositions[first].proposal_id.as_str();
+            if let Some((_, rows)) = self.submissions.get_mut(submission) {
                 rows.decisions.push(first);
+                kept.push(first);
             }
         }
         kept.sort_unstable();
@@ -173,30 +165,26 @@ impl<'a> ReviewReading<'a> {
             if let Some(second) = group.differing {
                 let records =
                     self.records_of_lines(withdrawals, &group, |row| row.proposal_id.as_str());
-                let fault = id_on_two_lines(
-                    &withdrawals[first].id,
-                    ReviewRowFamily::Withdrawal,
-                    first,
-                    second,
-                );
+                let family = ReviewRowFamily::Withdrawal;
+                let fault = id_on_lines(&withdrawals[first].id, family, &group.positions, second);
                 self.fault(fault, &records);
                 continue;
             }
-            kept.push(first);
             let withdrawal = &withdrawals[first];
             if !self.is_submission(&withdrawal.proposal_id) {
+                kept.push(first);
                 let fault = ReviewRowFault::NoSubmission {
-                    withdrawal: RowAt {
-                        family: ReviewRowFamily::Withdrawal,
-                        position: first,
-                    },
                     proposal: withdrawal.proposal_id.clone(),
+                    lines: rows_at(ReviewRowFamily::Withdrawal, &group.positions),
                 };
                 self.fault(fault, &[]);
             } else if let Some((_, rows)) =
                 self.submissions.get_mut(withdrawal.proposal_id.as_str())
             {
+                // A withdrawal of a submission whose ID is on lines that
+                // disagree is a part of the fault of that submission.
                 rows.withdrawals.push(first);
+                kept.push(first);
             }
         }
         kept.sort_unstable();
@@ -213,112 +201,155 @@ impl<'a> ReviewReading<'a> {
             .collect::<Vec<_>>();
         records.sort_by_key(|(_, first)| *first);
         for (key, _) in records {
-            let submissions = self.records[key.0][key.1].submissions.clone();
-            let mut faults = one_cycle_two_submissions(proposals, &submissions)
-                .into_iter()
-                .collect::<Vec<_>>();
-            let mut in_line_order = submissions;
+            let mut in_line_order = self.records[key.0][key.1].submissions.clone();
             in_line_order.sort_unstable();
-            for position in in_line_order {
-                let (_, rows) = &self.submissions[proposals[position].id.as_str()];
-                faults.extend(record_fault(
-                    &proposals[position].id,
-                    self.rows.dispositions,
-                    rows,
-                ));
+            let mut faults = self.shared_cycles(&in_line_order);
+            for &position in &in_line_order {
+                faults.extend(self.submission_faults(&proposals[position].id));
             }
             for fault in faults {
                 self.fault(fault, &[key]);
             }
         }
     }
+
+    /// The lines of each decision and of each withdrawal that name the
+    /// submission, by family, then in line order.
+    fn lines_naming(&self, submission: &StableId) -> Vec<RowAt> {
+        let decisions = self.rows.dispositions.iter().map(|row| &row.proposal_id);
+        let withdrawals = self.rows.withdrawals.iter().map(|row| &row.proposal_id);
+        let mut lines = naming(ReviewRowFamily::Decision, decisions, submission);
+        lines.extend(naming(ReviewRowFamily::Withdrawal, withdrawals, submission));
+        lines
+    }
+
+    /// One fault for each review cycle that more than one of the
+    /// submissions has, in the line order of the second submission.
+    /// `in_line_order` are the submissions of one record.
+    fn shared_cycles(&self, in_line_order: &[usize]) -> Vec<ReviewRowFault> {
+        let proposals = self.rows.proposals;
+        let mut cycles: Vec<(u64, Vec<usize>)> = Vec::new();
+        for &position in in_line_order {
+            let Some(cycle) = review_cycle(&proposals[position]) else {
+                continue;
+            };
+            match cycles.iter_mut().find(|(known, _)| *known == cycle) {
+                Some((_, positions)) => positions.push(position),
+                None => cycles.push((cycle, vec![position])),
+            }
+        }
+        cycles.retain(|(_, positions)| positions.len() > 1);
+        cycles.sort_by_key(|(_, positions)| positions[1]);
+        cycles
+            .into_iter()
+            .map(|(cycle, positions)| ReviewRowFault::OneCycleTwoSubmissions {
+                cycle,
+                submissions: positions
+                    .into_iter()
+                    .map(|position| self.submission_lines(position))
+                    .collect(),
+            })
+            .collect()
+    }
+
+    fn submission_lines(&self, position: usize) -> SubmissionLines {
+        let id = &self.rows.proposals[position].id;
+        let mut lines = rows_at(
+            ReviewRowFamily::Submission,
+            &self.submission_ids[id.as_str()],
+        );
+        lines.extend(self.lines_naming(id));
+        SubmissionLines {
+            submission: RowAt {
+                family: ReviewRowFamily::Submission,
+                position,
+            },
+            lines,
+        }
+    }
+
+    /// The decisions or the withdrawals of one submission that do not agree.
+    #[rule("rule_disagreeing_review_rows_refuse_record")]
+    fn submission_faults(&self, submission: &StableId) -> Vec<ReviewRowFault> {
+        let dispositions = self.rows.dispositions;
+        let (_, rows) = &self.submissions[submission.as_str()];
+        let lines = self.lines_naming(submission);
+        let of_family = |family| {
+            lines
+                .iter()
+                .copied()
+                .filter(move |at: &RowAt| at.family == family)
+        };
+        let mut faults = Vec::new();
+        if let Some((&first, rest)) = rows.decisions.split_first() {
+            let result = dispositions[first].decision;
+            if let Some(&second) = rest
+                .iter()
+                .find(|&&position| dispositions[position].decision != result)
+            {
+                faults.push(ReviewRowFault::DifferentResults {
+                    submission: submission.clone(),
+                    decisions: of_family(ReviewRowFamily::Decision).collect(),
+                    second: RowAt {
+                        family: ReviewRowFamily::Decision,
+                        position: second,
+                    },
+                });
+            }
+        }
+        let approves = |position: usize| {
+            dispositions[position].decision == DispositionDecision::Accepted
+        };
+        if rows.decisions.iter().any(|&position| approves(position))
+            && !rows.withdrawals.is_empty()
+        {
+            faults.push(ReviewRowFault::AcceptedAndWithdrawn {
+                submission: submission.clone(),
+                approvals: of_family(ReviewRowFamily::Decision)
+                    .filter(|at| approves(at.position))
+                    .collect(),
+                withdrawals: of_family(ReviewRowFamily::Withdrawal).collect(),
+            });
+        }
+        faults
+    }
 }
 
-fn id_on_two_lines(
+/// The rows of `family` whose submission is `submission`. `named` gives the
+/// submission of each row, in line order.
+fn naming<'a>(
+    family: ReviewRowFamily,
+    named: impl Iterator<Item = &'a StableId>,
+    submission: &StableId,
+) -> Vec<RowAt> {
+    named
+        .enumerate()
+        .filter(|(_, row_submission)| *row_submission == submission)
+        .map(|(position, _)| RowAt { family, position })
+        .collect()
+}
+
+fn rows_at(family: ReviewRowFamily, positions: &[usize]) -> Vec<RowAt> {
+    positions
+        .iter()
+        .map(|&position| RowAt { family, position })
+        .collect()
+}
+
+/// The fault of an ID whose lines do not have equal contents. `second` is
+/// the first line whose contents are not the contents of the first line.
+fn id_on_lines(
     id: &StableId,
     family: ReviewRowFamily,
-    first: usize,
+    positions: &[usize],
     second: usize,
 ) -> ReviewRowFault {
     ReviewRowFault::IdOnTwoLines {
         id: id.clone(),
-        first: RowAt {
-            family,
-            position: first,
-        },
+        lines: rows_at(family, positions),
         second: RowAt {
             family,
             position: second,
         },
-    }
-}
-
-/// Two submissions of one record with one review cycle, the first pair in
-/// line order.
-fn one_cycle_two_submissions(
-    proposals: &[ProposalCard],
-    submissions: &[usize],
-) -> Option<ReviewRowFault> {
-    let mut in_line_order = submissions.to_vec();
-    in_line_order.sort_unstable();
-    let mut cycles = HashMap::new();
-    for position in in_line_order {
-        let Some(cycle) = review_cycle(&proposals[position]) else {
-            continue;
-        };
-        if let Some(&first) = cycles.get(&cycle) {
-            let at = |position| RowAt {
-                family: ReviewRowFamily::Submission,
-                position,
-            };
-            return Some(ReviewRowFault::OneCycleTwoSubmissions {
-                cycle,
-                first: at(first),
-                second: at(position),
-            });
-        }
-        cycles.insert(cycle, position);
-    }
-    None
-}
-
-/// The decisions or the withdrawals of one submission that do not agree.
-#[rule("rule_disagreeing_review_rows_refuse_record")]
-fn record_fault(
-    submission: &StableId,
-    dispositions: &[DispositionRecord],
-    rows: &SubmissionRows,
-) -> Option<ReviewRowFault> {
-    let decision = |position| RowAt {
-        family: ReviewRowFamily::Decision,
-        position,
-    };
-    if let Some((&first, rest)) = rows.decisions.split_first() {
-        let result = dispositions[first].decision;
-        if let Some(&second) = rest
-            .iter()
-            .find(|&&position| dispositions[position].decision != result)
-        {
-            return Some(ReviewRowFault::DifferentResults {
-                submission: submission.clone(),
-                first: decision(first),
-                second: decision(second),
-            });
-        }
-    }
-    let approval = rows
-        .decisions
-        .iter()
-        .find(|&&position| dispositions[position].decision == DispositionDecision::Accepted);
-    match (approval, rows.withdrawals.first()) {
-        (Some(&approval), Some(&withdrawal)) => Some(ReviewRowFault::AcceptedAndWithdrawn {
-            submission: submission.clone(),
-            approval: decision(approval),
-            withdrawal: RowAt {
-                family: ReviewRowFamily::Withdrawal,
-                position: withdrawal,
-            },
-        }),
-        _ => None,
     }
 }

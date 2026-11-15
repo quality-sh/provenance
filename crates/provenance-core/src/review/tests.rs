@@ -25,6 +25,7 @@ fn closed_record_read_refuses_unknown_fields() {
 mod stored_rows {
     use crate::review::{
         read_review_rows, ReviewRowFamily, ReviewRowFault, RowAt, StoredReviewRows,
+        SubmissionLines,
     };
     use crate::{
         DispositionDecision, DispositionRecord, NodeType, ProposalCard, StableId, Withdrawal,
@@ -156,7 +157,7 @@ mod stored_rows {
                 vec![],
                 ReviewRowFault::DifferentResults {
                     submission: id("sub_a"),
-                    first: at(decision_family, 0),
+                    decisions: vec![at(decision_family, 0), at(decision_family, 1)],
                     second: at(decision_family, 1),
                 },
             ),
@@ -168,8 +169,11 @@ mod stored_rows {
                 ],
                 ReviewRowFault::AcceptedAndWithdrawn {
                     submission: id("sub_a"),
-                    approval: at(decision_family, 0),
-                    withdrawal: at(ReviewRowFamily::Withdrawal, 0),
+                    approvals: vec![at(decision_family, 0)],
+                    withdrawals: vec![
+                        at(ReviewRowFamily::Withdrawal, 0),
+                        at(ReviewRowFamily::Withdrawal, 1),
+                    ],
                 },
             ),
             (
@@ -180,7 +184,7 @@ mod stored_rows {
                 vec![],
                 ReviewRowFault::IdOnTwoLines {
                     id: id("dec_a"),
-                    first: at(decision_family, 0),
+                    lines: vec![at(decision_family, 0), at(decision_family, 1)],
                     second: at(decision_family, 1),
                 },
             ),
@@ -221,8 +225,16 @@ mod stored_rows {
                 .unwrap_err(),
             &ReviewRowFault::OneCycleTwoSubmissions {
                 cycle: 2,
-                first: at(family, 0),
-                second: at(family, 1),
+                submissions: vec![
+                    SubmissionLines {
+                        submission: at(family, 0),
+                        lines: vec![at(family, 0)],
+                    },
+                    SubmissionLines {
+                        submission: at(family, 1),
+                        lines: vec![at(family, 1)],
+                    },
+                ],
             }
         );
         let two_lines = [submission("sub_a", REQ_A, 1), submission("sub_a", REQ_A, 2)];
@@ -263,10 +275,118 @@ mod stored_rows {
         assert_eq!(
             reading.scope_fault(),
             Some(&ReviewRowFault::NoSubmission {
-                withdrawal: at(ReviewRowFamily::Withdrawal, 0),
                 proposal: id("sub_none"),
+                lines: vec![at(ReviewRowFamily::Withdrawal, 0)],
             })
         );
         assert!(reading.record(NodeType::Requirement, &id(REQ_A)).is_ok());
+    }
+
+    /// Pair 18 with a decision and a withdrawal: the rows that name a
+    /// submission whose ID is on lines that disagree are a part of its
+    /// fault. No list holds them, and a different record reads as usual.
+    #[test]
+    #[verifies("rule_review_row_refusal_stays_with_record", examples)]
+    fn rows_that_name_a_submission_on_lines_that_disagree_are_a_part_of_its_fault() {
+        let mut changed = submission("sub_a", REQ_A, 1);
+        changed.summary = "Changed by hand".to_owned();
+        let proposals = [
+            submission("sub_a", REQ_A, 1),
+            submission("sub_b", "req_b", 1),
+            changed,
+        ];
+        let dispositions = [
+            decision("dec_a", "sub_a", "rejected", "reviewer"),
+            decision("dec_b", "sub_b", "accepted", "reviewer"),
+        ];
+        let withdrawals = [withdrawal("wd_a", "sub_a", "agent")];
+        let reading = read_review_rows(StoredReviewRows {
+            proposals: &proposals,
+            dispositions: &dispositions,
+            withdrawals: &withdrawals,
+        });
+        let family = ReviewRowFamily::Submission;
+        let expected = ReviewRowFault::IdOnTwoLines {
+            id: id("sub_a"),
+            lines: vec![at(family, 0), at(family, 2)],
+            second: at(family, 2),
+        };
+        let once = reading.rows_once();
+        assert_eq!(
+            (&once.proposals, &once.dispositions, &once.withdrawals),
+            (&vec![1], &vec![1], &Vec::<usize>::new())
+        );
+        assert_eq!(reading.faults().collect::<Vec<_>>(), [&expected]);
+        assert_eq!(reading.scope_fault(), None);
+        assert_eq!(reading.submission(&id("sub_a")).unwrap_err(), &expected);
+        assert_eq!(
+            reading.submission(&id("sub_b")).unwrap().map(|row| &row.id),
+            Some(&id("sub_b"))
+        );
+        assert!(reading.record(NodeType::Requirement, &id("req_b")).is_ok());
+    }
+
+    /// Each repair names every line to remove: three submissions with one
+    /// cycle give one fault with the lines of each submission, and the
+    /// decisions with different results give each decision line.
+    #[test]
+    #[verifies("rule_review_row_refusal_gives_repair", examples)]
+    fn a_fault_holds_each_line_that_the_repair_removes() {
+        let proposals = [
+            submission("sub_a", REQ_A, 2),
+            submission("sub_b", REQ_A, 2),
+            submission("sub_c", REQ_A, 2),
+        ];
+        let dispositions = [
+            decision("dec_a", "sub_b", "accepted", "reviewer"),
+            decision("dec_b", "sub_c", "rejected", "reviewer"),
+            decision("dec_c", "sub_c", "accepted", "lead"),
+            decision("dec_b", "sub_c", "rejected", "reviewer"),
+        ];
+        let withdrawals = [withdrawal("wd_a", "sub_c", "agent")];
+        let reading = read_review_rows(StoredReviewRows {
+            proposals: &proposals,
+            dispositions: &dispositions,
+            withdrawals: &withdrawals,
+        });
+        let (submission_at, decision_at, withdrawal_at) = (
+            |position| at(ReviewRowFamily::Submission, position),
+            |position| at(ReviewRowFamily::Decision, position),
+            |position| at(ReviewRowFamily::Withdrawal, position),
+        );
+        let lines_of = |position, lines: Vec<RowAt>| SubmissionLines {
+            submission: submission_at(position),
+            lines,
+        };
+        let sub_c_lines = vec![
+            submission_at(2),
+            decision_at(1),
+            decision_at(2),
+            decision_at(3),
+            withdrawal_at(0),
+        ];
+        assert_eq!(
+            reading.faults().cloned().collect::<Vec<_>>(),
+            [
+                ReviewRowFault::OneCycleTwoSubmissions {
+                    cycle: 2,
+                    submissions: vec![
+                        lines_of(0, vec![submission_at(0)]),
+                        lines_of(1, vec![submission_at(1), decision_at(0)]),
+                        lines_of(2, sub_c_lines),
+                    ],
+                },
+                ReviewRowFault::DifferentResults {
+                    submission: id("sub_c"),
+                    decisions: vec![decision_at(1), decision_at(2), decision_at(3)],
+                    second: decision_at(2),
+                },
+                ReviewRowFault::AcceptedAndWithdrawn {
+                    submission: id("sub_c"),
+                    approvals: vec![decision_at(2)],
+                    withdrawals: vec![withdrawal_at(0)],
+                },
+            ]
+        );
     }
 }

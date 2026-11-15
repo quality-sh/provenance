@@ -80,101 +80,130 @@ fn result_word(rows: &StoredRows, at: RowAt) -> &'static str {
     }
 }
 
-/// The message of a fault and the row whose line the refusal names.
+/// `1`, `1 and 2` or `1, 2 and 3`.
+fn joined(items: impl IntoIterator<Item = String>) -> String {
+    let mut items = items.into_iter().collect::<Vec<_>>();
+    let Some(last) = items.pop() else {
+        return String::new();
+    };
+    if items.is_empty() {
+        last
+    } else {
+        format!("{} and {last}", items.join(", "))
+    }
+}
+
+/// The lines of `at`, file by file in the order of the rows:
+/// `ideation/proposal_cards.jsonl line 3; ideation/dispositions.jsonl lines
+/// 1 and 4`.
+fn lines_text(rows: &StoredRows, at: &[RowAt]) -> String {
+    let mut files: Vec<(String, Vec<String>)> = Vec::new();
+    for row in at {
+        let line = rows.line(*row);
+        let file = file_of(line);
+        let number = line.line.to_string();
+        match files.iter_mut().find(|(known, _)| *known == file) {
+            Some((_, numbers)) => numbers.push(number),
+            None => files.push((file, vec![number])),
+        }
+    }
+    files
+        .into_iter()
+        .map(|(file, numbers)| {
+            let word = if numbers.len() == 1 { "line" } else { "lines" };
+            format!("{file} {word} {}", joined(numbers))
+        })
+        .collect::<Vec<_>>()
+        .join("; ")
+}
+
+/// `D1 at line 1 and D2 at line 4`, for rows of one file.
+fn rows_text(rows: &StoredRows, at: &[RowAt], label: impl Fn(RowAt) -> String) -> String {
+    joined(
+        at.iter()
+            .map(|&row| format!("{} at line {}", label(row), rows.line(row).line)),
+    )
+}
+
+/// The message of a fault. Its repair names each line that the person
+/// removes, so that one repair is sufficient.
 #[rule("rule_review_row_refusal_gives_repair")]
-fn message(rows: &StoredRows, fault: &ReviewRowFault) -> (String, RowAt) {
+fn message(rows: &StoredRows, fault: &ReviewRowFault) -> String {
     match fault {
-        ReviewRowFault::IdOnTwoLines { id, first, second } => (
+        ReviewRowFault::IdOnTwoLines { id, lines, .. } => {
+            let numbers = lines.iter().map(|&at| rows.line(at).line.to_string());
             format!(
-                "{} {} is on line {} and line {} of {} with different contents. To repair, \
-                 remove the line that is not correct, then commit.",
-                noun(first.family),
+                "{} {} is on lines {} of {} with different contents. To repair, keep one of \
+                 these lines and remove the others, then commit.",
+                noun(lines[0].family),
                 id.as_str(),
-                rows.line(*first).line,
-                rows.line(*second).line,
-                file_of(rows.line(*second)),
-            ),
-            *second,
-        ),
+                joined(numbers),
+                file_of(rows.line(lines[0])),
+            )
+        }
         ReviewRowFault::DifferentResults {
             submission,
-            first,
-            second,
-        } => (
-            format!(
-                "{} has two decisions with different results: {} {} at {} line {} and {} {} at \
-                 line {}. To repair, remove the line of the decision that you do not keep, then \
-                 commit.",
-                submission_name(rows, submission),
-                result_word(rows, *first),
-                rows.id(*first).as_str(),
-                file_of(rows.line(*first)),
-                rows.line(*first).line,
-                result_word(rows, *second),
-                rows.id(*second).as_str(),
-                rows.line(*second).line,
-            ),
-            *second,
+            decisions,
+            ..
+        } => format!(
+            "{} has decisions with different results in {}: {}. To repair, remove each of these \
+             lines that has a result that you do not keep, then commit.",
+            submission_name(rows, submission),
+            file_of(rows.line(decisions[0])),
+            rows_text(rows, decisions, |at| format!(
+                "{} {}",
+                result_word(rows, at),
+                rows.id(at).as_str()
+            )),
         ),
         ReviewRowFault::AcceptedAndWithdrawn {
             submission,
-            approval,
-            withdrawal,
-        } => (
-            format!(
-                "{} is accepted by {} at {} line {} and withdrawn by {} at {} line {}. To \
-                 repair, remove the line of the approval or of the withdrawal, then commit.",
-                submission_name(rows, submission),
-                rows.id(*approval).as_str(),
-                file_of(rows.line(*approval)),
-                rows.line(*approval).line,
-                rows.id(*withdrawal).as_str(),
-                file_of(rows.line(*withdrawal)),
-                rows.line(*withdrawal).line,
-            ),
-            *withdrawal,
+            approvals,
+            withdrawals,
+        } => format!(
+            "{} is accepted and withdrawn. The approvals in {}: {}. The withdrawals in {}: {}. \
+             To repair, remove each approval line or each withdrawal line, then commit.",
+            submission_name(rows, submission),
+            file_of(rows.line(approvals[0])),
+            rows_text(rows, approvals, |at| rows.id(at).as_str().to_owned()),
+            file_of(rows.line(withdrawals[0])),
+            rows_text(rows, withdrawals, |at| rows.id(at).as_str().to_owned()),
         ),
-        ReviewRowFault::OneCycleTwoSubmissions {
-            cycle,
-            first,
-            second,
-        } => {
-            let target = &rows.proposals[first.position].traceability.target;
-            let file = file_of(rows.line(*first));
-            let directory = file.split_once('/').map_or("", |(directory, _)| directory);
-            (
-                format!(
-                    "{} {} has two review submissions with review cycle {cycle}: {} at {file} \
-                     line {} and {} at line {}. To repair, remove the line of one submission \
-                     and each line of {directory}/dispositions.jsonl and \
-                     {directory}/withdrawals.jsonl that names it, then commit.",
-                    NodeType::from(target.artifact_type).as_str(),
-                    target.artifact_id.as_str(),
-                    rows.id(*first).as_str(),
-                    rows.line(*first).line,
-                    rows.id(*second).as_str(),
-                    rows.line(*second).line,
-                ),
-                *second,
+        ReviewRowFault::OneCycleTwoSubmissions { cycle, submissions } => {
+            let target = &rows.proposals[submissions[0].submission.position]
+                .traceability
+                .target;
+            let each = submissions
+                .iter()
+                .map(|lines| {
+                    format!(
+                        "The lines of {}: {}.",
+                        rows.id(lines.submission).as_str(),
+                        lines_text(rows, &lines.lines)
+                    )
+                })
+                .collect::<Vec<_>>()
+                .join(" ");
+            format!(
+                "{} {} has {} review submissions with review cycle {cycle}. To repair, keep one \
+                 submission and remove the lines of each other submission, then commit. {}",
+                NodeType::from(target.artifact_type).as_str(),
+                target.artifact_id.as_str(),
+                submissions.len(),
+                each,
             )
         }
-        ReviewRowFault::NoSubmission {
-            withdrawal,
-            proposal,
-        } => (
-            format!(
-                "withdrawal {} names no review submission: {}",
-                rows.id(*withdrawal).as_str(),
-                proposal.as_str()
-            ),
-            *withdrawal,
+        ReviewRowFault::NoSubmission { proposal, lines } => format!(
+            "withdrawal {} names no review submission: {}. To repair, remove {}, then commit.",
+            rows.id(lines[0]).as_str(),
+            proposal.as_str(),
+            lines_text(rows, lines),
         ),
     }
 }
 
-/// `invalid_state_file` at the line of the second row of `fault`.
+/// `invalid_state_file` at the line of the row that the fault names.
 #[rule("rule_inconsistent_records_refusal_names_records")]
 pub(super) fn refusal(rows: &StoredRows, fault: &ReviewRowFault) -> anyhow::Error {
-    let (message, at) = message(rows, fault);
-    state_fault(rows.line(at), message)
+    state_fault(rows.line(fault.at()), message(rows, fault))
 }

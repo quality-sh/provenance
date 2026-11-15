@@ -7,8 +7,8 @@ use crate::{NodeType, ScopeId, StableId};
 use serde::{Deserialize, Serialize};
 
 pub use stored_rows::{
-    read_review_rows, review_cycle, RecordReview, ReviewReading, ReviewRowFamily, ReviewRowFault,
-    RowAt, RowsOnce, StoredReviewRows,
+    is_review_submission, read_review_rows, review_cycle, RecordReview, ReviewReading,
+    ReviewRowFamily, ReviewRowFault, RowAt, RowsOnce, StoredReviewRows, SubmissionLines,
 };
 
 const fn requirement_kind() -> NodeType {

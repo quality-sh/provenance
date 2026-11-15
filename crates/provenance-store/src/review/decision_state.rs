@@ -5,8 +5,8 @@
 use super::review_rows::CycleFacts;
 use crate::state_store::StateStore;
 use provenance_core::{
-    review::{review_cycle, CycleEntry, CycleFact, RecordReview},
-    DispositionDecision, NodeType, ProposalCard, ProposalType, ScopeId, StableId,
+    review::{is_review_submission, review_cycle, CycleEntry, CycleFact, RecordReview},
+    DispositionDecision, NodeType, ProposalCard, ScopeId, StableId,
 };
 use provenance_macros::rule;
 
@@ -72,23 +72,38 @@ pub(super) fn next_cycle(record: &RecordReview<'_>) -> anyhow::Result<u64> {
     Ok(next)
 }
 
+/// The Proposal with this ID. The reading of the review rows decides
+/// first, so a review submission whose record refuses gives the refusal of
+/// that record.
+fn proposal_named(
+    store: &StateStore,
+    scope: &ScopeId,
+    facts: &CycleFacts<'_>,
+    id: &StableId,
+) -> anyhow::Result<Option<ProposalCard>> {
+    if let Some(submission) = facts.submission(id)? {
+        return Ok(Some(submission.clone()));
+    }
+    Ok(store
+        .list_proposal_definitions(scope)?
+        .into_iter()
+        .find(|proposal| proposal.id == *id))
+}
+
 /// The proposal must be a bound record-review submission. Other proposals
 /// keep the ordinary disposition paths.
 pub(super) fn review_submission(
     store: &StateStore,
     scope: &ScopeId,
+    facts: &CycleFacts<'_>,
     proposal_id: &StableId,
 ) -> anyhow::Result<ProposalCard> {
-    let proposal = store
-        .list_proposal_definitions(scope)?
-        .into_iter()
-        .find(|p| p.id == *proposal_id)
-        .ok_or_else(|| {
-            crate::refusal::refuse!(ResourceNotFound, "review submission does not exist")
-        })?;
+    let proposal = proposal_named(store, scope, facts, proposal_id)?.ok_or_else(|| {
+        crate::refusal::refuse!(ResourceNotFound, "review submission does not exist")
+    })?;
     crate::write_error::ensure!(
         InvalidUpdate,
-        proposal.proposal_type == ProposalType::RecordRevision && proposal.record_revision.is_some(),
+        is_review_submission(&proposal) && proposal.record_revision.is_some(),
         "decision-cycle operations address record_revision submissions; other proposals keep their own disposition paths"
     );
     Ok(proposal)
@@ -106,14 +121,11 @@ pub(super) fn validated_resubmission(
     kind: NodeType,
     record_id: &StableId,
 ) -> anyhow::Result<StableId> {
-    let proposals = store.list_proposal_definitions(scope)?;
-    let predecessor = proposals
-        .iter()
-        .find(|p| p.id == *predecessor)
+    let predecessor = proposal_named(store, scope, facts, predecessor)?
         .ok_or_else(|| crate::refusal::refuse!(MissingReference, "revises names no proposal"))?;
     crate::write_error::ensure!(
         InvalidUpdate,
-        predecessor.proposal_type == ProposalType::RecordRevision,
+        is_review_submission(&predecessor),
         "a resubmission revises a review submission"
     );
     crate::write_error::ensure!(
@@ -131,7 +143,7 @@ pub(super) fn validated_resubmission(
     let Some(answered) = answered else {
         return Err(crate::refusal::refuse!(
             InvalidUpdate,
-            "a resubmission answers exactly one disposition of its predecessor"
+            "a resubmission answers a rejection of its predecessor"
         ));
     };
     crate::write_error::ensure!(

@@ -5,7 +5,7 @@ use super::{
 };
 use crate::model::{
     disposition_requires_prior_assertion, validate_disposition_intrinsic, DispositionActorRefusal,
-    DispositionRecord, PromotionState, ProposalCard, ProposalType,
+    DispositionRecord, PromotionState, ProposalCard,
 };
 use provenance_macros::rule;
 use std::collections::BTreeMap;
@@ -192,7 +192,7 @@ fn validate_disposition_links(
     for (index, disposition) in aggregate.dispositions.iter().enumerate() {
         let review = proposals
             .get(disposition.proposal_id.as_str())
-            .is_some_and(|proposal| proposal.proposal_type == ProposalType::RecordRevision);
+            .is_some_and(|proposal| crate::review::is_review_submission(proposal));
         let recorded = if review {
             &[][..]
         } else {

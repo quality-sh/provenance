@@ -5,15 +5,15 @@ use super::{
     StateStore,
 };
 use crate::shards;
-use provenance_core::{ProposalType, ScopeId, Withdrawal};
+use provenance_core::{ProposalCard, ScopeId, Withdrawal};
 
 impl StateStore {
     /// Reads the scope's Withdrawal records, each ID one time.
     pub fn list_withdrawals(&self, scope: &ScopeId) -> anyhow::Result<Vec<Withdrawal>> {
-        Ok(super::review_rows_once::withdrawals_once(read_jsonl(
-            self,
-            &shards::withdrawals_path(&self.layout, scope),
-        )?))
+        let proposals: Vec<ProposalCard> =
+            read_jsonl(self, &shards::proposal_cards_path(&self.layout, scope))?;
+        let withdrawals = read_jsonl(self, &shards::withdrawals_path(&self.layout, scope))?;
+        Ok(super::review_rows_once::withdrawals_once(&proposals, withdrawals))
     }
 
     /// Reads the scope's Withdrawal records, each with its shard line.
@@ -42,10 +42,7 @@ impl StateStore {
         }
         crate::write_error::ensure!(
             InvalidUpdate,
-            self.list_proposal_definitions(&scope)?
-                .iter()
-                .any(|proposal| proposal.id == withdrawal.proposal_id
-                    && proposal.proposal_type == ProposalType::RecordRevision),
+            self.stored_review_submission(&scope, &withdrawal.proposal_id)?.is_some(),
             "a withdrawal names a review submission"
         );
         self.mutate_jsonl_records(&path, |records: &mut Vec<Withdrawal>| {
