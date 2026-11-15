@@ -125,8 +125,8 @@ fn a_version_with_a_directory_at_the_path_of_the_record_file_has_no_record() {
         "The history statement applies.",
     ]);
     let created = commit(&repo);
-    let file = std::path::Path::new(&repo)
-        .join(".provenance/state/scopes/default/requirements/req.jsonl");
+    let file =
+        std::path::Path::new(&repo).join(".provenance/state/scopes/default/requirements/req.jsonl");
     let bytes = std::fs::read(&file).unwrap();
     std::fs::remove_file(&file).unwrap();
     std::fs::create_dir(&file).unwrap();

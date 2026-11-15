@@ -25,10 +25,7 @@ pub fn not_a_file_graph(entry: Entry) -> Vec<Commit> {
 
 /// A commit that puts `entry`, which is not a file, at the path is listed
 /// with no text, and so is the commit that removes it.
-pub async fn an_entry_that_is_not_a_file_has_no_text<H: Harness + Sync>(
-    harness: &H,
-    entry: Entry,
-) {
+pub async fn an_entry_that_is_not_a_file_has_no_text<H: Harness + Sync>(harness: &H, entry: Entry) {
     let graph = not_a_file_graph(entry);
     let adapter = harness.adapter(&graph);
     assert_versions(

@@ -127,6 +127,11 @@ async fn a_missing_answer_has_no_text() {
 /// error gives the answer.
 #[tokio::test]
 async fn an_answer_of_an_unknown_form_is_refused() {
-    let error = text_for_answer(|_| "x tree\n".to_owned()).await.unwrap_err();
-    assert_eq!(format!("{error:#}"), "git cat-file returned an unreadable header: x tree");
+    let error = text_for_answer(|_| "x tree\n".to_owned())
+        .await
+        .unwrap_err();
+    assert_eq!(
+        format!("{error:#}"),
+        "git cat-file returned an unreadable header: x tree"
+    );
 }
