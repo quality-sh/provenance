@@ -1,29 +1,28 @@
 //! A manifest that does not parse in the review library. The failure of the
 //! open of a repository has the text of the fault of the manifest, and its
-//! error is that fault. The HTTP API of a
-//! started review host whose manifest stops parsing refuses a read, a write
-//! and the page configuration with `invalid_state_file`, the line of the
-//! manifest and the two procedures that correct the state.
+//! error is that fault. The HTTP API of a started review host whose manifest
+//! stops parsing refuses a read, a write and the page configuration with
+//! `invalid_state_file`, the line of the manifest and the two procedures that
+//! correct the state.
+
+#[path = "support"]
+mod support {
+    pub mod no_checks;
+    pub mod user_cache;
+}
+
+use support::no_checks::NoChecks;
+use support::user_cache::use_user_cache;
 
 use provenance_core::protocol::read_failure::{
     ReadFailure, UnparsableStateFile, STATE_CORRECTIONS,
 };
 use provenance_macros::verifies;
-use provenance_porcelain::check::{Category, CheckPort, PortFuture};
 use provenance_review::{HostOptions, RepositoryScope};
 use provenance_store::repository::OpenFailure;
 use provenance_transport::fixture::records::Repository;
 use serde_json::{json, Value};
-use std::{path::Path, sync::Arc};
-
-/// A check port for a host whose test never runs a check.
-struct NoChecks;
-
-impl CheckPort for NoChecks {
-    fn run<'a>(&'a self, _: Category, _: Option<&'a str>) -> PortFuture<'a> {
-        Box::pin(async { Err("this host runs no checks".to_owned()) })
-    }
-}
+use std::sync::Arc;
 
 #[tokio::test(flavor = "multi_thread")]
 #[verifies("rule_state_parse_refusal_names_the_corrections", examples)]
@@ -140,12 +139,4 @@ fn call(
         status,
         serde_json::from_str(&response.into_string().unwrap()).unwrap(),
     )
-}
-
-/// Points every platform's per-user cache at one isolated directory.
-fn use_user_cache(root: &Path) {
-    let cache = root.join("cache");
-    std::env::set_var("HOME", root);
-    std::env::set_var("XDG_CACHE_HOME", &cache);
-    std::env::set_var("LOCALAPPDATA", &cache);
 }
