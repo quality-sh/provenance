@@ -6,11 +6,8 @@ mod gaps;
 #[cfg(feature = "host")]
 mod health;
 mod impact;
-// Without `host`, the catch-up and the rebuild build but have no entry
-// point: each entry takes the publication guard, whose wait for the
-// section lock runs on the blocking pool.
-#[cfg_attr(not(feature = "host"), allow(dead_code))]
 mod materialize;
+mod pass_claim;
 mod prime;
 mod projection_digest;
 pub mod read;
@@ -34,13 +31,17 @@ pub use impact::*;
 pub(crate) use materialize::catch_up_with_guard;
 #[cfg(feature = "host")]
 pub(crate) use materialize::catch_up_work;
-#[cfg(feature = "host")]
 pub(crate) use materialize::stored_validation_version;
 #[cfg(feature = "host")]
 pub(crate) use materialize::unit_stored_digest;
+pub(crate) use materialize::view_stored_digests;
+pub use materialize::{
+    catch_up_in_publish, scope_ids, unit_digest, units_for, CatchUpReport, Unit, UnitHashError,
+};
 #[cfg(feature = "host")]
 pub use materialize::{catch_up_state, materialize_empty_state, materialize_state};
-pub use materialize::{scope_ids, unit_digest, units_for, CatchUpReport, Unit, UnitHashError};
+pub use pass_claim::CatchUpRunning;
+pub(crate) use pass_claim::{PassClaim, PassSlot};
 pub use prime::*;
 pub use projection_digest::{
     family_content_digests, revision_digest, revision_digest_from_stored_rows, FamilyContentDigest,
