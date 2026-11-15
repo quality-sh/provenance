@@ -343,12 +343,12 @@ fn is_annotation_comment_line(
 
 /// The lexical state of the walker at the first of `rust_states`, the
 /// states of the lines below a binding.
-fn line_start<'a>(
-    rust_states: &'a [RustLexicalState],
+fn line_start(
+    rust_states: &[RustLexicalState],
     language: Language,
     in_block_comment: bool,
     multiline_delimiter: Option<String>,
-) -> LineStart<'a> {
+) -> LineStart<'_> {
     if language == Language::Rust {
         LineStart::Rust(rust_states)
     } else {
