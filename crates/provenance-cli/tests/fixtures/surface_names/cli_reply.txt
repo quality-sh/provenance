@@ -7,15 +7,26 @@ Arguments:
   [ACTION]  [possible values: get, trace, create, update, answer, claim, release, submit, discussions, discussion, discuss, reply]
 
 Options:
-      --repo <REPO>                          [default: .]
-      --scope <SCOPE>                        [default: default]
-      --format <FORMAT>                      [possible values: json]
-      --quiet                                
-      --stdin                                
-      --actor <actor>                        
-      --declared-by <declared-by>            
-      --body <body>                          
-      --role <role>                          
-      --expected-version <expected-version>  
-  -h, --help                                 Print help
+      --repo <REPO>
+          [default: .]
+      --scope <SCOPE>
+          [default: default]
+      --format <FORMAT>
+          [possible values: json]
+      --quiet
+          
+      --stdin
+          
+      --actor <actor>
+          The actor of the write. It is optional for a write that makes or changes a Requirement and for a write that starts or replies to a Discussion. A write that gives no actor records the actor `authoring`.
+      --declared-by <declared-by>
+          
+      --body <body>
+          
+      --role <role>
+          
+      --expected-version <expected-version>
+          
+  -h, --help
+          Print help
 

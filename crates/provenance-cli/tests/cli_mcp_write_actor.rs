@@ -174,7 +174,7 @@ async fn an_mcp_requirement_create_with_no_actor_records_authoring() {
     assert_eq!(
         created,
         json!({
-            "content": record_text("create", &data),
+            "content": record_text("create", &data), "isError": false,
             "structuredContent": {"action": "create", "type": "requirement", "data": data,
                 "meta": {}},
         })
@@ -200,7 +200,7 @@ async fn an_mcp_requirement_update_with_no_actor_records_authoring() {
     assert_eq!(
         updated,
         json!({
-            "content": record_text("update", &data),
+            "content": record_text("update", &data), "isError": false,
             "structuredContent": {"action": "update", "type": "requirement", "data": data,
                 "meta": {}},
         })
@@ -230,8 +230,56 @@ async fn an_mcp_discuss_with_no_actor_records_authoring() {
     assert_eq!(
         started,
         json!({
-            "content": [{"type": "text", "text": text}],
+            "content": [{"type": "text", "text": text}], "isError": false,
             "structuredContent": {"action": "discuss", "kind": "written", "receipt": receipt},
         })
+    );
+}
+
+/// The description of the actor input of a write that records `authoring` when it gives no
+/// actor.
+const ACTOR_DESCRIPTION: &str = "The actor of the write. It is optional for a write that makes \
+     or changes a Requirement and for a write that starts or replies to a Discussion. A write \
+     that gives no actor records the actor `authoring`.";
+
+/// The actor input has the same description in the API catalog, in the CLI help and in the
+/// MCP change tool, and the API catalog does not require it.
+#[tokio::test]
+#[verifies("rule_write_without_actor_records_authoring", examples)]
+async fn the_actor_input_has_one_description_on_each_interface() {
+    let directory = repository();
+    let repo = directory.path();
+    for route in [
+        "POST /requirements",
+        "PATCH /requirements/{id}",
+        "POST /requirements/{id}/discussions",
+        "POST /requirements/{id}/discussions/{discussion_id}/messages",
+    ] {
+        let catalog = cli_json(repo, &["api", "--filter", route]);
+        let request = &catalog["routes"][0]["request_schema"];
+        assert_eq!(
+            request["properties"]["actor"],
+            json!({"description": ACTOR_DESCRIPTION, "type": "string"}),
+            "{route}"
+        );
+        let required = request["required"].as_array().unwrap();
+        assert!(!required.contains(&json!("actor")), "{route}");
+    }
+    for action in ["update", "discuss"] {
+        let (code, help, _) = run(repo, &["req_a", action, "--help"]);
+        assert_eq!(code, 0);
+        let lines = help.lines().map(str::trim).collect::<Vec<_>>();
+        let described = lines.iter().any(|line| line.ends_with(ACTOR_DESCRIPTION));
+        assert!(described, "{action}: {help}");
+    }
+    let server = Server::start(repo.to_str().unwrap()).await;
+    let tools = server.client.tools().await;
+    server.close().await;
+    let change = tools.iter().find(|tool| tool["name"] == "change").unwrap();
+    assert_eq!(
+        change["inputSchema"]["properties"]["actor"]["description"],
+        format!(
+            "{ACTOR_DESCRIPTION} Actions: create, update, claim, release, submit, discuss, reply."
+        )
     );
 }

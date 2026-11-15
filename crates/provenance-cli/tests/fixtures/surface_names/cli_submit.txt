@@ -7,30 +7,58 @@ Arguments:
   [ACTION]  [possible values: get, trace, create, update, answer, claim, release, submit, discussions, discussion, discuss, reply]
 
 Options:
-      --repo <REPO>                                          [default: .]
-      --scope <SCOPE>                                        [default: default]
-      --format <FORMAT>                                      [possible values: json]
-      --quiet                                                
-      --stdin                                                
-      --actor <actor>                                        
-      --title <title>                                        
-      --declared-by <declared-by>                            
-      --builds-on <builds-on>                                
-      --confidence <confidence>                              
-      --evidence-references <evidence-references>            
-      --expected-revision <expected-revision>                
-      --revises <revises>                                    
-      --source-ids <source-ids>                              
-      --summary <summary>                                    
-      --actor-json <actor-json>                              
-      --builds-on-json <builds-on-json>                      
-      --confidence-json <confidence-json>                    
-      --declared-by-json <declared-by-json>                  
-      --evidence-references-json <evidence-references-json>  
-      --expected-revision-json <expected-revision-json>      
-      --revises-json <revises-json>                          
-      --source-ids-json <source-ids-json>                    
-      --summary-json <summary-json>                          
-      --title-json <title-json>                              
-  -h, --help                                                 Print help
+      --repo <REPO>
+          [default: .]
+      --scope <SCOPE>
+          [default: default]
+      --format <FORMAT>
+          [possible values: json]
+      --quiet
+          
+      --stdin
+          
+      --actor <actor>
+          
+      --title <title>
+          
+      --declared-by <declared-by>
+          The owning agent of the record, checked like an edit's `declared_by`.
+      --builds-on <builds-on>
+          Assertion lineage. A resubmission's rejection link lives on the cycle,
+          never here.
+      --confidence <confidence>
+          
+      --evidence-references <evidence-references>
+          
+      --expected-revision <expected-revision>
+          Refuses when the record moved on since the caller read it.
+      --revises <revises>
+          The rejected proposal this submission revises. The store checks the
+          rejection and records both links.
+      --source-ids <source-ids>
+          
+      --summary <summary>
+          
+      --actor-json <actor-json>
+          
+      --builds-on-json <builds-on-json>
+          
+      --confidence-json <confidence-json>
+          
+      --declared-by-json <declared-by-json>
+          
+      --evidence-references-json <evidence-references-json>
+          
+      --expected-revision-json <expected-revision-json>
+          
+      --revises-json <revises-json>
+          
+      --source-ids-json <source-ids-json>
+          
+      --summary-json <summary-json>
+          
+      --title-json <title-json>
+          
+  -h, --help
+          Print help
 
