@@ -69,19 +69,19 @@ async fn a_document_read_gives_the_fault_with_no_file_that_stops_its_catch_up() 
     );
 }
 
-/// A folder where a record file must be stops the catch-up with an error
-/// that names the folder by its absolute path. The refusal gives that path
-/// relative to the repository.
+/// A link where a record file must be stops the catch-up with an error that
+/// names the link by its absolute path. The refusal gives that path relative
+/// to the repository.
+#[cfg(unix)]
 #[tokio::test]
 #[verifies("rule_unclassified_refusal_gives_cause", examples)]
 async fn a_document_read_gives_no_absolute_path_in_the_cause() {
     let (repo, host) = read_once().await;
-    let shown = ".provenance/state/scopes/default/rules/rule.jsonl";
-    let folder = repo.dir.path().join(shown);
-    if folder.exists() {
-        std::fs::remove_file(&folder).unwrap();
-    }
-    std::fs::create_dir_all(&folder).unwrap();
+    let shown = ".provenance/state/scopes/default/requirements/req.jsonl";
+    let file = repo.dir.path().join(shown);
+    let copy = repo.dir.path().join("req.jsonl");
+    std::fs::rename(&file, &copy).unwrap();
+    std::os::unix::fs::symlink(&copy, &file).unwrap();
 
     let (status, refused) = call(&host, "GET", DOCUMENT, None).await;
 

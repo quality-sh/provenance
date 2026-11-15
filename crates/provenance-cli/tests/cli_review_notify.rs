@@ -3,7 +3,6 @@
 #![cfg(target_os = "linux")]
 
 use crate::codex;
-use crate::depends_on_cycle::add_a_depends_on_cycle;
 use crate::review_host_support;
 
 use codex::{notify, parts, registration, replay, Codex};
@@ -138,13 +137,23 @@ fn unaccepted_registration_fails_and_leaves_no_registration() {
 }
 
 /// A registration whose document read cannot catch up refuses with the text of that
-/// refusal, which holds no path. Records that do not agree stop the catch-up, and the
-/// observation of the host reads them.
+/// refusal, which holds no path. A read database that the host cannot write stops the
+/// catch-up of a new Requirement line. The observation of the host reads only the state.
 #[test]
 #[verifies("rule_review_partial_reads_remain_explicit", examples)]
 fn registration_whose_catch_up_fails_refuses_with_no_path() {
     let setup = Setup::start();
-    add_a_depends_on_cycle(setup.path());
+    let database = setup.path().join(".provenance/cache/provenance.db");
+    let mut permissions = std::fs::metadata(&database).unwrap().permissions();
+    permissions.set_readonly(true);
+    std::fs::set_permissions(&database, permissions).unwrap();
+    let shard = setup
+        .path()
+        .join(".provenance/state/scopes/default/requirements/req.jsonl");
+    let text = std::fs::read_to_string(&shard).unwrap();
+    let mut line: serde_json::Value = serde_json::from_str(text.lines().next().unwrap()).unwrap();
+    line["id"] = json!("req_after_failure");
+    std::fs::write(&shard, format!("{text}{line}\n")).unwrap();
 
     let output = notify(
         &setup.host,

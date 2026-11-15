@@ -72,9 +72,6 @@ mod cli_review_unknown_routes;
 #[cfg(target_os = "linux")]
 #[path = "../review_host_support/codex.rs"]
 mod codex;
-#[cfg(target_os = "linux")]
-#[path = "../../../provenance-transport/tests/support/depends_on_cycle.rs"]
-mod depends_on_cycle;
 #[cfg(unix)]
 #[path = "../review_host_support/persistent_browser.rs"]
 mod persistent_browser;
