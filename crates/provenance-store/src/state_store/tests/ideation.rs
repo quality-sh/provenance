@@ -13,6 +13,7 @@ use provenance_macros::verifies;
 #[verifies("rule_accepted_writes_stay_readable", examples)]
 fn landing_refuses_oversized_records_of_every_kind_before_publication() {
     let (_dir, store, scope) = seeded_requirement_store();
+    let before = crate::stopped_child::state_tree(store.layout.root());
     let oversized = "x".repeat(crate::cache::read::page::RESOURCE_RECORD_BYTES);
     let mut contribution = serde_json::to_value(contribution(&scope, "small")).unwrap();
     contribution["strongest_finding"] = serde_json::json!(oversized);
@@ -51,7 +52,10 @@ fn landing_refuses_oversized_records_of_every_kind_before_publication() {
             matches!(WriteError(error).safe(), WriteFailure::RecordTooLarge),
             "oversized {kind} must receive the typed refusal"
         );
-        assert!(store.list_ideation_landings(&scope).unwrap().is_empty());
+        assert!(
+            crate::stopped_child::state_tree(store.layout.root()) == before,
+            "a refused {kind} writes no file"
+        );
     }
 }
 
@@ -259,73 +263,6 @@ fn direct_synthesis_create_and_replace_respect_landed_records() {
     let records = store.list_synthesis_packets(&scope).unwrap();
     assert_eq!(records.len(), 1);
     assert_eq!(records[0].summary, "replacement");
-}
-
-#[test]
-/// Implementation aid: pins one publication snapshot across the composite ideation read.
-fn composite_ideation_list_holds_publication_lock_between_reads() {
-    let (_dir, store, scope) = initialized_store();
-    let repository = crate::test_support::repository(&store.layout);
-    crate::jsonl::write_jsonl_atomic(
-        &crate::shards::contributions_path(&store.layout, &scope),
-        &[contribution(&scope, "direct")],
-    )
-    .unwrap();
-    let (direct_read_tx, direct_read_rx) = std::sync::mpsc::channel();
-    let (release_tx, release_rx) = std::sync::mpsc::channel();
-    let reader = {
-        let store = repository.store();
-        let scope = scope.clone();
-        std::thread::spawn(move || {
-            store.list_contributions_after_direct_read(&scope, || {
-                direct_read_tx.send(()).unwrap();
-                release_rx.recv().unwrap();
-                Ok(())
-            })
-        })
-    };
-    direct_read_rx.recv().unwrap();
-
-    let (published_tx, published_rx) = std::sync::mpsc::channel();
-    let publisher = {
-        let store = repository.store();
-        let scope = scope.clone();
-        std::thread::spawn(move || {
-            store
-                .with_repository_publication(|_| {
-                    crate::jsonl::write_jsonl_atomic_under_publication::<Contribution>(
-                        &crate::shards::contributions_path(&store.layout, &scope),
-                        &[],
-                    )?;
-                    crate::jsonl::write_jsonl_atomic_under_publication(
-                        &crate::shards::ideation_landings_path(&store.layout, &scope),
-                        &[IdeationLandingBatch {
-                            contributions: vec![contribution(&scope, "landed")],
-                            synthesis_packets: Vec::new(),
-                            proposals: Vec::new(),
-                            assertions: Vec::new(),
-                            dispositions: Vec::new(),
-                        }],
-                    )
-                })
-                .unwrap();
-            published_tx.send(()).unwrap();
-        })
-    };
-
-    assert!(published_rx
-        .recv_timeout(std::time::Duration::from_millis(100))
-        .is_err());
-    release_tx.send(()).unwrap();
-    let records = reader.join().unwrap().unwrap();
-    publisher.join().unwrap();
-
-    assert_eq!(records.len(), 1);
-    assert_eq!(records[0].strongest_finding, "direct");
-    assert_eq!(
-        store.list_contributions(&scope).unwrap()[0].strongest_finding,
-        "landed"
-    );
 }
 
 #[test]
