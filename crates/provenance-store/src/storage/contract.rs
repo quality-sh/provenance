@@ -41,7 +41,7 @@ fn expected(entries: &[(&str, &[u8])]) -> BTreeMap<StateKey, Vec<u8>> {
 const A: &str = "scopes/a/questions/question.jsonl";
 const B: &str = "scopes/a/rules/rule.jsonl";
 const C: &str = "scopes/a/sources/source.jsonl";
-const X: &str = "scopes/a/ideation/landings.jsonl";
+const X: &str = "scopes/a/ideation/contributions.jsonl";
 const Y: &str = "scopes/a/topics/topic.jsonl";
 
 /// Bytes that a text reader would change: no final newline, CRLF, a byte

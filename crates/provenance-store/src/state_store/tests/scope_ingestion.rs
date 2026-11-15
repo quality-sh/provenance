@@ -43,7 +43,6 @@ fn scope_import_writes_only_the_imported_shards() {
         std::fs::read(staged_store.layout.manifest_path()).unwrap(),
         manifest_before
     );
-    assert!(!shards::ideation_landings_path(&staged_store.layout, &scope).exists());
 }
 
 #[test]
@@ -206,7 +205,7 @@ fn a_keyword_id_in_another_scope_does_not_grandfather_an_import() {
 }
 
 #[test]
-fn scope_import_preserves_a_keyword_id_from_a_landing_only_record() {
+fn scope_import_preserves_a_keyword_id_of_a_stored_contribution() {
     let (_dir, live, staged, scope, _) = staged_store();
     let old: provenance_core::Contribution = serde_json::from_value(serde_json::json!({
         "scope_id": "default", "id": "search",
@@ -218,15 +217,10 @@ fn scope_import_preserves_a_keyword_id_from_a_landing_only_record() {
         "uncertainty": {"level": "low", "rationale": "Direct"}, "open_questions": []
     }))
     .unwrap();
-    let landing = crate::state_store::IdeationLandingBatch {
-        contributions: vec![old.clone()],
-        synthesis_packets: Vec::new(),
-        proposals: Vec::new(),
-        assertions: Vec::new(),
-        dispositions: Vec::new(),
-    };
-    let landing_path = shards::ideation_landings_path(&staged.layout, &scope);
-    seed_shard(&landing_path, &[landing]);
+    seed_shard(
+        &shards::contributions_path(&staged.layout, &scope),
+        std::slice::from_ref(&old),
+    );
 
     with_repository_publication(&live.layout, |_| {
         staged.import_scope(
@@ -243,7 +237,7 @@ fn scope_import_preserves_a_keyword_id_from_a_landing_only_record() {
 }
 
 #[test]
-fn a_landing_does_not_grandfather_a_different_keyword_id() {
+fn a_stored_contribution_does_not_grandfather_a_different_keyword_id() {
     let (_dir, live, staged, scope, _) = staged_store();
     let contribution = |id| -> provenance_core::Contribution {
         serde_json::from_value(serde_json::json!({
@@ -258,17 +252,8 @@ fn a_landing_does_not_grandfather_a_different_keyword_id() {
         .unwrap()
     };
     let old = contribution("search");
-    let landing_path = shards::ideation_landings_path(&staged.layout, &scope);
-    seed_shard(
-        &landing_path,
-        &[crate::state_store::IdeationLandingBatch {
-            contributions: vec![old.clone()],
-            synthesis_packets: Vec::new(),
-            proposals: Vec::new(),
-            assertions: Vec::new(),
-            dispositions: Vec::new(),
-        }],
-    );
+    let stored = shards::contributions_path(&staged.layout, &scope);
+    seed_shard(&stored, std::slice::from_ref(&old));
     let error = with_repository_publication(&live.layout, |_| {
         staged.import_scope(
             &scope,
@@ -283,14 +268,7 @@ fn a_landing_does_not_grandfather_a_different_keyword_id() {
         error.to_string().contains("reserved record ID check"),
         "{error}"
     );
-    assert!(!shards::contributions_path(&staged.layout, &scope).exists());
-    assert_eq!(
-        std::fs::read_to_string(&landing_path)
-            .unwrap()
-            .lines()
-            .count(),
-        1
-    );
+    assert_eq!(std::fs::read_to_string(&stored).unwrap().lines().count(), 1);
     assert!(!staged.layout.publication_lock_path().exists());
 }
 
