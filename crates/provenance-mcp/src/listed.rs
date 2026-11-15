@@ -51,7 +51,7 @@ enum Runner {
     Api,
     Check,
     Discussions(ActionInput),
-    Change(ActionInput),
+    Change(tools::ChangeActions),
 }
 
 /// One call after its input checks: the tool, and the action that the call selected.
@@ -95,8 +95,11 @@ impl Listed {
                 Runner::Discussions(provenance_porcelain::discussion::action_input()),
             ),
             Command::Change => {
-                let input = tools::change_input(host);
-                (tools::change_tool(host, &input)?, Runner::Change(input))
+                let actions = tools::ChangeActions::new(host);
+                (
+                    tools::change_tool(host, &actions.listed)?,
+                    Runner::Change(actions),
+                )
             }
             Command::Action(_)
             | Command::Prime
@@ -143,10 +146,19 @@ impl Listed {
         host: &StatementHost,
         mut arguments: Map<String, Value>,
     ) -> Result<(Call, Map<String, Value>), CallToolResult> {
+        // A notify call on a host with no notify port has the checks of a host with one.
+        let mut notify = None;
         let wrong_tool = match &self.runner {
             Runner::Get => tools::get_refusal(&self.tool.input_schema, &arguments),
             Runner::Discussions(_) => tools::discussions_refusal(&arguments),
-            Runner::Change(input) => tools::change_refusal(host, input, &arguments),
+            Runner::Change(actions) => match actions.route(host, &arguments) {
+                tools::ChangeRoute::Refuse(refused) => Some(refused),
+                tools::ChangeRoute::Notify(unlisted) => {
+                    notify = Some(unlisted);
+                    None
+                }
+                tools::ChangeRoute::Listed => None,
+            },
             Runner::Trace | Runner::Search | Runner::Api | Runner::Check => None,
         };
         if let Some(refused) = wrong_tool {
@@ -171,16 +183,13 @@ impl Listed {
                 let word = select(input, &mut arguments)?;
                 Call::Discussion(Action::parse(word).expect("a Discussion action"))
             }
-            Runner::Change(input) => match tools::change_unlisted_notify(input, &arguments) {
-                // The listed schema has no notify action. The shared get operation
-                // checks the notify fields after the field names, as on the CLI.
-                Some(notify) => {
-                    return Ok((Call::Change(select(&notify, &mut arguments)?), arguments))
-                }
-                None => Call::Change(select(input, &mut arguments)?),
-            },
+            Runner::Change(actions) => {
+                let input = notify.map_or(&actions.listed, |unlisted| &unlisted.input);
+                Call::Change(select(input, &mut arguments)?)
+            }
         };
-        if let Some(refused) = self.input.refusal(&self.tool.name, &given) {
+        let check = notify.map_or(&self.input, |unlisted| &unlisted.check);
+        if let Some(refused) = check.refusal(&self.tool.name, &given) {
             return Err(crate::surface::detail_error(refused));
         }
         Ok((call, arguments))

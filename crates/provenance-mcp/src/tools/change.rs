@@ -4,6 +4,7 @@
 use super::{authoring, discussions, notify};
 
 mod output;
+use crate::arguments::InputCheck;
 use crate::exposed::{Place, EXPOSED};
 use crate::surface::{Effect, SchemaDeclaration};
 use provenance_core::protocol::failure::{ErasedFailure, OperationFailure};
@@ -100,36 +101,71 @@ pub fn tool(host: &StatementHost, input: &ActionInput) -> Option<Tool> {
     ))
 }
 
-/// The refusal of a write that this host does not list. A repository action on a host
-/// with no repository binding is unavailable; another write is denied. Notify on a host
-/// that grants the record read but binds no notify port is not refused here: the shared
-/// get operation answers it, as on the CLI.
-pub fn refusal(
-    host: &StatementHost,
-    input: &ActionInput,
-    arguments: &Map<String, Value>,
-) -> Option<CallToolResult> {
-    let Some(Value::String(word)) = arguments.get("action") else {
-        return None;
-    };
-    if !is_action(word) || input.actions().any(|action| action == word) {
-        return None;
-    }
-    let porcelain = host.porcelain();
-    if word == NOTIFY {
-        return (!porcelain.get_is_available()).then(denied);
-    }
-    let unbound = repository_command(word).is_some() && !porcelain.repository_is_available();
-    Some(if unbound { unavailable() } else { denied() })
+/// The actions of the change tool on one host. A host that grants the record read but
+/// binds no notify port lists no notify action, and keeps the notify input and its
+/// compiled schema check of a host with a notify port.
+pub struct Actions {
+    pub listed: ActionInput,
+    unlisted_notify: Option<UnlistedNotify>,
 }
 
-/// The notify fields, when the call selects notify and the host lists no notify action.
-/// The host then grants the record read and binds no notify port, because `refusal`
-/// denies each other unlisted notify call.
-pub fn unlisted_notify(input: &ActionInput, arguments: &Map<String, Value>) -> Option<ActionInput> {
-    let selects_notify = arguments.get("action").and_then(Value::as_str) == Some(NOTIFY);
-    (selects_notify && !input.actions().any(|action| action == NOTIFY))
-        .then(|| ActionInput::new(None).with_action(NOTIFY, notify_schema()))
+/// The notify action of a host with no notify port: the change input with notify added,
+/// and the input check of that change tool.
+pub struct UnlistedNotify {
+    pub input: ActionInput,
+    pub check: InputCheck,
+}
+
+/// What a change call does before its action runs.
+pub enum Route<'a> {
+    /// The host does not list the write: the call gets this refusal.
+    Refuse(CallToolResult),
+    /// Notify on a host with no notify port: the call passes the checks of this notify
+    /// input, and the shared get operation answers it, as on the CLI.
+    Notify(&'a UnlistedNotify),
+    /// The listed action input checks the call.
+    Listed,
+}
+
+impl Actions {
+    /// The change actions of the host.
+    pub fn new(host: &StatementHost) -> Self {
+        let porcelain = host.porcelain();
+        let unlisted = !porcelain.notify_is_available() && porcelain.get_is_available();
+        let unlisted_notify = unlisted.then(|| {
+            let input = input(host).with_action(NOTIFY, notify_schema());
+            let tool = tool(host, &input).expect("a change tool with notify");
+            let check = InputCheck::new(Value::Object((*tool.input_schema).clone()))
+                .unwrap_or_else(|error| panic!("the notify input schema compiles: {error}"));
+            UnlistedNotify { input, check }
+        });
+        Self {
+            listed: input(host),
+            unlisted_notify,
+        }
+    }
+
+    /// The route of one call. A repository action on a host with no repository binding
+    /// is unavailable. Notify that the host does not list goes to the shared get
+    /// operation when the host grants the record read. Another write that the host does
+    /// not list is denied.
+    pub fn route(&self, host: &StatementHost, arguments: &Map<String, Value>) -> Route<'_> {
+        let Some(Value::String(word)) = arguments.get("action") else {
+            return Route::Listed;
+        };
+        if !is_action(word) || self.listed.actions().any(|action| action == word) {
+            return Route::Listed;
+        }
+        if word == NOTIFY {
+            return self
+                .unlisted_notify
+                .as_ref()
+                .map_or_else(|| Route::Refuse(denied()), Route::Notify);
+        }
+        let unbound =
+            repository_command(word).is_some() && !host.porcelain().repository_is_available();
+        Route::Refuse(if unbound { unavailable() } else { denied() })
+    }
 }
 
 fn notify_schema() -> Value {
