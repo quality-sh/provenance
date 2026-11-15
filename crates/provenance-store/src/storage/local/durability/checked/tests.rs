@@ -238,3 +238,28 @@ fn a_read_only_file_is_replaced_and_the_new_file_is_read_only() {
     writable.set_readonly(false);
     std::fs::set_permissions(&path, writable).unwrap();
 }
+
+/// On Windows, a failed check deletes the temporary file also when it has
+/// the read-only attribute of the old file.
+#[cfg(windows)]
+#[test]
+fn a_failed_check_deletes_a_read_only_temporary_file() {
+    let (_temp, root) = directory();
+    let path = root.join("AGENTS.md");
+    std::fs::write(&path, "old\n").unwrap();
+    let mut permissions = std::fs::metadata(&path).unwrap().permissions();
+    permissions.set_readonly(true);
+    std::fs::set_permissions(&path, permissions.clone()).unwrap();
+
+    let error = write_synced_file_checked(&path, b"new\n", PREFIX, Some(&permissions), || {
+        anyhow::bail!("the file changed")
+    })
+    .unwrap_err();
+
+    assert_eq!(format!("{error:#}"), "the file changed");
+    assert_eq!(std::fs::read(&path).unwrap(), b"old\n");
+    assert_eq!(names(&root), ["AGENTS.md"]);
+    let mut writable = std::fs::metadata(&path).unwrap().permissions();
+    writable.set_readonly(false);
+    std::fs::set_permissions(&path, writable).unwrap();
+}

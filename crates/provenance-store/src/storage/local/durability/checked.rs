@@ -80,7 +80,7 @@ pub fn write_synced_file_checked(
         Ok(permissions) => permissions,
         Err(error) => {
             drop(file);
-            delete_temporary(&temporary);
+            let _ = std::fs::remove_file(&temporary);
             return Err(error);
         }
     };
@@ -128,20 +128,6 @@ fn unsynced(synced: anyhow::Result<()>) -> Result<(), ChangedUnsynced> {
             .downcast::<ChangedUnsynced>()
             .unwrap_or_else(ChangedUnsynced)
     })
-}
-
-/// Deletes the temporary file at `path`, also when it is read-only: Windows
-/// does not delete a read-only file.
-fn delete_temporary(path: &Path) {
-    #[cfg(windows)]
-    if let Ok(metadata) = std::fs::metadata(path) {
-        let mut permissions = metadata.permissions();
-        if permissions.readonly() {
-            permissions.set_readonly(false);
-            let _ = std::fs::set_permissions(path, permissions);
-        }
-    }
-    let _ = std::fs::remove_file(path);
 }
 
 /// Removes each regular file in the directory of `path` whose name is
@@ -226,7 +212,7 @@ fn rename_kept_over_read_only(
     };
     drop(file);
     renamed.map_err(|error| {
-        delete_temporary(path);
+        let _ = std::fs::remove_file(path);
         super::ReplaceFailed(error)
     })
 }
