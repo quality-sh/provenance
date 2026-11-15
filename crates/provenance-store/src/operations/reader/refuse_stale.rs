@@ -64,7 +64,7 @@ pub(super) fn run(repository: &Repository) -> FreshnessFuture<'_> {
         Ok(Freshness {
             check: Check::Stale { guard, passes },
             policy: StampPolicy::RefuseStale,
-            error: None,
+            failure: None,
         })
     })
 }

@@ -17,6 +17,8 @@ mod cli_catalog;
 mod cli_catalog_structured_input;
 #[path = "../cli_catch_up_characterization.rs"]
 mod cli_catch_up_characterization;
+#[path = "../cli_document_catch_up_cause.rs"]
+mod cli_document_catch_up_cause;
 #[path = "../cli_get_damaged_state.rs"]
 mod cli_get_damaged_state;
 #[path = "../cli_get_edit_etag.rs"]
@@ -61,3 +63,5 @@ mod search_repository;
 mod search_text_first_page;
 #[path = "../search_text_pages.rs"]
 mod search_text_pages;
+#[path = "../../../provenance-transport/tests/support/state_lines.rs"]
+mod state_lines;

@@ -334,3 +334,73 @@ async fn an_adapter_that_allows_no_values_in_a_list_is_refused() {
         "the read database adapter allows no values in a list",
     );
 }
+
+/// Gives the read context of one repository to the catalog.
+struct Prepared(Repository);
+
+impl crate::operations::catalog::ContextResolver for Prepared {
+    fn authorize(
+        &self,
+        _: &'static str,
+        _: &crate::operations::catalog::RequestedContext,
+    ) -> Result<(), provenance_core::protocol::failure::OperationFailure> {
+        Ok(())
+    }
+
+    fn prepare(
+        &self,
+        _: &'static str,
+        _: crate::operations::catalog::RequestedContext,
+        _: crate::operations::catalog::ExecutionNeeds,
+    ) -> Result<
+        crate::operations::catalog::PreparedContext,
+        provenance_core::protocol::failure::OperationFailure,
+    > {
+        use crate::operations::catalog::{PreparedContext, PreparedRead};
+        Ok(PreparedContext::read(PreparedRead {
+            repository: self.0.clone(),
+            policy: ReadPolicy::default(),
+            requested_target: "test".into(),
+            external: true,
+        }))
+    }
+}
+
+/// A database fault in the catch-up has no file and no line: the document
+/// read gives no file and no line, and the fault as the message.
+#[tokio::test]
+#[provenance_macros::verifies("rule_unclassified_refusal_gives_cause", examples)]
+async fn a_document_read_gives_the_database_fault_that_stops_its_catch_up() {
+    use crate::operations::catalog::{self, Direct};
+    let store = test_stores::seeded_queries();
+    get_through(&store, ReadPolicy::default()).await.unwrap();
+    add_requirement(&store, "req_after_the_read");
+    let repository = over(
+        &store,
+        Some(Arc::new(LateCommitFails(FileReadDatabase::new(
+            store.layout(),
+        )))),
+    );
+
+    let failed = crate::test_support::call::<catalog::ReadDocument, _>(
+        serde_json::json!({
+            "context": {"repository": "test", "scope": "default", "freshness": "catch_up"},
+            "request": {"id": "req_overtime"}
+        }),
+        Direct(Arc::new(Prepared(repository))),
+    )
+    .await
+    .unwrap_err();
+
+    assert_eq!(failed.status_code(), 409);
+    assert_eq!(
+        serde_json::to_value(&failed).unwrap(),
+        serde_json::json!({
+            "error": {
+                "kind": "document_catch_up_failed",
+                "message": "the store did not commit the write"
+            },
+            "meta": {}
+        })
+    );
+}
