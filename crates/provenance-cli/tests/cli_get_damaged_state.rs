@@ -2,7 +2,7 @@
 //! on a spawned `provenance mcp`. When the read database holds a stored revision, the get
 //! gives the record at that serial with its edit field and the freshness warning. When it
 //! holds no revision, the get refuses and names `provenance materialize`. When the record
-//! changed after the stored serial, an update with the ETag of the get refuses.
+//! changed after the stored serial, an update with the `ETag` of the get refuses.
 
 use provenance_macros::verifies;
 use serde_json::{json, Value};
