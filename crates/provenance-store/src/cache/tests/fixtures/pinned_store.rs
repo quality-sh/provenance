@@ -160,13 +160,11 @@ fn seed_graph(store: &StateStore, scope: &ScopeId) {
     create_rule_of(store, scope, LINKED_RULE_ID, "req_top");
     // Each Rule is created active, so its creation submission is a status
     // request; the reviewer accepts it.
-    let others = ["rule_penalty_001", LINKED_RULE_ID];
     let overtime = (2..=9).map(|index| format!("rule_over_{index:03}"));
-    for id in ["rule_overtime_001".to_owned()]
-        .into_iter()
+    let rules = std::iter::once("rule_overtime_001".to_owned())
         .chain(overtime)
-        .chain(others.map(str::to_owned))
-    {
+        .chain(["rule_penalty_001", LINKED_RULE_ID].map(str::to_owned));
+    for id in rules {
         crate::test_support::accept_pending(store, provenance_core::NodeType::Rule, &id);
     }
 }
