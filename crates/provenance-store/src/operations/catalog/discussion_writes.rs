@@ -2,7 +2,7 @@
 
 use super::{shapes::scoped_write_operation, ExecutionNeed};
 use crate::review;
-use provenance_core::{threads::Discussion, ScopeId, ThreadParent};
+use provenance_core::{actor_input::ActorInput, threads::Discussion, ScopeId, ThreadParent};
 use serde::Deserialize;
 
 #[derive(Deserialize)]
@@ -11,7 +11,10 @@ use serde::Deserialize;
 pub struct WriteDiscussionRequest {
     pub scope_id: ScopeId,
     pub parent: ThreadParent,
-    pub actor: String,
+    /// The actor of the write. A status change must give an actor. A start that gives no
+    /// actor records the actor `authoring`, and a reply needs no actor.
+    #[serde(default)]
+    pub actor: ActorInput,
     pub declared_by: Option<String>,
     pub action: review::DiscussionAction,
 }
@@ -24,11 +27,29 @@ scoped_write_operation!(
     &[409],
     &[ExecutionNeed::GraphStorage],
     scope = scope_id,
-    |store, _scope, request| store.write_discussion(review::WriteDiscussion {
-        scope_id: request.scope_id,
-        parent: request.parent,
-        actor: request.actor,
-        declared_by: request.declared_by,
-        action: request.action,
-    })
+    validate = |request: &WriteDiscussionRequest| match request.action {
+        review::DiscussionAction::SetStatus { .. } if request.actor.is_absent() => {
+            Err(review::write_actor::missing_actor())
+        }
+        _ => Ok(()),
+    },
+    |store, _scope, request| {
+        let actor = match request.action {
+            // A native caller of `invoke_typed` skips `validate_external`, so the status change
+            // of that caller is refused here.
+            review::DiscussionAction::SetStatus { .. } => {
+                review::write_actor::named_actor(request.actor)?
+            }
+            review::DiscussionAction::Start { .. } | review::DiscussionAction::Reply { .. } => {
+                review::write_actor::recorded_actor(request.actor)
+            }
+        };
+        store.write_discussion(review::WriteDiscussion {
+            scope_id: request.scope_id,
+            parent: request.parent,
+            actor,
+            declared_by: request.declared_by,
+            action: request.action,
+        })
+    }
 );

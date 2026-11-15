@@ -165,8 +165,8 @@ impl From<&UnparsableStateFile> for WriteFailure {
     }
 }
 
-/// Every write request names the actor who makes it. A blank actor is a
-/// client fault, named as the decoder names body fields.
+/// A given actor that is blank is a client fault on `request.actor`, named as the decoder
+/// names body fields.
 #[provenance_macros::rule("rule_write_actor_required")]
 pub(crate) fn ensure_actor(actor: &str) -> anyhow::Result<()> {
     if actor.trim().is_empty() {
