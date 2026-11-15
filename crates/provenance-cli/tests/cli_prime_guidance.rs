@@ -1,6 +1,7 @@
 use assert_cmd::Command;
 use provenance_macros::verifies;
 use provenance_porcelain::guidance::guidance_for;
+use provenance_porcelain::registry::Command as Porcelain;
 use serde_json::Value;
 
 fn prime(repo: &std::path::Path, extra: &[&str]) -> String {
@@ -151,68 +152,85 @@ async fn cli_and_mcp_share_the_same_guidance() {
     server.await.unwrap().cancel().await.unwrap();
 }
 
-/// The names of the commands that the CLI shows, read from the list that the CLI help reads.
-fn shown_names() -> Vec<&'static str> {
-    provenance_cli::exposed::EXPOSED
-        .iter()
-        .map(|command| command.declaration().name)
-        .collect()
+/// The form that selects `command` on the CLI: the words of its name, or `<id>` and its
+/// name for a command that only acts on a record.
+fn cli_form(command: Porcelain) -> String {
+    let declaration = command.declaration();
+    if declaration.grammar.takes_name() {
+        declaration.name.to_owned()
+    } else {
+        format!("<id> {}", declaration.name)
+    }
 }
 
-/// Each command line of prime and each `provenance` command in prime names a command that
-/// the CLI shows, and prime gives the CLI form of an action on a record.
-#[test]
-#[verifies("rule_guidance_names_accepted_commands", examples)]
-fn prime_names_only_commands_that_the_cli_shows() {
-    let repo = tempfile::tempdir().unwrap();
-    let text = prime(repo.path(), &[]);
-    let shown = shown_names();
+/// The names of the command lines of the guidance.
+fn line_names(text: &str) -> Vec<&str> {
     let (_, actions) = text.split_once("\n## Actions\n").unwrap();
-    let lines: Vec<&str> = actions
+    actions
         .lines()
         .filter_map(|line| line.strip_prefix("- ")?.split_once(": "))
         .map(|(name, _)| name)
-        .collect();
-    assert!(lines.contains(&"create"), "{text}");
-    for name in lines {
-        assert!(
-            shown.contains(&name),
-            "prime names {name}, which the CLI does not show:\n{text}"
-        );
-    }
-    let forms: Vec<&str> = text
-        .split('`')
+        .collect()
+}
+
+/// The command of each `provenance` code span, without the options and their values.
+fn code_forms(text: &str) -> Vec<String> {
+    text.split('`')
         .skip(1)
         .step_by(2)
         .filter_map(|code| code.strip_prefix("provenance "))
-        .collect();
-    for form in &forms {
-        let words = form
-            .split_whitespace()
-            .take_while(|word| !word.starts_with('-'))
-            .filter(|word| !word.starts_with('<'))
-            .collect::<Vec<_>>()
-            .join(" ");
-        assert!(
-            shown.contains(&words.as_str()),
-            "prime gives `provenance {form}`, which the CLI does not show:\n{text}"
-        );
-    }
-    assert!(
-        forms.iter().any(|form| is_record_action(form)),
-        "prime gives no CLI form of an action on a record:\n{text}"
-    );
+        .map(|code| {
+            code.split_whitespace()
+                .take_while(|word| !word.starts_with('-'))
+                .collect::<Vec<_>>()
+                .join(" ")
+        })
+        .collect()
 }
 
-/// Whether `form` is an action on a record: a record ID, then the name of a record action.
-fn is_record_action(form: &str) -> bool {
-    use provenance_porcelain::{action::Action, registry::Command as Porcelain};
+/// Whether the CLI accepts `provenance <form>`: the root words select a command that the
+/// CLI shows, or the form is a record ID and an action that the CLI accepts after it.
+fn accepts(form: &str) -> bool {
+    let words: Vec<&str> = form.split_whitespace().collect();
+    match words.as_slice() {
+        ["<id>", action] => Command::cargo_bin("provenance")
+            .unwrap()
+            .args(["req_prime_form", action, "--help"])
+            .output()
+            .unwrap()
+            .status
+            .success(),
+        root => provenance_cli::exposed::find(root).is_some(),
+    }
+}
 
-    let mut words = form.split_whitespace();
-    words.next() == Some("<id>")
-        && words.next().is_some_and(|word| {
-            Action::RECORD
-                .into_iter()
-                .any(|action| Porcelain::Action(action).declaration().name == word)
-        })
+/// Prime has a line for each command that the CLI help lists, in the form that selects it
+/// on the CLI, and the CLI accepts each command that prime names.
+#[test]
+#[verifies("rule_guidance_names_accepted_commands", examples)]
+fn prime_names_each_command_that_the_cli_shows_in_its_cli_form() {
+    let repo = tempfile::tempdir().unwrap();
+    let text = prime(repo.path(), &[]);
+    let lines = line_names(&text);
+    for command in provenance_cli::exposed::EXPOSED {
+        if command.declaration().internal {
+            continue;
+        }
+        let form = cli_form(*command);
+        assert!(
+            lines.contains(&form.as_str()),
+            "prime does not name `provenance {form}`, which the CLI shows:\n{text}"
+        );
+    }
+    let forms = code_forms(&text);
+    assert!(
+        forms.iter().any(|form| form.starts_with("<id> ")),
+        "prime gives no CLI form of an action on a record:\n{text}"
+    );
+    for form in lines.into_iter().chain(forms.iter().map(String::as_str)) {
+        assert!(
+            accepts(form),
+            "the CLI refuses `provenance {form}`, which prime names:\n{text}"
+        );
+    }
 }
