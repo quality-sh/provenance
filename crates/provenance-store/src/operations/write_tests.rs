@@ -193,6 +193,7 @@ fn two_stored_records_at_one_declaration_address_are_located_at_the_second_line(
         file,
         line,
         message,
+        ..
     } = error.safe()
     else {
         panic!("{error}");

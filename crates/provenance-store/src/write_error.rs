@@ -96,6 +96,8 @@ pub enum WriteFailure {
         file: String,
         line: u64,
         message: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        hint: Option<String>,
     },
     /// A write failure of no known kind. `cause` is the display chain of the
     /// native error. A path below the repository in it is relative to the
@@ -158,6 +160,7 @@ impl From<&UnparsableStateFile> for WriteFailure {
             file: state.file().to_owned(),
             line: state.line(),
             message: state.message().to_owned(),
+            hint: state.hint().map(str::to_owned),
         }
     }
 }

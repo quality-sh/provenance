@@ -20,12 +20,7 @@ pub fn state_file(path: &Utf8Path) -> String {
 /// the parent of that directory. A file that no store holds, such as a
 /// `merge-jsonl` input, is in the project of the working directory when it is
 /// below the root of that project.
-pub fn unparsable(
-    path: &Utf8Path,
-    line: u64,
-    message: String,
-    hint: Option<String>,
-) -> UnparsableStateFile {
+pub fn unparsable(path: &Utf8Path, line: u64, message: String) -> UnparsableStateFile {
     let absolute = std::path::absolute(path)
         .ok()
         .and_then(|absolute| Utf8PathBuf::from_path_buf(absolute).ok());
@@ -33,7 +28,7 @@ pub fn unparsable(
     let repository = store_root(path)
         .map(Utf8Path::to_path_buf)
         .or_else(working_project);
-    UnparsableStateFile::new(path, repository.as_deref(), line, message, hint)
+    UnparsableStateFile::new(path, repository.as_deref(), line, message)
 }
 
 /// The root of the store that holds `path`: the parent of the nearest

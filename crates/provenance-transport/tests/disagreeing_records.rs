@@ -5,6 +5,7 @@
 
 use crate::support;
 
+use provenance_core::protocol::read_failure::STATE_CORRECTIONS;
 use provenance_macros::verifies;
 use serde_json::json;
 use support::records::Repository;
@@ -34,7 +35,8 @@ async fn a_withdrawal_that_names_no_submission_is_located() {
     assert_eq!(
         failure["error"],
         json!({"kind":"invalid_state_file", "file":WITHDRAWALS, "line":1,
-            "message":"withdrawal withdrawal_lost names no review submission: proposal_missing"}),
+            "message":"withdrawal withdrawal_lost names no review submission: proposal_missing",
+            "hint":STATE_CORRECTIONS}),
     );
 }
 
@@ -79,7 +81,8 @@ async fn a_withdrawal_id_on_two_lines_is_located_at_the_second_line() {
     assert_eq!(
         failure["error"],
         json!({"kind":"invalid_state_file", "file":WITHDRAWALS, "line":2,
-            "message":"withdrawal withdrawal_a is stored again; line 1 stores it first"}),
+            "message":"withdrawal withdrawal_a is stored again; line 1 stores it first",
+            "hint":STATE_CORRECTIONS}),
     );
 }
 
@@ -104,7 +107,8 @@ async fn a_withdrawal_that_names_no_submission_after_two_withdrawals_is_located(
     assert_eq!(
         failure["error"],
         json!({"kind":"invalid_state_file", "file":WITHDRAWALS, "line":3,
-            "message":"withdrawal withdrawal_lost names no review submission: proposal_missing"}),
+            "message":"withdrawal withdrawal_lost names no review submission: proposal_missing",
+            "hint":STATE_CORRECTIONS}),
     );
 }
 
@@ -135,7 +139,8 @@ async fn a_requirement_stored_on_two_lines_is_located_at_the_second_line() {
     assert_eq!(
         failure["error"],
         json!({"kind":"invalid_state_file", "file":REQUIREMENTS, "line":second,
-            "message":format!("requirement req_shared is stored again; line {first} stores it first")}),
+            "message":format!("requirement req_shared is stored again; line {first} stores it first"),
+            "hint":STATE_CORRECTIONS}),
     );
 }
 
@@ -187,6 +192,7 @@ async fn a_message_id_on_two_lines_is_located_at_the_second_line() {
         "message":format!(
             "Message ID {id} appears more than once: {file}:1, {file}:2; \
              see docs/cli.md#repairing-a-duplicate-message-id"
-        )}),
+        ),
+            "hint":STATE_CORRECTIONS}),
     );
 }

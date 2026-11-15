@@ -82,7 +82,6 @@ pub fn state_fault(at: &ShardLine, message: String) -> anyhow::Error {
         &at.path,
         u64::try_from(at.line).unwrap_or(u64::MAX),
         message,
-        None,
     )
     .into()
 }

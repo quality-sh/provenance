@@ -172,6 +172,7 @@ async fn each_refusal_keeps_its_mcp_error_object() {
         {
             "error": {
                 "file": "scopes/default/requirements/req.jsonl",
+                "hint": provenance_core::protocol::read_failure::STATE_CORRECTIONS,
                 "kind": "invalid_state_file",
                 "line": 2,
                 "message": "missing field `scope_id`"
@@ -182,6 +183,7 @@ async fn each_refusal_keeps_its_mcp_error_object() {
         {
             "error": {
                 "file": "scopes/default/requirements/req.jsonl",
+                "hint": provenance_core::protocol::read_failure::STATE_CORRECTIONS,
                 "kind": "invalid_state_file",
                 "line": 2,
                 "message": "missing field `scope_id`"

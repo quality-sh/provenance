@@ -66,14 +66,9 @@ pub enum DictionaryResolution {
     },
 }
 
-/// The step that repairs a dictionary reference that does not parse.
-#[cfg(feature = "host")]
-const REFERENCE_REPAIR: &str =
-    "get the file again from git or correct its JSON, and then do the command again";
-
 /// Parses the reference at `path`. The refusal of a reference that does not
 /// parse gives the file below the state directory, the line, the parse message
-/// and the repair.
+/// and the steps that correct the state.
 #[cfg(feature = "host")]
 fn parse_reference(
     path: &camino::Utf8Path,
@@ -84,7 +79,6 @@ fn parse_reference(
             path,
             u64::try_from(error.line()).unwrap_or(u64::MAX),
             crate::state_store::readers::parse_message(&error),
-            Some(REFERENCE_REPAIR.to_owned()),
         )
     })
 }

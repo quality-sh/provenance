@@ -240,7 +240,7 @@ fn a_bad_state_line_keeps_its_exit_code_and_lines() {
                 "command": "req_a get",
                 "format": "text",
                 "stderr": [
-                    "Error: {\"error\":{\"file\":\"scopes/default/requirements/req.jsonl\",\"kind\":\"invalid_state_file\",\"line\":2,\"message\":\"missing field `scope_id`\"},\"meta\":{}}"
+                    "Error: {\"error\":{\"file\":\"scopes/default/requirements/req.jsonl\",\"hint\":\"get .provenance/state from a branch or a commit where Provenance can read it, or remove all records and settings of the repository: remove .provenance/state and run provenance init\",\"kind\":\"invalid_state_file\",\"line\":2,\"message\":\"missing field `scope_id`\"},\"meta\":{}}"
                 ],
                 "stdout_empty": true
             },
@@ -249,7 +249,7 @@ fn a_bad_state_line_keeps_its_exit_code_and_lines() {
                 "command": "req_a get",
                 "format": "json",
                 "stderr": [
-                    "{\"error\":{\"file\":\"scopes/default/requirements/req.jsonl\",\"kind\":\"invalid_state_file\",\"line\":2,\"message\":\"missing field `scope_id`\"},\"meta\":{}}"
+                    "{\"error\":{\"file\":\"scopes/default/requirements/req.jsonl\",\"hint\":\"get .provenance/state from a branch or a commit where Provenance can read it, or remove all records and settings of the repository: remove .provenance/state and run provenance init\",\"kind\":\"invalid_state_file\",\"line\":2,\"message\":\"missing field `scope_id`\"},\"meta\":{}}"
                 ],
                 "stdout_empty": true
             },
@@ -258,7 +258,7 @@ fn a_bad_state_line_keeps_its_exit_code_and_lines() {
                 "command": "req_b create",
                 "format": "text",
                 "stderr": [
-                    "Error: {\"error\":{\"file\":\"scopes/default/requirements/req.jsonl\",\"kind\":\"invalid_state_file\",\"line\":2,\"message\":\"missing field `scope_id`\"},\"meta\":{}}"
+                    "Error: {\"error\":{\"file\":\"scopes/default/requirements/req.jsonl\",\"hint\":\"get .provenance/state from a branch or a commit where Provenance can read it, or remove all records and settings of the repository: remove .provenance/state and run provenance init\",\"kind\":\"invalid_state_file\",\"line\":2,\"message\":\"missing field `scope_id`\"},\"meta\":{}}"
                 ],
                 "stdout_empty": true
             },
@@ -267,7 +267,7 @@ fn a_bad_state_line_keeps_its_exit_code_and_lines() {
                 "command": "req_b create",
                 "format": "json",
                 "stderr": [
-                    "{\"error\":{\"file\":\"scopes/default/requirements/req.jsonl\",\"kind\":\"invalid_state_file\",\"line\":2,\"message\":\"missing field `scope_id`\"},\"meta\":{}}"
+                    "{\"error\":{\"file\":\"scopes/default/requirements/req.jsonl\",\"hint\":\"get .provenance/state from a branch or a commit where Provenance can read it, or remove all records and settings of the repository: remove .provenance/state and run provenance init\",\"kind\":\"invalid_state_file\",\"line\":2,\"message\":\"missing field `scope_id`\"},\"meta\":{}}"
                 ],
                 "stdout_empty": true
             }
@@ -359,7 +359,7 @@ fn get_names_the_line_of_a_withdrawal_that_names_no_submission() {
             "command": "req_a get",
             "format": "json",
             "stderr": [
-                "{\"error\":{\"file\":\"scopes/default/ideation/withdrawals.jsonl\",\"kind\":\"invalid_state_file\",\"line\":1,\"message\":\"withdrawal withdrawal_lost names no review submission: proposal_missing\"},\"meta\":{}}"
+                "{\"error\":{\"file\":\"scopes/default/ideation/withdrawals.jsonl\",\"hint\":\"get .provenance/state from a branch or a commit where Provenance can read it, or remove all records and settings of the repository: remove .provenance/state and run provenance init\",\"kind\":\"invalid_state_file\",\"line\":1,\"message\":\"withdrawal withdrawal_lost names no review submission: proposal_missing\"},\"meta\":{}}"
             ],
             "stdout_empty": true
         }]),

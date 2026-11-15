@@ -378,7 +378,8 @@ async fn updating_a_row_with_repeated_unknown_members_is_refused_without_publica
         error,
         json!({"kind":"invalid_state_file", "file":"scopes/default/sources/source.jsonl",
             "line":1,
-            "message":"repeated top-level member `extension` cannot survive a typed record change"})
+            "message":"repeated top-level member `extension` cannot survive a typed record change",
+            "hint":provenance_core::protocol::read_failure::STATE_CORRECTIONS})
     );
     assert_eq!(raw_rows(&fixture, "sources", "source.jsonl"), vec![row]);
     assert_eq!(state_snapshot(&fixture), before);

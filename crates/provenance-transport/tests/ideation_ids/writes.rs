@@ -5,6 +5,7 @@ use super::repository::{
     state_path, write_answers, IDEATION, WRITES,
 };
 use super::support::resource_http::{call, call_with_headers, host};
+use provenance_core::protocol::read_failure::STATE_CORRECTIONS;
 use provenance_macros::verifies;
 use serde_json::{json, Value};
 
@@ -14,7 +15,7 @@ pub fn located(name: &str, kind: &str, id: &str, (first, second): (usize, usize)
     let message =
         format!("duplicate immutable {kind} id {id} at line {first} and at line {second}");
     json!({"kind":"invalid_state_file", "file":format!("{IDEATION}/{name}"), "line":second,
-        "message":message})
+        "message":message, "hint":STATE_CORRECTIONS})
 }
 
 /// The answers of the three ideation writes when each refuses with `refusal`.

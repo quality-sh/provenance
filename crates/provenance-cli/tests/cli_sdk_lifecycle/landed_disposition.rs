@@ -6,6 +6,7 @@
 
 use super::plan_apply::{document, route, run, Answer, KEPT};
 use super::porcelain_authoring_support::initialized_repo;
+use provenance_core::protocol::read_failure::STATE_CORRECTIONS;
 use provenance_macros::verifies;
 use serde_json::{json, Value};
 
@@ -88,9 +89,11 @@ fn each_read_refuses_a_landed_disposition_of_a_missing_record_at_its_line() {
 
     let message = "disposition disposition_a names requirement req_missing, \
                    which the scope does not have";
-    let text = json!(format!("Error: {LANDINGS} line 1: {message}"));
-    let fault =
-        json!({"kind": "invalid_state_file", "file": LANDINGS, "line": 1, "message": message});
+    let text = json!(format!(
+        "Error: {LANDINGS} line 1: {message}; {STATE_CORRECTIONS}"
+    ));
+    let fault = json!({"kind": "invalid_state_file", "file": LANDINGS, "line": 1,
+        "message": message, "hint": STATE_CORRECTIONS});
     assert_eq!(
         answers.map(|(surface, answer)| (surface, refusal(&answer))),
         [
