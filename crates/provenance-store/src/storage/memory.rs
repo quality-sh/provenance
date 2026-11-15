@@ -117,19 +117,39 @@ impl StateStorage for MemoryStateStorage {
 
 /// The section of a repository whose state is in memory: a lock in the
 /// process. A clone shares the lock.
+///
+/// The lock that `default` makes waits until a held section is free. The
+/// lock that [`MemorySectionLock::refusing`] makes never waits: an acquire
+/// of a held section refuses at once, so no thread blocks.
 #[derive(Clone, Debug, Default)]
 pub struct MemorySectionLock {
     held: Arc<(Mutex<bool>, Condvar)>,
+    refuses: bool,
+}
+
+impl MemorySectionLock {
+    /// A lock whose acquire of a held section refuses at once instead of
+    /// waiting, for an embedder whose thread must not block.
+    pub fn refusing() -> Self {
+        Self {
+            refuses: true,
+            ..Self::default()
+        }
+    }
 }
 
 impl SectionLock for MemorySectionLock {
     fn acquire(&self) -> anyhow::Result<Box<dyn Send>> {
         let (held, released) = &*self.held;
+        let held = held.lock().unwrap_or_else(PoisonError::into_inner);
+        if self.refuses && *held {
+            drop(held);
+            return Err(crate::refusal::fault!(
+                "the section is held, and this section lock refuses instead of waiting"
+            ));
+        }
         let mut held = released
-            .wait_while(
-                held.lock().unwrap_or_else(PoisonError::into_inner),
-                |held| *held,
-            )
+            .wait_while(held, |held| *held)
             .unwrap_or_else(PoisonError::into_inner);
         *held = true;
         drop(held);
