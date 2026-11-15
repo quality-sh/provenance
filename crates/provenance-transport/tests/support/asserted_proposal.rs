@@ -38,7 +38,7 @@ pub async fn create_asserted_proposal(repo: &Repository, proposal_id: &str) {
 
 /// The stored row of the assertion `assertion_a` of the proposal
 /// `proposal_id`.
-pub fn assertion_row(proposal_id: &str) -> Value {
+fn assertion_row(proposal_id: &str) -> Value {
     json!({"scope_id":"default", "id":"assertion_a", "proposal_id":proposal_id,
         "synthesis_packet_id":"synthesis_evidence", "supporting_claim_ids":["claim_a"]})
 }

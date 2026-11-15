@@ -2,7 +2,7 @@
 //! ideation writes and the reads over it, and the hand edits that put an id
 //! on two lines of its file.
 
-use super::support::asserted_proposal::{assertion_row, create_asserted_proposal};
+use super::support::asserted_proposal::create_asserted_proposal;
 use super::support::records::{allow_reviewer, Repository};
 use super::support::resource_http::{call, host};
 use serde_json::{json, Value};
@@ -188,15 +188,6 @@ pub fn copy_row_with_key(repo: &Repository, name: &str, id: &str, key: &str) -> 
 /// file. The result is the line of the row and the line of its copy.
 pub fn copy_row(repo: &Repository, name: &str, id: &str) -> (usize, usize) {
     copy_row_with_key(repo, name, id, "id")
-}
-
-/// Adds the row of `assertion_a` two times to the assertion file, as a
-/// merge of two branches that each add it gives. The result is the two
-/// lines.
-pub fn merge_assertion_two_times(repo: &Repository) -> (usize, usize) {
-    let row = format!("{}\n", assertion_row("proposal_a"));
-    let lines = add_rows(repo, "assertions.jsonl", &[row.clone(), row]);
-    (lines[0], lines[1])
 }
 
 /// Adds a line that does not parse at the end of the file `name`. The
