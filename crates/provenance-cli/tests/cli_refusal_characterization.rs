@@ -274,7 +274,12 @@ fn a_bad_state_line_gives_the_stored_record_and_refuses_a_create() {
                 "command": "req_b create",
                 "format": "text",
                 "stderr": [
-                    "Error: {\"error\":{\"file\":\"scopes/default/requirements/req.jsonl\",\"hint\":\"get .provenance/state from a branch or a commit where Provenance can read it, or remove all records and settings of the repository: remove .provenance/state and run provenance init\",\"kind\":\"invalid_state_file\",\"line\":2,\"message\":\"missing field `scope_id`\"},\"meta\":{}}"
+                    refusal_line(
+                        "Error: ",
+                        "scopes/default/requirements/req.jsonl",
+                        2,
+                        "missing field `scope_id`",
+                    )
                 ],
                 "stdout_empty": true
             },
@@ -283,7 +288,12 @@ fn a_bad_state_line_gives_the_stored_record_and_refuses_a_create() {
                 "command": "req_b create",
                 "format": "json",
                 "stderr": [
-                    "{\"error\":{\"file\":\"scopes/default/requirements/req.jsonl\",\"hint\":\"get .provenance/state from a branch or a commit where Provenance can read it, or remove all records and settings of the repository: remove .provenance/state and run provenance init\",\"kind\":\"invalid_state_file\",\"line\":2,\"message\":\"missing field `scope_id`\"},\"meta\":{}}"
+                    refusal_line(
+                        "",
+                        "scopes/default/requirements/req.jsonl",
+                        2,
+                        "missing field `scope_id`",
+                    )
                 ],
                 "stdout_empty": true
             }
@@ -375,9 +385,23 @@ fn a_read_names_the_line_of_a_withdrawal_that_names_no_submission() {
             "command": "api requirements/req_a",
             "format": "json",
             "stderr": [
-                "Error: {\"error\":{\"file\":\"scopes/default/ideation/withdrawals.jsonl\",\"hint\":\"get .provenance/state from a branch or a commit where Provenance can read it, or remove all records and settings of the repository: remove .provenance/state and run provenance init\",\"kind\":\"invalid_state_file\",\"line\":1,\"message\":\"withdrawal withdrawal_lost names no review submission: proposal_missing\"},\"meta\":{}}"
+                refusal_line(
+                    "Error: ",
+                    "scopes/default/ideation/withdrawals.jsonl",
+                    1,
+                    "withdrawal withdrawal_lost names no review submission: proposal_missing",
+                )
             ],
             "stdout_empty": true
         }]),
     );
+}
+
+/// A standard error line of an `invalid_state_file` refusal of `file` at
+/// `line`, with the steps that correct the state as its hint.
+fn refusal_line(prefix: &str, file: &str, line: u64, message: &str) -> String {
+    let refusal = json!({"error": {"kind": "invalid_state_file", "file": file, "line": line,
+        "message": message, "hint": provenance_core::protocol::read_failure::STATE_CORRECTIONS},
+        "meta": {}});
+    format!("{prefix}{refusal}")
 }

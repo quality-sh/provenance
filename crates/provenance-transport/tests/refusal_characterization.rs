@@ -6,6 +6,7 @@
 
 use crate::support;
 
+use provenance_core::protocol::read_failure::STATE_CORRECTIONS;
 use serde_json::{json, Value};
 use support::records::Repository;
 use support::resource_http::{call, call_with_headers, host};
@@ -370,7 +371,7 @@ fn expected_rows() -> Value {
         {"error":{"kind":"resource_not_found"},"row":"read a missing requirement","status":404},
         {"error":{"kind":"resource_not_found"},"row":"read a missing history entry","status":404},
         {"error":{"kind":"access_denied"},"row":"write on a read-only host","status":403},
-        {"error":{"file":"scopes/default/requirements/req.jsonl","hint":"get .provenance/state from a branch or a commit where Provenance can read it, or remove all records and settings of the repository: remove .provenance/state and run provenance init","kind":"invalid_state_file","line":3,"message":"missing field `scope_id`"},"row":"read a shard with a bad line","status":500},
-        {"error":{"file":"scopes/default/requirements/req.jsonl","hint":"get .provenance/state from a branch or a commit where Provenance can read it, or remove all records and settings of the repository: remove .provenance/state and run provenance init","kind":"invalid_state_file","line":3,"message":"missing field `scope_id`"},"row":"write to a shard with a bad line","status":500}
+        {"error":{"file":"scopes/default/requirements/req.jsonl","hint":STATE_CORRECTIONS,"kind":"invalid_state_file","line":3,"message":"missing field `scope_id`"},"row":"read a shard with a bad line","status":500},
+        {"error":{"file":"scopes/default/requirements/req.jsonl","hint":STATE_CORRECTIONS,"kind":"invalid_state_file","line":3,"message":"missing field `scope_id`"},"row":"write to a shard with a bad line","status":500}
     ])
 }
