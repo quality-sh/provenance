@@ -345,8 +345,7 @@ fn request(root: &Path, task: &Task) -> Option<Result<Request, String>> {
         | Operation::BindTwice { .. }
         | Operation::DecideReview { .. }
         | Operation::WriteDiscussion { .. }
-        | Operation::ArchiveRequirement { .. }
-        | Operation::RequestArchive { .. } => return None,
+        | Operation::ArchiveRequirement { .. } => return None,
     }))
 }
 

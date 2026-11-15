@@ -2,6 +2,12 @@
 
 use provenance_simulation::generate::{Case, Operation, Step};
 
+/// The archive of the first Requirement, which the reviewer accepts.
+pub const ARCHIVE_FIRST: Operation = Operation::ArchiveRequirement {
+    n: 0,
+    leave_open: false,
+};
+
 /// A section that meets a moved base: the engine enters the section and
 /// reads, then a write outside lands before its first publish.
 pub fn moved_base_case() -> Case {
@@ -54,7 +60,10 @@ pub fn each_operation() -> Vec<Operation> {
         Operation::WithdrawReview { n: 0 },
         Operation::SubmitReview,
         Operation::DecideReview { n: 1 },
-        Operation::RequestArchive { n: 0 },
+        Operation::ArchiveRequirement {
+            n: 0,
+            leave_open: true,
+        },
         Operation::DecideReview { n: 2 },
         Operation::WriteDiscussion { reply: false },
         Operation::WriteDiscussion { reply: true },
@@ -65,6 +74,6 @@ pub fn each_operation() -> Vec<Operation> {
             first: 0,
             second: 1,
         },
-        Operation::ArchiveRequirement { n: 0 },
+        ARCHIVE_FIRST,
     ]
 }

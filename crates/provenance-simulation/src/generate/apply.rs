@@ -190,22 +190,18 @@ pub fn apply(repository: &Repository, task: &Task) -> anyhow::Result<Effect> {
                 version: discussion.version,
             }
         }
-        Operation::RequestArchive { n } => {
+        Operation::ArchiveRequirement { n, leave_open } => {
             let id = requirement_id(*n);
             store.update_requirement(archive_update(&id))?;
-            match super::call::open_status_request(repository, &id)? {
-                Some(proposal) => Effect::Proposal {
+            let request = super::call::open_status_request(repository, &id)?;
+            if *leave_open {
+                return Ok(request.map_or(Effect::Skipped, |proposal| Effect::Proposal {
                     id: proposal.as_str().to_owned(),
-                },
-                None => Effect::Skipped,
+                }));
             }
-        }
-        Operation::ArchiveRequirement { n } => {
-            let id = requirement_id(*n);
-            store.update_requirement(archive_update(&id))?;
-            // The archive opens a status request. The allowed reviewer accepts
-            // it, so the archive and its cascade apply.
-            if let Some(proposal) = super::call::open_status_request(repository, &id)? {
+            // The allowed reviewer accepts the status request, so the archive
+            // and its cascade apply.
+            if let Some(proposal) = request {
                 store.decide_record_review(DecideRecordReview {
                     scope_id: scope(),
                     actor: decider(),

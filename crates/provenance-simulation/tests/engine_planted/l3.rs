@@ -9,7 +9,7 @@
 //! held before the write or the value of the write, so each one breaks L3.
 //! One more test checks the model of L3 for a group of writes.
 
-use crate::support::cases::alone;
+use crate::support::cases::{alone, ARCHIVE_FIRST};
 use crate::{expect_law, planted};
 use provenance_core::TopicStatus;
 use provenance_simulation::expected::{Expected, Write};
@@ -54,7 +54,7 @@ fn a_lost_write_breaks_l3() {
 #[ignore = "a planted fault of the nightly simulation"]
 fn an_archive_that_leaves_the_claim_breaks_l3() {
     let mut steps = vec![Step::OutsideWrite(Operation::ClaimTopic)];
-    steps.extend(alone(&[Operation::ArchiveRequirement { n: 0 }]));
+    steps.extend(alone(&[ARCHIVE_FIRST]));
     let run = run_case(&Case { engines: 2, steps }, planted(Plant::LoseWrite, "L3"));
     expect_law(laws::check_only(&run, "L3"), "L3");
 }
@@ -81,7 +81,7 @@ fn a_lost_claim_breaks_l3() {
 fn a_claim_lost_before_an_archive_of_unknown_outcome_breaks_l3() {
     let mut steps = alone(&[Operation::ClaimTopic]);
     steps.push(Step::Fault(Fault::UnknownOutcome { landed: 0 }));
-    steps.extend(alone(&[Operation::ArchiveRequirement { n: 0 }]));
+    steps.extend(alone(&[ARCHIVE_FIRST]));
     let run = run_case(&Case { engines: 2, steps }, planted(Plant::LoseWrite, "L3"));
     assert!(met(&run, 1, Outcome::Unknown), "{:?}", run.publishes);
     expect_law(laws::check_only(&run, "L3"), "L3");
@@ -93,7 +93,7 @@ fn archive_that_only_clears_the_claim(
     repository: &Repository,
     task: &Task,
 ) -> anyhow::Result<Effect> {
-    let Operation::ArchiveRequirement { n: 0 } = task.op else {
+    let Operation::ArchiveRequirement { n: 0, .. } = task.op else {
         return generate::apply(repository, task);
     };
     let store = repository.store();
@@ -113,7 +113,7 @@ fn a_claim_cleared_on_an_open_topic_breaks_l3() {
         engines: 2,
         steps: alone(&[
             Operation::ClaimTopic,
-            Operation::ArchiveRequirement { n: 0 },
+            ARCHIVE_FIRST,
         ]),
     };
     let run = run_case(&case, with(archive_that_only_clears_the_claim));
@@ -140,7 +140,7 @@ fn a_claim_on_an_archived_topic_breaks_l3() {
     let case = Case {
         engines: 2,
         steps: alone(&[
-            Operation::ArchiveRequirement { n: 0 },
+            ARCHIVE_FIRST,
             Operation::ClaimTopic,
         ]),
     };
@@ -234,7 +234,7 @@ fn archive_that_claims<const FAIL: bool>(
     repository: &Repository,
     task: &Task,
 ) -> anyhow::Result<Effect> {
-    let Operation::ArchiveRequirement { n: 0 } = task.op else {
+    let Operation::ArchiveRequirement { n: 0, .. } = task.op else {
         return generate::apply(repository, task);
     };
     let store = repository.store();
@@ -358,11 +358,11 @@ topic_write_breaks_l3! {
     a_stopped_release_that_closes_the_topic_breaks_l3:
         stopped, Operation::ReleaseTopic, release_that_closes::<false>;
     a_certain_archive_that_claims_the_topic_breaks_l3:
-        certain, Operation::ArchiveRequirement { n: 0 }, archive_that_claims::<false>;
+        certain, ARCHIVE_FIRST, archive_that_claims::<false>;
     an_archive_of_unknown_outcome_that_claims_the_topic_breaks_l3:
-        unknown, Operation::ArchiveRequirement { n: 0 }, archive_that_claims::<false>;
+        unknown, ARCHIVE_FIRST, archive_that_claims::<false>;
     a_failed_archive_that_claims_the_topic_breaks_l3:
-        failed, Operation::ArchiveRequirement { n: 0 }, archive_that_claims::<true>;
+        failed, ARCHIVE_FIRST, archive_that_claims::<true>;
     a_stopped_archive_that_claims_the_topic_breaks_l3:
-        stopped, Operation::ArchiveRequirement { n: 0 }, archive_that_claims::<false>;
+        stopped, ARCHIVE_FIRST, archive_that_claims::<false>;
 }

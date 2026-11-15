@@ -70,7 +70,7 @@ impl Task {
                     }),
                 )
             }
-            Operation::ArchiveRequirement { n } | Operation::RequestArchive { n } => {
+            Operation::ArchiveRequirement { n, .. } => {
                 let id = requirement_id(*n);
                 call(
                     "update-requirement",
@@ -147,7 +147,11 @@ impl Task {
     /// `None`. An archive through the contract opens a status request, so the
     /// allowed reviewer accepts it; the archive and its cascade then apply.
     pub fn follow_up(&self, repository: &Repository) -> anyhow::Result<Option<Call>> {
-        let Operation::ArchiveRequirement { n } = &self.op else {
+        let Operation::ArchiveRequirement {
+            n,
+            leave_open: false,
+        } = &self.op
+        else {
             return Ok(None);
         };
         let id = requirement_id(*n);
@@ -183,10 +187,15 @@ impl Task {
                 description: self.description(),
                 etag: text(&call.request["expected_etag"])?,
             },
-            Operation::ArchiveRequirement { n } => Effect::Archived {
+            Operation::ArchiveRequirement {
+                n,
+                leave_open: false,
+            } => Effect::Archived {
                 id: requirement_id(*n),
             },
-            Operation::RequestArchive { .. } => {
+            Operation::ArchiveRequirement {
+                leave_open: true, ..
+            } => {
                 let pending = &answer["decision"]["pending"];
                 if pending["status_request"].is_null() {
                     Effect::Skipped
