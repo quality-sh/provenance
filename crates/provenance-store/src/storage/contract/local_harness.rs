@@ -36,10 +36,18 @@ impl Harness for Local {
             .unwrap()
     }
 
-    /// A directory in the place of the file makes its rename fail.
+    /// A directory in the place of the file makes its rename fail, and the
+    /// view leaves the key out. On Unix, a symbolic link in the directory
+    /// also makes a copy of the state directory fail, so a set that copies
+    /// the stored keys fails too.
     fn break_key(&mut self, key: &str) {
         let path = self.layout.state_dir().join(key);
+        if path.is_file() {
+            std::fs::remove_file(&path).unwrap();
+        }
         std::fs::create_dir_all(&path).unwrap();
         std::fs::write(path.join("keep"), b"").unwrap();
+        #[cfg(unix)]
+        std::os::unix::fs::symlink(path.join("keep"), path.join("link")).unwrap();
     }
 }

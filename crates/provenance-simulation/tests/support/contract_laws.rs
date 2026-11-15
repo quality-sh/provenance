@@ -96,10 +96,10 @@ pub fn message_times_increase(run: &Run) -> Result<(), Violation> {
 }
 
 /// O3: each whole set names the revision where its stage started, and each
-/// operation of an engine that always stages and succeeded landed one set on
-/// that revision: a whole set, or a per-key set for a change of one key. A
-/// write outside every engine lands as one change of the world, with no
-/// base, so O3 does not count it.
+/// operation of an engine that always stages and succeeded landed one set
+/// with a key on that revision: a whole set, or a per-key set of one key. A
+/// set with no key changes nothing, and a write outside every engine lands
+/// as one change of the world with no base, so O3 counts neither.
 pub fn stages_land_whole(run: &Run) -> Result<(), Violation> {
     if let Some(publish) = run
         .publishes
@@ -120,15 +120,27 @@ pub fn stages_land_whole(run: &Run) -> Result<(), Violation> {
         .filter(|done| done.engine.is_some() && done.op.always_stages())
         .filter(|done| matches!(&done.result, Ok(effect) if *effect != Effect::Skipped))
     {
-        let landed = publishes_of(run, done)
+        let landed: Vec<_> = publishes_of(run, done)
             .filter(|publish| publish.on_base && publish.outcome == Outcome::Landed)
-            .count();
-        if landed != 1 {
+            .filter(|publish| publish.keys > 0)
+            .collect();
+        if landed.len() != 1 {
             return broken(
                 "O3",
                 format!(
-                    "operation {} ({:?}) succeeded with {landed} sets on a base, not one",
-                    done.operation, done.op
+                    "operation {} ({:?}) succeeded with {} sets on a base, not one",
+                    done.operation,
+                    done.op,
+                    landed.len()
+                ),
+            );
+        }
+        if !landed[0].whole_set && landed[0].keys != 1 {
+            return broken(
+                "O3",
+                format!(
+                    "operation {} ({:?}) landed a per-key set of {} keys, not a whole set",
+                    done.operation, done.op, landed[0].keys
                 ),
             );
         }

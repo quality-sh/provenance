@@ -223,12 +223,10 @@ impl crate::state_store::StateStore {
     }
 
     /// Publishes the new bytes of each changed shard at its path as one write
-    /// set that lands every shard or none. No shard sends no set;
-    /// [`Self::publish_set`] sends one shard as a one-key set.
+    /// set that lands every shard or none. No shard sends a set with no key,
+    /// so the adapter refuses it on a moved base; [`Self::publish_set`]
+    /// sends one shard as a one-key set.
     pub(crate) fn publish_shards(&self, shards: Vec<ShardBytes>) -> anyhow::Result<()> {
-        if shards.is_empty() {
-            return Ok(());
-        }
         let mut writes = WriteSet::new(Atomicity::WholeSet);
         for (path, bytes) in shards {
             writes = writes.put(self.state_key(&path)?, bytes);

@@ -125,6 +125,7 @@ impl World {
             outcome,
             outside_writes,
             whole_set: writes.atomicity() == Atomicity::WholeSet,
+            keys: writes.key_count(),
             on_base: writes.base().is_some(),
         });
         result

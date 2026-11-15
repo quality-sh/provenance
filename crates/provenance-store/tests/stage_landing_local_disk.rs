@@ -3,8 +3,7 @@
 //! stage that makes a transaction fails.
 #![cfg(unix)]
 
-#[path = "support/initialization.rs"]
-mod initialization;
+use crate::review_support::initialization;
 
 use camino::Utf8Path;
 use provenance_core::{RequirementStatus, ScopeId, Source, StableId};
