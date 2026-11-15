@@ -4,6 +4,7 @@ use crate::review;
 use provenance_core::review::{EvidencePage, EvidenceQuery, RecordVersion, ReviewHistoryQuery};
 pub use provenance_core::threads::DiscussionResultPage;
 use provenance_core::{
+    actor_input::ActorInput,
     threads::{DiscussionGroup, DiscussionMessagesQuery, DiscussionQuery, DiscussionSelector},
     Message, StableId, ThreadParent,
 };
@@ -61,7 +62,8 @@ macro_rules! review_read {
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 pub struct StartDiscussionData {
-    pub actor: String,
+    #[serde(default)]
+    pub actor: ActorInput,
     pub declared_by: Option<String>,
     pub role: provenance_core::MessageRole,
     pub body: String,
@@ -70,7 +72,8 @@ pub struct StartDiscussionData {
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 pub struct ReplyDiscussionData {
-    pub actor: String,
+    #[serde(default)]
+    pub actor: ActorInput,
     pub declared_by: Option<String>,
     pub role: provenance_core::MessageRole,
     pub body: String,
