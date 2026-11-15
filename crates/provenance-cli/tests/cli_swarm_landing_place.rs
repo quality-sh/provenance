@@ -113,7 +113,10 @@ fn a_landing_with_replace_gives_the_files_of_the_direct_replace_writes() {
     commit(repo, "a and z");
     git_ok(repo, &["checkout", "-b", "direct"]);
     for (path, record) in [
-        ("/contributions/contrib_a", contribution("contrib_a", "Changed.")),
+        (
+            "/contributions/contrib_a",
+            contribution("contrib_a", "Changed."),
+        ),
         ("/synthesis-packets/packet_a", packet_a_with("Changed")),
     ] {
         api_write(&landing, "patch", path, &record, &["scope_id", "id"]);
@@ -123,7 +126,12 @@ fn a_landing_with_replace_gives_the_files_of_the_direct_replace_writes() {
 
     git_ok(repo, &["checkout", "-b", "landed", "main"]);
     let contributions = [contribution("contrib_a", "Changed.")];
-    land_run(&landing, "a_changed", &contributions, Some(packet("Changed")));
+    land_run(
+        &landing,
+        "a_changed",
+        &contributions,
+        Some(packet("Changed")),
+    );
     commit(repo, "landed");
     assert_eq!(texts(ideation_files(repo)), texts(direct));
 }

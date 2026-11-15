@@ -158,9 +158,10 @@ impl StateStore {
             )
         };
         // The aggregate check refuses these too, but with no declared kind.
-        if assertions.iter().any(|record| {
-            record.id == assertion.id || record.proposal_id == assertion.proposal_id
-        }) {
+        if assertions
+            .iter()
+            .any(|record| record.id == assertion.id || record.proposal_id == assertion.proposal_id)
+        {
             return Err(stored());
         }
         let path = shards::assertion_records_path(&self.layout, &input.scope_id);
