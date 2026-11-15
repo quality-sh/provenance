@@ -40,7 +40,9 @@ fn cases() -> Vec<Case> {
         bound_cases(),
         pattern_cases(),
     ]
-    .concat()
+    .into_iter()
+    .flatten()
+    .collect()
 }
 
 /// The cases of the keywords on one value: `$ref`, `type`, `enum` and `const`.
