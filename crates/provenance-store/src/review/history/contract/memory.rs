@@ -153,7 +153,10 @@ impl FileVersions for MemoryFileVersions {
         let text = self
             .index(commit)
             .and_then(|index| self.entry(index, path))
-            .map(|entry| String::from_utf8(entry.bytes.clone()))
+            .and_then(|entry| match entry {
+                Entry::File { bytes, .. } => Some(String::from_utf8(bytes.clone())),
+                Entry::Submodule(_) | Entry::Directory => None,
+            })
             .transpose()
             .map_err(anyhow::Error::from);
         Box::pin(std::future::ready(text))
