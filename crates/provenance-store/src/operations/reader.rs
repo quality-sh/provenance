@@ -84,6 +84,14 @@ pub enum ReadRefusal {
     HalfMigrated { database: Utf8PathBuf },
 }
 
+/// The refusal of a [`current`] read whose catch-up failed.
+///
+/// The error of the catch-up is a field and not a source, so the text of the
+/// refusal is this text alone and holds no path.
+#[derive(Debug, thiserror::Error)]
+#[error("catch-up failed; restart the document read")]
+pub struct CatchUpFailed(pub anyhow::Error);
+
 fn one_line(text: &str) -> String {
     text.replace('\r', "\\r").replace('\n', "\\n")
 }
@@ -182,5 +190,24 @@ pub async fn answer<R: Send>(
     run: impl for<'c> FnOnce(&'c ReadContext) -> ReadFuture<'c, R> + Send,
 ) -> anyhow::Result<Stamped<R>> {
     let fresh = freshness::run(repository, policy.freshness).await?;
-    fresh.complete(repository, policy.scan_limit, run).await
+    fresh
+        .complete(repository, policy.scan_limit, run)
+        .await?
+        .answer()
+}
+
+/// Runs one read as [`answer`] does, but refuses when the catch-up fails.
+///
+/// The refusal is [`CatchUpFailed`]. A read with no stored revision refuses
+/// with [`ReadRefusal::NoProjection`] first, as under [`answer`].
+pub async fn current<R: Send>(
+    repository: &Repository,
+    policy: ReadPolicy,
+    run: impl for<'c> FnOnce(&'c ReadContext) -> ReadFuture<'c, R> + Send,
+) -> anyhow::Result<Stamped<R>> {
+    let fresh = freshness::run(repository, policy.freshness).await?;
+    fresh
+        .complete(repository, policy.scan_limit, run)
+        .await?
+        .current()
 }
