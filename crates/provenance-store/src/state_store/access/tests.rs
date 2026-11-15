@@ -50,27 +50,17 @@ macro_rules! read_families {
     }};
 }
 
-fn landings(store: &StateStore, scope: &ScopeId) -> anyhow::Result<Vec<serde_json::Value>> {
-    Ok(vec![serde_json::to_value(
-        store.list_ideation_landings(scope)?,
-    )?])
-}
-
 #[tokio::test]
 #[verifies("rule_store_under_guard_takes_no_second_lock", examples)]
 #[verifies("rule_guarded_reads_use_guard_repository", examples)]
 async fn a_store_under_the_guard_takes_no_second_lock() {
     let (_dir, store, scope) = seeded_source_requirement_store();
-    let mut expected = read_families!(&store, &scope).unwrap();
-    expected.extend(landings(&store, &scope).unwrap());
+    let expected = read_families!(&store, &scope).unwrap();
     let guard = publication_guard(&open(&store.layout)).await.unwrap();
     let (sender, receiver) = mpsc::channel();
     let reader = std::thread::spawn(move || {
         let guarded = StateStore::under_guard(&guard);
-        let records = read_families!(&guarded, &scope).and_then(|mut records| {
-            records.extend(landings(&guarded.store, &scope)?);
-            Ok(records)
-        });
+        let records = read_families!(&guarded, &scope);
         sender
             .send((records, publication_lock_is_held(&store.layout)))
             .unwrap();

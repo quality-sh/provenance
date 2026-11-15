@@ -24,6 +24,7 @@ mod reference_methods;
 mod reference_writers;
 mod requirement_reviews;
 mod resolution_decisions;
+mod review_rows_once;
 mod rule_writers;
 mod scope_ingestion;
 pub(crate) use read_fence::FencedStore;
@@ -73,8 +74,7 @@ pub(crate) use statement_policy::StatementWriteError;
 pub use typed_specs::{decide_typed_spec, ReviewHistory, TypedSpecDecision, TypedSpecView};
 pub use typed_statement_policy::TypedSpecWriteError;
 
-use crate::{layout::ProvenanceLayout, repository::RepositoryIdentity, shards};
-use ideation_batches::overlay_records;
+use crate::{layout::ProvenanceLayout, repository::RepositoryIdentity};
 use provenance_core::{
     ensure_record_id_assignable, AssertionRecord, Contribution, DispositionRecord,
     ImplementationBinding, Manifest, Message, ProposalCard, ScopeId, SynthesisPacket, Thread,
@@ -176,7 +176,7 @@ fn ensure_new_ids_assignable<T>(
     }
     Ok(())
 }
-use readers::{read_ideation_landings, read_jsonl_held, read_message_shards_held};
+use readers::{read_jsonl_held, read_message_shards_held};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug)]
@@ -262,6 +262,8 @@ enum Storage {
     },
 }
 
+/// The records of one swarm run. A landing writes each record to the state
+/// file of its kind.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct IdeationLandingBatch {
     #[serde(default)]
@@ -326,23 +328,6 @@ impl StateStore {
             .into_iter()
             .collect())
     }
-    fn list_contributions_after_direct_read(
-        &self,
-        scope: &ScopeId,
-        after_direct_read: impl FnOnce() -> anyhow::Result<()>,
-    ) -> anyhow::Result<Vec<Contribution>> {
-        self.with_repository_read(|held| {
-            let mut records = shared_parses::read_jsonl_shared(
-                held,
-                &shards::contributions_path(&held.layout, scope),
-            )?;
-            after_direct_read()?;
-            for batch in held.list_ideation_landings(scope)? {
-                overlay_records(&mut records, batch.contributions);
-            }
-            Ok(records)
-        })
-    }
     pub fn list_proposal_cards_with_actor_ids(
         &self,
         scope: &ScopeId,
@@ -377,14 +362,35 @@ impl StateStore {
         self.with_repository_read(|held| {
             let assertions = held.list_assertion_records(scope)?;
             let dispositions = held.list_dispositions(scope)?;
-            Ok(held
-                .list_proposal_definitions(scope)?
-                .into_iter()
-                .map(|mut proposal| {
+            let proposals = held.list_proposal_definitions(scope)?;
+            let withdrawals = held.list_withdrawals(scope)?;
+            let reading = provenance_core::review::read_review_rows(
+                provenance_core::review::StoredReviewRows {
+                    proposals: &proposals,
+                    dispositions: &dispositions,
+                    withdrawals: &withdrawals,
+                },
+            );
+            // A review submission takes its state from the result of its
+            // decisions only when its rows agree; else it keeps its stored
+            // state.
+            let decided = |proposal: &ProposalCard| {
+                !reading.is_submission(&proposal.id)
+                    || reading.agreed_decision(&proposal.id).is_some()
+            };
+            Ok(proposals
+                .iter()
+                .map(|proposal| {
+                    let mut proposal = proposal.clone();
+                    let decisions = if decided(&proposal) {
+                        dispositions.as_slice()
+                    } else {
+                        &[]
+                    };
                     proposal.promotion_state = provenance_core::effective_proposal_state(
                         &proposal,
                         &assertions,
-                        &dispositions,
+                        decisions,
                     );
                     proposal
                 })
@@ -392,16 +398,7 @@ impl StateStore {
         })
     }
     pub fn list_proposal_definitions(&self, scope: &ScopeId) -> anyhow::Result<Vec<ProposalCard>> {
-        self.with_repository_read(|held| {
-            let mut records = shared_parses::read_jsonl_shared(
-                held,
-                &shards::proposal_cards_path(&held.layout, scope),
-            )?;
-            for batch in held.list_ideation_landings(scope)? {
-                overlay_records(&mut records, batch.proposals);
-            }
-            Ok(records)
-        })
+        self.with_repository_read(|held| held.proposal_file_rows_once(scope))
     }
 }
 

@@ -399,6 +399,55 @@ To repair the store by hand:
 There is no automatic repair command. The duplicate rows do not always contain
 enough information to select the owning Discussion.
 
+## Repairing review rows that do not agree
+
+The review rows of a record are its review submissions, the decisions on them,
+and their withdrawals. They are in `ideation/proposal_cards.jsonl`,
+`ideation/dispositions.jsonl`, and `ideation/withdrawals.jsonl`. A merge of two
+branches keeps the rows that each branch added, and a person can keep the two
+sides when Git cannot merge a file.
+
+Rows that say the same thing read as one row: one row ID on two equal lines,
+two decisions on one submission with the same result, and two withdrawals of
+one submission. Rows that do not agree make each read and each review write of
+their record refuse with `invalid_state_file`:
+
+- One row ID is on more than one line, and the lines do not have equal
+  contents.
+- The decisions on one submission have different results.
+- One submission has an approval and a withdrawal.
+- More than one submission of one record has the same review cycle.
+
+Each line takes part in each of these tests, also a line of an ID whose lines
+do not agree. Thus the decisions and the withdrawals that name such a
+submission, and the review cycle of each of its lines, give their faults in the
+same read. A write that needs the approval of
+the record gives the same refusal: an active Rule or an answered Question that
+cites a Resolution that is not approved needs the approval of that Resolution.
+
+The refusal names the file and the line of one row, and its message names the
+rows and each line that the repair removes. For example:
+
+```text
+review submission S of requirement req_a has decisions with different results in ideation/dispositions.jsonl: accepted D1 at line 1 and rejected D2 at line 2. To repair, remove each of these lines that has a result that you do not keep, then commit.
+```
+
+Other records, the documents that do not hold the record, and the reads of all
+records of a type continue. `provenance check` reports each of these faults
+with its file and its line.
+
+A withdrawal that names no review submission makes each review read of the
+scope refuse. Its message names the line of the withdrawal.
+
+To repair the rows, do the repair step that the message gives, then commit.
+Some steps give a choice: keep one line of an ID, keep the decisions of one
+result, keep the approval or the withdrawals, or keep one submission. Remove
+only the lines that the step tells you to remove. One run of `provenance check`
+reports each fault of the record, and a repair step does not show a new fault.
+After the repair step of each fault, the reads of the record and
+`provenance check` pass. This is the only hand edit of
+`.provenance/state` that the generated AGENTS.md permits.
+
 ## Agent guidance
 
 `provenance prime` introduces the Provenance domain. It explains Requirements,

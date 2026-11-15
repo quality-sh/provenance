@@ -101,12 +101,13 @@ pub use decision_input::{
     DecideRecordReview, ReviewFeedback, SubmitRecordReview, WithdrawRecordReview,
 };
 mod automatic_submission;
-mod cycle_index;
 mod decision;
 mod decision_reads;
 mod status_request;
-pub(crate) use decision_reads::DocumentReviewState;
+pub(crate) use decision_reads::{DocumentReviewState, ResolutionAcceptance};
 mod decision_state;
+mod review_row_refusal;
+mod review_rows;
 
 #[cfg(test)]
 #[cfg(feature = "host")]

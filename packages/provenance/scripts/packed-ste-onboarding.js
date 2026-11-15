@@ -177,7 +177,7 @@ function assertAgentInstructions(project) {
     `${npmCommand} check --statement "<statement>" --format json`,
     `${npmCommand} prime --quiet`,
     "Write graph state only through the Provenance CLI or SDK",
-    "Do not edit\n  `.provenance/state` directly",
+    "Do not edit\n  `.provenance/state` by hand, with one exception",
     "ASD owns ASD-STE100. STEMG maintains it",
     "covers only the\n  ASD-STE100 Issue 9 checks that Provenance implements",
     "It does not prove full\n  conformance",
