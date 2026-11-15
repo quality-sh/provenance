@@ -284,6 +284,9 @@ fn a_stop_at_the_first_point_kills_each_kind_of_write() {
             .iter()
             .all(|landing| landing.is_some_and(|landing| one_key.contains(&landing)));
     let rows: Vec<_> = run.stops.iter().map(Stop::row).collect();
-    assert!(first_point, "a stop did not land at the first point of its write: {rows:?}");
+    assert!(
+        first_point,
+        "a stop did not land at the first point of its write: {rows:?}"
+    );
     report::probe_laws(&layer(), check(&case, &run));
 }
