@@ -363,6 +363,9 @@ fn init_after_the_removal_of_the_state_gives_a_state_that_reads() {
         let repo = directory.path();
         std::fs::create_dir(repo.join("other")).unwrap();
         support::review_paths::init_scope(repo, "other", "other");
+        passes(repo, &["init", "--disposition-actor-id", "approver"]);
+        let actors = state_json(repo, "manifest.json")["disposition_actor_ids"].clone();
+        assert!(actors.as_array().unwrap().contains(&json!("approver")), "{actors}");
         fault(repo);
         assert_eq!(hint(repo), json!(HINT));
         add_technical_name(repo);
@@ -375,7 +378,7 @@ fn init_after_the_removal_of_the_state_gives_a_state_that_reads() {
         let scopes = json!([{"id": "default", "path_prefix": "."}]);
         assert_eq!(manifest["scopes"], scopes, "{manifest}");
         let actors = manifest["disposition_actor_ids"].as_array().unwrap();
-        assert!(!actors.contains(&json!("reviewer")), "{manifest}");
+        assert!(!actors.contains(&json!("approver")), "{manifest}");
         assert_eq!(technical_names(repo), None);
         let (code, stdout, stderr) = run(repo, &["req_child", "get", "--format", "json"]);
         assert_eq!(code, Some(1), "{stdout}");

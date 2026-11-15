@@ -52,6 +52,8 @@ mod mcp_error_envelopes;
 mod mcp_guidance;
 #[path = "../mcp_instructions.rs"]
 mod mcp_instructions;
+#[path = "../mcp_manifest_fault.rs"]
+mod mcp_manifest_fault;
 #[path = "../mcp_plumbing_names.rs"]
 mod mcp_plumbing_names;
 #[path = "../mcp_read_tools_do_not_write.rs"]
