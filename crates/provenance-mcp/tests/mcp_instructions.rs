@@ -425,7 +425,11 @@ fn listed_names(tools: &[Tool]) -> Vec<String> {
             .get("properties")
             .cloned()
             .unwrap_or_default();
-        for value in properties["action"]["enum"].as_array().into_iter().flatten() {
+        for value in properties["action"]["enum"]
+            .as_array()
+            .into_iter()
+            .flatten()
+        {
             names.extend(value.as_str().map(str::to_owned));
         }
     }
@@ -445,7 +449,10 @@ async fn a_host_with_every_write_names_only_the_tools_and_actions_that_it_lists(
     let listed = listed_names(&tools);
     let (_, actions) = instructions.split_once("\n## Actions\n").unwrap();
     for line in actions.lines() {
-        if let Some((name, _)) = line.strip_prefix("- ").and_then(|line| line.split_once(": ")) {
+        if let Some((name, _)) = line
+            .strip_prefix("- ")
+            .and_then(|line| line.split_once(": "))
+        {
             assert!(
                 listed.iter().any(|listed| listed == name),
                 "the instructions name {name}, which the server does not list:\n{instructions}"

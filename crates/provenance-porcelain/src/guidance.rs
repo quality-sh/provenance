@@ -127,8 +127,7 @@ pub fn guidance_for(name: impl Fn(Command) -> Option<&'static str>, notify: bool
         } else {
             command.declaration().description.to_owned()
         };
-        writeln!(text, "- {shown_name}: {description}")
-            .expect("writing to a String cannot fail");
+        writeln!(text, "- {shown_name}: {description}").expect("writing to a String cannot fail");
     }
     text.truncate(text.trim_end().len());
     Guidance { guidance: text }
@@ -157,7 +156,10 @@ pub fn change_description(
     notify: bool,
 ) -> Option<String> {
     let names = |commands: &[Command]| -> Vec<&'static str> {
-        commands.iter().filter_map(|command| name(*command)).collect()
+        commands
+            .iter()
+            .filter_map(|command| name(*command))
+            .collect()
     };
     let groups = [
         (
