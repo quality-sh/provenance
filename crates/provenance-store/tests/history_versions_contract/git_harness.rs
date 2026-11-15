@@ -66,9 +66,8 @@ impl Harness for Git {
                 let Some(entry) = entry else {
                     continue;
                 };
-                let blob = |bytes: &[u8]| {
-                    git(root, &[], &["hash-object", "-w", "--stdin"], Some(bytes))
-                };
+                let blob =
+                    |bytes: &[u8]| git(root, &[], &["hash-object", "-w", "--stdin"], Some(bytes));
                 let entry = match entry {
                     Entry::File { bytes, executable } => {
                         let mode = if *executable { "100755" } else { "100644" };
