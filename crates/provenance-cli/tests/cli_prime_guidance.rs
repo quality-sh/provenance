@@ -148,3 +148,69 @@ async fn cli_and_mcp_share_the_same_guidance() {
     client.cancel().await.unwrap();
     server.await.unwrap().cancel().await.unwrap();
 }
+
+/// The names of the commands that the CLI shows, read from the list that the CLI help reads.
+fn shown_names() -> Vec<&'static str> {
+    provenance_cli::exposed::EXPOSED
+        .iter()
+        .map(|command| command.declaration().name)
+        .collect()
+}
+
+/// Each command line of prime and each `provenance` command in prime names a command that
+/// the CLI shows, and prime gives the CLI form of an action on a record.
+#[test]
+#[verifies("rule_guidance_names_accepted_commands", examples)]
+fn prime_names_only_commands_that_the_cli_shows() {
+    let repo = tempfile::tempdir().unwrap();
+    let text = prime(repo.path(), &[]);
+    let shown = shown_names();
+    let (_, actions) = text.split_once("\n## Actions\n").unwrap();
+    let lines: Vec<&str> = actions
+        .lines()
+        .filter_map(|line| line.strip_prefix("- ")?.split_once(": "))
+        .map(|(name, _)| name)
+        .collect();
+    assert!(lines.contains(&"create"), "{text}");
+    for name in lines {
+        assert!(
+            shown.contains(&name),
+            "prime names {name}, which the CLI does not show:\n{text}"
+        );
+    }
+    let forms: Vec<&str> = text
+        .split('`')
+        .skip(1)
+        .step_by(2)
+        .filter_map(|code| code.strip_prefix("provenance "))
+        .collect();
+    for form in &forms {
+        let words = form
+            .split_whitespace()
+            .take_while(|word| !word.starts_with('-'))
+            .filter(|word| !word.starts_with('<'))
+            .collect::<Vec<_>>()
+            .join(" ");
+        assert!(
+            shown.contains(&words.as_str()),
+            "prime gives `provenance {form}`, which the CLI does not show:\n{text}"
+        );
+    }
+    assert!(
+        forms.iter().any(|form| is_record_action(form)),
+        "prime gives no CLI form of an action on a record:\n{text}"
+    );
+}
+
+/// Whether `form` is an action on a record: a record ID, then the name of a record action.
+fn is_record_action(form: &str) -> bool {
+    use provenance_porcelain::{action::Action, registry::Command as Porcelain};
+
+    let mut words = form.split_whitespace();
+    words.next() == Some("<id>")
+        && words.next().is_some_and(|word| {
+            Action::RECORD
+                .into_iter()
+                .any(|action| Porcelain::Action(action).declaration().name == word)
+        })
+}

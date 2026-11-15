@@ -1,11 +1,11 @@
 //! The server instructions name only the tools that the server lists and the actions
-//! that the host grants. These tests have no Rule binding: the Rule that states which
-//! commands the instructions name waits for the approval of the owner.
+//! that the host grants. The test of the listed names verifies the Rule on the names in
+//! the guidance. The other tests have no Rule binding, because no Rule states which
+//! commands the instructions name for one grant.
 #![cfg(feature = "test-fixture")]
 
 use crate::support::{fixture_host, mcp::Session, records::Repository};
 use provenance_porcelain::action::Action;
-use provenance_porcelain::registry::Command;
 use provenance_store::operations::catalog::{self, Operation as _};
 use provenance_transport::{repository::RepoContext, StatementHost};
 use rmcp::model::Tool;
@@ -57,7 +57,7 @@ of that route.";
 const CHANGE: &str = "- change: Write to the graph. The action argument selects the write: \
 create, update, answer, claim, release, or submit on the target record; discuss or reply \
 for a Discussion; notify to register a client thread for review changes; or materialize, \
-import, dictionary import, or swarm-backtrace land on the repository files. A call that \
+import, dictionary_import, or swarm_backtrace_land on the repository files. A call that \
 lacks a field that the action and record kind need gets the schema of their fields.";
 const CHANGE_WITHOUT_REPOSITORY: &str = "- change: Write to the graph. The action argument \
 selects the write: create, update, answer, claim, release, or submit on the target record; \
@@ -415,14 +415,43 @@ fn names(text: &str, name: &str) -> bool {
         .any(|after| text.contains(&format!(" {name}{after}")))
 }
 
-/// The change tool names each write that the host runs. The writes come from the
-/// action values of the change tool, not from the list in the porcelain.
+/// The names of the tools that the server lists and of the action values of each tool.
+fn listed_names(tools: &[Tool]) -> Vec<String> {
+    let mut names = Vec::new();
+    for tool in tools {
+        names.push(tool.name.to_string());
+        let properties = tool
+            .input_schema
+            .get("properties")
+            .cloned()
+            .unwrap_or_default();
+        for value in properties["action"]["enum"].as_array().into_iter().flatten() {
+            names.extend(value.as_str().map(str::to_owned));
+        }
+    }
+    names
+}
+
+/// The instructions and the change tool name each command with the name that the server
+/// lists. Each command line names a listed tool or action, and the change tool names each
+/// of its action values and no other spelling of a command that MCP shows.
 #[tokio::test]
-async fn a_host_with_every_write_names_each_change_action() {
+#[provenance_macros::verifies("rule_guidance_names_accepted_commands", examples)]
+async fn a_host_with_every_write_names_only_the_tools_and_actions_that_it_lists() {
     let repository = Repository::new("The shared graph is readable.");
     let root = repository.dir.path().to_str().unwrap().to_owned();
     let host = fixture_host::full(&repository).with_repository(RepoContext::new(root, "default"));
     let (tools, instructions) = served_tools(host).await;
+    let listed = listed_names(&tools);
+    let (_, actions) = instructions.split_once("\n## Actions\n").unwrap();
+    for line in actions.lines() {
+        if let Some((name, _)) = line.strip_prefix("- ").and_then(|line| line.split_once(": ")) {
+            assert!(
+                listed.iter().any(|listed| listed == name),
+                "the instructions name {name}, which the server does not list:\n{instructions}"
+            );
+        }
+    }
     let change = tools.iter().find(|tool| tool.name == "change").unwrap();
     let description = change.description.as_deref().unwrap();
     for action in change.input_schema["properties"]["action"]["enum"]
@@ -431,15 +460,21 @@ async fn a_host_with_every_write_names_each_change_action() {
         .iter()
         .filter_map(|action| action.as_str())
     {
-        let name = Command::ALL
-            .iter()
-            .map(|command| command.declaration().name)
-            .find(|name| provenance_mcp::exposed::spelling(name) == action)
-            .unwrap_or(action);
         assert!(
-            names(description, name),
+            names(description, action),
             "{action} is not named: {description}"
         );
+    }
+    for (command, _) in provenance_mcp::exposed::EXPOSED {
+        let declared = command.declaration().name;
+        if declared != provenance_mcp::exposed::name(*command) {
+            for text in [description, instructions.as_str()] {
+                assert!(
+                    !text.contains(declared),
+                    "MCP does not accept {declared}, which the text names: {text}"
+                );
+            }
+        }
     }
     assert_eq!(Some(description), CHANGE.strip_prefix("- change: "));
     assert_eq!(instructions, provenance_mcp::instructions());
