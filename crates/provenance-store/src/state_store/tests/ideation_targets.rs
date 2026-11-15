@@ -165,7 +165,6 @@ fn a_landed_batch_naming_a_missing_target_is_refused() {
         store.list_synthesis_packets(&scope).unwrap(),
         [] as [provenance_core::SynthesisPacket; 0]
     );
-    assert!(store.list_ideation_landings(&scope).unwrap().is_empty());
 }
 
 /// An old dangling target refuses nothing, including a rewrite of its own

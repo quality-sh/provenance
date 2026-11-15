@@ -40,20 +40,6 @@ macro_rules! define_shard_paths {
 
 record_families!(define_shard_paths);
 
-/// The path of the ideation landings shard below a scope directory.
-pub(crate) const IDEATION_LANDINGS: &str = "ideation/landings.jsonl";
-
-pub fn ideation_landings_path(layout: &ProvenanceLayout, scope: &ScopeId) -> Utf8PathBuf {
-    let (directory, file) = IDEATION_LANDINGS
-        .split_once('/')
-        .expect("the landings shard is in a directory");
-    layout
-        .scopes_dir()
-        .join(scope.as_str())
-        .join(directory)
-        .join(file)
-}
-
 /// The directory below a scope directory that holds the shard at `suffix`,
 /// a path below the scope directory.
 // Only catch-up, which the host build has, asks for the directory.
@@ -115,7 +101,6 @@ fn shard_suffixes() -> impl Iterator<Item = &'static str> {
     ProjectionFamily::ALL
         .into_iter()
         .map(ProjectionFamily::shard_suffix)
-        .chain([IDEATION_LANDINGS])
 }
 
 #[cfg_attr(not(feature = "host"), allow(dead_code))]

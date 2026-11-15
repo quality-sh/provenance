@@ -1,6 +1,5 @@
 //! The per-family list readers that the record family tables generate.
 
-use super::ideation_batches::overlay_records;
 use super::readers::{read_jsonl, read_message_shards};
 use super::shared_parses::{read_jsonl_shared, shared};
 use super::StateStore;
@@ -72,19 +71,10 @@ macro_rules! canonical_reader {
             read_message_shards(self, &self.layout, scope)
         }
     };
-    ($record:ty, $path:ident, $list:ident, contributions) => {
-        pub fn $list(&self, scope: &ScopeId) -> anyhow::Result<Vec<$record>> {
-            self.list_contributions_after_direct_read(scope, || Ok(()))
-        }
-    };
-    ($record:ty, $path:ident, $list:ident, synthesis_packets) => {
+    ($record:ty, $path:ident, $list:ident, shared) => {
         pub fn $list(&self, scope: &ScopeId) -> anyhow::Result<Vec<$record>> {
             self.with_repository_read(|held| {
-                let mut records = read_jsonl_shared(held, &shards::$path(&held.layout, scope))?;
-                for batch in held.list_ideation_landings(scope)? {
-                    overlay_records(&mut records, batch.synthesis_packets);
-                }
-                Ok(records)
+                read_jsonl_shared(held, &shards::$path(&held.layout, scope))
             })
         }
     };
@@ -93,26 +83,9 @@ macro_rules! canonical_reader {
             self.project_proposal_cards(scope, None, || Ok(()))
         }
     };
-    ($record:ty, $path:ident, $list:ident, assertion_records) => {
-        pub fn $list(&self, scope: &ScopeId) -> anyhow::Result<Vec<$record>> {
-            self.with_repository_read(|held| {
-                let mut records = read_jsonl_shared(held, &shards::$path(&held.layout, scope))?;
-                for batch in held.list_ideation_landings(scope)? {
-                    overlay_records(&mut records, batch.assertions);
-                }
-                Ok(records)
-            })
-        }
-    };
     ($record:ty, $path:ident, $list:ident, dispositions) => {
         pub fn $list(&self, scope: &ScopeId) -> anyhow::Result<Vec<$record>> {
-            self.with_repository_read(|held| {
-                let mut records = held.disposition_file_rows_once(scope)?;
-                for batch in held.list_ideation_landings(scope)? {
-                    overlay_records(&mut records, batch.dispositions);
-                }
-                Ok(records)
-            })
+            self.with_repository_read(|held| held.disposition_file_rows_once(scope))
         }
     };
 }
