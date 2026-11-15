@@ -143,7 +143,10 @@ fn a_record_read_and_a_list_read_give_the_line_that_is_not_json() {
 
         assert!(read.status.success(), "{path}: {}", read.stderr);
         let answer: Value = serde_json::from_str(&read.stdout).unwrap();
-        assert_eq!(answer["meta"]["stamp"]["policy"], "catch_up_failed", "{path}");
+        assert_eq!(
+            answer["meta"]["stamp"]["policy"], "catch_up_failed",
+            "{path}"
+        );
         let text = answer["meta"]["freshness_error"].as_str().unwrap();
         let file = text
             .strip_prefix("cannot hash ")

@@ -8,8 +8,8 @@ use crate::support;
 
 use provenance_macros::verifies;
 use serde_json::{json, Value};
-use support::records::Repository;
 use support::depends_on_cycle::add_a_depends_on_cycle;
+use support::records::Repository;
 use support::resource_http::{call, host};
 use support::state_lines::give_refines_a_string;
 
@@ -108,5 +108,8 @@ async fn a_document_read_with_no_stored_revision_refuses_with_no_projection() {
     let (status, refused) = call(&host, "GET", DOCUMENT, None).await;
 
     assert_eq!(status, 409);
-    assert_eq!(refused, json!({"error": {"kind": "no_projection"}, "meta": {}}));
+    assert_eq!(
+        refused,
+        json!({"error": {"kind": "no_projection"}, "meta": {}})
+    );
 }
