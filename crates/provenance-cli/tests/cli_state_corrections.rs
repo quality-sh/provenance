@@ -138,7 +138,7 @@ fn cut_manifest(repo: &Path) -> (u64, String) {
     assert!(text.ends_with('}'), "{text}");
     let cut = &text[..text.len() - 1];
     std::fs::write(&path, cut).unwrap();
-    let line = u64::try_from(cut.lines().count()).unwrap();
+    let line = u64::try_from(cut.matches('\n').count() + 1).unwrap();
     (line, "EOF while parsing an object".to_owned())
 }
 
@@ -320,18 +320,30 @@ fn read(repo: &Path, id: &str) -> Value {
     read
 }
 
-/// Adds a technical name to the dictionary reference of the state.
+/// Writes a dictionary reference with a technical name to the state. The CLI
+/// has no command that adds a technical name.
 fn add_technical_name(repo: &Path) {
-    let path = repo.join(".provenance/state/dictionary.json");
-    let mut reference: Value = serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
-    reference["technical_names"] = json!(["Provenance"]);
-    std::fs::write(&path, serde_json::to_vec_pretty(&reference).unwrap()).unwrap();
+    let dictionary = crate::dictionary_support::imported_dictionary();
+    crate::dictionary_support::write_reference_with_technical_names(
+        repo,
+        dictionary,
+        &["Provenance"],
+    );
 }
 
 /// The JSON file at `file` below the state directory.
 fn state_json(repo: &Path, file: &str) -> Value {
     let path = repo.join(".provenance/state").join(file);
     serde_json::from_slice(&std::fs::read(path).unwrap()).unwrap()
+}
+
+/// The technical names of the dictionary reference of the state, when it has
+/// a reference.
+fn technical_names(repo: &Path) -> Option<Value> {
+    let path = repo.join(".provenance/state/dictionary.json");
+    let bytes = std::fs::read(path).ok()?;
+    let reference: Value = serde_json::from_slice(&bytes).unwrap();
+    reference.get("technical_names").cloned()
 }
 
 /// Procedure 2, done as the hint says: remove .provenance/state and then do
@@ -348,6 +360,7 @@ fn init_after_the_removal_of_the_state_gives_a_state_that_reads() {
         fault(repo);
         assert_eq!(hint(repo), json!(HINT));
         add_technical_name(repo);
+        assert_eq!(technical_names(repo), Some(json!(["Provenance"])));
 
         std::fs::remove_dir_all(repo.join(".provenance/state")).unwrap();
         passes(repo, &["init"]);
@@ -357,8 +370,7 @@ fn init_after_the_removal_of_the_state_gives_a_state_that_reads() {
         assert_eq!(manifest["scopes"], scopes, "{manifest}");
         let actors = manifest["disposition_actor_ids"].as_array().unwrap();
         assert!(!actors.contains(&json!("reviewer")), "{manifest}");
-        let reference = state_json(repo, "dictionary.json");
-        assert_eq!(reference.get("technical_names"), None, "{reference}");
+        assert_eq!(technical_names(repo), None);
         let (code, stdout, stderr) = run(repo, &["req_child", "get", "--format", "json"]);
         assert_eq!(code, Some(1), "{stdout}");
         let refused: Value = serde_json::from_str(&stderr).unwrap();
