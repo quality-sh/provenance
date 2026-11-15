@@ -467,6 +467,8 @@ fn directory_file(repo: &str, name: &str, content: &str) -> String {
 
 #[path = "porcelain_api/options.rs"]
 mod options;
+#[path = "porcelain_api/review_cited_resolutions.rs"]
+mod review_cited_resolutions;
 #[path = "porcelain_api/review_conflicts.rs"]
 mod review_conflicts;
 #[path = "porcelain_api/review_cycle.rs"]

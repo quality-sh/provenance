@@ -57,19 +57,6 @@ pub(super) fn only_req_a_refuses(repo: &str, expected: &Value) {
     for arguments in reads {
         assert_eq!(&refused(repo, arguments), expected, "{arguments:?}");
     }
-    // The target-first read gives each refusal of a state file as
-    // `operation_failed` with the file and the line in its message.
-    let target_first = ["req_a", "get", "--view", "review", "--format", "json"];
-    let message = format!(
-        "{} line {}: {}",
-        expected["file"].as_str().unwrap(),
-        expected["line"],
-        expected["message"].as_str().unwrap()
-    );
-    assert_eq!(
-        refused(repo, &target_first),
-        json!({"kind":"operation_failed", "message":message})
-    );
     read(repo, &["api", "requirements/req_b"]);
     read(repo, &["api", "requirements/req_b/document"]);
     fresh_list(repo, "dispositions");
@@ -81,23 +68,31 @@ pub(super) fn state_file(file: &str) -> String {
     file.trim_start_matches(".provenance/state/").to_owned()
 }
 
-/// `provenance check` exits 1 and reports the fault of `expected`, the
-/// refusal of a read, with its file and its line.
+/// `provenance check` exits 1, and its one review row finding is the fault
+/// of `expected`, the refusal of a read, with its file and its line.
 pub(super) fn check_reports(repo: &str, expected: &Value) {
+    check_reports_all(repo, std::slice::from_ref(expected));
+}
+
+/// `provenance check` exits 1, and its review row findings are the faults of
+/// `expected` in that order, each the refusal of a read with its file and
+/// its line.
+pub(super) fn check_reports_all(repo: &str, expected: &[Value]) {
     let result = output(&["check", "--repo", repo]);
-    let text = format!(
-        "{}{}",
-        String::from_utf8_lossy(&result.stdout),
-        String::from_utf8_lossy(&result.stderr)
+    let stderr = String::from_utf8_lossy(&result.stderr);
+    assert_eq!(result.status.code(), Some(1), "{stderr}");
+    let findings = expected.iter().map(|fault| {
+        format!(
+            "{} line {}: {}",
+            fault["file"].as_str().unwrap(),
+            fault["line"],
+            fault["message"].as_str().unwrap()
+        )
+    });
+    assert_eq!(
+        crate::review_row_findings::review_row_findings(&result),
+        findings.collect::<Vec<_>>()
     );
-    assert_eq!(result.status.code(), Some(1), "{text}");
-    let finding = format!(
-        "{} line {}: {}",
-        expected["file"].as_str().unwrap(),
-        expected["line"],
-        expected["message"].as_str().unwrap()
-    );
-    assert!(text.contains(&finding), "{finding}\n{text}");
 }
 
 /// Removes the lines that `remove` names, file by file, and commits once,

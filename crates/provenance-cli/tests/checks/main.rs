@@ -8,6 +8,7 @@
 #[path = "../support"]
 mod support {
     pub mod review_paths;
+    pub mod review_row_findings;
 }
 #[path = "../review_host_support/mod.rs"]
 mod review_host_support;

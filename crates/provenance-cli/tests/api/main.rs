@@ -51,6 +51,8 @@ mod porcelain_dispatch;
 mod porcelain_search;
 #[path = "../porcelain_target_routing.rs"]
 mod porcelain_target_routing;
+#[path = "../support/review_row_findings.rs"]
+mod review_row_findings;
 #[path = "../search_lifecycle.rs"]
 mod search_lifecycle;
 #[path = "../support/search_repository.rs"]

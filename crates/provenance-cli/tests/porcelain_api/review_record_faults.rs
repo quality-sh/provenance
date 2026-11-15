@@ -4,17 +4,19 @@
 //! that record. Review rows that agree beside a withdrawal or a newer
 //! submission read as before.
 
-use super::review_cycle::{describe, REVIEWER};
+use super::review_cycle::describe;
 use super::review_disagreeing_rows::{
-    check_reports, line_of, only_req_a_refuses, refused, remove_lines, row, state_file,
+    check_reports, check_reports_all, line_of, only_req_a_refuses, refused, remove_lines, row,
+    state_file,
 };
 use super::review_history::{commit, git};
 use super::review_merged_decisions::{
-    decide, fresh_list, lines, store_lines, DISPOSITIONS, PROPOSALS,
+    decide, fresh_list, lines, store_lines, DISPOSITIONS, PROPOSALS, WITHDRAWALS,
 };
 use super::review_merged_withdrawals::{
     check_passes, create, merge_side, pending, read, repository, withdraw, Merge,
 };
+use super::review_row_dependence::{create_resolution, decide_resolution_on_two_branches};
 use super::*;
 
 /// The line of the row of `file` whose `field` is `id`.
@@ -94,6 +96,55 @@ fn a_submission_id_on_lines_that_disagree_refuses_only_its_record() {
     let state = read(&repo, &["api", "requirements/req_a"])["data"]["decision"].clone();
     assert_eq!(state["withdrawn"], json!([submission]));
     assert_eq!(state["decisions"].as_array().unwrap().len(), 1);
+    check_passes(&repo);
+}
+
+/// Flow: one branch approves the submission S of `req_a`, the other branch
+/// withdraws it, and a hand edit copies the line of S and changes its
+/// summary. The record refuses with the fault of the ID, and one run of
+/// `check` also names the approval with the withdrawal. After the repair
+/// step of each, the read and `check` pass.
+#[test]
+#[verifies("rule_disagreeing_review_rows_refuse_record", examples)]
+#[verifies("rule_check_reports_review_row_faults", examples)]
+#[verifies("rule_review_row_refusal_gives_repair", examples)]
+fn an_approval_and_a_withdrawal_of_a_submission_on_lines_that_disagree() {
+    let (_directory, repo) = repository(Merge::Driver);
+    let submission = pending(&repo, "req_a");
+    let first = git(&repo, &["rev-parse", "--abbrev-ref", "HEAD"]);
+    git(&repo, &["checkout", "-q", "-b", "side"]);
+    withdraw(&repo, "req_a", &submission, "agent", "Side branch.");
+    commit(&repo);
+    git(&repo, &["checkout", "-q", &first]);
+    decide(&repo, "req_a", &submission, "accepted", "", None);
+    commit(&repo);
+    merge_side(&repo, Merge::Driver);
+    let line = line_naming(&repo, PROPOSALS, "id", &submission);
+    let mut changed = row(&repo, PROPOSALS, line);
+    changed["summary"] = json!("Changed by hand.");
+    let mut proposals = lines(&repo, PROPOSALS);
+    proposals.push(changed.to_string());
+    store_lines(&repo, PROPOSALS, &proposals);
+    let copied = proposals.len();
+    let approval = row(&repo, DISPOSITIONS, 1)["id"].as_str().unwrap().to_owned();
+    let withdrawal = row(&repo, WITHDRAWALS, 1)["id"].as_str().unwrap().to_owned();
+    let on_lines = json!({"kind":"invalid_state_file", "file":state_file(PROPOSALS),
+        "line":copied,
+        "message":format!("review submission {submission} is on lines {line} and {copied} of \
+            ideation/proposal_cards.jsonl with different contents. To repair, keep one of these \
+            lines and remove the others, then commit.")});
+    let withdrawn = json!({"kind":"invalid_state_file", "file":state_file(WITHDRAWALS), "line":1,
+        "message":format!("review submission {submission} of requirement req_a is accepted and \
+            withdrawn. The approvals in ideation/dispositions.jsonl: {approval} at line 1. The \
+            withdrawals in ideation/withdrawals.jsonl: {withdrawal} at line 1. To repair, remove \
+            each approval line or each withdrawal line, then commit.")});
+    only_req_a_refuses(&repo, &on_lines);
+    check_reports_all(&repo, &[on_lines, withdrawn]);
+
+    remove_lines(&repo, &[(PROPOSALS, copied), (WITHDRAWALS, 1)]);
+    let state = read(&repo, &["api", "requirements/req_a"])["data"]["decision"].clone();
+    assert_eq!(state["withdrawn"], json!([]));
+    assert_eq!(state["current_acceptance"]["disposition"]["id"], approval);
     check_passes(&repo);
 }
 
@@ -234,25 +285,6 @@ fn rows_beside_a_withdrawal_or_a_newer_submission_read_as_before() {
     }
 }
 
-/// Decides the pending submission of the Resolution `res_a`.
-fn decide_resolution(repo: &str, result: &str) {
-    let submission = read(repo, &["api", "resolutions/res_a"])["data"]["decision"]["pending"]
-        ["proposal_id"]
-        .as_str()
-        .unwrap()
-        .to_owned();
-    let accepted = result == "accepted";
-    let body = json!({
-        "actor":{"identity_type":"human","id":REVIEWER}, "decision":result,
-        "rationale":(!accepted).then_some("Not yet."),
-        "canonical_artifact":accepted
-            .then(|| json!({"artifact_type":"resolution","artifact_id":"res_a"})),
-        "feedback":null, "declared_by":null
-    });
-    let path = format!("resolutions/res_a/submissions/{submission}/decide");
-    super::review_cycle::write(repo, "post", &path, &body, None);
-}
-
 /// Flow: a Rule in review cites the Resolution `res_a`. One branch approves
 /// the submission of `res_a`, and the other branch rejects it. The change
 /// of the Rule to active needs the review state of `res_a`, so it gives the
@@ -261,15 +293,7 @@ fn decide_resolution(repo: &str, result: &str) {
 #[verifies("rule_review_row_refusal_stays_with_record", examples)]
 fn a_citation_of_a_resolution_whose_rows_disagree_gives_its_refusal() {
     let (_directory, repo) = repository(Merge::Driver);
-    super::review_cycle::write(
-        &repo,
-        "post",
-        "resolutions",
-        &json!({"id":"res_a", "title":"One copy",
-            "position":"Keep one copy of each record.", "rationale":"The owner chose one copy.",
-            "status":"draft", "requirement_ids":["req_a"], "supersedes":[], "inputs":[]}),
-        None,
-    );
+    create_resolution(&repo, "res_a");
     super::review_cycle::write(
         &repo,
         "post",
@@ -279,15 +303,7 @@ fn a_citation_of_a_resolution_whose_rows_disagree_gives_its_refusal() {
             "resolution_ids":["res_a"]}),
         None,
     );
-    commit(&repo);
-    let first = git(&repo, &["rev-parse", "--abbrev-ref", "HEAD"]);
-    git(&repo, &["checkout", "-q", "-b", "side"]);
-    decide_resolution(&repo, "rejected");
-    commit(&repo);
-    git(&repo, &["checkout", "-q", &first]);
-    decide_resolution(&repo, "accepted");
-    commit(&repo);
-    merge_side(&repo, Merge::Driver);
+    decide_resolution_on_two_branches(&repo, "res_a");
 
     let resolution = refused(&repo, &["api", "resolutions/res_a"]);
     assert_eq!(resolution["kind"], "invalid_state_file", "{resolution}");

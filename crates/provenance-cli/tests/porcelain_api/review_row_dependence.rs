@@ -11,7 +11,7 @@ use super::review_merged_withdrawals::{merge_side, pending, read, repository, wi
 use super::*;
 
 /// Creates the draft Resolution `id`, which cites `req_a`.
-fn create_resolution(repo: &str, id: &str) {
+pub(super) fn create_resolution(repo: &str, id: &str) {
     write(
         repo,
         "post",
@@ -24,7 +24,7 @@ fn create_resolution(repo: &str, id: &str) {
 }
 
 /// Decides the pending submission of the Resolution `id`.
-fn decide_resolution(repo: &str, id: &str, result: &str) {
+pub(super) fn decide_resolution(repo: &str, id: &str, result: &str) {
     let path = format!("resolutions/{id}");
     let submission = read(repo, &["api", &path])["data"]["decision"]["pending"]["proposal_id"]
         .as_str()
@@ -47,9 +47,24 @@ fn decide_resolution(repo: &str, id: &str, result: &str) {
     );
 }
 
+/// Commits, then one branch approves the pending submission of the
+/// Resolution `id` and a second branch rejects it, and the merge driver
+/// merges the branches. The review rows of `id` then disagree.
+pub(super) fn decide_resolution_on_two_branches(repo: &str, id: &str) {
+    commit(repo);
+    let first = git(repo, &["rev-parse", "--abbrev-ref", "HEAD"]);
+    git(repo, &["checkout", "-q", "-b", "side"]);
+    decide_resolution(repo, id, "rejected");
+    commit(repo);
+    git(repo, &["checkout", "-q", &first]);
+    decide_resolution(repo, id, "accepted");
+    commit(repo);
+    merge_side(repo, Merge::Driver);
+}
+
 /// The arguments of a patch of `path` on `repo` with `body` and the current
 /// etag.
-fn patch(repo: &str, path: &str, body: &Value) -> Vec<String> {
+pub(super) fn patch(repo: &str, path: &str, body: &Value) -> Vec<String> {
     let etag = read(repo, &["api", path])["data"]["edit"]["etag"]
         .as_str()
         .unwrap()
@@ -83,15 +98,7 @@ fn a_change_of_a_resolution_does_not_refuse_for_a_second_resolution() {
             "resolution_ids":["res_x", "res_a"]}),
         None,
     );
-    commit(&repo);
-    let first = git(&repo, &["rev-parse", "--abbrev-ref", "HEAD"]);
-    git(&repo, &["checkout", "-q", "-b", "side"]);
-    decide_resolution(&repo, "res_a", "rejected");
-    commit(&repo);
-    git(&repo, &["checkout", "-q", &first]);
-    decide_resolution(&repo, "res_a", "accepted");
-    commit(&repo);
-    merge_side(&repo, Merge::Driver);
+    decide_resolution_on_two_branches(&repo, "res_a");
     let fault = refused(&repo, &["api", "resolutions/res_a"]);
     assert_eq!(fault["kind"], "invalid_state_file", "{fault}");
 

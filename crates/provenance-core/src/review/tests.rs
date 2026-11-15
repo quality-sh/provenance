@@ -2,6 +2,9 @@ use super::ReviewRecord;
 use crate::NodeType;
 use serde_json::json;
 
+mod disputed_lines;
+mod rows;
+
 /// Implementation aid: pins the closed read of an enrolled record; no Rule
 /// names it.
 #[test]
@@ -23,55 +26,13 @@ fn closed_record_read_refuses_unknown_fields() {
 }
 
 mod stored_rows {
+    use super::rows::{at, decision, id, submission, withdrawal, REQ_A};
     use crate::review::{
         read_review_rows, ReviewRowFamily, ReviewRowFault, RowAt, StoredReviewRows, SubmissionLines,
     };
-    use crate::{
-        DispositionDecision, DispositionRecord, NodeType, ProposalCard, StableId, Withdrawal,
-    };
+    use crate::{DispositionDecision, DispositionRecord, NodeType, Withdrawal};
     use provenance_macros::verifies;
     use serde_json::json;
-
-    fn id(value: &str) -> StableId {
-        StableId::new(value).unwrap()
-    }
-
-    fn submission(id: &str, record: &str, cycle: u64) -> ProposalCard {
-        serde_json::from_value(json!({
-            "scope_id": "default", "id": id,
-            "proposal_key": format!("review:requirement:{record}:{cycle}"),
-            "proposal_type": "record_revision", "title": "Review", "summary": "Review",
-            "traceability": {
-                "target": {"artifact_type": "requirement", "artifact_id": record},
-                "source_ids": [], "evidence_references": [], "supporting_claim_ids": []
-            },
-            "promotion_state": "proposed",
-            "record_revision": {"revision": "rev_a"}
-        }))
-        .unwrap()
-    }
-
-    fn decision(id: &str, submission: &str, result: &str, actor: &str) -> DispositionRecord {
-        serde_json::from_value(json!({
-            "scope_id": "default", "id": id, "proposal_id": submission, "decision": result,
-            "actor": {"identity_type": "human", "id": actor}
-        }))
-        .unwrap()
-    }
-
-    fn withdrawal(id: &str, submission: &str, actor: &str) -> Withdrawal {
-        serde_json::from_value(json!({
-            "scope_id": "default", "id": id, "proposal_id": submission, "actor": actor,
-            "reason": null
-        }))
-        .unwrap()
-    }
-
-    fn at(family: ReviewRowFamily, position: usize) -> RowAt {
-        RowAt { family, position }
-    }
-
-    const REQ_A: &str = "req_a";
 
     /// Pairs 3 to 7: two decisions with one result, from other actors, read
     /// as one decision with that result.
