@@ -1,4 +1,6 @@
 use crate::review_host_support;
+use provenance_core::protocol::read_failure::STATE_CORRECTIONS;
+use provenance_macros::verifies;
 use review_host_support::{
     follow::{create, setup, Follow},
     repository, start, waits,
@@ -215,4 +217,39 @@ fn deleted_root_reports_a_read_error_when_recovery_reads_it() {
     assert_eq!(error["type"], "read-error");
     assert_eq!(error["continuity"], "unknown");
     assert_eq!(error["reason"], "document root is missing");
+}
+
+#[test]
+#[verifies("rule_state_parse_refusal_names_the_corrections", examples)]
+fn a_manifest_that_does_not_parse_gives_its_fault_as_the_read_error_reason() {
+    let repo = repository();
+    create(repo.path(), "req_follow", "requirement", &[]);
+    let feed = review_host_support::scripted_feed::Feed::start(repo.path());
+    feed.send(serde_json::json!({"type":"ready", "epoch":feed.epoch, "sequence":0}));
+    let follow = feed.follow(repo.path());
+    follow.frame();
+    std::fs::write(
+        repo.path().join(".provenance/state/manifest.json"),
+        "{\"scopes\":\"default\"}\n",
+    )
+    .unwrap();
+    feed.send(
+        serde_json::json!({"type":"reset", "epoch":feed.epoch, "sequence":1, "reason":"recovery"}),
+    );
+
+    let error = follow.frame();
+
+    assert_eq!(
+        error,
+        serde_json::json!({
+            "type": "read-error",
+            "continuity": "unknown",
+            "epoch": feed.epoch,
+            "sequence": 1,
+            "reason": format!(
+                "manifest.json line 1: invalid type: string \"default\", expected a sequence; \
+                 {STATE_CORRECTIONS}"
+            ),
+        })
+    );
 }
