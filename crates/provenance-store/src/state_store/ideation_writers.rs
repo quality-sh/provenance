@@ -1,4 +1,4 @@
-use super::ideation_batches::{replace_checked_or_append, replace_or_append};
+use super::ideation_batches::{place_checked_in_file, replace_or_append};
 use super::{
     CreateContributionInput, CreateSynthesisPacketInput, StateStore, UpdateContributionInput,
     UpdateSynthesisPacketInput,
@@ -102,7 +102,7 @@ impl StateStore {
         };
         let path = shards::contributions_path(&self.layout, &scope_id);
         self.mutate_jsonl_records(&path, |records: &mut Vec<Contribution>| {
-            replace_checked_or_append(records, contribution.clone(), |stored| {
+            place_checked_in_file(records, contribution.clone(), |stored| {
                 crate::write_error::ensure!(AlreadyExists, replace, "contribution already exists");
                 super::ideation_batches::ensure_asserted_contribution_unchanged(
                     stored,
@@ -125,7 +125,6 @@ impl StateStore {
                 },
             )?;
             super::read_budget::ensure_within_read_budget(&contribution)?;
-            records.sort_by(|a, b| a.id.as_str().cmp(b.id.as_str()));
             Ok(contribution)
         })
     }
@@ -207,7 +206,7 @@ impl StateStore {
         };
         let path = shards::synthesis_packets_path(&self.layout, &scope_id);
         self.mutate_jsonl_records(&path, |records: &mut Vec<SynthesisPacket>| {
-            replace_checked_or_append(records, synthesis_packet.clone(), |stored| {
+            place_checked_in_file(records, synthesis_packet.clone(), |stored| {
                 crate::write_error::ensure!(
                     AlreadyExists,
                     replace,
@@ -234,7 +233,6 @@ impl StateStore {
                 },
             )?;
             super::read_budget::ensure_within_read_budget(&synthesis_packet)?;
-            records.sort_by(|a, b| a.id.as_str().cmp(b.id.as_str()));
             Ok(synthesis_packet)
         })
     }

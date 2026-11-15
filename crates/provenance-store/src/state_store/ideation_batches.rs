@@ -147,9 +147,9 @@ impl StateStore {
         self.publish_shards(files.into_iter().flatten().collect())
     }
 
-    /// The new bytes of the state file at `path` with each of `records` in
-    /// place of the row with its id, or after the last row. No bytes when
-    /// `records` is empty.
+    /// The new bytes of the state file at `path` with each of `records` at
+    /// the place that [`place_in_file`] gives it. No bytes when `records` is
+    /// empty.
     fn kind_file<T>(&self, path: Utf8PathBuf, records: Vec<T>) -> anyhow::Result<Option<ShardBytes>>
     where
         T: IdeationRecord + DeserializeOwned + Serialize,
@@ -160,7 +160,7 @@ impl StateStore {
         let contents = self.state_text(&path)?;
         let bytes = crate::jsonl::mutate_jsonl_bytes(self, &path, contents.as_deref(), |rows| {
             for record in records {
-                replace_or_append(rows, record);
+                place_in_file(rows, record);
             }
             Ok(true)
         })?;
@@ -330,6 +330,26 @@ fn merge_immutable<T: Clone + IdeationRecord>(
         );
         existing.push(record.clone());
     }
+    Ok(())
+}
+
+/// Puts `record` in the rows of the state file of its kind: in place of the
+/// row with its id, or else among the rows in id order. Each direct writer and
+/// each landing give a record its place with this function, so the file stays
+/// in id order.
+pub(super) fn place_in_file<T: IdeationRecord>(rows: &mut Vec<T>, record: T) {
+    let Ok(()) = place_checked_in_file(rows, record, |_| Ok::<(), Infallible>(()));
+}
+
+/// [`place_in_file`], after `check_stored` reads the stored row with the id of
+/// `record`. When it refuses, `rows` stays as it is.
+pub(super) fn place_checked_in_file<T: IdeationRecord, E>(
+    rows: &mut Vec<T>,
+    record: T,
+    check_stored: impl FnOnce(&T) -> Result<(), E>,
+) -> Result<(), E> {
+    replace_checked_or_append(rows, record, check_stored)?;
+    rows.sort_by(|a, b| a.immutable_id().cmp(b.immutable_id()));
     Ok(())
 }
 

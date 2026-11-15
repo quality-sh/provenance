@@ -1,4 +1,5 @@
 use super::canonical_artifacts::CanonicalArtifactIndex;
+use super::ideation_batches::place_in_file;
 use super::{
     serde_name, CreateAssertionInput, CreateDispositionInput, CreateProposalCardInput, StateStore,
 };
@@ -174,8 +175,7 @@ impl StateStore {
                 },
             )?;
             super::read_budget::ensure_within_read_budget(&assertion)?;
-            records.push(assertion.clone());
-            records.sort_by(|a, b| a.id.as_str().cmp(b.id.as_str()));
+            place_in_file(records, assertion.clone());
             Ok(assertion)
         })
     }
@@ -231,8 +231,7 @@ impl StateStore {
         // check above covers it.
         self.mutate_jsonl_records(&path, |records: &mut Vec<ProposalCard>| {
             super::read_budget::ensure_within_read_budget(&candidate)?;
-            records.push(candidate.clone());
-            records.sort_by(|a, b| a.id.as_str().cmp(b.id.as_str()));
+            place_in_file(records, candidate.clone());
             Ok(candidate)
         })
     }
@@ -326,8 +325,7 @@ impl StateStore {
             &dispositions_path,
             |records: &mut Vec<DispositionRecord>| {
                 super::read_budget::ensure_within_read_budget(&disposition)?;
-                records.push(disposition.clone());
-                records.sort_by(|a, b| a.id.as_str().cmp(b.id.as_str()));
+                place_in_file(records, disposition.clone());
                 Ok(disposition)
             },
         )
