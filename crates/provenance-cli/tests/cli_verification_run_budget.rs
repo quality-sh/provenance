@@ -121,7 +121,7 @@ fn a_completion_with_a_row_over_the_budget_is_refused_and_the_run_stays_running(
     let evidence = data(&api(repo, "rules/rule_two/evidence", None));
 
     assert_eq!(refused.status.code(), Some(1));
-    assert!(refused.stdout.is_empty());
+    assert_eq!(String::from_utf8_lossy(&refused.stdout), "");
     let stderr = String::from_utf8(refused.stderr).unwrap();
     let message = stderr.strip_prefix("Error: ").unwrap();
     let refusal: Value = serde_json::from_str(message).unwrap();
