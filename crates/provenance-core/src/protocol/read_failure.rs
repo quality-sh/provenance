@@ -92,7 +92,9 @@ fn file_and_line<'de, D: serde::Deserializer<'de>>(
     match (keys.file, keys.line) {
         (Some(file), Some(line)) => Ok(Some(FileLine { file, line })),
         (None, None) => Ok(None),
-        _ => Err(serde::de::Error::custom("a failure gives file and line together, or neither")),
+        _ => Err(serde::de::Error::custom(
+            "a failure gives file and line together, or neither",
+        )),
     }
 }
 

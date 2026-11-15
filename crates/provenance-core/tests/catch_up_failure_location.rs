@@ -6,6 +6,9 @@ use provenance_core::protocol::read_failure::ReadFailure;
 use provenance_macros::verifies;
 use serde_json::{json, Value};
 
+/// The read error of a body with one of the two keys.
+const ONE_KEY: &str = "a failure gives file and line together, or neither";
+
 /// The failure that `body` reads as, written again, or the read error.
 fn read(body: &Value) -> Result<Value, String> {
     let failure = serde_json::from_value::<ReadFailure>(body.clone());
@@ -47,10 +50,6 @@ fn a_failure_with_only_the_file_or_only_the_line_is_refused() {
     });
 
     for body in [only_file, only_line] {
-        assert_eq!(
-            read(&body),
-            Err("a failure gives file and line together, or neither".to_owned()),
-            "{body}"
-        );
+        assert_eq!(read(&body), Err(ONE_KEY.to_owned()), "{body}");
     }
 }
