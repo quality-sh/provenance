@@ -108,7 +108,7 @@ pub trait FileVersions: Send + Sync + Debug {
 /// The file versions of a repository that has no committed history: no
 /// file has a version and no commit has a text.
 #[derive(Debug)]
-pub(crate) struct NoFileVersions;
+pub struct NoFileVersions;
 
 impl FileVersions for NoFileVersions {
     fn versions<'a>(&'a self, _: &'a str) -> BoxFuture<'a, anyhow::Result<Arc<Vec<FileVersion>>>> {
