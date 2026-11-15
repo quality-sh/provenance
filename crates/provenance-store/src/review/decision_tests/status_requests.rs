@@ -26,7 +26,7 @@ fn rule_state(store: &StateStore) -> provenance_core::review::RequirementDecisio
 }
 
 fn create(store: &StateStore, status: &str) -> anyhow::Result<Rule> {
-    store.request_rule_creation(
+    store.create_rule(
         serde_json::from_value(json!({
             "scope_id":"default","id":"rule_a","statement":"The rule holds.",
             "requirement_ids":["req_a"],"resolution_ids":[],"status":status,"severity":"high"
@@ -40,7 +40,7 @@ fn update(store: &StateStore, fields: &Value) -> anyhow::Result<Rule> {
     for (key, field) in fields.as_object().unwrap() {
         value[key] = field.clone();
     }
-    store.request_rule_update(serde_json::from_value(value).unwrap())
+    store.update_rule(serde_json::from_value(value).unwrap())
 }
 
 fn accept(store: &StateStore, proposal: &StableId) {
@@ -253,7 +253,7 @@ fn create_citing_proposed_resolution(
             .unwrap(),
         )
         .unwrap();
-    let created = store.request_rule_creation(
+    let created = store.create_rule(
         serde_json::from_value(json!({
             "scope_id":"default","id":"rule_a","statement":"The rule holds.",
             "requirement_ids":["req_a"],"resolution_ids":["res_a"],"status":status,
@@ -315,7 +315,7 @@ fn requirement_request(store: &StateStore, fields: &Value) -> anyhow::Result<()>
         update[key] = field.clone();
     }
     store
-        .request_requirement_save(
+        .save_requirement_resource(
             serde_json::from_value(json!({
                 "actor":"agent","expected_etag":etag,"update":update,"relationships":null
             }))
@@ -430,7 +430,7 @@ fn a_requirement_archive_that_the_cascade_refuses_is_refused_at_request_time() {
         )
         .unwrap();
     store
-        .request_rule_creation(
+        .create_rule(
             serde_json::from_value(json!({
                 "scope_id":"default","id":"rule_a","statement":"The rule holds.",
                 "requirement_ids":["req_b"],"resolution_ids":["res_a"],"status":"active",

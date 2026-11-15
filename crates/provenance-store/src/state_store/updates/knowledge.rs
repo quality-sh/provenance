@@ -69,11 +69,9 @@ impl StateStore {
         Ok(record)
     }
 
-    pub fn update_rule(&self, input: UpdateRuleInput) -> anyhow::Result<Rule> {
-        self.prepare_rule_update(input)
-    }
-
-    fn prepare_rule_update(&self, input: UpdateRuleInput) -> anyhow::Result<Rule> {
+    /// Writes a Rule update directly. [`StateStore::update_rule`] calls it
+    /// for each update that does not wait for a reviewer.
+    pub(crate) fn prepare_rule_update(&self, input: UpdateRuleInput) -> anyhow::Result<Rule> {
         let scope = input.scope_id.clone();
         let path = shards::rules_path(&self.layout, &input.scope_id);
         let expected_etag = input.expected_etag.clone();

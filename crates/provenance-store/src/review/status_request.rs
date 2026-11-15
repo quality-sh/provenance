@@ -1,60 +1,26 @@
-//! Status requests: a change of a record status to active or archived waits
-//! for a reviewer. The request opens a review submission that names the
-//! requested status, and an approval of that submission sets the status.
+//! Status requests: a change of the status of a Rule or a Requirement to
+//! active or archived waits for a reviewer. The request opens a review
+//! submission that names the requested status, and an approval of that
+//! submission sets the status.
 
 use super::{
-    automatic_submission::AUTHORING_ACTOR, decision_state::check_request_size, owner_matches,
-    publication::with_record_state, RequirementResourceSnapshot, SaveRequirement,
-    SubmitRecordReview,
+    automatic_submission::{record_submission, AUTHORING_ACTOR},
+    input::RequirementRelations,
+    owner_matches,
+    publication::with_record_state,
+    SaveRequirement,
 };
 use crate::{
     shards,
     state_store::{
         CreateRuleInput, RecordStamp, StateStore, UpdateRequirementInput, UpdateRuleInput,
     },
-    write_error::WriteFailure,
 };
 use provenance_core::{
     review::{RequestedStatus, ReviewRecord, StatusRequest},
-    DispositionDecision, NodeType, RecordRevisionBinding, Requirement, RequirementStatus, Rule,
-    RuleStatus,
+    DispositionDecision, NodeType, RecordRevisionBinding, Requirement, Rule, RuleStatus,
 };
 use provenance_macros::rule;
-
-/// The longest summary a status request copies from the record.
-const SUMMARY_CHARS: usize = 1000;
-
-const fn requested_rule_status(status: &RuleStatus) -> Option<RequestedStatus> {
-    match status {
-        RuleStatus::Active => Some(RequestedStatus::Active),
-        RuleStatus::Archived => Some(RequestedStatus::Archived),
-        RuleStatus::Draft | RuleStatus::Review | RuleStatus::Deprecated => None,
-    }
-}
-
-const fn requested_requirement_status(status: &RequirementStatus) -> Option<RequestedStatus> {
-    match status {
-        RequirementStatus::Active => Some(RequestedStatus::Active),
-        RequirementStatus::Archived => Some(RequestedStatus::Archived),
-        RequirementStatus::Discovery
-        | RequirementStatus::Refinement
-        | RequirementStatus::Resolved => None,
-    }
-}
-
-const fn requirement_status(status: RequestedStatus) -> RequirementStatus {
-    match status {
-        RequestedStatus::Active => RequirementStatus::Active,
-        RequestedStatus::Archived => RequirementStatus::Archived,
-    }
-}
-
-const fn rule_status(status: RequestedStatus) -> RuleStatus {
-    match status {
-        RequestedStatus::Active => RuleStatus::Active,
-        RequestedStatus::Archived => RuleStatus::Archived,
-    }
-}
 
 /// Refuses an update that requests a status and also changes another field.
 #[rule("rule_status_request_changes_one_field")]
@@ -64,24 +30,6 @@ fn ensure_status_only(other_fields: bool) -> anyhow::Result<()> {
             InvalidUpdate,
             "an update that sets the status to active or archived cannot change other fields: \
              send the other fields in a separate update"
-        ));
-    }
-    Ok(())
-}
-
-/// Refuses a stale edit guard on a status request.
-fn check_etag(record: &ReviewRecord, expected: Option<&str>) -> anyhow::Result<()> {
-    let Some(expected) = expected else {
-        return Ok(());
-    };
-    let current_etag = super::save::etag(record)?;
-    if expected != current_etag {
-        return Err(crate::refusal::refuse!(
-            (WriteFailure::RecordEditConflict {
-                record_kind: record.kind(),
-                current_etag,
-            }),
-            "stale record edit etag"
         ));
     }
     Ok(())
@@ -111,114 +59,82 @@ fn dry_run<R>(
     Ok(())
 }
 
-const fn rule_fields_changed(input: &UpdateRuleInput) -> bool {
-    input.name.is_some()
-        || input.description.is_some()
-        || input.statement.is_some()
-        || input.severity.is_some()
-        || input.source_document.is_some()
-        || input.source_section.is_some()
-        || input.requirement_ids.is_some()
-        || input.resolution_ids.is_some()
-        || !input.clear_fields.is_empty()
+/// Each field of a Rule update other than the status and its guards. Each
+/// field is named, so a new field of the input does not compile until it is
+/// sorted here.
+fn rule_fields_changed(input: &UpdateRuleInput) -> bool {
+    let UpdateRuleInput {
+        scope_id: _,
+        id: _,
+        expected_etag: _,
+        declared_by: _,
+        status: _,
+        archived_in_commit: _,
+        name,
+        description,
+        statement,
+        severity,
+        source_document,
+        source_section,
+        requirement_ids,
+        resolution_ids,
+        clear_fields,
+    } = input;
+    name.is_some()
+        || description.is_some()
+        || statement.is_some()
+        || severity.is_some()
+        || source_document.is_some()
+        || source_section.is_some()
+        || requirement_ids.is_some()
+        || resolution_ids.is_some()
+        || !clear_fields.is_empty()
 }
 
+/// Each field of a Requirement save other than the status and its guards,
+/// named as in [`rule_fields_changed`].
 fn requirement_fields_changed(input: &SaveRequirement) -> bool {
-    let update = &input.update;
-    update.statement.is_some()
-        || update.description.is_some()
-        || !update.clear_fields.is_empty()
-        || input.relationships.as_ref().is_some_and(|relations| {
-            relations.refines.is_some()
-                || relations.depends_on.is_some()
-                || relations.supersedes.is_some()
-                || relations.spawned_by.is_some()
-                || relations.cites.is_some()
-        })
+    let SaveRequirement {
+        actor: _,
+        expected_etag: _,
+        update,
+        relationships,
+    } = input;
+    let UpdateRequirementInput {
+        scope_id: _,
+        id: _,
+        expected_etag: _,
+        declared_by: _,
+        status: _,
+        archived_in_commit: _,
+        statement,
+        description,
+        clear_fields,
+    } = update;
+    let relations_changed = relationships.as_ref().is_some_and(|relations| {
+        let RequirementRelations {
+            refines,
+            depends_on,
+            supersedes,
+            spawned_by,
+            cites,
+        } = relations;
+        refines.is_some()
+            || depends_on.is_some()
+            || supersedes.is_some()
+            || spawned_by.is_some()
+            || cites.is_some()
+    });
+    statement.is_some() || description.is_some() || !clear_fields.is_empty() || relations_changed
 }
 
 impl StateStore {
-    /// Runs the `update-requirement` operation. A change of the status to
-    /// active or archived opens a status request with the request actor and
-    /// keeps the stored Requirement; every other update saves directly.
-    pub(crate) fn request_requirement_save(
-        &self,
-        input: SaveRequirement,
-    ) -> anyhow::Result<RequirementResourceSnapshot> {
-        let Some(status) = input
-            .update
-            .status
-            .as_ref()
-            .and_then(requested_requirement_status)
-        else {
-            return self.save_requirement_resource(input);
-        };
-        crate::write_error::ensure_actor(&input.actor)?;
-        let scope = input.update.scope_id.clone();
-        let id = input.update.id.clone();
-        self.with_repository_publication(|held| {
-            super::ensure_manifest_scope(held, &scope)?;
-            let current = held.requirement(&scope, &id)?;
-            if current.status == requirement_status(status) {
-                return held.save_requirement_resource(input);
-            }
-            ensure_status_only(requirement_fields_changed(&input))?;
-            owner_matches(&current, input.update.declared_by.as_deref())?;
-            let record = ReviewRecord::from(current.clone());
-            let current_etag = super::save::etag(&record)?;
-            if input.expected_etag != current_etag {
-                return Err(crate::refusal::refuse!(
-                    (WriteFailure::RequirementEditConflict { current_etag }),
-                    "stale Requirement edit etag"
-                ));
-            }
-            let mut requested = current.clone();
-            requested.status = requirement_status(status);
-            requested
-                .archived_in_commit
-                .clone_from(&input.update.archived_in_commit);
-            requested
-                .validate_transition(&current)
-                .map_err(|error| crate::refusal::refuse!(InvalidUpdate, "{error}"))?;
-            let request = StatusRequest {
-                status,
-                archived_in_commit: input.update.archived_in_commit.clone(),
-            };
-            // A copy of the input for the direct write: `SaveRequirement` has no `Clone`.
-            let direct: SaveRequirement = serde_json::from_value(serde_json::to_value(&input)?)?;
-            dry_run(held, |staged| staged.save_requirement_resource(direct))?;
-            with_record_state(held, RecordStamp::ResolveFromRepository, |staged| {
-                staged.open_status_request(&record, &input.actor, request)
-            })?;
-            held.requirement_resource_snapshot_unlocked(&scope, &id)
-        })
-    }
-
-    /// Runs the `update-requirement-native` operation with the authoring
-    /// actor. An update with no etag uses the current etag of the record.
-    pub fn request_requirement_update(
-        &self,
-        update: UpdateRequirementInput,
-    ) -> anyhow::Result<Requirement> {
-        let scope = update.scope_id.clone();
-        let id = update.id.clone();
-        let current = self.requirement_edit_state(&scope, &id)?.etag;
-        let expected_etag = update.expected_etag.clone().unwrap_or(current);
-        self.request_requirement_save(SaveRequirement {
-            actor: AUTHORING_ACTOR.to_owned(),
-            expected_etag,
-            update,
-            relationships: None,
-        })?;
-        self.requirement(&scope, &id)
-    }
-
-    /// Runs the `update-rule` operation. A change of the status to active or
-    /// archived opens a status request and keeps the stored Rule; every other
-    /// update writes the Rule directly.
-    pub fn request_rule_update(&self, input: UpdateRuleInput) -> anyhow::Result<Rule> {
-        let Some(status) = input.status.as_ref().and_then(requested_rule_status) else {
-            return self.update_rule(input);
+    /// Writes a Rule update. A change of the status to active or archived
+    /// opens a status request and keeps the stored Rule; every other update
+    /// writes the Rule directly.
+    pub fn update_rule(&self, input: UpdateRuleInput) -> anyhow::Result<Rule> {
+        let Some(status) = input.status.as_ref().and_then(RequestedStatus::of_rule) else {
+            return self.prepare_rule_update(input);
         };
         self.with_repository_publication(|held| {
             let record = crate::families::review_families::record(
@@ -232,14 +148,16 @@ impl StateStore {
                     "the Rule read gave another record kind"
                 ));
             };
-            if current.status == rule_status(status) {
-                return held.update_rule(input);
+            if current.status == status.rule_status() {
+                return held.prepare_rule_update(input);
             }
-            ensure_status_only(rule_fields_changed(&input))?;
             owner_matches(&record, input.declared_by.as_deref())?;
-            check_etag(&record, input.expected_etag.as_deref())?;
+            ensure_status_only(rule_fields_changed(&input))?;
+            if let Some(expected) = input.expected_etag.as_deref() {
+                super::save::ensure_etag(&record, expected)?;
+            }
             let mut requested = current.clone();
-            requested.status = rule_status(status);
+            requested.status = status.rule_status();
             requested
                 .archived_in_commit
                 .clone_from(&input.archived_in_commit);
@@ -253,7 +171,9 @@ impl StateStore {
             dry_run(held, |staged| {
                 let path = shards::rules_path(&staged.layout, &input.scope_id);
                 let id = input.id.clone();
-                staged.permitting(&[&path], id.as_str(), |store| store.update_rule(input))
+                staged.permitting(&[&path], id.as_str(), |store| {
+                    store.prepare_rule_update(input)
+                })
             })?;
             with_record_state(held, RecordStamp::ResolveFromRepository, |staged| {
                 staged.open_status_request(&record, AUTHORING_ACTOR, request)
@@ -262,51 +182,94 @@ impl StateStore {
         })
     }
 
-    /// Runs the `create-rule` operation. A new Rule with the active status
-    /// has the review status, and its creation submission requests the
-    /// active status.
+    /// Creates a Rule and opens its review submission. A new Rule with the
+    /// active status has the review status, and its creation submission
+    /// requests the active status.
     #[rule("rule_new_active_rule_waits_for_review")]
-    pub fn request_rule_creation(&self, mut input: CreateRuleInput) -> anyhow::Result<Rule> {
-        match input.status {
-            RuleStatus::Archived => Err(crate::refusal::refuse!(
-                InvalidUpdate,
-                "a new Rule cannot have the archived status: create the Rule, then request \
-                 the archive"
-            )),
-            RuleStatus::Active => {
-                let path = shards::rules_path(&self.layout, &input.scope_id);
-                let relative = path.strip_prefix(self.layout.root())?.to_owned();
-                let id = input.id.clone();
-                let stamp = self.current_record_stamp()?;
-                self.with_repository_publication(|held| {
-                    let direct = copy_rule_input(&input);
-                    dry_run(held, |staged| {
-                        let path = shards::rules_path(&staged.layout, &direct.scope_id);
-                        let id = direct.id.clone();
-                        staged.permitting(&[&path], id.as_str(), |store| store.write_rule(direct))
-                    })?;
-                    input.status = RuleStatus::Review;
-                    with_record_state(held, RecordStamp::resolved(stamp), |staged| {
-                        let staged_path = staged.layout.root().join(&relative);
-                        let created = staged.permitting(&[&staged_path], id.as_str(), |store| {
-                            store.write_rule(input)
-                        })?;
-                        staged.open_status_request(
-                            &created.clone().into(),
-                            AUTHORING_ACTOR,
-                            StatusRequest {
-                                status: RequestedStatus::Active,
-                                archived_in_commit: None,
-                            },
-                        )?;
-                        Ok(created)
-                    })
-                })
+    pub fn create_rule(&self, mut input: CreateRuleInput) -> anyhow::Result<Rule> {
+        let path = shards::rules_path(&self.layout, &input.scope_id);
+        let id = input.id.clone();
+        let request = match RequestedStatus::of_rule(&input.status) {
+            None => None,
+            Some(RequestedStatus::Archived) => {
+                return Err(crate::refusal::refuse!(
+                    InvalidUpdate,
+                    "a new Rule cannot have the archived status: create the Rule, then request \
+                     the archive"
+                ));
             }
-            RuleStatus::Draft | RuleStatus::Review | RuleStatus::Deprecated => {
-                self.create_rule(input)
+            Some(status) => Some(StatusRequest {
+                status,
+                archived_in_commit: None,
+            }),
+        };
+        self.with_repository_publication(|held| {
+            if request.is_some() {
+                let direct = input.clone();
+                dry_run(held, |staged| {
+                    let path = shards::rules_path(&staged.layout, &direct.scope_id);
+                    staged.permitting(&[&path], id.as_str(), |store| store.write_rule(direct))
+                })?;
+                input.status = RuleStatus::Review;
             }
+            held.create_native_record_with(&path, &id, request, |store| store.write_rule(input))
+        })
+    }
+
+    /// The status request of a Requirement save, when the save changes the
+    /// status to active or archived. A save that requests a status and
+    /// changes another field is refused.
+    pub(super) fn requirement_status_request(
+        &self,
+        input: &SaveRequirement,
+        current: &Requirement,
+    ) -> anyhow::Result<Option<StatusRequest>> {
+        let Some(status) = input
+            .update
+            .status
+            .as_ref()
+            .and_then(RequestedStatus::of_requirement)
+        else {
+            return Ok(None);
+        };
+        if current.status == status.requirement_status() {
+            return Ok(None);
         }
+        ensure_status_only(requirement_fields_changed(input))?;
+        Ok(Some(StatusRequest {
+            status,
+            archived_in_commit: input.update.archived_in_commit.clone(),
+        }))
+    }
+
+    /// Opens the status request of a Requirement save after the checks of
+    /// the direct save, and keeps the stored Requirement.
+    pub(super) fn request_requirement_status(
+        &self,
+        input: SaveRequirement,
+        current: &Requirement,
+        request: StatusRequest,
+    ) -> anyhow::Result<()> {
+        let record = ReviewRecord::from(current.clone());
+        super::save::ensure_etag(&record, &input.expected_etag)?;
+        let mut requested = current.clone();
+        requested.status = request.status.requirement_status();
+        requested
+            .archived_in_commit
+            .clone_from(&request.archived_in_commit);
+        requested
+            .validate_transition(current)
+            .map_err(|error| crate::refusal::refuse!(InvalidUpdate, "{error}"))?;
+        let actor = input.actor.clone();
+        dry_run(self, |staged| {
+            let path = shards::requirements_path(&staged.layout, &current.scope_id);
+            staged.permitting(&[&path], current.id.as_str(), |store| {
+                store.commit_requirement(input, current, None, None)
+            })
+        })?;
+        with_record_state(self, RecordStamp::ResolveFromRepository, |staged| {
+            staged.open_status_request(&record, &actor, request)
+        })
     }
 
     /// Opens a review submission that requests a status, bound to the
@@ -319,33 +282,7 @@ impl StateStore {
         request: StatusRequest,
     ) -> anyhow::Result<()> {
         let revision = super::classifier::review_revision(record.kind(), record)?;
-        let value = serde_json::to_value(record)?;
-        let summary = ["statement", "position", "question", "title", "name"]
-            .into_iter()
-            .find_map(|field| value.get(field).and_then(serde_json::Value::as_str))
-            .unwrap_or_else(|| record.id().as_str())
-            .chars()
-            .take(SUMMARY_CHARS)
-            .collect::<String>();
-        let input = SubmitRecordReview {
-            scope_id: record.scope_id().clone(),
-            actor: actor.to_owned(),
-            record_kind: record.kind(),
-            record_id: record.id().clone(),
-            declared_by: value
-                .get("declared_by")
-                .and_then(serde_json::Value::as_str)
-                .map(str::to_owned),
-            title: String::new(),
-            summary,
-            confidence: None,
-            source_ids: Vec::new(),
-            evidence_references: Vec::new(),
-            builds_on: Vec::new(),
-            expected_revision: Some(revision),
-            revises: None,
-        };
-        check_request_size(&input)?;
+        let input = record_submission(record, actor, &revision)?;
         let path = shards::proposal_cards_path(&self.layout, record.scope_id());
         self.permitting(&[&path], "*", |store| {
             store.commit_submission_with(input, Some(request))
@@ -365,7 +302,7 @@ impl StateStore {
             ReviewRecord::Rule(rule) => {
                 let path = shards::rules_path(&self.layout, &rule.scope_id);
                 self.permitting(&[&path], rule.id.as_str(), |store| {
-                    store.update_rule(rule_status_update(rule, request))
+                    store.prepare_rule_update(rule_status_update(rule, request))
                 })?;
                 Ok(())
             }
@@ -384,26 +321,6 @@ impl StateStore {
     }
 }
 
-/// A copy of a Rule creation input, for the dry run of the direct write.
-fn copy_rule_input(input: &CreateRuleInput) -> CreateRuleInput {
-    CreateRuleInput {
-        scope_id: input.scope_id.clone(),
-        id: input.id.clone(),
-        name: input.name.clone(),
-        description: input.description.clone(),
-        requirement_ids: input.requirement_ids.clone(),
-        resolution_ids: input.resolution_ids.clone(),
-        statement: input.statement.clone(),
-        status: input.status.clone(),
-        archived_in_commit: input.archived_in_commit.clone(),
-        severity: input.severity.clone(),
-        source_document: input.source_document.clone(),
-        source_section: input.source_section.clone(),
-        origin_thread: input.origin_thread.clone(),
-        origin_message: input.origin_message.clone(),
-    }
-}
-
 fn rule_status_update(rule: &Rule, request: &StatusRequest) -> UpdateRuleInput {
     UpdateRuleInput {
         scope_id: rule.scope_id.clone(),
@@ -413,7 +330,7 @@ fn rule_status_update(rule: &Rule, request: &StatusRequest) -> UpdateRuleInput {
         name: None,
         description: None,
         statement: None,
-        status: Some(rule_status(request.status)),
+        status: Some(request.status.rule_status()),
         severity: None,
         source_document: None,
         source_section: None,
@@ -435,7 +352,7 @@ fn requirement_status_update(
         declared_by: requirement.declared_by.clone(),
         statement: None,
         description: None,
-        status: Some(requirement_status(request.status)),
+        status: Some(request.status.requirement_status()),
         archived_in_commit: request.archived_in_commit.clone(),
         clear_fields: Vec::new(),
     }

@@ -106,7 +106,7 @@ scoped_write_operation!(
     &[ExecutionNeed::GraphStorage, ExecutionNeed::Dictionary],
     scope = none,
     |store, scope, request| {
-        let snapshot = store.request_requirement_save(review::SaveRequirement {
+        let snapshot = store.save_requirement_resource(review::SaveRequirement {
                 actor: request.actor,
                 expected_etag: request.expected_etag,
                 relationships: request.relationships,

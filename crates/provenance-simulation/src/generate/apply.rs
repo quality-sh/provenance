@@ -188,6 +188,23 @@ pub fn apply(repository: &Repository, task: &Task) -> anyhow::Result<Effect> {
                 update.status = Some(RequirementStatus::Archived);
                 update.archived_in_commit = Some(archive_stamp());
             }))?;
+            // The archive opens a status request. The allowed reviewer accepts
+            // it, so the archive and its cascade apply.
+            if let Some(proposal) = super::call::open_status_request(repository, &id)? {
+                store.decide_record_review(DecideRecordReview {
+                    scope_id: scope(),
+                    actor: decider(),
+                    proposal_id: proposal,
+                    decision: provenance_core::DispositionDecision::Accepted,
+                    rationale: None,
+                    canonical_artifact: Some(provenance_core::CanonicalArtifact {
+                        artifact_type: provenance_core::CanonicalArtifactType::Requirement,
+                        artifact_id: stable(&id),
+                    }),
+                    feedback: None,
+                    declared_by: None,
+                })?;
+            }
             Effect::Archived { id }
         }
         Operation::ClaimTopic => {

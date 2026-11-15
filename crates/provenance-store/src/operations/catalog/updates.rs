@@ -26,7 +26,7 @@ creation!(
     "update-requirement-native",
     UpdateRequirementInput,
     provenance_core::Requirement,
-    request_requirement_update,
+    update_requirement,
     [GraphStorage, Dictionary]
 );
 creation!(
@@ -34,7 +34,7 @@ creation!(
     "update-rule",
     UpdateRuleInput,
     provenance_core::Rule,
-    request_rule_update,
+    update_rule,
     [GraphStorage, Dictionary]
 );
 creation!(

@@ -42,7 +42,7 @@ creation!(
     "create-rule",
     CreateRuleInput,
     provenance_core::Rule,
-    request_rule_creation,
+    create_rule,
     [GraphStorage, Dictionary]
 );
 creation!(

@@ -5,7 +5,7 @@ use super::{
     FIRST_REQUIREMENT, SCOPE, TOPIC,
 };
 use crate::{scope, stable};
-use provenance_core::review::PendingSubmission;
+use provenance_core::StableId;
 use provenance_store::repository::Repository;
 use serde::Serialize;
 use serde_json::{json, Value};
@@ -151,18 +151,14 @@ impl Task {
             return Ok(None);
         };
         let id = requirement_id(*n);
-        let state = repository
-            .store()
-            .requirement_decision_state(&scope(), &stable(&id))?;
-        let requested = |pending: &PendingSubmission| pending.status_request.is_some();
-        let Some(pending) = state.pending.filter(requested) else {
+        let Some(proposal) = open_status_request(repository, &id)? else {
             return Ok(None);
         };
         Ok(Some(Call {
             operation: "decide-record-review",
             request: json!({
                 "scope_id": SCOPE, "record_kind": "requirement", "record_id": id,
-                "proposal_id": pending.proposal_id,
+                "proposal_id": proposal,
                 "actor": {"identity_type": "human", "id": DECIDER},
                 "decision": "accepted",
                 "canonical_artifact": {"artifact_type": "requirement", "artifact_id": id},
@@ -217,4 +213,18 @@ impl Task {
             }
         })
     }
+}
+
+/// The open status request of the Requirement `id`, if it has one.
+pub(super) fn open_status_request(
+    repository: &Repository,
+    id: &str,
+) -> anyhow::Result<Option<StableId>> {
+    let state = repository
+        .store()
+        .requirement_decision_state(&scope(), &stable(id))?;
+    Ok(state
+        .pending
+        .filter(|pending| pending.status_request.is_some())
+        .map(|pending| pending.proposal_id))
 }

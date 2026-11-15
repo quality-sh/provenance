@@ -4,7 +4,7 @@
 mod review_serde;
 mod stored_rows;
 
-use crate::{NodeType, ScopeId, StableId};
+use crate::{NodeType, RequirementStatus, RuleStatus, ScopeId, StableId};
 use serde::{Deserialize, Serialize};
 
 pub use stored_rows::{withdrawn_submission_ids, WithdrawalRowFault};
@@ -261,6 +261,44 @@ impl RequestedStatus {
         match self {
             Self::Active => "active",
             Self::Archived => "archived",
+        }
+    }
+
+    /// The request that a change of a Rule to `status` opens. Only active
+    /// and archived wait for a reviewer.
+    pub const fn of_rule(status: &RuleStatus) -> Option<Self> {
+        match status {
+            RuleStatus::Active => Some(Self::Active),
+            RuleStatus::Archived => Some(Self::Archived),
+            RuleStatus::Draft | RuleStatus::Review | RuleStatus::Deprecated => None,
+        }
+    }
+
+    /// The request that a change of a Requirement to `status` opens. Only
+    /// active and archived wait for a reviewer.
+    pub const fn of_requirement(status: &RequirementStatus) -> Option<Self> {
+        match status {
+            RequirementStatus::Active => Some(Self::Active),
+            RequirementStatus::Archived => Some(Self::Archived),
+            RequirementStatus::Discovery
+            | RequirementStatus::Refinement
+            | RequirementStatus::Resolved => None,
+        }
+    }
+
+    /// The Rule status that an accepted request sets.
+    pub const fn rule_status(self) -> RuleStatus {
+        match self {
+            Self::Active => RuleStatus::Active,
+            Self::Archived => RuleStatus::Archived,
+        }
+    }
+
+    /// The Requirement status that an accepted request sets.
+    pub const fn requirement_status(self) -> RequirementStatus {
+        match self {
+            Self::Active => RequirementStatus::Active,
+            Self::Archived => RequirementStatus::Archived,
         }
     }
 }
