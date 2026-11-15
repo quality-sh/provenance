@@ -1,18 +1,38 @@
-//! One commit of a commit graph of the contract, and one file of a commit.
+//! One commit of a commit graph of the contract, and one entry of a commit.
 
-/// A file that one commit holds: its bytes and its mode.
+/// An entry that one commit holds at a path. Each kind holds only its own
+/// data, so an entry cannot be a directory with bytes or an executable
+/// submodule entry.
 #[derive(Debug, Clone, PartialEq, Eq)]
-#[non_exhaustive]
-pub struct Entry {
-    pub bytes: Vec<u8>,
-    /// The file has the executable mode.
-    pub executable: bool,
+pub enum Entry {
+    /// A file. Only a file has a text.
+    File {
+        bytes: Vec<u8>,
+        /// The file has the executable mode.
+        executable: bool,
+    },
+    /// A submodule entry to a commit: a commit name of the graph, or a commit
+    /// id that the graph does not hold.
+    Submodule(String),
+    /// A directory. Two directories at one path are the same entry.
+    Directory,
 }
 
 impl Entry {
     /// A file with `bytes`, executable when `executable` is set.
     pub const fn new(bytes: Vec<u8>, executable: bool) -> Self {
-        Self { bytes, executable }
+        Self::File { bytes, executable }
+    }
+
+    /// A submodule entry to `commit`, a commit name of the graph or a commit
+    /// id that the graph does not hold.
+    pub fn submodule(commit: &str) -> Self {
+        Self::Submodule(commit.to_owned())
+    }
+
+    /// A directory.
+    pub const fn directory() -> Self {
+        Self::Directory
     }
 
     /// A file that is not executable, with `text` as its bytes.
@@ -36,9 +56,9 @@ pub struct Commit {
     pub authored_at: i64,
     /// The commit time in seconds since the Unix epoch.
     pub committed_at: i64,
-    /// The files that differ from the first parent: the new file, or `None`
-    /// for a removed file. A merge has the files of its first parent and
-    /// these changes.
+    /// The entries that differ from the first parent: the new entry at a
+    /// path, or `None` for a removed entry. A merge has the entries of its
+    /// first parent and these changes.
     pub changes: Vec<(String, Option<Entry>)>,
 }
 
@@ -73,7 +93,7 @@ impl Commit {
         self.with_entry(path, Entry::text(text))
     }
 
-    /// This commit with `entry` as the file at `path`.
+    /// This commit with `entry` as the entry at `path`.
     #[must_use]
     pub fn with_entry(mut self, path: &str, entry: Entry) -> Self {
         self.changes.push((path.to_owned(), Some(entry)));

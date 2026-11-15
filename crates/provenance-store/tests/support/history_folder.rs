@@ -4,6 +4,7 @@
 //! last commit and the saved working copy over it.
 
 use super::history_fixture::History;
+use provenance_store::review::history::contract::Entry;
 use std::collections::BTreeMap;
 use std::fmt::Write as _;
 use std::io::Write as _;
@@ -63,7 +64,16 @@ pub fn folder(history: &History) -> Folder {
                 git(root, &["update-index", "--force-remove", path], None);
                 continue;
             };
-            let blob = git(root, &["hash-object", "-w", "--stdin"], Some(&entry.bytes));
+            let Entry::File {
+                bytes,
+                executable: false,
+            } = entry
+            else {
+                panic!(
+                    "the folder repository writes only files that are not executable: {path} is {entry:?}"
+                );
+            };
+            let blob = git(root, &["hash-object", "-w", "--stdin"], Some(bytes));
             let entry = format!("100644,{blob},{path}");
             git(
                 root,
