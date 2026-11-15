@@ -132,12 +132,13 @@ fn decision(id: &str, submission: &Value, result: &str) -> Value {
 
 /// Removes the lines of `file` at the line numbers `remove`.
 fn remove(repo: &Path, file: &str, remove: &[usize]) {
-    let kept = lines(repo, file)
-        .into_iter()
-        .enumerate()
-        .filter(|(index, _)| !remove.contains(&(index + 1)))
-        .map(|(_, line)| format!("{line}\n"))
-        .collect::<String>();
+    let mut kept = String::new();
+    for (index, line) in lines(repo, file).into_iter().enumerate() {
+        if !remove.contains(&(index + 1)) {
+            kept.push_str(&line);
+            kept.push('\n');
+        }
+    }
     std::fs::write(repo.join(file), kept).unwrap();
 }
 
