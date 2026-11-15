@@ -43,10 +43,11 @@ inside an open block comment. A marker after code on the same line does not
 bind. The comment binds the Rule whatever item comes below it.
 
 The scanner takes the item name from the declaration below the comment. It
-reads the next six code lines; comment lines and empty lines do not count.
-Attributes, decorators, and annotations can come between the comment and the
-declaration, and the declaration can continue on the next lines. The item name
-is the name of the function or type that the first code line declares:
+reads the next six code lines. Comment lines, empty lines, and lines that start
+an attribute, a decorator, or an annotation do not count. These can come
+between the comment and the declaration, and the declaration can continue on
+the next lines. The item name is the name of the function or type that the
+first code line declares:
 
 - Rust: `fn`, `struct`, `enum`, `union`, `trait`, or `type`, after `#[...]`
   attributes, `pub` or `pub(...)`, and `const`, `async`, `unsafe`, `extern`,
@@ -64,12 +65,17 @@ is the name of the function or type that the first code line declares:
   `public static boolean paysOvertime(int hours) {` gives `paysOvertime`.
 
 When the first code line declares no function or type, for example a Rust
-`impl` block, a Rust `const`, or a Java field, the first function in the six
-lines gives the item name. In JavaScript and TypeScript, a named function
-expression also counts, so `test("overtime", function overtimeExamples() {`
-gives `overtimeExamples`. When the six lines have no function, the comment has
-no item name. A declaration without a name, such as
-`export default function () {}`, gives no name of its own.
+`impl` block, a Rust `const`, a Java field, or a test call, the scanner reads
+the six lines one at a time and takes the first name that this line rule gives:
+
+- Rust, Python, Go: the word after `fn`, `def`, or `func`.
+- JavaScript, TypeScript: the word after `function`, `const`, `let`, or `var`.
+  On a line without these words, the word after the first space.
+- Java: the word after the first space.
+
+So `test("overtime", function overtimeExamples() {` gives `overtimeExamples`,
+and `test("hours above 38", () => {` gives `above`. When no line gives a name,
+the comment has no item name.
 
 A Rust `#[rule]` or `#[verifies]` attribute and a Python `@rule` decorator take
 their item name by the same rules.

@@ -7,45 +7,41 @@
 
 use provenance_macros::rule;
 
-use super::Language;
+use super::{token_after, Language};
 
 /// The number of code lines below a binding that the scanner reads. Comment
-/// lines and empty lines do not count.
+/// lines, empty lines, and lines that start an attribute, a decorator, or an
+/// annotation do not count.
 const WINDOW: usize = 6;
 
-/// What a declaration declares.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum Kind {
-    Function,
-    Type,
-}
-
 /// The name of the function or type that the first code lines below a binding
-/// declare, or else the name of the first function in the window.
+/// declare, or else the name that the line rule of the language finds.
 #[rule("rule_site_item_name_is_the_declaration_below")]
 pub(super) fn item_name(language: Language, following: &[&str]) -> Option<String> {
-    let window = following
-        .iter()
-        .map(|line| line.trim())
-        .filter(|line| !line.is_empty() && !is_comment(language, line))
-        .take(WINDOW)
-        .collect::<Vec<_>>();
+    let window = window(language, following);
     let header = window.join("\n");
-    if let Some((_, name)) = declaration(language, &tokens(language, &header)) {
-        return Some(name);
-    }
-    window.iter().find_map(|line| {
-        let tokens = tokens(language, line);
-        match declaration(language, &tokens) {
-            Some((Kind::Function, name)) => Some(name),
-            _ if is_script(language) => function_expression(&tokens),
-            _ => None,
+    declaration(language, &tokens(language, &header))
+        .or_else(|| window.iter().find_map(|line| line_name(language, line)))
+}
+
+fn window<'a>(language: Language, following: &[&'a str]) -> Vec<&'a str> {
+    let mut counted = 0;
+    let mut window = Vec::new();
+    for line in following.iter().map(|line| line.trim()) {
+        if counted == WINDOW {
+            break;
         }
-    })
+        if line.is_empty() || is_comment(language, line) {
+            continue;
+        }
+        counted += usize::from(!line.starts_with("#[") && !line.starts_with('@'));
+        window.push(line);
+    }
+    window
 }
 
 /// The declaration at the start of `tokens`, in the grammar of `language`.
-fn declaration(language: Language, tokens: &[&str]) -> Option<(Kind, String)> {
+fn declaration(language: Language, tokens: &[&str]) -> Option<String> {
     match language {
         Language::Rust => rust(tokens),
         Language::Python => python(tokens),
@@ -55,8 +51,32 @@ fn declaration(language: Language, tokens: &[&str]) -> Option<(Kind, String)> {
     }
 }
 
-const fn is_script(language: Language) -> bool {
-    matches!(language, Language::JavaScript | Language::TypeScript)
+/// The name that one line gives when the code below a binding starts with no
+/// declaration: the word after `fn`, `def`, or `func`; in JavaScript and
+/// TypeScript the word after `function`, `const`, `let`, or `var`, and else,
+/// as in Java, the word after the first space.
+fn line_name(language: Language, line: &str) -> Option<String> {
+    let marker = match language {
+        Language::Rust => "fn ",
+        Language::Python => "def ",
+        Language::Go => "func ",
+        Language::JavaScript | Language::TypeScript | Language::Java => " ",
+    };
+    if matches!(language, Language::JavaScript | Language::TypeScript) {
+        if line.contains("function ") {
+            return token_after(line, "function ");
+        }
+        for declaration in ["const ", "let ", "var "] {
+            if line.contains(declaration) {
+                return token_after(line, declaration);
+            }
+        }
+    }
+    if language == Language::Go && line.starts_with("func (") {
+        let after_receiver = line.split_once(") ")?.1;
+        return token_after(after_receiver, "");
+    }
+    token_after(line, marker)
 }
 
 fn is_comment(language: Language, line: &str) -> bool {
@@ -68,7 +88,7 @@ fn is_comment(language: Language, line: &str) -> bool {
 
 /// `fn`, `struct`, `enum`, `union`, `trait`, and `type` after attributes,
 /// visibility, and the function qualifiers.
-fn rust(tokens: &[&str]) -> Option<(Kind, String)> {
+fn rust(tokens: &[&str]) -> Option<String> {
     let mut index = 0;
     loop {
         let next = tokens.get(index + 1).copied();
@@ -81,34 +101,32 @@ fn rust(tokens: &[&str]) -> Option<(Kind, String)> {
             "default" | "async" | "unsafe" => index += 1,
             "extern" => index += 1 + usize::from(next.is_some_and(|abi| abi.starts_with('"'))),
             "const" if matches!(next, Some("fn" | "async" | "unsafe" | "extern")) => index += 1,
-            "fn" => return named(tokens, index + 1, Kind::Function),
-            "struct" | "enum" | "union" | "trait" | "type" => {
-                return named(tokens, index + 1, Kind::Type)
-            }
+            "fn" => return named(tokens, index + 1),
+            "struct" | "enum" | "union" | "trait" | "type" => return named(tokens, index + 1),
             _ => return None,
         }
     }
 }
 
 /// `def` and `class` after decorators and `async`.
-fn python(tokens: &[&str]) -> Option<(Kind, String)> {
+fn python(tokens: &[&str]) -> Option<String> {
     let mut index = 0;
     loop {
         match *tokens.get(index)? {
             "@" => index = skip_annotation(tokens, index + 1),
             "async" => index += 1,
-            "def" => return named(tokens, index + 1, Kind::Function),
-            "class" => return named(tokens, index + 1, Kind::Type),
+            "def" => return named(tokens, index + 1),
+            "class" => return named(tokens, index + 1),
             _ => return None,
         }
     }
 }
 
 /// `func`, with or without a receiver, and `type`.
-fn go(tokens: &[&str]) -> Option<(Kind, String)> {
+fn go(tokens: &[&str]) -> Option<String> {
     match *tokens.first()? {
-        "func" => named(tokens, skip_group(tokens, 1, "(", ")"), Kind::Function),
-        "type" => named(tokens, 1, Kind::Type),
+        "func" => named(tokens, skip_group(tokens, 1, "(", ")")),
+        "type" => named(tokens, 1),
         _ => None,
     }
 }
@@ -136,7 +154,7 @@ const SCRIPT_KEYWORDS: [&str; 22] = [
 /// A function, a class, an interface, a type alias, an enum, a `const`,
 /// `let`, or `var` declaration, or a class method, after decorators and
 /// modifiers.
-fn script(tokens: &[&str]) -> Option<(Kind, String)> {
+fn script(tokens: &[&str]) -> Option<String> {
     let mut index = 0;
     loop {
         let token = *tokens.get(index)?;
@@ -145,11 +163,11 @@ fn script(tokens: &[&str]) -> Option<(Kind, String)> {
             "@" => index = skip_annotation(tokens, index + 1),
             "function" => {
                 let generator = next == Some("*");
-                return named(tokens, index + 1 + usize::from(generator), Kind::Function);
+                return named(tokens, index + 1 + usize::from(generator));
             }
-            "class" | "interface" | "type" | "enum" => return named(tokens, index + 1, Kind::Type),
+            "class" | "interface" | "type" | "enum" => return named(tokens, index + 1),
             "const" if next == Some("enum") => index += 1,
-            "const" | "let" | "var" => return named(tokens, index + 1, Kind::Function),
+            "const" | "let" | "var" => return named(tokens, index + 1),
             "*" => index += 1,
             _ if is_modifier(&SCRIPT_MODIFIERS, token, next) => index += 1,
             "get" | "set" if next.is_some_and(is_identifier) => index += 1,
@@ -163,7 +181,7 @@ fn script(tokens: &[&str]) -> Option<(Kind, String)> {
 
 /// A class method: a name, type parameters, and a parameter list that a body
 /// or a return type follows.
-fn script_method(tokens: &[&str], name: usize) -> Option<(Kind, String)> {
+fn script_method(tokens: &[&str], name: usize) -> Option<String> {
     let mut index = name + 1;
     index += usize::from(tokens.get(index) == Some(&"?"));
     index = skip_group(tokens, index, "<", ">");
@@ -171,16 +189,7 @@ fn script_method(tokens: &[&str], name: usize) -> Option<(Kind, String)> {
         return None;
     }
     let after = skip_group(tokens, index, "(", ")");
-    matches!(tokens.get(after), Some(&("{" | ":")))
-        .then(|| (Kind::Function, tokens[name].to_string()))
-}
-
-/// The name of a named function expression, such as the test function that a
-/// test runner call takes.
-fn function_expression(tokens: &[&str]) -> Option<String> {
-    let index = tokens.iter().position(|token| *token == "function")?;
-    let index = index + 1 + usize::from(tokens.get(index + 1) == Some(&"*"));
-    named(tokens, index, Kind::Function).map(|(_, name)| name)
+    matches!(tokens.get(after), Some(&("{" | ":"))).then(|| tokens[name].to_string())
 }
 
 const JAVA_MODIFIERS: [&str; 13] = [
@@ -206,18 +215,16 @@ const JAVA_KEYWORDS: [&str; 14] = [
 
 /// A class, an interface, an enum, a record, an annotation type, a method, or
 /// a constructor, after annotations and modifiers.
-fn java(tokens: &[&str]) -> Option<(Kind, String)> {
+fn java(tokens: &[&str]) -> Option<String> {
     let mut index = 0;
     let mut modified = false;
     loop {
         let token = *tokens.get(index)?;
         let next = tokens.get(index + 1).copied();
         match token {
-            "@" if next == Some("interface") => return named(tokens, index + 2, Kind::Type),
+            "@" if next == Some("interface") => return named(tokens, index + 2),
             "@" => index = skip_annotation(tokens, index + 1),
-            "class" | "interface" | "enum" | "record" => {
-                return named(tokens, index + 1, Kind::Type)
-            }
+            "class" | "interface" | "enum" | "record" => return named(tokens, index + 1),
             "non" if next == Some("-") && tokens.get(index + 2) == Some(&"sealed") => {
                 index += 3;
                 modified = true;
@@ -233,7 +240,7 @@ fn java(tokens: &[&str]) -> Option<(Kind, String)> {
 
 /// A method: type parameters, a return type, a name, and a parameter list. A
 /// constructor has no return type, so it needs a modifier or a body.
-fn java_method(tokens: &[&str], start: usize, modified: bool) -> Option<(Kind, String)> {
+fn java_method(tokens: &[&str], start: usize, modified: bool) -> Option<String> {
     let start = skip_group(tokens, start, "<", ">");
     let mut depth = 0usize;
     for (index, token) in tokens.iter().enumerate().skip(start) {
@@ -246,7 +253,7 @@ fn java_method(tokens: &[&str], start: usize, modified: bool) -> Option<(Kind, S
                 let after = tokens.get(skip_group(tokens, index, "(", ")")).copied();
                 let body = matches!(after, Some("{" | "throws"));
                 return (is_identifier(name) && (typed || modified || body))
-                    .then(|| (Kind::Function, name.to_string()));
+                    .then(|| name.to_string());
             }
             "=" | ";" | "{" | ")" => return None,
             _ if depth == 0 && JAVA_KEYWORDS.contains(token) => return None,
@@ -260,10 +267,10 @@ fn is_modifier(modifiers: &[&str], token: &str, next: Option<&str>) -> bool {
     modifiers.contains(&token) && next.is_some_and(|next| is_identifier(next) || next == "*")
 }
 
-/// The token at `index` as the name of a declaration of `kind`.
-fn named(tokens: &[&str], index: usize, kind: Kind) -> Option<(Kind, String)> {
+/// The token at `index` as the name of a declaration.
+fn named(tokens: &[&str], index: usize) -> Option<String> {
     let name = *tokens.get(index)?;
-    is_identifier(name).then(|| (kind, name.to_string()))
+    is_identifier(name).then(|| name.to_string())
 }
 
 /// The index after an annotation or a decorator name and its argument list.
