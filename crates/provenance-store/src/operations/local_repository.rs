@@ -133,29 +133,24 @@ impl ContextResolver for LocalRepository {
                 requested_target: repository,
             }));
         }
-        // The repository opened before this call, so the operation checks that
-        // the manifest still declares the scope when it takes its scope, before
-        // recovery or projection access.
         if !needs.contains(&ExecutionNeed::ProjectionMaintenance) {
             return Ok(PreparedContext::for_scope(PreparedScope {
                 repository: self.repository.clone(),
                 requested_target: repository,
-            })
-            .with_grant_check());
+            }));
         }
         Ok(PreparedContext::read(PreparedRead {
             repository: self.repository.clone(),
             policy: ReadPolicy::resolve(self.repository.settings(), freshness),
             requested_target: repository,
             external: true,
-        })
-        .with_grant_check())
+        }))
     }
 }
 
 #[cfg(test)]
 #[cfg(feature = "host")]
-mod tests {
+pub(crate) mod tests {
     use super::*;
     use crate::layout::ProvenanceLayout;
     use provenance_core::{
@@ -163,7 +158,8 @@ mod tests {
         Manifest, RepoPathPrefix,
     };
 
-    fn repository() -> (tempfile::TempDir, LocalRepository) {
+    /// A repository with one scope `default`, bound under the alias `native`.
+    pub(crate) fn repository() -> (tempfile::TempDir, LocalRepository) {
         let dir = tempfile::tempdir().unwrap();
         let layout = ProvenanceLayout::new(dir.path().to_str().unwrap());
         std::fs::create_dir_all(layout.state_dir()).unwrap();
@@ -190,8 +186,12 @@ mod tests {
         )
         .unwrap();
         let refused = binding.disposition_actor_ids().unwrap_err();
-        let refused = serde_json::to_value(refused).unwrap();
-        assert_eq!(refused["kind"], "invalid_state_file", "{refused}");
+        assert_eq!(
+            serde_json::to_value(refused).unwrap(),
+            serde_json::json!({"kind": "invalid_state_file", "file": "manifest.json", "line": 1,
+                "message": "expected ident",
+                "hint": provenance_core::protocol::read_failure::STATE_CORRECTIONS})
+        );
 
         let other_alias = RequestedContext::Repository(RepositoryTarget {
             repository: "other".into(),

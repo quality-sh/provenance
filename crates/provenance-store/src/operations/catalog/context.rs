@@ -30,9 +30,6 @@ pub struct PreparedContext {
     read: Option<PreparedRead>,
     scope: Option<PreparedScope>,
     repository: Option<PreparedRepository>,
-    /// The operation checks that the manifest still declares the scope before
-    /// it takes the scope, because the repository opened before this call.
-    grant_check: bool,
 }
 #[derive(Debug, Clone)]
 pub struct PreparedRepository {
@@ -57,7 +54,6 @@ impl PreparedContext {
             read: None,
             scope: None,
             repository: None,
-            grant_check: false,
         }
     }
     pub fn read(read: PreparedRead) -> Self {
@@ -71,7 +67,6 @@ impl PreparedContext {
                 requested_target: read.requested_target.clone(),
             }),
             read: Some(read),
-            grant_check: false,
         }
     }
     pub const fn for_repository(repository: PreparedRepository) -> Self {
@@ -79,7 +74,6 @@ impl PreparedContext {
             repository: Some(repository),
             read: None,
             scope: None,
-            grant_check: false,
         }
     }
     pub fn for_scope(scope: PreparedScope) -> Self {
@@ -90,16 +84,7 @@ impl PreparedContext {
             }),
             read: None,
             scope: Some(scope),
-            grant_check: false,
         }
-    }
-    /// This context, with the check of the scope grant in the operation. A
-    /// resolver that holds a repository opened before the call asks for it,
-    /// because the manifest can change after the open.
-    #[must_use]
-    pub const fn with_grant_check(mut self) -> Self {
-        self.grant_check = true;
-        self
     }
     /// Use native answer framing after a host has authorized this context.
     #[must_use]
@@ -133,25 +118,20 @@ impl PreparedContext {
         }
         Ok(self)
     }
-    /// The scope of the operation, after the check of its grant when the
-    /// context asks for it.
+    /// The scope of the operation, after the check that the manifest declares it.
     pub(super) fn scope(self) -> anyhow::Result<PreparedScope> {
         let scope = self.scope.ok_or(OperationFailure::UnavailableNeeds)?;
-        if self.grant_check {
-            declared(&scope.repository)?;
-        }
+        declared(&scope.repository)?;
         Ok(scope)
     }
     pub(super) fn repository(self) -> Result<PreparedRepository, OperationFailure> {
         self.repository.ok_or(OperationFailure::UnavailableNeeds)
     }
-    /// The graph read of the operation, after the check of its grant when the
-    /// context asks for it.
+    /// The graph read of the operation, after the check that the manifest
+    /// declares its scope.
     pub(super) fn graph(self) -> anyhow::Result<PreparedRead> {
         let read = self.read.ok_or(OperationFailure::UnavailableNeeds)?;
-        if self.grant_check {
-            declared(&read.repository)?;
-        }
+        declared(&read.repository)?;
         Ok(read)
     }
     pub(super) const fn validate_kind(&self, kind: ContextKind) -> Result<(), OperationFailure> {
@@ -202,12 +182,16 @@ pub trait ContextResolver: Send + Sync {
         needs: ExecutionNeeds,
     ) -> Result<PreparedContext, OperationFailure>;
 }
-/// The grant of a scoped operation: the manifest must still declare the scope
-/// of `repository`. The check runs in the operation, before each read of the
-/// scope, so that a manifest that does not parse gives its own error to the
-/// failure of the operation, which classifies it as `invalid_state_file`.
+/// The check of a scoped operation that the manifest declares the scope of
+/// `repository`. The manifest can change after the repository opened, so the
+/// check runs in the operation, before each read of the scope. A manifest that
+/// does not parse gives its own error, which the failure of the operation
+/// classifies as `invalid_state_file`. The error has the paths below the
+/// repository root, as the error of the operation has.
 fn declared(repository: &Repository) -> anyhow::Result<()> {
-    let manifest = repository.manifest()?;
+    let manifest = repository.manifest().map_err(|error| {
+        crate::write_error::in_repository(repository.layout().root().as_std_path(), error)
+    })?;
     if manifest
         .scopes
         .iter()
