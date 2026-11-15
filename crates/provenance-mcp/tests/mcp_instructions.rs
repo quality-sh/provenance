@@ -91,7 +91,7 @@ const FIRST_STEPS: &str = "\n\nFor a focused start, call search with {\"text\":\
 then get with {\"target\":\"<id>\",\"view\":\"children\",\"depth\":<N>}.";
 
 /// The expected instructions: the domain text, the opening sentences on one line, the
-/// ETag sentence when the lines hold get and update, the access sentence, the command
+/// `edit.etag` sentence when the lines hold get and update, the access sentence, the command
 /// lines, and the first steps when `first_steps` is true.
 fn expected(opening: &[&str], lines: &[&str], first_steps: bool) -> String {
     let mut text = DOMAIN.to_owned();

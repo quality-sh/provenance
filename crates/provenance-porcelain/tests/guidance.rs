@@ -124,7 +124,7 @@ fn guidance_with_trace_and_without_get_gives_no_trace_line() {
     assert!(guidance().guidance.contains("\n- trace: "));
 }
 
-/// The ETag sentence names get and update, so a consumer gets it only when it shows
+/// The `edit.etag` sentence names get and update, so a consumer gets it only when it shows
 /// the two commands.
 #[test]
 fn the_etag_sentence_needs_get_and_update() {

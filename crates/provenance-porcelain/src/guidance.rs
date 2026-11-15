@@ -41,7 +41,7 @@ const CREATE: (&str, &str) = (
     "; actions on an existing record infer its type",
 );
 
-/// The sentence of a consumer that shows get and update: the edit ETag of a get guards
+/// The sentence of a consumer that shows get and update: the `edit.etag` of a get guards
 /// the update.
 const ETAG_BEFORE_UPDATE: &str = "Before an update, read the record with get. \
 Give its `edit.etag` unchanged to the update as the if-match value.\n";
