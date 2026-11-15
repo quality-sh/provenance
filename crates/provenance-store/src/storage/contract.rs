@@ -72,7 +72,9 @@ pub use base::{
     publish_on_a_base_with_changed_bytes_is_refused, publish_on_a_moved_base_is_refused,
     publish_on_the_current_base_lands,
 };
-pub use empty_set::{an_empty_set_changes_nothing, an_empty_set_lands_while_each_stored_key_is_broken};
+pub use empty_set::{
+    an_empty_set_changes_nothing, an_empty_set_lands_while_each_stored_key_is_broken,
+};
 pub use one_key::{
     a_failed_one_key_set_lands_nothing, a_one_key_set_lands_all_of_its_bytes,
     a_one_key_set_lands_while_each_other_key_is_broken,
