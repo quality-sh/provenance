@@ -33,10 +33,25 @@ def pays_overtime(hours: int) -> bool:
 ```
 
 The comment needs no import and no package. An install that omits development
-dependencies, such as `npm ci --omit=dev`, loads the application. The
-comment binds to the first function declared in the six lines below it. It does
-not move with its function the way a compiled symbol does, so keep the two
+dependencies, such as `npm ci --omit=dev`, loads the application. The comment
+does not move with its function the way a compiled symbol does, so keep the two
 together when you move code.
+
+The scanner reads the marker only on a comment line: after leading whitespace,
+the line starts with `//`, `/*`, or `*` (or `#` in Python), or the line is
+inside an open block comment. A marker after code on the same line does not
+bind. The comment binds the Rule whatever item comes below it. The scanner
+takes the item name from the six lines below the comment:
+
+- Rust, Python, Go: the first `fn`, `def`, or `func` in those lines. A `const`,
+  a `static`, or a type gives no name, and a function lower in the six lines,
+  such as a method of the type, gives its own name.
+- JavaScript, TypeScript: the first `function`, `const`, `let`, or `var`
+  declaration. On any other line the scanner takes the word after the first
+  space, so `class Token` gives `Token` and `export class Token` gives `class`.
+- Java: the word after the first space of the first line that has one, so
+  `boolean paysOvertime(int hours) {` gives `paysOvertime` and
+  `public static boolean paysOvertime(int hours) {` gives `static`.
 
 ## Test code
 
@@ -51,7 +66,9 @@ def test_overtime_examples() -> None:
 ```
 
 The method is one of `exhaustion`, `property`, `examples`, `conformance`,
-`construction`, or `proof`.
+`construction`, or `proof`. Put a `construction` comment directly above the type
+that it verifies, not above a test. The comment needs no package in the
+application; the item names of a type follow the list above.
 
 In TypeScript and JavaScript, a test can call `verifies` from the SDK's `rules`
 subpath. Install the SDK as a development dependency (the TypeScript
@@ -74,10 +91,16 @@ test("hours above 38 attract overtime", function overtimeExamples() {
 `verifies` returns nothing, registers no state, and does not change the test.
 Put `verifies("id", "method")` in a named function or in a function-valued
 `const`; the scanner takes the name of that function. Import `verifies` only in
-test code.
+test code. A free `verifies(` call that does not read as a quoted id and one
+method word gives the warning ``malformed verifies binding `<line>`: expected a
+quoted rule id and one method word: exhaustion, property, examples, conformance,
+construction, or proof``. A member call such as `x.verifies(` that does not read
+that way gives no warning and does not bind.
 
 In Rust, a test takes `#[verifies]` from `provenance-macros` under
-`[dev-dependencies]`:
+`[dev-dependencies]`. `cargo provenance init` adds `provenance-sdk` under
+`[dev-dependencies]`, and it re-exports the same attribute as
+`provenance_sdk::verifies`:
 
 ```sh
 cargo add --dev provenance-macros

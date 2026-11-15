@@ -1,6 +1,17 @@
-// Installs the example as a deployment does, with `npm ci --omit=dev` in a copy
-// of its package files and built output, and loads the built application from
-// that copy.
+// Implementation aid: no Rule states where the example lists its Provenance
+// package. The script shows that the built application loads in an install that
+// omits development dependencies: it installs a copy of the package files and
+// built output with `npm ci --omit=dev`, checks that `@quality-sh/provenance`
+// does not resolve there, and loads the production module from that copy.
+//
+// It loads only `dist/share-links.js`, the one production module. No file-name
+// rule tells the production modules from `dist/apply.js`, a development script
+// that imports the package, so a second production module that imports the
+// package is not found here.
+//
+// `npm run test:production` starts this script. npm gives the path of its own
+// command-line script in `npm_execpath`, and Node runs that script on each
+// platform with no shell.
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { cpSync, mkdtempSync, rmSync } from "node:fs";
@@ -15,12 +26,14 @@ try {
   for (const entry of ["package.json", "package-lock.json", "dist"]) {
     cpSync(join(example, entry), join(install, entry), { recursive: true });
   }
+  const npm = process.env.npm_execpath;
+  assert.ok(npm, "start this script with `npm run test:production`");
   const ci = spawnSync(
-    "npm",
-    ["ci", "--omit=dev", "--ignore-scripts", "--no-audit", "--no-fund"],
+    process.execPath,
+    [npm, "ci", "--omit=dev", "--ignore-scripts", "--no-audit", "--no-fund"],
     { cwd: install, encoding: "utf8" },
   );
-  assert.equal(ci.status, 0, ci.stderr);
+  assert.equal(ci.status, 0, ci.error?.message ?? ci.stderr);
 
   const resolve = spawnSync(
     process.execPath,

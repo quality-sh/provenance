@@ -23,15 +23,16 @@ fn typed_rule_declaration_call_is_not_an_implementation_binding() {
 #[test]
 fn namespace_imported_helpers_bind_their_implementation_and_verification() {
     let scan = scan_file(
-        Utf8Path::new("rule-bindings.ts"),
+        Utf8Path::new("overtime.ts"),
         Language::TypeScript,
-        r#"import * as ruleBindings from "./rule-bindings.js";
+        r#"import * as rules from "./rules.js";
+import * as provenance from "@quality-sh/provenance/rules";
 
 const implementation = (hours: number): boolean => hours > 38;
-const paysOvertime: (hours: number) => boolean = ruleBindings.rule("rule_packed_consumer_overtime", implementation);
+const paysOvertime: (hours: number) => boolean = rules.rule("rule_packed_consumer_overtime", implementation);
 
 function overtimeExamples(): void {
-  ruleBindings.verifies("rule_packed_consumer_overtime", "examples");
+  provenance.verifies("rule_packed_consumer_overtime", "examples");
 }"#,
     );
 

@@ -36,7 +36,9 @@ it in the same change.
   dependency: `verifies("<rule_id>", "<method>")` from `@quality-sh/provenance/rules`
   in TypeScript, or `#[verifies("<rule_id>", <method>)]` from `provenance-macros` under
   `[dev-dependencies]` in Rust. The method is exhaustion, property, examples,
-  conformance, construction, or proof. Put `construction` on a type, not on a test.
+  conformance, construction, or proof. For `construction`, put the comment directly
+  above the type, not above a test; `#[verifies]` on a type needs `provenance-macros`
+  under `[dependencies]`.
 - In Rust, `#[rule("<rule_id>")]` from `provenance-macros` is an option for production
   code. It puts `provenance-macros` under `[dependencies]`. That crate is a procedural
   macro: it runs at compile time and adds nothing to the binary.
