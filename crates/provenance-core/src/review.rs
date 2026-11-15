@@ -97,6 +97,14 @@ macro_rules! define_review_record {
             }
         }
 
+        impl From<crate::protocol::GraphNode> for ReviewRecord {
+            fn from(node: crate::protocol::GraphNode) -> Self {
+                match node {
+                    $( crate::protocol::GraphNode::$variant(record) => Self::$variant(*record), )*
+                }
+            }
+        }
+
         $(
             impl From<$record> for ReviewRecord {
                 fn from(record: $record) -> Self {

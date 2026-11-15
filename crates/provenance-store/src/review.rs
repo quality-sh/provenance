@@ -11,6 +11,7 @@ mod resource_read;
 pub(crate) use resource_read::RequirementResourceSnapshot;
 mod save;
 pub use input::{ListEdit, RequirementRelations, SaveRequirement};
+pub use save::edit_state;
 
 /// Creates the identity of a review record from the ID source of the store.
 fn new_id(ids: &dyn crate::repository::IdSource) -> provenance_core::StableId {

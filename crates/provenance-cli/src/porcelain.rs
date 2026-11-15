@@ -111,61 +111,16 @@ pub async fn dispatch_get(
     input: GetInput,
 ) -> anyhow::Result<()> {
     let host = local_host(&RepoContext::new(repo, scope))?;
-    let service = host.porcelain().get();
-    let outcome = service.get(input).await?;
-    let edit = if outcome.view() == provenance_porcelain::get::View::Record {
-        edit_state(&host, &outcome).await?
-    } else {
-        None
-    };
-    println!("{}", render_get(&outcome, edit.as_ref(), format)?);
+    let outcome = host.porcelain().get().get(input).await?;
+    println!("{}", render_get(&outcome, format)?);
     Ok(())
-}
-
-/// The `edit` state of the record, read from its member route so that a JSON
-/// record read shows the etag that the next guarded update needs. The text
-/// form stays identical to the shared readable rendering. A refusal of the
-/// member route is the refusal of the get.
-async fn edit_state(
-    host: &provenance_transport::StatementHost,
-    outcome: &GetOutcome,
-) -> anyhow::Result<Option<serde_json::Value>> {
-    use provenance_contract::{target_definitions, TargetAction};
-    let kind = outcome.record.node_type();
-    let Some((_, definition)) =
-        target_definitions(TargetAction::Update).find(|(registered, _)| *registered == kind)
-    else {
-        return Ok(None);
-    };
-    let path = definition
-        .path
-        .replace("{id}", outcome.record.id().as_str());
-    let value = host
-        .invoke_resource(
-            axum::http::Method::GET,
-            &path,
-            serde_json::json!({}),
-            std::collections::BTreeMap::new(),
-            axum::http::HeaderMap::new(),
-        )
-        .await
-        .map_err(|failure| crate::refusal::HostRefusal::of(&failure))?;
-    Ok(value.get("data").and_then(|data| data.get("edit")).cloned())
 }
 
 /// Renders the selected record as readable text or structured JSON.
 #[rule("rule_porcelain_cli_readable_json")]
-fn render_get(
-    outcome: &GetOutcome,
-    edit: Option<&serde_json::Value>,
-    format: Option<OutputFormat>,
-) -> serde_json::Result<String> {
+fn render_get(outcome: &GetOutcome, format: Option<OutputFormat>) -> serde_json::Result<String> {
     if format == Some(OutputFormat::Json) {
-        let mut value = serde_json::to_value(outcome)?;
-        if let (Some(object), Some(edit)) = (value.as_object_mut(), edit) {
-            object.insert("edit".into(), edit.clone());
-        }
-        serde_json::to_string_pretty(&value)
+        serde_json::to_string_pretty(&serde_json::to_value(outcome)?)
     } else {
         render_get_readable(outcome)
     }

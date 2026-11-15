@@ -217,7 +217,13 @@ async fn emitted_get_schema_accepts_each_canonical_record_and_tagged_related_kin
         populate(node);
         let outcome = GetOutcome {
             record: node.clone(),
-            result: ViewResult::Record,
+            result: ViewResult::Record {
+                edit: provenance_core::review::RequirementEditState {
+                    etag: format!("sha256:{}", "0".repeat(64)),
+                    revision: None,
+                },
+                review_link: None,
+            },
             record_metadata: None,
         };
         assert_canonical_record(&schema, &serde_json::to_value(outcome).unwrap(), node);
