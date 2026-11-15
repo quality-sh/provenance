@@ -109,13 +109,13 @@ async fn the_contract_refuses_an_adapter_whose_text_fails_for_another_reason() {
 }
 
 #[tokio::test]
-#[verifies("rule_record_history_gitlink_has_no_text", examples)]
+#[verifies("rule_record_history_submodule_entry_has_no_text", examples)]
 async fn git_a_gitlink_at_the_path_is_listed_with_no_text() {
     contract::a_gitlink_at_the_path_is_listed_with_no_text(&git_harness()).await;
 }
 
 #[tokio::test]
-#[verifies("rule_record_history_gitlink_has_no_text", examples)]
+#[verifies("rule_record_history_submodule_entry_has_no_text", examples)]
 async fn memory_a_gitlink_at_the_path_is_listed_with_no_text() {
     contract::a_gitlink_at_the_path_is_listed_with_no_text(&Memory).await;
 }

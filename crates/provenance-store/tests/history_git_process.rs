@@ -109,7 +109,7 @@ async fn text_for_answer(answer: fn(&str) -> String) -> anyhow::Result<Option<St
 /// Git 2.56 answers a gitlink whose commit the repository does not hold with
 /// that commit and `submodule`.
 #[tokio::test]
-#[verifies("rule_record_history_gitlink_has_no_text", examples)]
+#[verifies("rule_record_history_submodule_entry_has_no_text", examples)]
 async fn a_gitlink_that_git_answers_as_a_submodule_has_no_text() {
     let text = text_for_answer(|_| format!("{GITLINK_COMMIT} submodule\n")).await;
     assert_eq!(text.unwrap(), None);
@@ -118,7 +118,7 @@ async fn a_gitlink_that_git_answers_as_a_submodule_has_no_text() {
 /// Git 2.43 answers a gitlink whose commit the repository does not hold with
 /// the name of the request and `missing`.
 #[tokio::test]
-#[verifies("rule_record_history_gitlink_has_no_text", examples)]
+#[verifies("rule_record_history_submodule_entry_has_no_text", examples)]
 async fn a_gitlink_that_git_answers_as_missing_has_no_text() {
     let text = text_for_answer(|commit| format!("{commit}:good.jsonl missing\n")).await;
     assert_eq!(text.unwrap(), None);
