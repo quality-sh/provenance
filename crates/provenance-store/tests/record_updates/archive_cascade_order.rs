@@ -39,9 +39,7 @@ async fn archive_req_one(fixture: &Fixture) -> Result<Value, Value> {
 /// Archives `req_one` through an accepted status request: the reviewer
 /// accepts its creation submission, then the archive request.
 async fn accept_archive_of_req_one(fixture: &Fixture) {
-    fixture
-        .accept_status_request("requirement", "req_one")
-        .await;
+    fixture.accept_pending("requirement", "req_one").await;
     archive_req_one(fixture).await.unwrap();
     fixture
         .accept_status_request("requirement", "req_one")

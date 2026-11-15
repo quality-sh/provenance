@@ -34,10 +34,8 @@ pub async fn call(client: &Client, name: &str, arguments: Value) -> rmcp::model:
         .unwrap()
 }
 
-/// Accepts the pending submission of a record as the reviewer through the
-/// `api` tool: the creation submission, or the status request that sets an
-/// active or archived status. The repository must allow the reviewer.
-pub async fn accept_status_request(client: &Client, collection: &str, id: &str) {
+/// Reads one record with its edit and decision state through the `api` tool.
+pub async fn read(client: &Client, collection: &str, id: &str) -> Value {
     let read = call(
         client,
         "api",
@@ -45,7 +43,13 @@ pub async fn accept_status_request(client: &Client, collection: &str, id: &str) 
     )
     .await;
     assert_ne!(read.is_error, Some(true), "{read:?}");
-    let record = &read.structured_content.as_ref().unwrap()["data"];
+    read.structured_content.unwrap()["data"].clone()
+}
+
+/// Accepts the pending submission of a record as the reviewer through the
+/// `api` tool. The repository must allow the reviewer.
+pub async fn accept_pending(client: &Client, collection: &str, id: &str) {
+    let record = read(client, collection, id).await;
     let proposal = record["decision"]["pending"]["proposal_id"]
         .as_str()
         .unwrap_or_else(|| panic!("no pending submission: {record}"));
@@ -66,4 +70,15 @@ pub async fn accept_status_request(client: &Client, collection: &str, id: &str) 
     )
     .await;
     assert_ne!(decided.is_error, Some(true), "{decided:?}");
+}
+
+/// Accepts the pending status request of a record as the reviewer: the
+/// request that sets an active or archived status.
+pub async fn accept_status_request(client: &Client, collection: &str, id: &str) {
+    let record = read(client, collection, id).await;
+    assert!(
+        !record["decision"]["pending"]["status_request"].is_null(),
+        "no status request: {record}"
+    );
+    accept_pending(client, collection, id).await;
 }

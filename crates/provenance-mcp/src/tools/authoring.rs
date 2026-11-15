@@ -6,7 +6,6 @@ use provenance_core::NodeType;
 use provenance_macros::rule;
 use provenance_porcelain::action::render_readable;
 use provenance_porcelain::action_input::unknown_field_message;
-use provenance_porcelain::api::{ApiInput, ApiMethod, ApiOutcome, ApiRequest};
 use provenance_porcelain::registry::Command;
 use provenance_transport::porcelain::{
     replacement_call, target_call, Action, ActionError, ParentReplacement, ReplacementError,
@@ -243,7 +242,11 @@ pub async fn call(
     if let Some(refused) = field_refusal(action, route.kind, &schema, &arguments) {
         return refused;
     }
-    let requested = requested_status(action, route.kind, &arguments);
+    let requested = arguments
+        .get("status")
+        .and_then(Value::as_str)
+        .filter(|_| matches!(action, Action::Create | Action::Update))
+        .map(str::to_owned);
     let request = match request_arguments(route.definition, arguments) {
         Ok(request) => request,
         Err(refused) => return refused,
@@ -256,85 +259,32 @@ pub async fn call(
     };
     match written {
         (Ok(value), note) => {
+            let kind = route.kind;
+            let opened = match &requested {
+                Some(status) => host.open_status_request(kind, &target, status, &value).await,
+                None => None,
+            };
             let mut structured = value.clone();
+            if let Some(opened) = &opened {
+                let record = if structured.get("data").is_some() {
+                    &mut structured["data"]
+                } else {
+                    &mut structured
+                };
+                record["decision"] = opened.decision.clone();
+            }
             if let Some(object) = structured.as_object_mut() {
                 object.insert("type".into(), json!(route.kind.as_str()));
             }
             let mut result = CallToolResult::structured(structured);
             let readable = render_readable(action, &target, route.kind, &value);
-            let request_note = match requested {
-                Some(status) => {
-                    status_request_note(host, route.kind, &target, status, &value).await
-                }
-                None => None,
-            };
+            let request_note = opened.map(|opened| opened.note + "\n");
             let text = request_note.unwrap_or_default() + &note.unwrap_or_default() + &readable;
             result.content = vec![ContentBlock::text(text)];
             result
         }
         (Err(failure), _) => crate::surface::failure_result(failure),
     }
-}
-
-/// The status that a create or an update of a Rule or a Requirement requests, when it
-/// is a status that waits for a reviewer: active or archived.
-fn requested_status(
-    action: Action,
-    kind: NodeType,
-    arguments: &Map<String, Value>,
-) -> Option<&'static str> {
-    let record_action = matches!(action, Action::Create | Action::Update);
-    let reviewed_kind = matches!(kind, NodeType::Rule | NodeType::Requirement);
-    if !(record_action && reviewed_kind) {
-        return None;
-    }
-    match arguments.get("status").and_then(Value::as_str)? {
-        "active" => Some("active"),
-        "archived" => Some("archived"),
-        _ => None,
-    }
-}
-
-/// The note of a write that opened a status request instead of a status change. The
-/// note names the request from a read of the record, because the write result of a
-/// Rule has no review state. A record that has the requested status gets no note.
-async fn status_request_note(
-    host: &StatementHost,
-    kind: NodeType,
-    target: &str,
-    requested: &str,
-    written: &Value,
-) -> Option<String> {
-    let record = written.get("data").unwrap_or(written);
-    if record.get("status").and_then(Value::as_str) == Some(requested) {
-        return None;
-    }
-    let collection = match kind {
-        NodeType::Rule => "rules",
-        NodeType::Requirement => "requirements",
-        _ => return None,
-    };
-    let read = ApiRequest::Invoke(ApiInput {
-        method: ApiMethod::Get,
-        path: format!("/{collection}/{target}"),
-        query: std::collections::BTreeMap::new(),
-        headers: std::collections::BTreeMap::new(),
-        body: None,
-    });
-    let Ok(ApiOutcome::Invoked(current)) = host.porcelain().api().execute_api(read).await else {
-        return None;
-    };
-    let pending = &current["data"]["decision"]["pending"];
-    let status = pending["status_request"]["status"].as_str()?;
-    let proposal = pending["proposal_id"].as_str()?;
-    let kept = current["data"]["status"]
-        .as_str()
-        .unwrap_or("its current status");
-    Some(format!(
-        "Status request {proposal} is open. The status of {target} changes to {status} when \
-         an allowed reviewer accepts the request. Until then, {target} keeps the status \
-         {kept}.\n\n"
-    ))
 }
 
 /// The written record, or the failure of the write, and a note for the reader. With

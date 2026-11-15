@@ -96,6 +96,11 @@ pub async fn dispatch_target(
         ));
     }
     let writes_statement = statement_warning::has_statement(&data);
+    let requested = data
+        .get("status")
+        .and_then(serde_json::Value::as_str)
+        .filter(|_| matches!(action, Action::Create | Action::Update))
+        .map(str::to_owned);
     let replacement = matches.get_one::<String>("replace_parent");
     let guidance = |failure: &provenance_core::protocol::failure::ErasedFailure| {
         failure_with_guidance(failure, &route.path, Some(&target), &context.repo)
@@ -136,6 +141,14 @@ pub async fn dispatch_target(
     if writes_statement {
         statement_warning::print_if_rule_one_one_did_not_run(&repo.repo);
     }
+    let opened = match &requested {
+        Some(status) => host.open_status_request(route.kind, &target, status, &value).await,
+        None => None,
+    };
+    if let Some(opened) = &opened {
+        value["data"]["decision"] = opened.decision.clone();
+        value["meta"]["notes"] = serde_json::json!([opened.note.trim_end()]);
+    }
     let affected = route.definition.registration.review_link.map(|kind| {
         crate::review_link::AffectedReviewRecord {
             kind,
@@ -146,6 +159,9 @@ pub async fn dispatch_target(
     if json {
         crate::output::print_json(&value)?;
     } else {
+        if let Some(opened) = &opened {
+            println!("{}", opened.note);
+        }
         println!(
             "{}",
             provenance_porcelain::action::render_readable(action, &target, route.kind, &value)

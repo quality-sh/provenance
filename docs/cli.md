@@ -62,12 +62,27 @@ A word that names an API collection, such as `rules` in `provenance rules list`,
 is not a command. The CLI refuses it with a usage error and shows
 `provenance --help`.
 
-Rule creation defaults to `draft` in the CLI and in catalog operations. A
-create or an update with `--status active` or `--status archived` opens a status
-request and does not change the status. The Rule gets the status when an allowed
-reviewer accepts the request. A create with `--status active` writes the Rule as
-`review` until then. Coverage reports do not produce active-Rule absence
-findings for a draft Rule.
+Rule creation defaults to `draft` in the CLI and in catalog operations. An
+update with `--status active` or `--status archived`, or a create with
+`--status active`, opens a status request and does not change the status. A
+create with `--status archived` is refused: create the Rule, then request the
+archive. A create with `--status active` writes the Rule as `review` until a
+reviewer accepts the request. Coverage reports do not produce active-Rule
+absence findings for a draft Rule.
+
+A status request of a Rule or a Requirement is a review submission. The result
+of the request gives its Proposal ID under `decision.pending.proposal_id` and
+the call that accepts it. A reviewer on the reviewer list of the repository
+accepts it with `provenance api <collection>/<id>/submissions/<proposal_id>/decide
+--method post --input -`, where `<collection>` is `rules` or `requirements`. The
+input names the reviewer, the decision and the reviewed record:
+`{"actor":{"identity_type":"human","id":"<reviewer>"},"decision":"accepted","canonical_artifact":{"artifact_type":"rule","artifact_id":"<id>"}}`.
+An acceptance with the `agent` identity type needs a prior assertion, which a
+review submission does not have, so it is refused with
+`approval_evidence_required`. The status changes in the write of the
+acceptance. A rejection or a withdrawal keeps the status. With an empty
+reviewer list, nobody can accept the request: the result says so and names
+`provenance init --disposition-actor-id <id>`, which adds a reviewer.
 
 A typed specification cannot set a Rule status, so apply creates each new
 specification Rule as `draft`. To make a specification Rule active, request the
