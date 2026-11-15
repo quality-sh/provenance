@@ -285,9 +285,11 @@ fn each_merge_of_swarm_runs_follows_the_record_rule() {
             for third in &singles {
                 assert_merge(&mut domain, &base, &merged, third);
             }
-            for one in pool.iter().filter_map(|run| domain.land(&merged, run)) {
-                for two in pool.iter().filter_map(|run| domain.land(&reverse, run)) {
-                    assert_merge(&mut domain, &merged, &one, &two);
+            let ones: Vec<_> = pool.iter().filter_map(|run| domain.land(&merged, run)).collect();
+            let twos: Vec<_> = pool.iter().filter_map(|run| domain.land(&reverse, run)).collect();
+            for one in &ones {
+                for two in &twos {
+                    assert_merge(&mut domain, &merged, one, two);
                 }
             }
         }
