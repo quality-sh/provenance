@@ -84,16 +84,38 @@ pub(super) fn repository_output_schema(command: Command) -> Value {
     }
 }
 
-/// The change tool, when the host can run some write.
+/// The commands that the change tool runs as an action of this input.
+pub fn commands(input: &ActionInput) -> impl Iterator<Item = Command> + '_ {
+    EXPOSED
+        .iter()
+        .filter(|(_, place)| *place == Place::Action { tool: "change" })
+        .map(|(command, _)| *command)
+        .filter(|command| {
+            input
+                .actions()
+                .any(|word| word == crate::exposed::name(*command))
+        })
+}
+
+/// Whether this input has the notify action.
+pub fn notifies(input: &ActionInput) -> bool {
+    input.actions().any(|word| word == NOTIFY)
+}
+
+/// The change tool, when the host can run some write. Its description names only the
+/// writes of the input.
 pub fn tool(host: &StatementHost, input: &ActionInput) -> Option<Tool> {
     let actions = input.actions().collect::<Vec<_>>();
     if actions.is_empty() {
         return None;
     }
-    let declaration = Command::Change.declaration();
+    let description = provenance_porcelain::guidance::change_description(
+        |command| commands(input).any(|write| write == command),
+        notifies(input),
+    )?;
     Some(crate::surface::tool(
         crate::exposed::name(Command::Change),
-        declaration.description,
+        description,
         Effect::Writes,
         input.schema(),
         output::schema(host, &actions),

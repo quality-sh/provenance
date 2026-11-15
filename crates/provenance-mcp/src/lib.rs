@@ -10,6 +10,7 @@ mod arguments;
 mod client;
 pub mod derived;
 pub mod exposed;
+mod guidance;
 mod io;
 mod json_schema;
 mod listed;

@@ -106,6 +106,42 @@ async fn notify_without_a_notify_port_answers_as_the_shared_operation() {
     assert_eq!(not_found, refused(&shared(&host(), &unknown).await));
 }
 
+/// No Rule binds this test: the Rule that states which writes the instructions name waits
+/// for the approval of the owner. This test pins that a host with no notify port names
+/// notify in no action value, change description, or instruction line, and that the shared
+/// operation still answers a notify call.
+#[tokio::test]
+async fn notify_without_a_notify_port_is_answered_and_not_named() {
+    let repository = Repository::new("The shared graph is readable.");
+    repository.all_kinds();
+    let host = StatementHost::with_fixture_access(access(&repository));
+    let request = json!({"target": "req_shared", "notify": "codex", "thread": "thread-1"});
+    let session = Session::start(host).await;
+    let instructions = session
+        .client
+        .peer_info()
+        .and_then(|info| info.instructions.clone())
+        .expect("server instructions");
+    let tools = session.client.list_all_tools().await.unwrap();
+    let answer = support::mcp::call(&session.client, "change", notify_call(&request)).await;
+    session.close().await;
+
+    let change = tools.iter().find(|tool| tool.name == "change").unwrap();
+    let actions = &change.input_schema["properties"]["action"]["enum"];
+    assert!(
+        !actions.as_array().unwrap().contains(&json!("notify")),
+        "{actions}"
+    );
+    let description = change.description.as_deref().unwrap();
+    assert!(!description.contains("notify"), "{description}");
+    assert!(!instructions.contains("notify"), "{instructions}");
+    let answer = serde_json::to_value(answer).unwrap();
+    assert_eq!(
+        answer["structuredContent"]["error"]["kind"],
+        "operation_failed"
+    );
+}
+
 /// No Rule binds this test: `rule_mcp_refusal_names_field` is verified on a host with a
 /// notify port. This test pins that a host with no notify port gives the same refusal,
 /// and that an unknown field wins over a missing required field.
