@@ -1,6 +1,7 @@
 //! A spawned `provenance mcp` and the CLI take the same fields: the change tool and the
 //! CLI record actions store the same records, and get returns the same review link.
 
+use crate::bounded_process::{provenance, Bounded as _};
 use provenance_macros::verifies;
 use provenance_mcp::Client;
 use serde_json::{json, Value};
@@ -8,10 +9,7 @@ use std::process::Stdio;
 
 /// The standard output of one CLI command that succeeds.
 fn cli(args: &[&str]) -> String {
-    let output = assert_cmd::Command::new(assert_cmd::cargo::cargo_bin!("provenance"))
-        .args(args)
-        .output()
-        .unwrap();
+    let output = provenance().args(args).bounded_output();
     assert!(
         output.status.success(),
         "{args:?}: {}",
@@ -20,7 +18,8 @@ fn cli(args: &[&str]) -> String {
     String::from_utf8(output.stdout).unwrap()
 }
 
-fn init(repo: &str) {
+/// Makes a repository with one scope at `repo`.
+pub fn init(repo: &str) {
     cli(&[
         "init",
         "--scope",

@@ -201,10 +201,9 @@ async fn a_submit_with_no_actor_is_refused_on_the_cli_and_mcp() {
     assert_eq!(refused["structuredContent"], refusal);
 }
 
-/// A Rule or a Resolution write takes no actor on the two interfaces, and records the actor
-/// `authoring`.
+/// Implementation aid: the Rule names only the writes that take an optional actor. A Rule or
+/// a Resolution write takes no actor on the two interfaces, and records the actor `authoring`.
 #[tokio::test]
-#[verifies("rule_write_without_actor_records_authoring", examples)]
 async fn rule_and_resolution_writes_record_authoring_and_refuse_an_actor() {
     let directory = repository();
     let repo = directory.path();

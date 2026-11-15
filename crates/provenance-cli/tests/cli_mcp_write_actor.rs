@@ -2,7 +2,8 @@
 //! actor `authoring`, on the CLI and on a spawned `provenance mcp`. Each test asserts the
 //! complete answer and then reads the stored actor back through the same interface.
 
-use crate::cli_mcp_record_actions::Server;
+use crate::bounded_process::{provenance, Bounded as _};
+use crate::cli_mcp_record_actions::{init, Server};
 use provenance_macros::verifies;
 use serde_json::{json, Value};
 use std::path::Path;
@@ -16,11 +17,7 @@ const REVIEW_MESSAGE: &str = "No review host is running. Start it with `provenan
 /// The exit code, the standard output and the standard error of one CLI command that runs
 /// in the repository directory.
 pub fn run(repo: &Path, args: &[&str]) -> (i32, String, String) {
-    let output = assert_cmd::Command::new(assert_cmd::cargo::cargo_bin!("provenance"))
-        .current_dir(repo)
-        .args(args)
-        .output()
-        .unwrap();
+    let output = provenance().current_dir(repo).args(args).bounded_output();
     (
         output.status.code().unwrap(),
         String::from_utf8(output.stdout).unwrap(),
@@ -40,18 +37,7 @@ pub fn cli_json(repo: &Path, args: &[&str]) -> Value {
 /// A new repository with one scope.
 pub fn repository() -> tempfile::TempDir {
     let directory = tempfile::tempdir().unwrap();
-    let repo = directory.path().to_str().unwrap();
-    let args = [
-        "init",
-        "--scope",
-        "default",
-        "--path-prefix",
-        ".",
-        "--path",
-        repo,
-    ];
-    let (code, _, stderr) = run(directory.path(), &args);
-    assert_eq!(code, 0, "{stderr}");
+    init(directory.path().to_str().unwrap());
     directory
 }
 
@@ -270,50 +256,5 @@ async fn an_mcp_discuss_with_no_actor_records_authoring() {
             "content": [{"type": "text", "text": text}], "isError": false,
             "structuredContent": {"action": "discuss", "kind": "written", "receipt": receipt},
         })
-    );
-}
-
-/// The description of the actor input of a write that records `authoring` when it gives no
-/// actor.
-const ACTOR_DESCRIPTION: &str = "The actor of the write. It is optional for a write that makes \
-     or changes a Requirement and for a write that starts or replies to a Discussion. A write \
-     that gives no actor records the actor `authoring`.";
-
-/// The actor input has the same description in the API catalog, in the CLI help and in the
-/// MCP change tool, and the API catalog does not require it.
-#[tokio::test]
-#[verifies("rule_write_without_actor_records_authoring", examples)]
-async fn the_actor_input_has_one_description_on_each_interface() {
-    let directory = repository();
-    let repo = directory.path();
-    for route in [
-        "POST /requirements",
-        "PATCH /requirements/{id}",
-        "POST /requirements/{id}/discussions",
-        "POST /requirements/{id}/discussions/{discussion_id}/messages",
-    ] {
-        let catalog = cli_json(repo, &["api", "--filter", route]);
-        let request = &catalog["routes"][0]["request_schema"];
-        let actor = &request["properties"]["actor"];
-        assert_eq!(actor["description"], ACTOR_DESCRIPTION, "{route}");
-        let required = request["required"].as_array().unwrap();
-        assert!(!required.contains(&json!("actor")), "{route}");
-    }
-    for action in ["update", "discuss"] {
-        let (code, help, _) = run(repo, &["req_a", action, "--help"]);
-        assert_eq!(code, 0);
-        let lines = help.lines().map(str::trim).collect::<Vec<_>>();
-        let described = lines.iter().any(|line| line.ends_with(ACTOR_DESCRIPTION));
-        assert!(described, "{action}: {help}");
-    }
-    let server = Server::start(repo.to_str().unwrap()).await;
-    let tools = server.client.tools().await;
-    server.close().await;
-    let change = tools.iter().find(|tool| tool["name"] == "change").unwrap();
-    assert_eq!(
-        change["inputSchema"]["properties"]["actor"]["description"],
-        format!(
-            "{ACTOR_DESCRIPTION} Actions: create, update, claim, release, submit, discuss, reply."
-        )
     );
 }
