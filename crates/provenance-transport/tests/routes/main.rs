@@ -12,9 +12,11 @@ mod support {
     #[path = "../support/asserted_proposal.rs"]
     pub mod asserted_proposal;
     pub mod catch_up_steps;
+    pub mod depends_on_cycle;
     pub mod ideation;
     pub mod records;
     pub mod resource_http;
+    pub mod state_lines;
     pub mod transcript;
 }
 #[path = "../caller_refusal_kinds.rs"]

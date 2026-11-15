@@ -55,3 +55,5 @@ mod search_repository;
 mod search_text_first_page;
 #[path = "../search_text_pages.rs"]
 mod search_text_pages;
+#[path = "../../../provenance-transport/tests/support/state_lines.rs"]
+mod state_lines;
