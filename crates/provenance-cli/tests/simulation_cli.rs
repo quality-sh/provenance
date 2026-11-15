@@ -282,17 +282,17 @@ fn a_stop_at_the_first_point_of_each_kind_of_write_keeps_the_laws() {
     assert_eq!(ops, kinds);
     assert_eq!(run.stops.len(), kinds.len());
     let one_key = [Landing::BeforeRename, Landing::AfterRename];
-    let first_point = run
-        .stops
-        .iter()
-        .zip(&stopped)
-        .enumerate()
-        .all(|(n, (stop, done))| match stop {
-            Stop::Landed(landed) if n < 2 => landed.landing == Landing::BeforeMarker,
-            Stop::Landed(landed) => one_key.contains(&landed.landing),
-            Stop::Answered { .. } | Stop::Ended { .. } => n >= 2 && done.result.is_ok(),
-            _ => false,
-        });
+    let first_point =
+        run.stops
+            .iter()
+            .zip(&stopped)
+            .enumerate()
+            .all(|(n, (stop, done))| match stop {
+                Stop::Landed(landed) if n < 2 => landed.landing == Landing::BeforeMarker,
+                Stop::Landed(landed) => one_key.contains(&landed.landing),
+                Stop::Answered { .. } | Stop::Ended { .. } => n >= 2 && done.result.is_ok(),
+                _ => false,
+            });
     let rows: Vec<_> = run.stops.iter().map(Stop::row).collect();
     assert!(
         first_point,
