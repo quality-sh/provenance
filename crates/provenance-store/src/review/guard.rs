@@ -2,7 +2,7 @@
 //! refuse.
 
 use crate::state_store::StateStore;
-use provenance_core::{ProposalType, ScopeId};
+use provenance_core::ScopeId;
 use provenance_macros::rule;
 
 /// One kind of stored review state that a scope export file cannot hold, in the order that the
@@ -21,12 +21,7 @@ impl UnportableState {
     fn is_in(self, held: &StateStore, scope: &ScopeId) -> anyhow::Result<bool> {
         Ok(match self {
             Self::ReviewHistory => {
-                !held.list_discussions(scope)?.is_empty()
-                    || !held.list_withdrawals(scope)?.is_empty()
-                    || held
-                        .list_proposal_definitions(scope)?
-                        .iter()
-                        .any(|proposal| proposal.proposal_type == ProposalType::RecordRevision)
+                !held.list_discussions(scope)?.is_empty() || held.has_review_rows(scope)?
             }
             Self::RequirementReviews => !held.list_requirement_reviews(scope)?.is_empty(),
         })

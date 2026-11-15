@@ -1,17 +1,14 @@
-//! Shared decision-cycle helpers: the review state read from Proposal,
-//! Disposition, Withdrawal and Discussion records, and the checks a
-//! submission or a decision must pass against the scope.
+//! Shared decision-cycle helpers: the key and the response of a review
+//! write, and the checks a submission or a decision must pass against the
+//! scope. The review state of a record is in [`super::review_rows`].
 
-use super::cycle_index::CycleIndex;
-use crate::refusal::state_fault;
-use crate::state_store::{message_ids::ShardLine, StateStore};
+use super::review_rows::CycleFacts;
+use crate::state_store::StateStore;
 use provenance_core::{
-    review::{CycleEntry, CycleFact, WithdrawalRowFault},
-    DispositionDecision, DispositionRecord, NodeType, ProposalCard, ProposalType, ScopeId,
-    StableId, Withdrawal,
+    review::{is_review_submission, review_cycle, CycleEntry, CycleFact, RecordReview},
+    DispositionDecision, NodeType, ProposalCard, ScopeId, StableId,
 };
 use provenance_macros::rule;
-use std::collections::HashSet;
 
 const MAX_SAFE_CYCLE: u64 = (1 << 53) - 1;
 
@@ -48,7 +45,7 @@ impl Receipt {
         CycleEntry {
             scope_id: self.proposal.scope_id.clone(),
             id: self.id,
-            sequence: cycle_of(&self.proposal).unwrap_or_default(),
+            sequence: review_cycle(&self.proposal).unwrap_or_default(),
             proposal_key: (self.fact == CycleFact::Submitted)
                 .then(|| self.proposal.proposal_key.clone()),
             record_kind: self.record_kind,
@@ -62,275 +59,35 @@ impl Receipt {
     }
 }
 
-/// The review cycle a Proposal key names, or `None` for a key in another
-/// form, such as the random key of an older submission.
-pub(super) fn cycle_of(proposal: &ProposalCard) -> Option<u64> {
-    let kind = NodeType::from(proposal.traceability.target.artifact_type);
-    let prefix = format!(
-        "review:{}:{}:",
-        kind.as_str(),
-        proposal.traceability.target.artifact_id.as_str()
+/// The review cycle of the next submission of one record.
+pub(super) fn next_cycle(record: &RecordReview<'_>) -> anyhow::Result<u64> {
+    let next = record
+        .next_cycle()
+        .ok_or_else(|| crate::refusal::fault!("review cycle overflow"))?;
+    crate::write_error::ensure!(
+        Fault,
+        next <= MAX_SAFE_CYCLE,
+        "review cycle exceeds the safe integer limit"
     );
-    proposal
-        .proposal_key
-        .strip_prefix(&prefix)
-        .and_then(|cycle| cycle.parse().ok())
+    Ok(next)
 }
 
-/// The ids of the review submissions that the scope's Withdrawals withdraw.
-/// Refuses, at its line, a Withdrawal that names no review submission or
-/// has the id of an earlier Withdrawal.
-#[rule("rule_inconsistent_records_refusal_names_records")]
-fn scope_withdrawn_submission_ids(
-    submission_ids: &HashSet<&str>,
-    located: &[(Withdrawal, ShardLine)],
-) -> anyhow::Result<HashSet<String>> {
-    let withdrawn = provenance_core::review::withdrawn_submission_ids(
-        |proposal| submission_ids.contains(proposal),
-        located.iter().map(|(withdrawal, _)| withdrawal),
-    )
-    .map_err(|fault| match fault {
-        WithdrawalRowFault::NoSubmission {
-            position,
-            withdrawal,
-            proposal,
-        } => state_fault(
-            &located[position].1,
-            format!(
-                "withdrawal {} names no review submission: {}",
-                withdrawal.as_str(),
-                proposal.as_str()
-            ),
-        ),
-        WithdrawalRowFault::RepeatedId {
-            position,
-            first_position,
-            withdrawal,
-        } => state_fault(
-            &located[position].1,
-            format!(
-                "withdrawal {} is stored again; line {} stores it first",
-                withdrawal.as_str(),
-                located[first_position].1.line
-            ),
-        ),
-    })?;
-    Ok(withdrawn.into_iter().map(str::to_owned).collect())
-}
-
-/// The review state of one scope, read from its records.
-pub(super) struct CycleFacts {
-    /// Every Proposal of the scope, in stored order.
-    proposals: Vec<ProposalCard>,
-    /// The review submissions among the Proposals.
-    submissions: Vec<ProposalCard>,
-    dispositions: Vec<DispositionRecord>,
-    index: CycleIndex,
-}
-
-impl CycleFacts {
-    /// Reads the scope's review submissions, Dispositions, Withdrawals and
-    /// feedback Discussions, and refuses a Withdrawal that names no review
-    /// submission or has the id of an earlier Withdrawal. More than one
-    /// Withdrawal of one submission withdraws it one time.
-    pub(super) fn validated(store: &StateStore, scope: &ScopeId) -> anyhow::Result<Self> {
-        let proposals = store.list_proposal_definitions(scope)?;
-        let submissions = proposals
-            .iter()
-            .filter(|proposal| proposal.proposal_type == ProposalType::RecordRevision)
-            .cloned()
-            .collect::<Vec<_>>();
-        let submission_ids = submissions
-            .iter()
-            .map(|proposal| proposal.id.as_str())
-            .collect::<HashSet<_>>();
-        let located = store.list_withdrawals_located(scope)?;
-        let withdrawn = scope_withdrawn_submission_ids(&submission_ids, &located)?;
-        let feedback = store
-            .list_discussions(scope)?
-            .into_iter()
-            .filter_map(|discussion| {
-                discussion
-                    .disposition_id
-                    .map(|disposition| (disposition, discussion.root_message_id))
-            })
-            .collect::<Vec<_>>();
-        let dispositions = store.list_dispositions(scope)?;
-        let index = CycleIndex::new(
-            &proposals,
-            &submissions,
-            &dispositions,
-            withdrawn,
-            &feedback,
-        );
-        Ok(Self {
-            proposals,
-            submissions,
-            dispositions,
-            index,
-        })
+/// The Proposal with this ID. The reading of the review rows decides
+/// first, so a review submission whose record refuses gives the refusal of
+/// that record.
+fn proposal_named(
+    store: &StateStore,
+    scope: &ScopeId,
+    facts: &CycleFacts<'_>,
+    id: &StableId,
+) -> anyhow::Result<Option<ProposalCard>> {
+    if let Some(submission) = facts.submission(id)? {
+        return Ok(Some(submission.clone()));
     }
-
-    /// Every Disposition of the scope, as one read of the records gave them.
-    pub(super) fn dispositions(&self) -> &[DispositionRecord] {
-        &self.dispositions
-    }
-
-    /// The Dispositions whose Proposal names the record, each with that
-    /// Proposal, in stored order.
-    pub(super) fn decisions_of<'a>(
-        &'a self,
-        kind: NodeType,
-        record_id: &'a StableId,
-    ) -> impl Iterator<Item = (&'a DispositionRecord, &'a ProposalCard)> + 'a {
-        self.index
-            .dispositions_of(kind, record_id)
-            .iter()
-            .filter_map(|&position| {
-                let disposition = &self.dispositions[position];
-                let proposal = self.index.proposal(&disposition.proposal_id)?;
-                Some((disposition, &self.proposals[proposal]))
-            })
-    }
-
-    pub(super) fn is_withdrawn(&self, proposal: &StableId) -> bool {
-        self.index.is_withdrawn(proposal)
-    }
-
-    pub(super) fn is_decided(&self, proposal: &StableId) -> bool {
-        self.index.is_decided(proposal)
-    }
-
-    /// The feedback Message a decision published, if it did.
-    pub(super) fn feedback_for(&self, disposition: &StableId) -> Option<StableId> {
-        self.index.feedback_for(disposition)
-    }
-
-    /// The order of one review submission: its review cycle, then its id.
-    /// A submission whose key names no cycle keeps the end of the order.
-    pub(super) fn order_of(&self, proposal: &StableId) -> (u64, String) {
-        let cycle = self.index.cycle(proposal).unwrap_or(u64::MAX);
-        (cycle, proposal.as_str().to_owned())
-    }
-
-    /// Whether a Proposal is a review submission.
-    #[cfg_attr(not(feature = "host"), allow(dead_code))]
-    pub(super) fn is_submission(&self, proposal: &StableId) -> bool {
-        self.index.is_submission(proposal)
-    }
-
-    /// The kind and id of the record of each review submission, in stored
-    /// order.
-    pub(super) fn submitted_records(&self) -> impl Iterator<Item = (NodeType, &StableId)> + '_ {
-        self.submissions.iter().map(|submission| {
-            let target = &submission.traceability.target;
-            (NodeType::from(target.artifact_type), &target.artifact_id)
-        })
-    }
-
-    fn of_record<'a>(
-        &'a self,
-        kind: NodeType,
-        record_id: &'a StableId,
-    ) -> impl Iterator<Item = &'a ProposalCard> + 'a {
-        self.index
-            .submissions_of(kind, record_id)
-            .iter()
-            .map(|&position| &self.submissions[position])
-    }
-
-    /// Whether a later submission or a revision link replaces this submission.
-    pub(super) fn is_replaced(&self, proposal: &ProposalCard) -> bool {
-        let target = &proposal.traceability.target;
-        self.of_record(NodeType::from(target.artifact_type), &target.artifact_id)
-            .any(|candidate| {
-                self.order_of(&candidate.id) > self.order_of(&proposal.id)
-                    || candidate.revises.as_ref() == Some(&proposal.id)
-            })
-    }
-
-    /// The withdrawn submissions of one record, in submission order.
-    pub(super) fn withdrawn_submissions_of_record(
-        &self,
-        kind: NodeType,
-        record_id: &StableId,
-    ) -> Vec<StableId> {
-        let mut withdrawn = self
-            .of_record(kind, record_id)
-            .filter(|proposal| self.is_withdrawn(&proposal.id))
-            .map(|proposal| proposal.id.clone())
-            .collect::<Vec<_>>();
-        withdrawn.sort_by_key(|proposal| self.order_of(proposal));
-        withdrawn
-    }
-
-    /// The review cycle of the next submission of one record: one more than
-    /// the number of review submissions of the record.
-    pub(super) fn next_cycle(&self, kind: NodeType, record_id: &StableId) -> anyhow::Result<u64> {
-        let next = u64::try_from(self.of_record(kind, record_id).count())?
-            .checked_add(1)
-            .ok_or_else(|| crate::refusal::fault!("review cycle overflow"))?;
-        crate::write_error::ensure!(
-            Fault,
-            next <= MAX_SAFE_CYCLE,
-            "review cycle exceeds the safe integer limit"
-        );
-        Ok(next)
-    }
-
-    /// The submission of this record that still waits for a decision, if any.
-    pub(super) fn pending_submission(
-        &self,
-        store: &StateStore,
-        scope: &ScopeId,
-        kind: NodeType,
-        record_id: &StableId,
-    ) -> anyhow::Result<Option<ProposalCard>> {
-        let record = crate::families::review_families::record(store, scope, kind, record_id)?;
-        let current_revision = super::save::current_revision(&record)?;
-        Ok(self.pending_submission_at_revision(kind, record_id, current_revision.as_ref()))
-    }
-
-    /// The undecided, unwithdrawn submission bound to the current revision.
-    pub(super) fn pending_submission_at_revision(
-        &self,
-        kind: NodeType,
-        record_id: &StableId,
-        current_revision: Option<&StableId>,
-    ) -> Option<ProposalCard> {
-        self.of_record(kind, record_id)
-            .filter(|proposal| !self.is_decided(&proposal.id) && !self.is_withdrawn(&proposal.id))
-            .filter(|proposal| {
-                proposal
-                    .record_revision
-                    .as_ref()
-                    .is_some_and(|binding| Some(&binding.revision) == current_revision)
-            })
-            .max_by_key(|proposal| self.order_of(&proposal.id))
-            .cloned()
-    }
-
-    /// Returns the current review state in the typed conflict without merging values.
-    #[rule("rule_review_conflict_returns_current_value")]
-    #[rule("rule_review_conflict_not_merged")]
-    pub(super) fn conflict_failure(
-        &self,
-        store: &StateStore,
-        scope: &ScopeId,
-        kind: NodeType,
-        record_id: &StableId,
-    ) -> anyhow::Result<crate::write_error::WriteFailure> {
-        let record = crate::families::review_families::record(store, scope, kind, record_id)?;
-        let current_revision = super::save::current_revision(&record)?
-            .ok_or_else(|| crate::refusal::fault!("the submitted record has no review revision"))?;
-        let current_submission = self
-            .pending_submission(store, scope, kind, record_id)?
-            .map(|proposal| proposal.id);
-        Ok(crate::write_error::WriteFailure::ReviewSubmissionConflict {
-            current_submission,
-            current_revision,
-        })
-    }
+    Ok(store
+        .list_proposal_definitions(scope)?
+        .into_iter()
+        .find(|proposal| proposal.id == *id))
 }
 
 /// The proposal must be a bound record-review submission. Other proposals
@@ -338,41 +95,37 @@ impl CycleFacts {
 pub(super) fn review_submission(
     store: &StateStore,
     scope: &ScopeId,
+    facts: &CycleFacts<'_>,
     proposal_id: &StableId,
 ) -> anyhow::Result<ProposalCard> {
-    let proposal = store
-        .list_proposal_definitions(scope)?
-        .into_iter()
-        .find(|p| p.id == *proposal_id)
-        .ok_or_else(|| {
-            crate::refusal::refuse!(ResourceNotFound, "review submission does not exist")
-        })?;
+    let proposal = proposal_named(store, scope, facts, proposal_id)?.ok_or_else(|| {
+        crate::refusal::refuse!(ResourceNotFound, "review submission does not exist")
+    })?;
     crate::write_error::ensure!(
         InvalidUpdate,
-        proposal.proposal_type == ProposalType::RecordRevision && proposal.record_revision.is_some(),
+        is_review_submission(&proposal) && proposal.record_revision.is_some(),
         "decision-cycle operations address record_revision submissions; other proposals keep their own disposition paths"
     );
     Ok(proposal)
 }
 
-/// A resubmission must answer exactly one rejection of one rejected
-/// predecessor submission of the same record, and the rejection disposition it
-/// answers is recorded on the fresh proposal.
+/// A resubmission must answer the rejection of one rejected predecessor
+/// submission of the same record, and the rejection it answers is recorded
+/// on the fresh proposal. When the predecessor has more than one rejection,
+/// the first in the order of the history is the one it answers.
 pub(super) fn validated_resubmission(
     store: &StateStore,
     scope: &ScopeId,
+    facts: &CycleFacts<'_>,
     predecessor: &StableId,
     kind: NodeType,
     record_id: &StableId,
 ) -> anyhow::Result<StableId> {
-    let proposals = store.list_proposal_definitions(scope)?;
-    let predecessor = proposals
-        .iter()
-        .find(|p| p.id == *predecessor)
+    let predecessor = proposal_named(store, scope, facts, predecessor)?
         .ok_or_else(|| crate::refusal::refuse!(MissingReference, "revises names no proposal"))?;
     crate::write_error::ensure!(
         InvalidUpdate,
-        predecessor.proposal_type == ProposalType::RecordRevision,
+        is_review_submission(&predecessor),
         "a resubmission revises a review submission"
     );
     crate::write_error::ensure!(
@@ -381,20 +134,22 @@ pub(super) fn validated_resubmission(
             && predecessor.traceability.target.artifact_id == *record_id,
         "a resubmission revises a submission of the same record"
     );
-    let rejections: Vec<_> = store
-        .list_dispositions(scope)?
+    let record = facts.record(kind, record_id)?;
+    let answered = record
+        .decisions()
         .into_iter()
-        .filter(|d| d.proposal_id == predecessor.id)
-        .collect();
+        .find(|(_, proposal)| proposal.id == predecessor.id)
+        .map(|(disposition, _)| disposition.id.clone());
+    let Some(answered) = answered else {
+        return Err(crate::refusal::refuse!(
+            InvalidUpdate,
+            "a resubmission answers a rejection of its predecessor"
+        ));
+    };
     crate::write_error::ensure!(
         InvalidUpdate,
-        rejections.len() == 1,
-        "a resubmission answers exactly one disposition of its predecessor"
-    );
-    crate::write_error::ensure!(
-        InvalidUpdate,
-        rejections[0].decision == DispositionDecision::Rejected,
+        facts.agreed_decision(&predecessor.id) == Some(DispositionDecision::Rejected),
         "a resubmission answers a rejection"
     );
-    Ok(rejections[0].id.clone())
+    Ok(answered)
 }
