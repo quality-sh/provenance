@@ -4,6 +4,7 @@ use camino::Utf8Path;
 /// The bytes a content digest covers for one file. Catch-up keeps the stored
 /// content digest of a unit whose bytes have not changed. After a change to
 /// what this function covers, `provenance materialize` rebuilds the digests.
+/// A line that is not JSON is refused with its file and its line.
 pub(super) fn hash_bytes(path: &Utf8Path, bytes: &[u8]) -> anyhow::Result<Vec<u8>> {
     if path.extension() != Some("jsonl")
         || !matches!(
@@ -14,11 +15,13 @@ pub(super) fn hash_bytes(path: &Utf8Path, bytes: &[u8]) -> anyhow::Result<Vec<u8
         return Ok(bytes.to_vec());
     }
     let mut content = Vec::new();
-    for line in bytes
+    for (index, line) in bytes
         .split(|b| *b == b'\n')
-        .filter(|line| !line.iter().all(u8::is_ascii_whitespace))
+        .enumerate()
+        .filter(|(_, line)| !line.iter().all(u8::is_ascii_whitespace))
     {
-        let mut record: serde_json::Value = serde_json::from_slice(line)?;
+        let mut record: serde_json::Value = serde_json::from_slice(line)
+            .map_err(|error| crate::state_store::readers::located(path, index + 1, &error))?;
         if let Some(record) = record.as_object_mut() {
             record.remove("created");
             record.remove("updated");
