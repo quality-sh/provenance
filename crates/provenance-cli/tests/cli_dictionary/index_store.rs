@@ -1,7 +1,7 @@
 //! The store of an index file in the machine index directory: an import
 //! stored one time loads again with no PDF, a second store of the same import
-//! does not write the file again, and a second store syncs the directory of
-//! the index and each directory above it.
+//! does not write the file again, a second store syncs the directory of the
+//! index, and it does not sync a directory above the directory of the index.
 
 use super::support::imported_dictionary;
 use provenance_macros::verifies;
@@ -75,37 +75,30 @@ fn a_store_of_an_equal_index_syncs_the_directory() {
     assert_eq!(std::fs::read(&path).expect("read the index"), stored);
 }
 
-/// An earlier store can have made the directories above the index directory
-/// and stopped before their syncs. So the store of an equal index syncs each
-/// directory above the index directory too, up to the root. A directory above
-/// the index directory that the process cannot read makes that sync fail.
+/// The directories above the index directory, such as the home directory and
+/// `/home`, are not directories of Provenance, and a directory sync needs read
+/// access. So the store of an equal index does not sync a directory above the
+/// index directory, and a directory above it that the process cannot read
+/// does not make the store fail. No Rule states this, so the test has no Rule
+/// binding.
 #[cfg(unix)]
 #[test]
-#[verifies("rule_ste_dictionary_file_write_is_durable", examples)]
-fn a_store_of_an_equal_index_syncs_each_directory_above_it() {
+fn a_store_of_an_equal_index_succeeds_below_a_directory_that_cannot_be_read() {
     use std::os::unix::fs::PermissionsExt;
     let temp = tempfile::tempdir().expect("make a temporary directory");
-    let made = temp.path().join("made");
-    let directory = made.join("index");
+    let above = temp.path().join("above");
+    let directory = above.join("index");
     let import = imported_dictionary();
     let path = store_dictionary_index(import, &directory).expect("store the index");
     let stored = std::fs::read(&path).expect("read the index");
 
     let closed = std::fs::Permissions::from_mode(0o300);
-    std::fs::set_permissions(&made, closed).expect("close the directory to reads");
+    std::fs::set_permissions(&above, closed).expect("close the directory to reads");
     let result = store_dictionary_index(import, &directory);
     let open = std::fs::Permissions::from_mode(0o700);
-    std::fs::set_permissions(&made, open).expect("open the directory again");
+    std::fs::set_permissions(&above, open).expect("open the directory again");
 
-    let error = result.expect_err("the sync of the directory above must fail");
-    assert_eq!(
-        format!("{error:#}"),
-        format!(
-            "sync {}: {}",
-            made.display(),
-            std::io::Error::from_raw_os_error(13)
-        )
-    );
+    assert_eq!(result.expect("store the equal index again"), path);
     assert_eq!(std::fs::read(&path).expect("read the index"), stored);
 }
 
