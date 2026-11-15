@@ -175,7 +175,11 @@ handles, which record the table's family word in the stamp's `attested`
 list; a live part (canonical shards, the working-tree scan, the run
 file, git) only through a handle that records its word in `live`. A
 failed freshness step answers at the stored serial with the policy word
-`catch_up_failed` and the error text beside the answer.
+`catch_up_failed` and the error text beside the answer. The document read
+is the exception: after the read at the stored serial, it refuses with
+`document_catch_up_failed`, and the refusal gives the file, the line and
+the message of a state line that does not parse. With no stored revision,
+it refuses with `no_projection`, as each other read does.
 
 The settings in `.provenance/settings.json` survive a cache delete. The
 file is tracked beside `state/` and `cache/`. Each query loads

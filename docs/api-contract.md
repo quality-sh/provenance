@@ -231,6 +231,19 @@ the write read it and before the write landed. The write saved nothing. The
 `message` field gives the next step: read the records again, then send the
 write again. The server does not repeat the write.
 
+A document read whose catch-up fails returns 409 with
+`document_catch_up_failed`. The document read does not answer from the
+stored projection. With no stored revision, the read refuses with
+`no_projection` first. `message` is the cause as text, without its
+location. When a state line does not parse, the refusal also has the
+location fields of `invalid_state_file`: `file`, the path below the state
+directory, and `line`, from 1. The refusal has `file` and `line` together,
+or neither. A cause that has no file has only `message`, which says what
+the cause is. The client reads the document again after a temporary cause,
+such as a cache close that did not finish in time. It corrects a cause in
+the record files first. The client reads these fields and does not parse
+the text.
+
 ## 6. Compatibility tuple and gate
 
 One authoritative compatibility tuple contains `wire` and `read_derivation`.
