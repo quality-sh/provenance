@@ -134,18 +134,30 @@ fn each_operation_runs_on_the_engine() {
             done.result
         );
     }
+    // An archive lands one whole set. A decision changes one key, so it
+    // lands one per-key set on its base, as law O3 counts it.
     for done in &run.done {
-        if matches!(
-            done.op,
-            Operation::DecideReview { .. } | Operation::ArchiveRequirement { .. }
-        ) {
-            let staged = run.publishes.iter().any(|publish| {
+        let whole = match done.op {
+            Operation::ArchiveRequirement { .. } => true,
+            Operation::DecideReview { .. } => false,
+            _ => continue,
+        };
+        let landed: Vec<_> = run
+            .publishes
+            .iter()
+            .filter(|publish| {
                 publish.operation == done.operation
-                    && publish.whole_set
+                    && publish.on_base
                     && publish.outcome == Outcome::Landed
-            });
-            assert!(staged, "{:?} landed no stage: {:?}", done.op, run.publishes);
-        }
+            })
+            .collect();
+        assert!(
+            landed.len() == 1 && landed[0].whole_set == whole,
+            "{:?} did not land one {} set: {:?}",
+            done.op,
+            if whole { "whole" } else { "per-key" },
+            run.publishes
+        );
     }
 }
 

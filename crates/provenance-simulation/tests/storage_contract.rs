@@ -60,4 +60,7 @@ fn the_simulated_storage_keeps_the_storage_contract() {
     contract::a_failed_per_key_set_leaves_a_landed_prefix(Simulated::default());
     contract::a_two_key_whole_set_lands_both_keys(Simulated::default());
     contract::a_failed_whole_set_lands_no_key(Simulated::default());
+    contract::an_empty_set_changes_nothing(Simulated::default());
+    contract::an_empty_set_on_a_moved_base_is_refused(Simulated::default());
+    contract::a_per_key_set_that_fails_at_its_first_key_is_refused(Simulated::default());
 }

@@ -74,8 +74,7 @@ fn decide_in_two_stages(repository: &Repository, task: &Task) -> anyhow::Result<
     Ok(effect)
 }
 
-// No Rule: proof that O3 can fail. A stand-in lands a decision in two
-// whole sets.
+// No Rule: proof that O3 can fail. A stand-in lands a decision in two sets.
 #[test]
 #[ignore = "a planted fault of the nightly simulation"]
 fn a_decision_in_two_stages_breaks_o3() {

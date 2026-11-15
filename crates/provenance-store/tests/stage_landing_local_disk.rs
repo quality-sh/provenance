@@ -1,7 +1,7 @@
 //! What a stage writes on the local disk adapter. Unix only: the tests take
 //! the write permission from the folder of whole-set transactions, so a
 //! stage that makes a transaction fails.
-#![cfg(all(unix, feature = "host"))]
+#![cfg(unix)]
 
 #[path = "support/initialization.rs"]
 mod initialization;
