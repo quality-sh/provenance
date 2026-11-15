@@ -135,7 +135,10 @@ fn newest_runs(
         }
     }
     let has_more = matched > kept.len();
-    Ok((kept.into_iter().rev().map(|(run, _)| run).collect(), has_more))
+    Ok((
+        kept.into_iter().rev().map(|(run, _)| run).collect(),
+        has_more,
+    ))
 }
 
 /// The order of the runs from the oldest start to the newest.

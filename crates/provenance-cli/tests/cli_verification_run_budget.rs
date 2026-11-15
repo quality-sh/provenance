@@ -49,8 +49,20 @@ fn repository() -> tempfile::TempDir {
         .assert()
         .success();
     provenance()
-        .args(["req_data", "create", "--type", "requirement", "--repo", root])
-        .args(["--scope", "default", "--statement", "The system keeps the data"])
+        .args([
+            "req_data",
+            "create",
+            "--type",
+            "requirement",
+            "--repo",
+            root,
+        ])
+        .args([
+            "--scope",
+            "default",
+            "--statement",
+            "The system keeps the data",
+        ])
         .current_dir(repo)
         .assert()
         .success();
@@ -76,7 +88,11 @@ fn begin(repo: &Path, row: usize) -> (String, usize) {
         "rule": "rule_one", "key": "check", "method": "examples",
         "declared_by": "fixture", "file": "check.rs"
     });
-    let run = data(&api(repo, "verification-runs/begin-verification", Some(&start)));
+    let run = data(&api(
+        repo,
+        "verification-runs/begin-verification",
+        Some(&start),
+    ));
     let mut failed = run.clone();
     failed["status"] = json!("failed");
     failed["completed_at"] = run["started_at"].clone();
