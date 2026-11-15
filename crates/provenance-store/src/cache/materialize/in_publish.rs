@@ -16,8 +16,9 @@ use crate::repository::Repository;
 /// and never waits. A call with no publish since the last pass commits
 /// nothing.
 ///
-/// One pass at a time writes the read database of one repository and its
-/// clones. When another pass runs, this call refuses at once with a
+/// One pass at a time writes one read database, over every repository
+/// handle that `Repository::with_storage` makes with it. When another pass
+/// runs, this call refuses at once with a
 /// [`CatchUpRunning`] error and writes nothing. The other pass can be a call
 /// of this function or, with `host`, the catch-up of a read,
 /// `catch_up_state` or a rebuild of `materialize`. With `host`, a read

@@ -80,12 +80,30 @@ fn pinned_call(answer: &Answer) -> Value {
 
 /// The pinned form of a run over the fixture repository, when the router
 /// runs each operation itself.
+///
+/// To make the file again after an intended change of the answers, run
+/// `router_port` test `the_site_operations_answer_as_the_checked_transcript`
+/// with the environment variable `PROVENANCE_WRITE_FIXTURES` set: the test
+/// then writes the observed transcript to the file and passes. Review the
+/// change of the file before it is committed.
 const PINNED: &str = include_str!("../fixtures/site_operations.json");
 
+/// The checked file of [`PINNED`].
+const PINNED_PATH: &str = concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/tests/fixtures/site_operations.json"
+);
+
 /// Asserts that `pinned` equals the checked transcript. A failure shows each
-/// line that differs, then the whole observed transcript.
+/// line that differs, then the whole observed transcript. With
+/// `PROVENANCE_WRITE_FIXTURES` set, writes `pinned` to the checked file in
+/// its place.
 pub fn assert_pinned(pinned: &Value) {
     let observed = serde_json::to_string_pretty(pinned).unwrap();
+    if std::env::var_os("PROVENANCE_WRITE_FIXTURES").is_some() {
+        std::fs::write(PINNED_PATH, format!("{observed}\n")).unwrap();
+        return;
+    }
     let expected = PINNED.trim_end();
     if observed == expected {
         return;
@@ -103,7 +121,8 @@ pub fn assert_pinned(pinned: &Value) {
     }
     panic!(
         "the transcript differs from tests/fixtures/site_operations.json \
-         (- expected, + observed):\n{}\n=== observed transcript\n{observed}\n=== end",
+         (- expected, + observed); to write the file again, run the test with \
+         PROVENANCE_WRITE_FIXTURES set:\n{}\n=== observed transcript\n{observed}\n=== end",
         diff.join("\n")
     );
 }

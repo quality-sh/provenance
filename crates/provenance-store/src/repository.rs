@@ -61,7 +61,8 @@ struct Inner {
     /// repository that `open` makes, or the one that the caller of
     /// `with_storage` gives.
     read_database: Option<Arc<dyn ReadDatabase>>,
-    /// Whether a catch-up pass writes `read_database`.
+    /// Whether a catch-up pass writes `read_database`. Each handle over the
+    /// same read database shares it.
     pass: Arc<PassSlot>,
     /// The source scans of the last commit range that a stale or evidence
     /// query of this open read. Each clone of the handle, and each handle
@@ -183,8 +184,8 @@ impl Repository {
         Self {
             inner: Arc::new(Inner {
                 layout: ProvenanceLayout::new(identity.working_tree().to_owned()),
+                pass: PassSlot::of(read_database.as_ref()),
                 read_database,
-                pass: Arc::default(),
                 identity,
                 storage,
                 section_lock,
@@ -319,8 +320,8 @@ impl Repository {
     }
 
     /// The claim of the one catch-up pass that writes the read database, or
-    /// the refusal at once when another pass holds it. Each clone of this
-    /// handle shares the claim.
+    /// the refusal at once when another pass holds it. Each handle over the
+    /// same read database shares the claim.
     pub(crate) fn claim_catch_up(&self) -> Result<PassClaim, CatchUpRunning> {
         self.inner.pass.claim()
     }

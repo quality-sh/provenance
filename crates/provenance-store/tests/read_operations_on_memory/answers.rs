@@ -15,7 +15,19 @@ const DEFAULT_POLICY: &str = "annotate_only";
 
 /// The checked answers of [`reads`] after the first catch-up, without their
 /// stamps. They are the same with and without `host`.
+///
+/// To make the file again after an intended change of the answers, run
+/// `the_reads_answer_alike_with_and_without_host` with the environment
+/// variable `PROVENANCE_WRITE_FIXTURES` set: the test then writes the
+/// observed answers to the file and passes. Review the change of the file
+/// before it is committed.
 const PINNED: &str = include_str!("../fixtures/read_operations_on_memory.json");
+
+/// The checked file of [`PINNED`].
+const PINNED_PATH: &str = concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/tests/fixtures/read_operations_on_memory.json"
+);
 
 /// One call of each read operation.
 pub(crate) fn reads() -> Vec<(&'static str, Value)> {
@@ -44,8 +56,13 @@ pub(crate) fn reads() -> Vec<(&'static str, Value)> {
 }
 
 /// Fails with each line of `observed` that differs from the checked file,
-/// and with the whole observed text.
+/// and with the whole observed text. With `PROVENANCE_WRITE_FIXTURES` set,
+/// writes `observed` to the checked file in its place.
 fn assert_pinned(observed: &str) {
+    if std::env::var_os("PROVENANCE_WRITE_FIXTURES").is_some() {
+        std::fs::write(PINNED_PATH, format!("{observed}\n")).unwrap();
+        return;
+    }
     let expected = PINNED.trim_end();
     if observed == expected {
         return;
@@ -63,14 +80,17 @@ fn assert_pinned(observed: &str) {
     }
     panic!(
         "the answers differ from tests/fixtures/read_operations_on_memory.json \
-         (- expected, + observed):\n{}\n=== observed answers\n{observed}\n=== end",
+         (- expected, + observed); to write the file again, run the test with \
+         PROVENANCE_WRITE_FIXTURES set:\n{}\n=== observed answers\n{observed}\n=== end",
         diff.join("\n")
     );
 }
 
 /// The answers of the read operations, after the embedder's catch-up, are
 /// the same with and without `host`; only the stamp policy differs. Each
-/// success has a stamp at the serial of the catch-up.
+/// success has a stamp at the serial of the catch-up, and each page of the
+/// six record families holds a record. With `PROVENANCE_WRITE_FIXTURES`
+/// set, the test writes the checked file in place of the comparison.
 #[tokio::test]
 async fn the_reads_answer_alike_with_and_without_host() {
     let (_root, repository, _) = repository().await;
@@ -87,14 +107,18 @@ async fn the_reads_answer_alike_with_and_without_host() {
         } else {
             assert_eq!(stamp, Value::Null, "{operation}: {answer}");
         }
+        if operation.starts_with("page-") {
+            let items = answer["result"]["items"].as_array().map_or(0, Vec::len);
+            assert!(items > 0, "{operation}: {answer}");
+        }
         answers.push(json!({ "operation": operation, "answer": answer }));
     }
     assert_pinned(&serde_json::to_string_pretty(&answers).unwrap());
 }
 
 /// Without `host` a read before any catch-up refuses as an `annotate_only`
-/// read refuses a database that holds no current schema: `schema_behind`,
-/// 409. With `host` the read builds the projection itself.
+/// read refuses a database that nothing has written: `no_projection`, 409.
+/// With `host` the read builds the projection itself.
 #[tokio::test]
 async fn a_read_before_any_catch_up_answers_as_its_build_says() {
     let (_root, repository, _) = repository().await;
@@ -104,7 +128,7 @@ async fn a_read_before_any_catch_up_answers_as_its_build_says() {
     {
         assert!(stamp.is_null(), "{answer}");
         assert_eq!(answer["status"], 409, "{answer}");
-        assert_eq!(answer["error"]["kind"], "schema_behind", "{answer}");
+        assert_eq!(answer["error"]["kind"], "no_projection", "{answer}");
     }
     #[cfg(feature = "host")]
     {
@@ -218,4 +242,29 @@ fn a_refusing_memory_section_lock_refuses_a_held_section() {
     );
     drop(held);
     assert!(lock.acquire().is_ok());
+}
+
+/// A memory section lock made by `default` waits for a held section, in
+/// each build, and takes it once the holder frees it.
+#[test]
+fn a_default_memory_section_lock_waits_for_a_held_section() {
+    let lock = MemorySectionLock::default();
+    let held = lock.acquire().unwrap();
+    let other = lock.clone();
+    let (sender, receiver) = std::sync::mpsc::channel();
+    let waiter = std::thread::spawn(move || {
+        let taken = other.acquire().map(drop).map_err(|error| error.to_string());
+        sender.send(taken).unwrap();
+    });
+    assert_eq!(
+        receiver.recv_timeout(std::time::Duration::from_millis(500)),
+        Err(std::sync::mpsc::RecvTimeoutError::Timeout),
+        "the second acquire did not wait for the held section"
+    );
+    drop(held);
+    let taken = receiver
+        .recv_timeout(std::time::Duration::from_secs(10))
+        .expect("the second acquire takes the freed section");
+    assert_eq!(taken, Ok(()));
+    waiter.join().unwrap();
 }

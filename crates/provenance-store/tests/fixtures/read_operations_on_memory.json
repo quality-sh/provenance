@@ -4,7 +4,16 @@
       "freshness_error": null,
       "result": {
         "has_more": false,
-        "items": [],
+        "items": [
+          {
+            "id": "source_expiry",
+            "name": "Share link notes",
+            "reference": "Notes on the expiry of share links.",
+            "scope_id": "default",
+            "source_type": "project_artifact",
+            "url": null
+          }
+        ],
         "limit": 50,
         "next_cursor": null
       }
@@ -35,7 +44,21 @@
       "freshness_error": null,
       "result": {
         "has_more": false,
-        "items": [],
+        "items": [
+          {
+            "context": "Links go to people outside the team.",
+            "id": "res_expiry",
+            "inputs": [],
+            "position": "Share links expire after a fixed time.",
+            "rationale": "An old link gives access to a person who left.",
+            "requirement_ids": [
+              "req_expiry"
+            ],
+            "scope_id": "default",
+            "status": "draft",
+            "title": "Expire share links"
+          }
+        ],
         "limit": 50,
         "next_cursor": null
       }
@@ -70,7 +93,16 @@
       "freshness_error": null,
       "result": {
         "has_more": false,
-        "items": [],
+        "items": [
+          {
+            "id": "topic_expiry",
+            "links": [],
+            "requirement_id": "req_expiry",
+            "scope_id": "default",
+            "status": "open",
+            "title": "Expiry"
+          }
+        ],
         "limit": 50,
         "next_cursor": null
       }
@@ -82,7 +114,19 @@
       "freshness_error": null,
       "result": {
         "has_more": false,
-        "items": [],
+        "items": [
+          {
+            "depends_on": [],
+            "id": "q_expiry",
+            "links": [],
+            "question": "How long does a share link stay valid?",
+            "requirement_id": "req_expiry",
+            "resolution_method": "ask",
+            "scope_id": "default",
+            "status": "open",
+            "topic_id": "topic_expiry"
+          }
+        ],
         "limit": 50,
         "next_cursor": null
       }
@@ -139,6 +183,28 @@
         {
           "kind": "member",
           "node": {
+            "context": "Links go to people outside the team.",
+            "id": "res_expiry",
+            "inputs": [],
+            "node_type": "resolution",
+            "position": "Share links expire after a fixed time.",
+            "rationale": "An old link gives access to a person who left.",
+            "requirement_ids": [
+              "req_expiry"
+            ],
+            "scope_id": "default",
+            "status": "draft",
+            "title": "Expire share links"
+          },
+          "review": {
+            "comment_count": 0,
+            "outcome": null,
+            "pending_proposal_id": null
+          }
+        },
+        {
+          "kind": "member",
+          "node": {
             "id": "rule_expiry",
             "node_type": "rule",
             "requirement_ids": [
@@ -148,6 +214,43 @@
             "severity": "medium",
             "statement": "Share links expire",
             "status": "active"
+          },
+          "review": {
+            "comment_count": 0,
+            "outcome": null,
+            "pending_proposal_id": null
+          }
+        },
+        {
+          "kind": "member",
+          "node": {
+            "id": "topic_expiry",
+            "links": [],
+            "node_type": "topic",
+            "requirement_id": "req_expiry",
+            "scope_id": "default",
+            "status": "open",
+            "title": "Expiry"
+          },
+          "review": {
+            "comment_count": 0,
+            "outcome": null,
+            "pending_proposal_id": null
+          }
+        },
+        {
+          "kind": "member",
+          "node": {
+            "depends_on": [],
+            "id": "q_expiry",
+            "links": [],
+            "node_type": "question",
+            "question": "How long does a share link stay valid?",
+            "requirement_id": "req_expiry",
+            "resolution_method": "ask",
+            "scope_id": "default",
+            "status": "open",
+            "topic_id": "topic_expiry"
           },
           "review": {
             "comment_count": 0,

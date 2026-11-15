@@ -1,9 +1,10 @@
 //! The check of each answer that a port gives.
 //!
 //! The router sends an answer of the port only when the operation gives it:
-//! a success that the closed success schema accepts, or a common failure or
-//! a read failure with the one status of its kind. Any other answer becomes
-//! the `internal` failure (500).
+//! a success that the closed success schema accepts, a read failure, or a
+//! common failure that a read can give after the router prepared the
+//! repository, each with the one status of its kind. Any other answer
+//! becomes the `internal` failure (500).
 
 use crate::failures::{host, kind, Pair, Step};
 use crate::support::memory_host::{bound, in_process, Counted};
@@ -118,8 +119,8 @@ async fn an_answer_that_the_operation_gives_passes_unchanged() {
     assert_eq!(kind(&declared), (409, json!("no_projection")));
 }
 
-/// A failure of a common kind that a port gives passes with the status of
-/// its kind, as the host gives it.
+/// A failure of a common kind that a read can give after the router prepared the repository
+/// passes with the status of its kind, as the host gives it.
 #[tokio::test]
 async fn a_common_failure_from_the_port_passes_with_its_status() {
     let _alone = crate::one_at_a_time().await;
@@ -129,8 +130,20 @@ async fn a_common_failure_from_the_port_passes_with_its_status() {
             field: Some("request.limit".into()),
             reason: InvalidInputReason::InvalidValue,
         },
-        OperationFailure::AccessDenied { message: None },
+        OperationFailure::InvalidInput {
+            field: Some("f".repeat(128)),
+            reason: InvalidInputReason::InvalidValue,
+        },
+        OperationFailure::InvalidInput {
+            field: None,
+            reason: InvalidInputReason::Required,
+        },
+        OperationFailure::access_denied(),
+        OperationFailure::UnknownTarget,
+        OperationFailure::UnknownScope,
+        OperationFailure::UnavailableNeeds,
         OperationFailure::HostBusy,
+        OperationFailure::Internal,
     ];
     for failure in refusals {
         let body = common(&failure);
@@ -138,6 +151,40 @@ async fn a_common_failure_from_the_port_passes_with_its_status() {
         let given = through(&pair.memory, &answer).await;
         assert_eq!(given.status, failure.status_code(), "{answer:?}");
         assert_eq!(given.json()["error"], body, "{answer:?}");
+    }
+}
+
+/// A common failure that only the router or the transport gives before the port is asked, or
+/// one with free text that no read gives, is `internal` (500) from a port, with its own status.
+#[tokio::test]
+async fn a_common_failure_that_a_read_cannot_give_is_internal() {
+    let _alone = crate::one_at_a_time().await;
+    let pair = Pair::new(None).await;
+    let refusals = [
+        OperationFailure::Unauthenticated,
+        OperationFailure::MethodNotAllowed,
+        OperationFailure::UnknownOperation,
+        OperationFailure::ProtocolMismatch {
+            requested: 2,
+            supported: 1,
+        },
+        OperationFailure::AccessDenied {
+            message: Some("any text of the port".into()),
+        },
+        OperationFailure::InvalidInput {
+            field: Some("f".repeat(129)),
+            reason: InvalidInputReason::InvalidValue,
+        },
+        OperationFailure::InvalidInput {
+            field: Some("request limit".into()),
+            reason: InvalidInputReason::InvalidValue,
+        },
+    ];
+    for failure in refusals {
+        let answer = Fixed::Failure(common(&failure), failure.status_code());
+        let given = through(&pair.memory, &answer).await;
+        assert_eq!(kind(&given), (500, json!("internal")), "{answer:?}");
+        assert_eq!(given.json()["error"], json!({"kind": "internal"}));
     }
 }
 

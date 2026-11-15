@@ -6,8 +6,11 @@
 //!
 //! Without the `host` feature the read operations build (`catalog`,
 //! `queries`, `reader`, `read_operations`): they answer from the read
-//! database as it stands, with no publication guard. The write operations,
-//! the file and git reads, and the scan of the working tree need `host`.
+//! database as it stands, with no publication guard. The operation types
+//! of the scoped writes (record creation and updates, drafts, ideation and
+//! Discussion writes) build too, as part of `catalog`. The commands
+//! (`apply`, `plan` and the verification runs), the file and git reads,
+//! and the scan of the working tree need `host`.
 
 #[cfg(feature = "host")]
 use anyhow::Context as _;

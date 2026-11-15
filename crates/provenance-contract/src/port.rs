@@ -6,7 +6,7 @@ use provenance_core::protocol::failure::{ErasedFailure as FailureEnvelope, Opera
 use provenance_core::protocol::read_failure::ReadFailure;
 use provenance_core::protocol::ResponseMeta;
 use provenance_store::operations::catalog::{
-    ExecutionNeeds, GetReviewedResource, Operation, ReadDocument, RequestedContext,
+    ContextKind, ExecutionNeeds, GetReviewedResource, Operation, ReadDocument, RequestedContext,
     ReviewDiscussionMessages, ReviewDiscussions, ReviewEvidence, ReviewHistory, ReviewHistoryEntry,
 };
 use provenance_store::operations::family_operations::{
@@ -32,7 +32,16 @@ struct Checks {
     success: Shape,
     /// Each status that the operation gives.
     statuses: Vec<u16>,
+    /// The context that the operation names, which sets the common failures that a port can
+    /// give for it.
+    context: ContextKind,
 }
+
+/// The most characters of the `field` of an `invalid_input` failure that a port gives.
+const FIELD_CHARS: usize = 128;
+
+/// The most characters of a refused answer that the host log keeps.
+const LOGGED_CHARS: usize = 1024;
 
 impl Checks {
     fn of<O: Operation>() -> Self {
@@ -43,6 +52,7 @@ impl Checks {
             success: Shape::new(definition.success_schema)
                 .unwrap_or_else(|unread| panic!("the success schema of {}: {unread}", O::NAME)),
             statuses: definition.http_statuses,
+            context: O::CONTEXT,
         }
     }
 }
@@ -79,9 +89,12 @@ static CHECKS: LazyLock<[Checks; 13]> = LazyLock::new(|| {
 /// - a success that the success schema of the operation accepts, where no object has a member
 ///   that the schema does not name;
 /// - or a common failure or a read failure, with no member that the failure does not name, no
-///   response meta, and the one status of its kind, which the operation gives.
+///   response meta, and the one status of its kind, which the operation gives. A common failure
+///   must also be one that the operation can give after the router prepared the repository,
+///   with its free text bounded.
 ///
-/// Any other answer becomes the `internal` failure, and the host log keeps what the port gave.
+/// Any other answer becomes the `internal` failure, and the host log keeps the start of what the
+/// port gave.
 /// The check of a success walks each value of the answer once for each schema node that applies
 /// to it, and again for each branch of an `anyOf` or `oneOf` that it tries, so its cost grows
 /// with the size of the answer. It uses no schema engine.
@@ -125,11 +138,14 @@ fn checked(
     let given = match &answer {
         Ok(success) if checks.success.accepts(success) => None,
         Err(failure) if declared(checks, failure) => None,
-        Ok(success) => Some(format!("a success that its schema refuses: {success}")),
+        Ok(success) => Some(format!(
+            "a success that its schema refuses: {}",
+            logged(success)
+        )),
         Err(failure) => Some(format!(
             "a failure that it does not give, with status {}: {}",
             failure.status_code(),
-            failure.error
+            logged(&failure.error)
         )),
     };
     let Some(given) = given else {
@@ -145,16 +161,57 @@ fn checked(
     ))
 }
 
-/// Whether the operation gives `failure`: its body is a common failure or a read failure as the
-/// dispatch writes it, it has no response meta, and its status is the one of its kind.
+/// The start of `value` as JSON text, at most [`LOGGED_CHARS`] characters, with the length of
+/// the whole text when it is longer.
+fn logged(value: &Value) -> String {
+    let text = value.to_string();
+    let count = text.chars().count();
+    if count <= LOGGED_CHARS {
+        return text;
+    }
+    let start: String = text.chars().take(LOGGED_CHARS).collect();
+    format!("{start}… ({count} characters)")
+}
+
+/// Whether the operation gives `failure`: its body is a common failure that the operation can
+/// give after the router prepared the repository, or a read failure, as the dispatch writes it;
+/// it has no response meta; and its status is the one of its kind.
 fn declared(checks: &Checks, failure: &FailureEnvelope) -> bool {
     let body = &failure.error;
     let status = exact::<OperationFailure>(body)
-        .map(|common| common.status_code())
-        .or_else(|| exact::<ReadFailure>(body).map(|read| read.status_code()));
+        .map(|common| after_prepare(checks.context, &common).then_some(common.status_code()))
+        .or_else(|| exact::<ReadFailure>(body).map(|read| Some(read.status_code())))
+        .flatten();
     failure.meta == ResponseMeta::default()
         && status == Some(failure.status_code())
         && checks.statuses.contains(&failure.status_code())
+}
+
+/// Whether a port can give the common failure `failure` for an operation whose context is
+/// `context`. The router gives the other common kinds itself, before the port is asked: a port
+/// gives no `unauthenticated`, `method_not_allowed`, `protocol_mismatch` or `unknown_operation`.
+/// `unknown_target` needs a context that names a repository, and `unknown_scope` one that names a
+/// scope. The free text of a common failure is bounded: an `access_denied` has no message, as no
+/// read gives one, and the `field` of an `invalid_input` is at most [`FIELD_CHARS`] printable
+/// ASCII characters.
+fn after_prepare(context: ContextKind, failure: &OperationFailure) -> bool {
+    match failure {
+        OperationFailure::InvalidInput { field, .. } => field.as_deref().is_none_or(|field| {
+            field.chars().count() <= FIELD_CHARS && field.chars().all(|c| c.is_ascii_graphic())
+        }),
+        OperationFailure::AccessDenied { message } => message.is_none(),
+        OperationFailure::UnknownTarget => !matches!(context, ContextKind::DataFree),
+        OperationFailure::UnknownScope => {
+            matches!(context, ContextKind::Scope | ContextKind::Scoped)
+        }
+        OperationFailure::UnavailableNeeds
+        | OperationFailure::HostBusy
+        | OperationFailure::Internal => true,
+        OperationFailure::ProtocolMismatch { .. }
+        | OperationFailure::UnknownOperation
+        | OperationFailure::MethodNotAllowed
+        | OperationFailure::Unauthenticated => false,
+    }
 }
 
 /// `body` as a `T`, when `T` writes it back as the same JSON: no member is unknown or left out.
