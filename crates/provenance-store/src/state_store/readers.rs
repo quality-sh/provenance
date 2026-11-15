@@ -12,9 +12,9 @@ pub fn state_file(path: &Utf8Path) -> String {
     shown_file(path, None)
 }
 
-/// The refusal of the file at `path`, which does not parse at `line`, with a
-/// path that a person can find and never an absolute path.
+/// The refusal of the file at `path`, which does not parse at `line`.
 ///
+/// The refusal gives a path that a person can find and never an absolute path.
 /// Each file of a store is below `<root>/.provenance`, where `<root>` is the
 /// root of the store, so the root of a file below a `.provenance` directory is
 /// the parent of that directory. A file that no store holds, such as a
@@ -46,7 +46,8 @@ fn store_root(path: &Utf8Path) -> Option<&Utf8Path> {
 
 /// The project of the working directory, by the rule of a repository open.
 fn working_project() -> Option<Utf8PathBuf> {
-    let directory = Utf8PathBuf::from_path_buf(std::env::current_dir().ok()?).ok()?;
+    let directory = std::env::current_dir().ok()?;
+    let directory = Utf8PathBuf::from_path_buf(directory).ok()?;
     crate::layout::enclosing_project(&directory).map(Utf8Path::to_path_buf)
 }
 

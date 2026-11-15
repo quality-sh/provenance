@@ -92,10 +92,11 @@ impl ProvenanceLayout {
     }
 }
 
-/// The project that holds `directory`: the nearest of `directory` and its
-/// ancestors with a manifest file or a `.git`. A repository open with no
-/// root and a refusal of a file that no store holds both take the project
-/// from this rule.
+/// The project that holds `directory`.
+///
+/// The project is the nearest of `directory` and its ancestors with a manifest
+/// file or a `.git`. A repository open with no root and a refusal of a file
+/// that no store holds both take the project from this rule.
 pub fn enclosing_project(directory: &Utf8Path) -> Option<&Utf8Path> {
     directory.ancestors().find(|ancestor| {
         ancestor
