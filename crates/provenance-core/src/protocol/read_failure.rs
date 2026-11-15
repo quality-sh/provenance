@@ -16,8 +16,15 @@ pub enum ReadFailure {
     PageRecordTooLarge,
     #[error("document root is missing")]
     DocumentRootMissing,
+    /// The document read did not catch up the document. `message` is the
+    /// cause as text, without its location. A state line that does not parse
+    /// also gives its location, as `invalid_state_file` gives it.
     #[error("catch-up failed; restart the document read")]
-    DocumentCatchUpFailed,
+    DocumentCatchUpFailed {
+        #[serde(flatten, deserialize_with = "file_and_line")]
+        location: Option<FileLine>,
+        message: String,
+    },
     #[error("repository file access denied")]
     FileAccessDenied,
     #[error("secure repository file access unavailable")]
@@ -56,6 +63,39 @@ pub enum ReadFailure {
     /// directory.
     #[error("read failed: {cause}")]
     ReadFailed { cause: String },
+}
+
+/// The location of a state line that does not parse.
+///
+/// A failure gives `file` and `line` together, or neither.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+pub struct FileLine {
+    /// The file that holds the line, as `invalid_state_file` gives it. It
+    /// comes with `line`.
+    pub file: String,
+    /// The line that does not parse, from 1. It comes with `file`.
+    pub line: u64,
+}
+
+/// Reads the location of a failure from its `file` and `line` keys. A body
+/// with one of the two keys is refused, so that no key is lost.
+fn file_and_line<'de, D: serde::Deserializer<'de>>(
+    deserializer: D,
+) -> Result<Option<FileLine>, D::Error> {
+    #[derive(Deserialize)]
+    struct Keys {
+        file: Option<String>,
+        line: Option<u64>,
+    }
+    let keys = Keys::deserialize(deserializer)?;
+    match (keys.file, keys.line) {
+        (Some(file), Some(line)) => Ok(Some(FileLine { file, line })),
+        (None, None) => Ok(None),
+        _ => Err(serde::de::Error::custom(
+            "a failure gives file and line together, or neither",
+        )),
+    }
 }
 
 /// A line of a record file, or the dictionary reference, that does not parse.
@@ -112,6 +152,20 @@ impl UnparsableStateFile {
         ReadFailure::InvalidStateFile {
             file: self.file.clone(),
             line: self.line,
+            message: self.message.clone(),
+        }
+    }
+
+    /// The `document_catch_up_failed` read failure of this line.
+    ///
+    /// It is the refusal of a document read whose catch-up stopped at this
+    /// line. The failure has no hint.
+    pub fn catch_up_failure(&self) -> ReadFailure {
+        ReadFailure::DocumentCatchUpFailed {
+            location: Some(FileLine {
+                file: self.file.clone(),
+                line: self.line,
+            }),
             message: self.message.clone(),
         }
     }
