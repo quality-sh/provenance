@@ -19,11 +19,13 @@ fn initialized_store_in(root: camino::Utf8PathBuf) -> (StateStore, ScopeId) {
     let layout = ProvenanceLayout::new(root);
     std::fs::create_dir_all(layout.manifest_path().parent().unwrap()).unwrap();
     let scope = ScopeId::new("default").unwrap();
-    let mut manifest = Manifest::default_with_scope(scope.clone(), RepoPathPrefix::new("."));
-    manifest.disposition_actor_ids = vec!["reviewer".to_owned()];
     std::fs::write(
         layout.manifest_path(),
-        serde_json::to_string(&manifest).unwrap(),
+        serde_json::to_string(&Manifest::default_with_scope(
+            scope.clone(),
+            RepoPathPrefix::new("."),
+        ))
+        .unwrap(),
     )
     .unwrap();
     let store = crate::test_support::store(&layout);
@@ -64,6 +66,15 @@ fn seeded_requirement_store() -> (tempfile::TempDir, StateStore, ScopeId) {
             origin_message: None,
         })
         .unwrap();
+    (dir, store, scope)
+}
+
+/// A seeded store whose manifest names the reviewer, for the tests that
+/// accept a status request.
+#[cfg(feature = "host")]
+fn reviewed_requirement_store() -> (tempfile::TempDir, StateStore, ScopeId) {
+    let (dir, store, scope) = seeded_requirement_store();
+    crate::test_support::allow_reviewer(&store.layout);
     (dir, store, scope)
 }
 

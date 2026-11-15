@@ -1,4 +1,4 @@
-use super::seeded_requirement_store;
+use super::reviewed_requirement_store;
 use crate::state_store::StateStore;
 use crate::write_error::{WriteError, WriteFailure};
 use provenance_core::{NodeType, Requirement, ScopeId};
@@ -85,7 +85,7 @@ pub(super) fn append_requirement(store: &StateStore, scope: &ScopeId, id: &str, 
 #[verifies("rule_archive_is_terminal_for_each_record", examples)]
 #[verifies("rule_archive_records_each_commit", examples)]
 fn requirement_archive_stores_commit_and_refuses_live_status() {
-    let (_directory, store, scope) = seeded_requirement_store();
+    let (_directory, store, scope) = reviewed_requirement_store();
     archive(&store, "req_overtime");
     let archived = requirement(&store, &scope, "req_overtime");
     let value = serde_json::to_value(&archived).unwrap();
@@ -109,7 +109,7 @@ fn requirement_archive_stores_commit_and_refuses_live_status() {
 #[test]
 #[verifies("rule_archive_is_terminal_for_each_record", examples)]
 fn archived_requirement_refuses_a_changed_commit() {
-    let (_directory, store, scope) = seeded_requirement_store();
+    let (_directory, store, scope) = reviewed_requirement_store();
     archive(&store, "req_overtime");
     let archived = requirement(&store, &scope, "req_overtime");
     let error = store
@@ -131,7 +131,7 @@ fn archived_requirement_refuses_a_changed_commit() {
 #[test]
 #[verifies("rule_archive_records_each_commit", examples)]
 fn later_update_to_archived_requirement_does_not_archive_again() {
-    let (_directory, store, scope) = seeded_requirement_store();
+    let (_directory, store, scope) = reviewed_requirement_store();
     archive(&store, "req_overtime");
     append_rule(&store, &scope, "rule_merged", &["req_overtime"]);
     let before = store.list_rules(&scope).unwrap();
@@ -154,7 +154,7 @@ fn later_update_to_archived_requirement_does_not_archive_again() {
 #[verifies("rule_archive_keeps_archived_parent_links", examples)]
 #[verifies("rule_archive_records_each_commit", examples)]
 fn sole_parent_chain_archives_in_one_operation_and_keeps_parents() {
-    let (_directory, store, scope) = seeded_requirement_store();
+    let (_directory, store, scope) = reviewed_requirement_store();
     child(&store, "req_child", "req_overtime");
     child(&store, "req_leaf", "req_child");
     archive(&store, "req_overtime");
@@ -171,7 +171,7 @@ fn sole_parent_chain_archives_in_one_operation_and_keeps_parents() {
 #[verifies("rule_archive_keeps_archived_parent_links", examples)]
 #[verifies("rule_archive_records_each_commit", examples)]
 fn requirement_archive_includes_topic_and_question() {
-    let (_directory, store, scope) = seeded_requirement_store();
+    let (_directory, store, scope) = reviewed_requirement_store();
     store
         .create_topic(
             serde_json::from_value(json!({
@@ -219,7 +219,7 @@ fn requirement_archive_includes_topic_and_question() {
 #[test]
 #[verifies("rule_claim_cleared_on_exit", examples)]
 fn requirement_archive_clears_the_claim_of_its_topic() {
-    let (_directory, store, scope) = seeded_requirement_store();
+    let (_directory, store, scope) = reviewed_requirement_store();
     store
         .create_topic(
             serde_json::from_value(json!({

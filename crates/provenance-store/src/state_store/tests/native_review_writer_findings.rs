@@ -1,6 +1,6 @@
 use super::{
     native_review_writers::{id, seed_native_records},
-    seeded_requirement_store,
+    reviewed_requirement_store, seeded_requirement_store,
 };
 use crate::state_store::{
     EditQuestionInput, UpdateRequirementInput, UpdateRuleInput, UpdateTopicInput,
@@ -40,7 +40,7 @@ fn assert_lifecycle_then_content(
 
 #[test]
 fn rule_archive_stamp_keeps_revision_after_statement_changes_it() {
-    let (_dir, store, scope) = seeded_requirement_store();
+    let (_dir, store, scope) = reviewed_requirement_store();
     seed_native_records(&store, &scope);
     let created = revision(&store, &scope, NodeType::Rule, "rule_native");
     store

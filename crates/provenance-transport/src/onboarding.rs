@@ -73,7 +73,7 @@ it in the same change.
   command with `--notify off`.
 - A change of a Rule or a Requirement to active or archived opens a status
   request. The status changes when a reviewer on the reviewer list accepts it with
-  `{command} api <rules|requirements>/<id>/submissions/<proposal_id>/decide --method post --input - --scope {selected_scope}`.
+  `{command} api <rules|requirements>/<id>/submissions/<proposal_id>/decide --scope {selected_scope} --method post --input -`.
   The result of the request names the request and this call.
 - A guarded update after a rejection opens a new submission unless a reviewer
   accepted that content. Revise or withdraw a rejected candidate that no later
