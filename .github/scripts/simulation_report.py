@@ -346,7 +346,7 @@ def layer_reports(layer, log, failures, run_url=None, environment=""):
 
 def counts(stats_dir, layer):
     """The counts of the random cases of `layer` as a Markdown table, and
-    the stops of each probe of `layer` in rows of their own."""
+    the stop rows of each probe of `layer` in rows of their own."""
     if not stats_dir:
         return ""
     text = ""
@@ -364,7 +364,8 @@ def counts(stats_dir, layer):
         for probe in probes:
             name = probe.name[len(prefix):-len(".json")]
             rows = json.loads(probe.read_text())
-            lines += [f"| {name} | {stop} | {value} |" for stop, value in rows.items()]
+            lines += [f"| {name} | {stop} | {value} |" for stop, value in rows.items()
+                      if stop.startswith("stops ")]
         text += "\n".join(lines) + "\n\n"
     return text
 
