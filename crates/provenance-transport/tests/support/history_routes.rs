@@ -11,24 +11,24 @@
 use super::router_answer::{Answer, Http};
 use serde_json::Value;
 
-/// One history route: its operation id in the contract, the records of
+/// One history route: its name in the contract, the records of
 /// `default` and the record of `broken` that it reads, and the field of
 /// its evidence reads.
 pub struct Row {
-    pub operation_id: &'static str,
+    pub name: &'static str,
     pub records: &'static [&'static str],
     pub broken: &'static str,
     pub field: &'static str,
 }
 
 const fn row(
-    operation_id: &'static str,
+    name: &'static str,
     records: &'static [&'static str],
     broken: &'static str,
     field: &'static str,
 ) -> Row {
     Row {
-        operation_id,
+        name,
         records,
         broken,
         field,
@@ -105,22 +105,22 @@ pub const ROWS: [Row; 18] = [
     ),
 ];
 
-/// The path of the route `operation_id`.
-pub fn route(operation_id: &str) -> &'static str {
+/// The path of the route `name`.
+pub fn route(name: &str) -> &'static str {
     provenance_contract::definitions()
         .iter()
-        .find(|definition| definition.operation_id == operation_id)
-        .unwrap_or_else(|| panic!("no route {operation_id}"))
+        .find(|definition| definition.name == name)
+        .unwrap_or_else(|| panic!("no route {name}"))
         .path
 }
 
-/// The operation id of each route of the contract whose path reads record
+/// The name of each route of the contract whose path reads record
 /// history.
 pub fn history_routes() -> Vec<&'static str> {
     provenance_contract::definitions()
         .iter()
         .filter(|definition| definition.path.contains("/history"))
-        .map(|definition| definition.operation_id)
+        .map(|definition| definition.name)
         .collect()
 }
 
@@ -146,8 +146,8 @@ async fn versions(http: &Http, list: &str) -> Vec<String> {
 
 /// The paths of one row for the record `id`.
 async fn paths(http: &Http, row: &Row, id: &str) -> Vec<String> {
-    let template = route(row.operation_id).replace("{id}", id);
-    let list = route(row.operation_id)
+    let template = route(row.name).replace("{id}", id);
+    let list = route(row.name)
         .split("/history")
         .next()
         .unwrap()

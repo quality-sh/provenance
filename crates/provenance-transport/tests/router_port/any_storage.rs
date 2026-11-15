@@ -34,6 +34,9 @@ use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
+/// The read operations of the history routes, which the second test calls.
+const HISTORY: [&str; 3] = ["review-evidence", "review-history", "review-history-entry"];
+
 /// The number of calls of `run` to read operations: the 25 reads, the read
 /// of the new Requirement, and each record again at the end.
 const READS: usize = 25 + 1 + 6;
@@ -121,7 +124,11 @@ async fn the_router_over_memory_storage_answers_as_over_a_folder() {
     assert_eq!(runs.len(), READS, "{runs:?}");
     assert_eq!(
         runs.iter().copied().collect::<BTreeSet<_>>(),
-        READ_OPERATIONS.iter().copied().collect::<BTreeSet<_>>()
+        READ_OPERATIONS
+            .iter()
+            .copied()
+            .filter(|name| !HISTORY.contains(name))
+            .collect::<BTreeSet<_>>()
     );
     assert!(!root.exists(), "the router made the working tree");
     for directory in [&missing, &home, &working, &temporary] {
@@ -168,7 +175,7 @@ async fn the_history_routes_over_memory_storage_answer_as_over_a_folder() {
     let _alone = crate::one_at_a_time().await;
     let mut routes = history_routes();
     routes.sort_unstable();
-    let mut rows: Vec<_> = ROWS.iter().map(|row| row.operation_id).collect();
+    let mut rows: Vec<_> = ROWS.iter().map(|row| row.name).collect();
     rows.sort_unstable();
     assert_eq!(rows, routes, "each history route has one row");
     let history = history(&Sources {
@@ -213,10 +220,7 @@ async fn the_history_routes_over_memory_storage_answer_as_over_a_folder() {
         );
     }
     let runs: BTreeSet<_> = port.runs().into_iter().chain(port_broken.runs()).collect();
-    assert_eq!(
-        runs,
-        BTreeSet::from(["review-evidence", "review-history", "review-history-entry"])
-    );
+    assert_eq!(runs, BTreeSet::from(HISTORY));
     assert!(!root.exists(), "the router made the working tree");
     for directory in [&missing, &home, &working, &temporary] {
         assert_eq!(entries(directory.path()), Vec::<PathBuf>::new());
