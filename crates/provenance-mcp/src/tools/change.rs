@@ -43,13 +43,7 @@ pub fn input(host: &StatementHost) -> ActionInput {
         }
     }
     if porcelain.notify_is_available() {
-        input = input.with_action(
-            NOTIFY,
-            crate::derived::writes_schema(
-                Command::Get,
-                provenance_porcelain::get::notify_input_schema(),
-            ),
-        );
+        input = input.with_action(NOTIFY, notify_schema());
     }
     input
 }
@@ -106,9 +100,10 @@ pub fn tool(host: &StatementHost, input: &ActionInput) -> Option<Tool> {
     ))
 }
 
-/// The refusal of a write that this host does not run. A write that needs a repository
-/// binding or a notify port that the host does not bind is unavailable; another write is
-/// denied. When the host also denies the record read that notify needs, notify is denied.
+/// The refusal of a write that this host does not list. A repository action on a host
+/// with no repository binding is unavailable; another write is denied. Notify on a host
+/// that grants the record read but binds no notify port is not refused here: the shared
+/// get operation answers it, as on the CLI.
 pub fn refusal(
     host: &StatementHost,
     input: &ActionInput,
@@ -121,12 +116,27 @@ pub fn refusal(
         return None;
     }
     let porcelain = host.porcelain();
-    let unbound = if word == NOTIFY {
-        porcelain.get_is_available()
-    } else {
-        repository_command(word).is_some() && !porcelain.repository_is_available()
-    };
+    if word == NOTIFY {
+        return (!porcelain.get_is_available()).then(denied);
+    }
+    let unbound = repository_command(word).is_some() && !porcelain.repository_is_available();
     Some(if unbound { unavailable() } else { denied() })
+}
+
+/// The notify fields, when the call selects notify and the host lists no notify action.
+/// The host then grants the record read and binds no notify port, because `refusal`
+/// denies each other unlisted notify call.
+pub fn unlisted_notify(input: &ActionInput, arguments: &Map<String, Value>) -> Option<ActionInput> {
+    let selects_notify = arguments.get("action").and_then(Value::as_str) == Some(NOTIFY);
+    (selects_notify && !input.actions().any(|action| action == NOTIFY))
+        .then(|| ActionInput::new(None).with_action(NOTIFY, notify_schema()))
+}
+
+fn notify_schema() -> Value {
+    crate::derived::writes_schema(
+        Command::Get,
+        provenance_porcelain::get::notify_input_schema(),
+    )
 }
 
 fn denied() -> CallToolResult {
@@ -169,9 +179,10 @@ async fn run_repository(
     command: Command,
     arguments: Map<String, Value>,
 ) -> CallToolResult {
-    let Some(work) = host.porcelain().repository() else {
-        return unavailable();
-    };
+    let work = host
+        .porcelain()
+        .repository()
+        .expect("a listed repository action has a repository binding");
     let arguments = Value::Object(arguments);
     // The result of the command and the readable line of the result.
     macro_rules! answer {

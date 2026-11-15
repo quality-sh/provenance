@@ -171,7 +171,14 @@ impl Listed {
                 let word = select(input, &mut arguments)?;
                 Call::Discussion(Action::parse(word).expect("a Discussion action"))
             }
-            Runner::Change(input) => Call::Change(select(input, &mut arguments)?),
+            Runner::Change(input) => match tools::change_unlisted_notify(input, &arguments) {
+                // The listed schema has no notify action. The shared get operation
+                // checks the notify fields after the field names, as on the CLI.
+                Some(notify) => {
+                    return Ok((Call::Change(select(&notify, &mut arguments)?), arguments))
+                }
+                None => Call::Change(select(input, &mut arguments)?),
+            },
         };
         if let Some(refused) = self.input.refusal(&self.tool.name, &given) {
             return Err(crate::surface::detail_error(refused));

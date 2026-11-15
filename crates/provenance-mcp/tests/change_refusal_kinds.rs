@@ -68,7 +68,10 @@ async fn notify_without_a_notify_port_answers_as_the_shared_operation() {
     let bad_thread = json!({"target": "req_shared", "notify": "codex", "thread": ""});
     let call = |fields: &Value| {
         let mut arguments = json!({"action": "notify"});
-        arguments.as_object_mut().unwrap().extend(fields.as_object().unwrap().clone());
+        arguments
+            .as_object_mut()
+            .unwrap()
+            .extend(fields.as_object().unwrap().clone());
         arguments
     };
 
@@ -102,7 +105,9 @@ async fn a_denied_read_wins_over_a_missing_notify_port() {
 
     assert_eq!(
         answer,
-        refused(&json!({"error": {"kind": "access_denied", "message": "access denied"},
-                        "meta": {}}))
+        refused(
+            &json!({"error": {"kind": "access_denied", "message": "access denied"},
+                        "meta": {}})
+        )
     );
 }

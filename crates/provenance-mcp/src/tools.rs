@@ -18,6 +18,7 @@ mod read_only;
 pub use api::{call as call_api, lowercase_method, tool as api_tool};
 pub use change::{
     input as change_input, refusal as change_refusal, run as call_change, tool as change_tool,
+    unlisted_notify as change_unlisted_notify,
 };
 pub use discussions::{
     refusal as discussions_refusal, run as call_discussion, tool as discussions_tool,
