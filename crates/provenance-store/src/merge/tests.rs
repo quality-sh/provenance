@@ -439,24 +439,35 @@ fn only_the_scoped_discussion_shard_uses_the_discussion_key() {
 #[test]
 #[verifies("rule_landing_batch_merge", examples)]
 fn a_side_that_lands_an_equal_batch_again_keeps_the_two_copies() {
-    // A batch with no records reads as nothing, so these rows differ only
-    // in a field that the read does not use.
-    let batch = |run: &str| serde_json::json!({ "run": run });
+    let batch = |id: &str| {
+        serde_json::json!({ "contributions": [{
+            "scope_id": "default", "id": id,
+            "target": {"artifact_type": "requirement", "artifact_id": "req_a"},
+            "participant_slot": "slot_a", "stance": "support", "strongest_finding": "Observed",
+            "evidence_references": [], "material_claims": [], "risks": [], "objections": [],
+            "challenges": [], "suggested_artifact_changes": [],
+            "unsupported_recommendations": [],
+            "uncertainty": {"level": "low", "rationale": "Direct."}, "open_questions": []
+        }]})
+    };
     let merged = merge_records(
         RowIdentity::Batch,
-        &[batch("a")],
-        &[batch("a"), batch("a")],
-        &[batch("a"), batch("b")],
+        &[batch("contrib_a")],
+        &[batch("contrib_a"), batch("contrib_a")],
+        &[batch("contrib_a"), batch("contrib_b")],
     )
     .unwrap()
     .unwrap_clean();
-    assert_eq!(merged, [batch("a"), batch("a"), batch("b")]);
+    assert_eq!(
+        merged,
+        [batch("contrib_a"), batch("contrib_a"), batch("contrib_b")]
+    );
 }
 
 // No Rule binding: an aid to the implementation. It shows the refusal of a
 // batch row that a hand edit breaks.
 #[test]
-fn a_row_that_is_not_a_landing_batch_is_refused_with_its_side_and_line() {
+fn a_row_that_is_not_a_landing_batch_is_refused_with_its_side_and_row() {
     let row = serde_json::json!({ "contributions": {} });
 
     let error = merge_records(RowIdentity::Batch, &[], &[], &[row]).unwrap_err();
@@ -464,7 +475,7 @@ fn a_row_that_is_not_a_landing_batch_is_refused_with_its_side_and_line() {
     assert!(
         error
             .to_string()
-            .starts_with("line 1 of theirs is not a landing batch: "),
+            .starts_with("row 1 of theirs is not a landing batch: "),
         "{error}"
     );
 }

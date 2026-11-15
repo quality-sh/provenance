@@ -1,10 +1,10 @@
 use crate::support::landing_runs::{
     contribution, contribution_ids, driver_outcome, land, land_run, landing_lines,
-    landing_repository, merge_into, proposal_run, read_families,
+    landing_repository, merge_into, proposal_run, read_families, read_record,
 };
 use crate::support::merge_driver::{commit, git_ok, json};
 use provenance_macros::verifies;
-use serde_json::Value;
+use serde_json::{json, Value};
 
 #[test]
 #[verifies("rule_landing_batch_merge", examples)]
@@ -110,7 +110,75 @@ fn a_record_that_two_batches_hold_with_equal_content_merges_to_one_read_in_each_
 }
 
 #[test]
+#[verifies("rule_landing_batch_merge", examples)]
+fn the_merge_keeps_a_correction_that_the_two_sides_land_after_a_batch_of_each_side() {
+    let landing = landing_repository();
+    let repo = landing.repo();
+    let base = land(&landing, "base");
+    commit(repo, "base");
+    let earlier = contribution("contrib_c", "Earlier finding.");
+    let correction = contribution("contrib_c", "Corrected finding.");
+    let other = contribution("contrib_d", "Finding of theirs.");
+    git_ok(repo, &["checkout", "-b", "theirs"]);
+    let theirs = land_run(&landing, "theirs", &[earlier.clone(), other.clone()], None);
+    let shared = land_run(&landing, "shared", std::slice::from_ref(&correction), None);
+    commit(repo, "theirs");
+    git_ok(repo, &["checkout", "-b", "ours", "main"]);
+    let ours = land_run(&landing, "ours", &[earlier], None);
+    let again = land_run(&landing, "shared", std::slice::from_ref(&correction), None);
+    assert_eq!(again, shared);
+    commit(repo, "ours");
+
+    assert_eq!(merge_into(repo, "ours", "theirs").status.code(), Some(0));
+    assert_eq!(
+        landing_lines(repo),
+        [base.clone(), ours.clone(), theirs.clone(), shared.clone()]
+    );
+    let into_ours = read_families(repo);
+    assert_eq!(read_record(&into_ours[0], "contrib_c"), &correction);
+    assert_eq!(read_record(&into_ours[0], "contrib_d"), &other);
+    assert_eq!(merge_into(repo, "theirs", "ours").status.code(), Some(0));
+    assert_eq!(landing_lines(repo), [base, theirs, ours, shared]);
+    assert_eq!(read_families(repo), into_ours);
+}
+
+#[test]
+#[verifies("rule_landing_batch_merge", examples)]
+fn a_batch_of_one_side_before_a_batch_that_the_two_sides_add_keeps_its_place() {
+    let landing = landing_repository();
+    let repo = landing.repo();
+    let base = land(&landing, "base");
+    commit(repo, "base");
+    git_ok(repo, &["checkout", "-b", "theirs"]);
+    let earlier = land_run(
+        &landing,
+        "earlier",
+        &[contribution("contrib_c", "Earlier finding of theirs.")],
+        None,
+    );
+    let correction = contribution("contrib_c", "Shared finding.");
+    let shared = land_run(&landing, "shared", std::slice::from_ref(&correction), None);
+    commit(repo, "theirs");
+    git_ok(repo, &["checkout", "-b", "ours", "main"]);
+    let again = land_run(&landing, "shared", std::slice::from_ref(&correction), None);
+    assert_eq!(again, shared);
+    commit(repo, "ours");
+
+    for into in ["ours", "theirs"] {
+        let from = if into == "ours" { "theirs" } else { "ours" };
+        assert_eq!(merge_into(repo, into, from).status.code(), Some(0));
+        assert_eq!(
+            landing_lines(repo),
+            [base.clone(), earlier.clone(), shared.clone()]
+        );
+        let reads = read_families(repo);
+        assert_eq!(read_record(&reads[0], "contrib_c"), &correction);
+    }
+}
+
+#[test]
 #[verifies("rule_record_merge", examples)]
+#[verifies("rule_landing_batch_merge_conflict", examples)]
 fn two_batches_that_add_one_proposal_differently_conflict_and_keep_ours() {
     let landing = landing_repository();
     let repo = landing.repo();
@@ -145,6 +213,17 @@ fn two_batches_that_add_one_proposal_differently_conflict_and_keep_ours() {
     assert_eq!(conflicts[0]["base"], Value::Null);
     assert_eq!(conflicts[0]["ours"]["title"], "Of ours");
     assert_eq!(conflicts[0]["theirs"]["title"], "Of theirs");
+    let check = |order: &str, side: &str| {
+        json!({"order": order, "side": side, "row": 2, "record_id": "proposals/proposal_p",
+            "check": "duplicate immutable proposal id proposal_p"})
+    };
+    assert_eq!(
+        outcome["failed_checks"],
+        json!([
+            check("ours_first", "theirs"),
+            check("theirs_first", "ours")
+        ])
+    );
     assert_eq!(landing_lines(repo), [base, ours]);
     let read = json(repo, &["api", "proposals"]);
     let proposal = read["data"]["items"]

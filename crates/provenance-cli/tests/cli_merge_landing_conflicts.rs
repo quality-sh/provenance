@@ -7,14 +7,18 @@ use provenance_macros::verifies;
 use serde_json::{json, Value};
 
 /// The next step that the text of each conflict of the landings file gives.
-const NEXT_STEP: &str = "Git keeps their version of the file as stage 3 of the path. To add \
-a contribution or a synthesis packet of theirs, land their swarm run again with `provenance \
-swarm-backtrace land --replace --run-dir <run>`, and then mark the path as resolved. A landing \
-cannot replace a proposal, an assertion or a disposition.";
+const NEXT_STEP: &str = "Git keeps their version of the file as stage 3 of the path. When a \
+batch of theirs comes from a swarm run, `provenance swarm-backtrace land --replace --run-dir \
+<run>` lands the run again, and each contribution and synthesis packet of the run then has the \
+record of theirs. The landing refuses the run when the file holds a proposal, an assertion or a \
+disposition with an id of the run, or when an assertion of the file cites a contribution or a \
+synthesis packet that the run changes. No command of Provenance replaces a proposal, an \
+assertion or a disposition that the file holds, or a contribution or a synthesis packet that an \
+assertion of the file cites. After the change, mark the path as resolved.";
 
 /// The first line of the text of each conflict of the landings file.
-const FIRST_LINE: &str = "the merge of the landing batches depends on the order of the two \
-sides, so the file holds the batches of our side";
+const FIRST_LINE: &str = "the merge of the landing batches has a conflict, so the file holds \
+the batches of our side";
 
 /// Merges `from` into a branch at `into`, and checks that the merge is a
 /// conflict that leaves the file of `into` as it is and a scope that passes
@@ -40,41 +44,60 @@ fn abort(landing: &Landing) {
 }
 
 /// The record ids of the batches of theirs that the outcome names as left
-/// out of the file, with the line of each batch in their file.
+/// out of the file, with the row of each batch in their file.
 fn left_out(outcome: &Value) -> Value {
     outcome.get("left_out").cloned().unwrap_or(Value::Null)
 }
 
 #[test]
 #[verifies("rule_landing_batch_merge_conflict", examples)]
-fn a_shared_batch_after_an_earlier_batch_of_one_side_conflicts_in_each_direction() {
+fn a_record_that_each_side_changes_differently_around_a_common_batch_conflicts() {
     let landing = landing_repository();
     let repo = landing.repo();
     land(&landing, "base");
     commit(repo, "base");
     git_ok(repo, &["checkout", "-b", "theirs"]);
-    let earlier = contribution("contrib_c", "Earlier finding of theirs.");
-    land_run(&landing, "earlier", &[earlier], None);
-    let shared = contribution("contrib_c", "Shared finding.");
-    let row = land_run(&landing, "shared", std::slice::from_ref(&shared), None);
+    let their_record = contribution("contrib_c", "Finding of theirs.");
+    land_run(
+        &landing,
+        "theirs",
+        std::slice::from_ref(&their_record),
+        None,
+    );
+    let shared = land(&landing, "shared");
     commit(repo, "theirs");
     git_ok(repo, &["checkout", "-b", "ours", "main"]);
-    assert_eq!(
-        land_run(&landing, "shared", std::slice::from_ref(&shared), None),
-        row
-    );
+    assert_eq!(land(&landing, "shared"), shared);
+    let our_record = contribution("contrib_c", "Finding of ours.");
+    land_run(&landing, "ours", std::slice::from_ref(&our_record), None);
     commit(repo, "ours");
 
-    for (into, from) in [("ours", "theirs"), ("theirs", "ours")] {
-        let (outcome, _) = conflict_keeps_ours(&landing, into, from);
+    for (into, from, row) in [("ours", "theirs", 2), ("theirs", "ours", 3)] {
+        let (outcome, stderr) = conflict_keeps_ours(&landing, into, from);
+        let (ours, theirs) = if into == "ours" {
+            (&our_record, &their_record)
+        } else {
+            (&their_record, &our_record)
+        };
         assert_eq!(
             outcome["conflicts"],
             json!([{"kind": "add_add", "record_id": "contributions/contrib_c",
-                "base": null, "ours": shared, "theirs": shared}]),
+                "base": null, "ours": ours, "theirs": theirs}]),
             "into {into}"
         );
+        assert_eq!(
+            left_out(&outcome),
+            json!([{"row": row, "record_ids": ["contributions/contrib_c"]}]),
+            "into {into}"
+        );
+        let text = format!(
+            "Error: {FIRST_LINE}\nrecords that the two sides change differently: \
+             contributions/contrib_c\nbatches of theirs that the file does not hold: row {row} \
+             of theirs: contributions/contrib_c\n{NEXT_STEP}\n"
+        );
+        assert_eq!(stderr, text, "into {into}");
         let read = json(repo, &["api", "contributions"]);
-        assert_eq!(read_record(&read["data"]["items"], "contrib_c"), &shared);
+        assert_eq!(read_record(&read["data"]["items"], "contrib_c"), ours);
         abort(&landing);
     }
 }
@@ -100,23 +123,23 @@ fn one_proposal_with_equal_content_in_two_different_batches_conflicts_in_each_di
         let (outcome, stderr) = conflict_keeps_ours(&landing, into, from);
         assert_eq!(outcome["conflicts"], json!([]), "into {into}");
         let check = |order: &str, side: &str| {
-            json!({"order": order, "side": side, "line": 2,
+            json!({"order": order, "side": side, "row": 2,
                 "record_id": "proposals/proposal_p",
                 "check": "duplicate immutable proposal id proposal_p"})
         };
         assert_eq!(
             outcome["failed_checks"],
             json!([
-                check("ours_then_theirs", "theirs"),
-                check("theirs_then_ours", "ours")
+                check("ours_first", "theirs"),
+                check("theirs_first", "ours")
             ]),
             "into {into}"
         );
         assert!(
             stderr.contains(
-                "checks that an order fails: line 2 of theirs in the order ours, theirs: \
-                 duplicate immutable proposal id proposal_p; line 2 of ours in the order \
-                 theirs, ours: duplicate immutable proposal id proposal_p"
+                "checks that the merged file fails: row 2 of theirs with our batches first: \
+                 duplicate immutable proposal id proposal_p; row 2 of ours with their batches \
+                 first: duplicate immutable proposal id proposal_p"
             ),
             "{stderr}"
         );
@@ -146,13 +169,13 @@ fn an_assertion_of_one_side_on_a_contribution_that_the_other_side_replaces_confl
     commit(repo, "ours");
 
     for (into, from, order, side) in [
-        ("ours", "theirs", "theirs_then_ours", "ours"),
-        ("theirs", "ours", "ours_then_theirs", "theirs"),
+        ("ours", "theirs", "theirs_first", "ours"),
+        ("theirs", "ours", "ours_first", "theirs"),
     ] {
         let (outcome, _) = conflict_keeps_ours(&landing, into, from);
         assert_eq!(
             outcome["failed_checks"],
-            json!([{"order": order, "side": side, "line": 2,
+            json!([{"order": order, "side": side, "row": 2,
                 "record_id": "contributions/contrib_c",
                 "check": "contribution contrib_c is referenced by an assertion and cannot be \
                     replaced"}]),
@@ -189,11 +212,11 @@ fn a_batch_of_theirs_with_one_conflicting_record_is_named_with_each_of_its_recor
     );
     assert_eq!(
         left_out(&outcome),
-        json!([{"line": 2, "record_ids": ["contributions/contrib_c", "contributions/contrib_d"]}])
+        json!([{"row": 2, "record_ids": ["contributions/contrib_c", "contributions/contrib_d"]}])
     );
     let text = format!(
-        "Error: {FIRST_LINE}\nrecords that the two orders read differently: \
-         contributions/contrib_c\nbatches of theirs that the file does not hold: line 2 of \
+        "Error: {FIRST_LINE}\nrecords that the two sides change differently: \
+         contributions/contrib_c\nbatches of theirs that the file does not hold: row 2 of \
          theirs: contributions/contrib_c, contributions/contrib_d\n{NEXT_STEP}\n"
     );
     assert_eq!(stderr, text);
@@ -206,7 +229,7 @@ fn a_batch_of_theirs_with_one_conflicting_record_is_named_with_each_of_its_recor
 
 #[test]
 #[verifies("rule_landing_batch_merge_conflict", examples)]
-fn the_next_step_of_the_conflict_text_adds_their_change() {
+fn the_next_step_of_the_conflict_text_lands_the_run_of_theirs_again() {
     let landing = landing_repository();
     let repo = landing.repo();
     land_run(
@@ -285,40 +308,63 @@ fn a_side_that_lands_a_base_batch_again_conflicts_with_a_change_of_the_other_sid
     );
     assert_eq!(
         left_out(&outcome),
-        json!([{"line": 2, "record_ids": ["contributions/contrib_c"]}])
+        json!([{"row": 2, "record_ids": ["contributions/contrib_c"]}])
     );
 }
 
+/// The product does not remove a batch, so this test is not bound to a
+/// Rule: it shows what the driver does with a side that a person edited.
 #[test]
-#[verifies("rule_landing_batch_merge_conflict", examples)]
-fn a_batch_that_one_side_removes_by_hand_conflicts_when_the_read_changes() {
+fn a_batch_of_the_base_that_one_side_removes_by_hand_is_a_conflict() {
     let landing = landing_repository();
     let repo = landing.repo();
     let kept = land(&landing, "kept");
-    let removed_record = contribution("contrib_removed", "The requirement holds.");
-    land_run(
-        &landing,
-        "removed",
-        std::slice::from_ref(&removed_record),
-        None,
-    );
+    land(&landing, "removed");
     commit(repo, "base");
     git_ok(repo, &["checkout", "-b", "theirs"]);
     land(&landing, "theirs");
     commit(repo, "theirs");
     git_ok(repo, &["checkout", "-b", "ours", "main"]);
-    // The product does not remove a batch, so this side removes it by hand.
     std::fs::write(landings(repo), format!("{kept}\n")).unwrap();
     commit(repo, "ours");
 
-    let (outcome, _) = conflict_keeps_ours(&landing, "ours", "theirs");
-    assert_eq!(
-        outcome["conflicts"],
-        json!([{"kind": "delete_modify", "record_id": "contributions/contrib_removed",
-            "base": removed_record, "ours": null, "theirs": removed_record}])
-    );
+    let (outcome, stderr) = conflict_keeps_ours(&landing, "ours", "theirs");
+    assert_eq!(outcome["conflicts"], json!([]));
+    assert_eq!(outcome["sequence"], json!({"ours": null, "theirs": 2}));
     assert_eq!(
         left_out(&outcome),
-        json!([{"line": 3, "record_ids": ["contributions/contrib_theirs"]}])
+        json!([
+            {"row": 2, "record_ids": ["contributions/contrib_removed"]},
+            {"row": 3, "record_ids": ["contributions/contrib_theirs"]}
+        ])
     );
+    assert!(
+        stderr.contains(
+            "common batches that the two sides hold in different sequences, from the end of \
+             ours and row 2 of theirs"
+        ),
+        "{stderr}"
+    );
+}
+
+#[test]
+#[verifies("rule_landing_batch_merge_conflict", examples)]
+fn common_batches_in_different_sequences_conflict() {
+    let landing = landing_repository();
+    let repo = landing.repo();
+    land(&landing, "base");
+    commit(repo, "base");
+    git_ok(repo, &["checkout", "-b", "theirs"]);
+    let first = land(&landing, "first");
+    let second = land(&landing, "second");
+    commit(repo, "theirs");
+    git_ok(repo, &["checkout", "-b", "ours", "main"]);
+    assert_eq!(land(&landing, "second"), second);
+    assert_eq!(land(&landing, "first"), first);
+    commit(repo, "ours");
+
+    let (outcome, _) = conflict_keeps_ours(&landing, "ours", "theirs");
+    assert_eq!(outcome["conflicts"], json!([]));
+    assert_eq!(outcome["sequence"], json!({"ours": 2, "theirs": 2}));
+    assert_eq!(left_out(&outcome), Value::Null);
 }
