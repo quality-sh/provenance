@@ -219,10 +219,7 @@ fn two_batches_that_add_one_proposal_differently_conflict_and_keep_ours() {
     };
     assert_eq!(
         outcome["failed_checks"],
-        json!([
-            check("ours_first", "theirs"),
-            check("theirs_first", "ours")
-        ])
+        json!([check("ours_first", "theirs"), check("theirs_first", "ours")])
     );
     assert_eq!(landing_lines(repo), [base, ours]);
     let read = json(repo, &["api", "proposals"]);

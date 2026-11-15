@@ -83,7 +83,10 @@ pub(super) fn conflict_text(
     }
     if let Some(sequence) = sequence {
         let place = |row: Option<usize>, side: &str| {
-            row.map_or_else(|| format!("the end of {side}"), |row| format!("row {row} of {side}"))
+            row.map_or_else(
+                || format!("the end of {side}"),
+                |row| format!("row {row} of {side}"),
+            )
         };
         lines.push(format!(
             "common batches that the two sides hold in different sequences, from {} and {}",

@@ -129,10 +129,7 @@ fn one_proposal_with_equal_content_in_two_different_batches_conflicts_in_each_di
         };
         assert_eq!(
             outcome["failed_checks"],
-            json!([
-                check("ours_first", "theirs"),
-                check("theirs_first", "ours")
-            ]),
+            json!([check("ours_first", "theirs"), check("theirs_first", "ours")]),
             "into {into}"
         );
         assert!(

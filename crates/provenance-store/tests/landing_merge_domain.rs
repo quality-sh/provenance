@@ -155,9 +155,11 @@ fn merge(reads: &mut Reads, base: &[Value], ours: &[Value], theirs: &[Value]) ->
                 unreachable!()
             };
             assert_eq!(partial, ours);
-            let rows: Vec<_> = report["left_out"].as_array().map_or_else(Vec::new, |left_out| {
-                left_out.iter().map(|batch| batch["row"].clone()).collect()
-            });
+            let rows: Vec<_> = report["left_out"]
+                .as_array()
+                .map_or_else(Vec::new, |left_out| {
+                    left_out.iter().map(|batch| batch["row"].clone()).collect()
+                });
             let held_by_ours = common_rows(&[], theirs, ours);
             let only_theirs: Vec<_> = (1..=theirs.len())
                 .filter(|row| !held_by_ours[row - 1])
@@ -212,6 +214,9 @@ fn each_history_of_a_small_domain_merges_as_the_record_rule_gives_in_each_direct
             clean += usize::from(matches!(into_ours, Merged::Clean(_)));
         }
     }
-    println!("histories {histories}, clean {clean}, conflicts {}", histories - clean);
+    println!(
+        "histories {histories}, clean {clean}, conflicts {}",
+        histories - clean
+    );
     assert_eq!((histories, clean), (24_336, 10_618));
 }
