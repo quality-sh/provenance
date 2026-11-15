@@ -132,7 +132,11 @@ the claim, and the temporary file stays, but no read sees it. One stops the
 claim when its temporary file goes, and the stop must land after the
 rename; after a read, only the Topic key changed. One stops each kind of
 write that the simulation sends at its first point: a write of two keys
-must stop before the marker, and a write of one key before the rename.
+must stop before the marker, and a write of one key before the rename. On
+macOS the rename of a one-key write can occur after the test saw its
+temporary file and before the kill lands: the probe before the rename does
+not run there, and the probe of each kind also accepts a stop after the
+rename.
 
 ## When a failure issue opens
 

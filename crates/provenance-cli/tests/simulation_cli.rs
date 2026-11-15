@@ -148,7 +148,10 @@ fn stop_probe(stopped: Operation, at: u8, landing: Landing) {
     let marker = fixture.repo.layout.publication_marker_path();
     assert!(!marker.exists(), "the read after the stop left the marker");
     let after = state_entries(&root).expect("the state reads after the stop");
-    let before = landed.before.clone().expect("the state read before the write");
+    let before = landed
+        .before
+        .clone()
+        .expect("the state read before the write");
     let changed: BTreeSet<_> = before
         .keys()
         .chain(after.keys())
@@ -198,7 +201,9 @@ fn a_merged_branch_and_a_stop_after_the_marker_keep_the_laws() {
 
 // No Rule: a probe of the nightly simulation. It runs `stop_probe` on a
 // claim, a write of one key, with the stop when its temporary file appears,
-// which must land before the rename.
+// which must land before the rename. Not on macOS: there the rename can
+// occur after the test saw the temporary file and before the kill lands.
+#[cfg(not(target_os = "macos"))]
 #[test]
 #[ignore = "a probe of the nightly simulation"]
 fn a_merged_branch_and_a_stop_before_the_rename_keep_the_laws() {
@@ -217,7 +222,9 @@ fn a_merged_branch_and_a_stop_after_the_rename_keep_the_laws() {
 // No Rule: a probe that each kind of write that the simulation sends
 // publishes through a transaction or a temporary file: a stop at the first
 // point kills each kind before its answer, a write of two keys before the
-// marker and a write of one key before the rename.
+// marker and a write of one key before the rename. On macOS the rename can
+// occur after the test saw the temporary file and before the kill lands, so
+// a write of one key can also stop after the rename.
 #[test]
 #[ignore = "a probe of the nightly simulation"]
 fn a_stop_at_the_first_point_kills_each_kind_of_write() {
@@ -266,13 +273,17 @@ fn a_stop_at_the_first_point_kills_each_kind_of_write() {
             _ => None,
         })
         .collect();
-    let two_keys = Some(Landing::BeforeMarker);
-    let one_key = Some(Landing::BeforeRename);
+    let one_key: &[Landing] = if cfg!(target_os = "macos") {
+        &[Landing::BeforeRename, Landing::AfterRename]
+    } else {
+        &[Landing::BeforeRename]
+    };
+    let first_point = landings.len() == kinds.len()
+        && landings[..2] == [Some(Landing::BeforeMarker); 2]
+        && landings[2..]
+            .iter()
+            .all(|landing| landing.is_some_and(|landing| one_key.contains(&landing)));
     let rows: Vec<_> = run.stops.iter().map(Stop::row).collect();
-    assert_eq!(
-        landings,
-        [two_keys, two_keys, one_key, one_key, one_key, one_key],
-        "a stop did not land at the first point of its write: {rows:?}"
-    );
+    assert!(first_point, "a stop did not land at the first point of its write: {rows:?}");
     report::probe_laws(&layer(), check(&case, &run));
 }
