@@ -123,7 +123,10 @@ fn older_manifest(repo: &Path) -> (u64, String) {
     let mut manifest: Value = serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
     manifest["disposition_actor_ids"] = json!("reviewer");
     let text = serde_json::to_string_pretty(&manifest).unwrap();
-    assert!(text.starts_with("{\n  \"disposition_actor_ids\": \"reviewer\","), "{text}");
+    assert!(
+        text.starts_with("{\n  \"disposition_actor_ids\": \"reviewer\","),
+        "{text}"
+    );
     std::fs::write(&path, text + "\n").unwrap();
     let message = "invalid type: string \"reviewer\", expected a sequence";
     (2, message.to_owned())

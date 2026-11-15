@@ -313,7 +313,6 @@ fn read_manifest(layout: &ProvenanceLayout) -> anyhow::Result<Option<Manifest>> 
         .transpose()
 }
 
-
 mod apply;
 
 #[cfg(test)]
