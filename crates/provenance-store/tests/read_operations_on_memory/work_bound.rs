@@ -9,6 +9,7 @@
 //! operations declare it.
 
 use crate::{context, handles_over, read};
+use provenance_macros::verifies;
 use provenance_store::cache::catch_up_in_publish;
 use provenance_store::operations::catalog::{
     frame_failure, invoke_authorized_typed, ContextKind, ContextResolver, Operation,
@@ -106,6 +107,7 @@ fn refusal() -> Value {
 /// Each family page past its work bound answers the page budget refusal
 /// through its public operation.
 #[tokio::test]
+#[verifies("rule_query_pages_bound_shared_reads", examples)]
 async fn each_family_page_past_its_work_bound_refuses_with_the_page_budget() {
     let (_root, repository) = repository().await;
     let page = json!({});
@@ -184,6 +186,7 @@ async fn each_family_page_past_its_work_bound_refuses_with_the_page_budget() {
 /// Each page of the read operations port past its work bound answers the
 /// page budget refusal, as `read-document` does.
 #[tokio::test]
+#[verifies("rule_query_pages_bound_shared_reads", examples)]
 async fn each_port_page_past_its_work_bound_refuses_with_the_page_budget() {
     let (_root, repository) = repository().await;
     let pages: Vec<_> = READ_OPERATIONS
