@@ -17,17 +17,14 @@
 
 use super::history::{assert_pinned, fixture, memory_repository, MemoryReads};
 use crate::history_cases::{answers, run, CASES, ENTRY};
-use crate::history_fixture::{Tree, STATE};
-use provenance_store::review::history::contract::{Commit, MemoryFileVersions};
+use crate::history_long::{long_history, long_name, LONG};
+use provenance_store::review::history::contract::MemoryFileVersions;
 use provenance_store::review::history::{BoxFuture, FileVersion, FileVersions};
-use serde_json::{json, Value};
+use serde_json::json;
 use std::sync::Arc;
 
 /// The checked answers of the edges.
 const PINNED: &str = include_str!("../fixtures/history_edges.json");
-
-/// The commits of the long history.
-const LONG: i64 = 205;
 
 /// File versions that list the commits of `held` but do not hold the
 /// commit `missing`: its text is `None` at each path.
@@ -55,44 +52,6 @@ impl FileVersions for Missing {
         }
         self.held.text(path, commit)
     }
-}
-
-/// The name of commit `index` of the long history.
-fn long_name(index: i64) -> String {
-    format!("edit_{index:03}")
-}
-
-/// `LONG` commits, each the child of the one before, that each give
-/// `req_a` in the Requirement file of `default` in `working` a new
-/// statement.
-fn long_history(working: &Tree) -> Vec<Commit> {
-    let path = working
-        .keys()
-        .find(|path| path.starts_with(&format!("{STATE}scopes/default/requirements/")))
-        .expect("a Requirement file in default");
-    let text = String::from_utf8(working[path].clone()).unwrap();
-    (0..LONG)
-        .map(|index| {
-            let mut file = String::new();
-            for line in text.lines() {
-                let mut record: Value = serde_json::from_str(line).unwrap();
-                if record["id"] == json!("req_a") {
-                    record["statement"] = json!(format!("Edit {index} of the statement."));
-                }
-                file.push_str(&serde_json::to_string(&record).unwrap());
-                file.push('\n');
-            }
-            let parent = (index > 0).then(|| long_name(index - 1));
-            let parents: Vec<&str> = parent.iter().map(String::as_str).collect();
-            Commit::new(
-                &long_name(index),
-                &parents,
-                "Reviewer",
-                1_700_000_000 + 60 * index,
-            )
-            .with_file(path, &file)
-        })
-        .collect()
 }
 
 #[tokio::test]

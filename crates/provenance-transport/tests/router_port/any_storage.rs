@@ -141,7 +141,7 @@ async fn the_router_over_memory_storage_answers_as_over_a_folder() {
 /// copy of `history`, at the working tree `root`, with the history
 /// contract's memory adapter of the commits of `folder`, under their Git
 /// ids.
-async fn history_in_memory(
+pub async fn history_in_memory(
     history: &History,
     folder: &Folder,
     root: &Utf8Path,

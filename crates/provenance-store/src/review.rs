@@ -57,6 +57,7 @@ fn owner_matches(record: &impl serde::Serialize, owner: Option<&str>) -> anyhow:
 // port, and the working copy through the storage.
 pub mod history;
 mod reads;
+pub(crate) use reads::read_history_entry;
 pub use reads::{read_evidence, read_history};
 
 #[cfg(test)]
