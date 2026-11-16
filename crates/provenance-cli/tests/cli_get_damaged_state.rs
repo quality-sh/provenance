@@ -63,7 +63,7 @@ async fn mcp_refusal(server: &Server, tool: &str, arguments: Value) -> Value {
 
 /// An update of the Rule with the guard `etag` refuses with `by_cli` on the CLI and with
 /// `by_mcp` on MCP.
-async fn assert_update_refused(
+pub(crate) async fn assert_update_refused(
     server: &Server,
     repo: &str,
     etag: &str,
@@ -87,7 +87,12 @@ async fn assert_update_refused(
 /// The get of the Rule over damaged state, on each interface: the record at the stored
 /// serial with the freshness warning `warning`, and otherwise the answer of `clean`, the
 /// JSON and text of the get before the damage.
-async fn assert_stored_record(server: &Server, repo: &str, clean: &(Value, String), warning: &str) {
+pub(crate) async fn assert_stored_record(
+    server: &Server,
+    repo: &str,
+    clean: &(Value, String),
+    warning: &str,
+) {
     let by_cli = cli_json(repo, &[RULE, "get"]);
     let mut expected = clean.0.clone();
     expected["record_metadata"]["freshness_error"] = json!(warning);
@@ -123,7 +128,7 @@ async fn assert_stored_record(server: &Server, repo: &str, clean: &(Value, Strin
 }
 
 /// The JSON and the text of the get of the Rule.
-fn clean_get(repo: &str) -> (Value, String) {
+pub(crate) fn clean_get(repo: &str) -> (Value, String) {
     let text = cli(&[RULE, "get", "--repo", repo]);
     (cli_json(repo, &[RULE, "get"]), text)
 }
