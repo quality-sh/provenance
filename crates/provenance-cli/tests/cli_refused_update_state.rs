@@ -109,15 +109,15 @@ fn get(repo: &str, id: &str) -> Value {
     serde_json::from_slice(&output.stdout).unwrap()
 }
 
-/// Reads the ETag of `id`, changes its description, and then runs
-/// `<id> update <flag> <target> --if-match <ETag of the read>`. Checks that
-/// the stale guard wins over the missing target and that no state file
-/// changes.
-fn assert_stale_guard_wins(id: &str, record_kind: &str, flag: &str, target: &str) {
+/// Reads the ETag of `id`, changes the text field `change` of the record, and
+/// then runs `<id> update <flag> <target> --if-match <ETag of the read>`.
+/// Checks that the stale guard wins over the missing target and that no state
+/// file changes.
+fn assert_stale_guard_wins(id: &str, record_kind: &str, change: &str, flag: &str, target: &str) {
     let (directory, repo) = records();
     let stale = get(&repo, id)["edit"]["etag"].as_str().unwrap().to_owned();
     provenance()
-        .args([id, "update", "--description", "Changed.", "--repo", &repo])
+        .args([id, "update", change, "Changed.", "--repo", &repo])
         .assert()
         .success();
     let current = get(&repo, id)["edit"]["etag"].as_str().unwrap().to_owned();
@@ -132,6 +132,8 @@ fn assert_stale_guard_wins(id: &str, record_kind: &str, flag: &str, target: &str
             target,
             "--if-match",
             &stale,
+            "--format",
+            "json",
             "--repo",
             &repo,
         ])
@@ -139,10 +141,7 @@ fn assert_stale_guard_wins(id: &str, record_kind: &str, flag: &str, target: &str
         .unwrap();
 
     let stderr = String::from_utf8_lossy(&output.stderr).into_owned();
-    let refusal = stderr
-        .strip_prefix("Error: ")
-        .and_then(|text| text.strip_suffix('\n'))
-        .map(|text| serde_json::from_str::<Value>(text).unwrap());
+    let refusal = serde_json::from_str::<Value>(&stderr).ok();
     let hint = format!("run `provenance {id} --view review --scope default --repo {repo}`");
     assert_eq!(
         (
@@ -167,15 +166,27 @@ fn assert_stale_guard_wins(id: &str, record_kind: &str, flag: &str, target: &str
 
 #[test]
 fn a_stale_guard_wins_over_a_missing_requirement_of_a_resolution_update() {
-    assert_stale_guard_wins("res_a", "resolution", "--requirement-ids", "req_missing");
+    assert_stale_guard_wins(
+        "res_a",
+        "resolution",
+        "--title",
+        "--requirement-ids",
+        "req_missing",
+    );
 }
 
 #[test]
 fn a_stale_guard_wins_over_a_missing_resolution_of_a_rule_update() {
-    assert_stale_guard_wins("rule_a", "rule", "--resolution-ids", "res_missing");
+    assert_stale_guard_wins(
+        "rule_a",
+        "rule",
+        "--description",
+        "--resolution-ids",
+        "res_missing",
+    );
 }
 
 #[test]
 fn a_stale_guard_wins_over_a_missing_source_of_a_source_update() {
-    assert_stale_guard_wins("src_a", "source", "--supersedes", "src_missing");
+    assert_stale_guard_wins("src_a", "source", "--name", "--supersedes", "src_missing");
 }

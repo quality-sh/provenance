@@ -75,13 +75,13 @@ impl NativeRecordBatch<'_> {
             let result = mutate(held, records)?;
             Ok((result.clone(), Some(result.id().clone())))
         })?;
-        let changed = !changes.is_empty();
+        let any_change = !changes.is_empty();
         let record = changes
             .into_iter()
             .map(|(_, after)| after)
             .find(|record| record.id() == result.id())
             .unwrap_or(result);
-        Ok((record, changed))
+        Ok((record, any_change))
     }
 
     pub(crate) fn mutate_all<T: GraphRecord>(
