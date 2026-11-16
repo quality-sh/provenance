@@ -18,7 +18,7 @@ mod preservation;
 
 #[cfg(feature = "host")]
 pub(crate) use line::without_terminator;
-pub(crate) use line::{ensure_no_legacy_retirement, numbered_lines, record_of_line};
+pub(crate) use line::{numbered_lines, record_line_value, record_of_line, untyped_line_value};
 #[cfg(feature = "host")]
 pub(crate) use preservation::Carried;
 use preservation::{LoadedRecords, RawRecord};
