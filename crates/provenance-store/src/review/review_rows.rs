@@ -220,6 +220,14 @@ impl StateStore {
             .any(|(proposal, _)| is_review_submission(proposal)))
     }
 
+    /// Refuses, at its line, a withdrawal of `scope` that names no review
+    /// submission: the fault that stops each read of the review state of the
+    /// scope. The cache catch-up and rebuild run this check, so that the
+    /// read database holds no review rows that the review read refuses.
+    pub(crate) fn validate_review_scope(&self, scope: &ScopeId) -> anyhow::Result<()> {
+        StoredRows::read(self, scope)?.facts().map(drop)
+    }
+
     /// The review submission with this ID, as [`CycleFacts::submission`]
     /// gives it, from one read of the review rows of `scope`.
     pub(crate) fn stored_review_submission(
