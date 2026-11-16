@@ -4,9 +4,7 @@
 
 use serde_json::{json, Value};
 
-mod support {
-    pub mod review_paths;
-}
+use crate::support;
 use support::review_paths::{create_requirement, json_output, provenance};
 
 const REQUIREMENTS: &str = ".provenance/state/scopes/default/requirements/req.jsonl";
@@ -153,23 +151,12 @@ fn a_new_link_to_an_archived_parent_keeps_its_reason() {
     let (_directory, repo) = support::review_paths::init();
     create_requirement(&repo, "req_old");
     create_requirement(&repo, "req_child");
-    let guard = etag(&repo, "req_old");
-    json_output(provenance().args([
-        "req_old",
-        "update",
-        "--if-match",
-        &guard,
-        "--repo",
+    // The archive is a status request: the reviewer accepts it.
+    support::record_review::archive_requirement(
         &repo,
-        "--actor",
-        "author",
-        "--status",
-        "archived",
-        "--archived-in-commit-json",
-        r#"{"commit":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}"#,
-        "--format",
-        "json",
-    ]));
+        "req_old",
+        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    );
     let guard = etag(&repo, "req_child");
     let mut rows = Vec::new();
     both(
@@ -211,17 +198,48 @@ fn a_new_link_to_an_archived_parent_keeps_its_reason() {
     );
 }
 
-/// A line that is not a record in the Requirement shard.
+/// The exit code, the standard output and the standard error of a get of
+/// `req_a` with `flags`.
+fn get(repo: &str, flags: &[&str]) -> (Option<i32>, String, String) {
+    let output = provenance()
+        .args(["req_a", "get", "--repo", repo])
+        .args(flags)
+        .output()
+        .unwrap();
+    let text = |bytes: Vec<u8>| String::from_utf8(bytes).unwrap();
+    (
+        output.status.code(),
+        text(output.stdout),
+        text(output.stderr),
+    )
+}
+
+/// A line that is not a record in the Requirement shard. A get gives the
+/// record at the stored serial with the freshness warning, and a create
+/// refuses with the line.
 #[test]
-fn a_bad_state_line_keeps_its_exit_code_and_lines() {
+fn a_bad_state_line_gives_the_stored_record_and_refuses_a_create() {
     let (directory, repo) = support::review_paths::init();
     create_requirement(&repo, "req_a");
+    let json = ["--format", "json"];
+    let (_, text, _) = get(&repo, &[]);
+    let (_, record, _) = get(&repo, &json);
     let path = directory.path().join(REQUIREMENTS);
-    let mut text = std::fs::read_to_string(&path).unwrap();
-    text.push_str("{\"not\":\"a record\"}\n");
-    std::fs::write(&path, text).unwrap();
+    let mut state = std::fs::read_to_string(&path).unwrap();
+    state.push_str("{\"not\":\"a record\"}\n");
+    std::fs::write(&path, state).unwrap();
+
+    let warning = "scopes/default/requirements/req.jsonl line 2: missing field `scope_id`";
+    let text = format!("{text}\nwarning: record freshness: {warning}\n");
+    assert_eq!(get(&repo, &[]), (Some(0), text, String::new()));
+    let mut expected: Value = serde_json::from_str(&record).unwrap();
+    expected["record_metadata"]["freshness_error"] = json!(warning);
+    expected["record_metadata"]["stamp"]["policy"] = json!("catch_up_failed");
+    let (code, record, stderr) = get(&repo, &json);
+    let record: Value = serde_json::from_str(&record).unwrap();
+    assert_eq!((code, record, stderr), (Some(0), expected, String::new()));
+
     let mut rows = Vec::new();
-    both(&mut rows, &repo, &["req_a", "get"]);
     both(
         &mut rows,
         &repo,
@@ -237,24 +255,6 @@ fn a_bad_state_line_keeps_its_exit_code_and_lines() {
     assert_rows(
         &rows,
         &json!([
-            {
-                "code": 1,
-                "command": "req_a get",
-                "format": "text",
-                "stderr": [
-                    "Error: {\"error\":{\"file\":\"scopes/default/requirements/req.jsonl\",\"kind\":\"invalid_state_file\",\"line\":2,\"message\":\"missing field `scope_id`\"},\"meta\":{}}"
-                ],
-                "stdout_empty": true
-            },
-            {
-                "code": 1,
-                "command": "req_a get",
-                "format": "json",
-                "stderr": [
-                    "{\"error\":{\"file\":\"scopes/default/requirements/req.jsonl\",\"kind\":\"invalid_state_file\",\"line\":2,\"message\":\"missing field `scope_id`\"},\"meta\":{}}"
-                ],
-                "stdout_empty": true
-            },
             {
                 "code": 1,
                 "command": "req_b create",
@@ -340,11 +340,11 @@ fn api_create_with_source_refs_names_the_unknown_field() {
     );
 }
 
-/// `get` on a Withdrawal that names no review submission gives the
-/// file and the line of the Withdrawal.
+/// The `api` read of the record of a Withdrawal that names no review
+/// submission gives the file and the line of the Withdrawal.
 #[test]
 #[provenance_macros::verifies("rule_inconsistent_records_refusal_names_records", examples)]
-fn get_names_the_line_of_a_withdrawal_that_names_no_submission() {
+fn a_read_names_the_line_of_a_withdrawal_that_names_no_submission() {
     let (directory, repo) = support::review_paths::init();
     create_requirement(&repo, "req_a");
     let path = directory
@@ -355,13 +355,13 @@ fn get_names_the_line_of_a_withdrawal_that_names_no_submission() {
         "proposal_id":"proposal_missing","actor":"reviewer","reason":null});
     std::fs::write(&path, format!("{withdrawal}\n")).unwrap();
     assert_rows(
-        &[answer(&repo, &["req_a", "get"], "json")],
+        &[answer(&repo, &["api", "requirements/req_a"], "json")],
         &json!([{
             "code": 1,
-            "command": "req_a get",
+            "command": "api requirements/req_a",
             "format": "json",
             "stderr": [
-                "{\"error\":{\"file\":\"scopes/default/ideation/withdrawals.jsonl\",\"kind\":\"invalid_state_file\",\"line\":1,\"message\":\"withdrawal withdrawal_lost names no review submission: proposal_missing\"},\"meta\":{}}"
+                "Error: {\"error\":{\"file\":\"scopes/default/ideation/withdrawals.jsonl\",\"kind\":\"invalid_state_file\",\"line\":1,\"message\":\"withdrawal withdrawal_lost names no review submission: proposal_missing. To repair, remove ideation/withdrawals.jsonl line 1, then commit.\"},\"meta\":{}}"
             ],
             "stdout_empty": true
         }]),

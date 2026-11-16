@@ -2,13 +2,7 @@
 //! it names a definition that the same schema holds.
 #![cfg(feature = "test-fixture")]
 
-#[allow(dead_code)]
-mod support {
-    #[path = "../../../provenance-transport/tests/support/check_port.rs"]
-    pub mod check_port;
-    #[path = "../../../provenance-transport/tests/support/records.rs"]
-    pub mod records;
-}
+use crate::support;
 
 use provenance_transport::{
     fixture::{FixtureAccess, Target},

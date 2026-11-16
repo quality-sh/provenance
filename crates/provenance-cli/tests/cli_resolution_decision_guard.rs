@@ -1,12 +1,12 @@
 //! Regression tests for provenance-ps18. No matching Rule exists in the graph.
-#[path = "shaping_support/fixtures.rs"]
-mod fixtures;
-#[path = "shaping_support/provenance.rs"]
-mod provenance;
+use crate::fixtures;
+use crate::provenance;
 
 use fixtures::{create_source_and_requirement, create_topic, init};
 use predicates::str::contains;
 use provenance::{provenance, provenance_stdin};
+
+use crate::support::record_review::accept_status_request;
 
 fn setup() -> tempfile::TempDir {
     let dir = tempfile::tempdir().unwrap();
@@ -422,6 +422,7 @@ fn cli_resolution_cannot_lose_approval_while_it_produces_an_active_rule() {
     )
     .success();
     provenance_stdin(&["rule_code_scores_health", "create", "--type", "rule", "--stdin", "--repo", repo, "--scope", "default"], r#"{"statement":"Code scores affect health.","status":"active","severity":"high","requirement_ids":["req_overtime"],"resolution_ids":["res_code_scores_health"]}"#).success();
+    accept_status_request(repo, "rules", "rule", "rule_code_scores_health");
     edit(
         repo,
         "resolutions",

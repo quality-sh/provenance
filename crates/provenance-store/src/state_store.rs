@@ -1,6 +1,8 @@
 mod access;
 mod archive_history;
 mod canonical_artifacts;
+#[cfg(feature = "host")]
+mod failure_text;
 mod family_readers;
 mod graph_validation;
 mod ideation_batches;
@@ -10,6 +12,7 @@ mod ideation_validation;
 mod ideation_writers;
 mod immutable_ids;
 mod implementation_bindings;
+mod import_reviews;
 mod inputs;
 mod live_parents;
 pub(crate) mod message_ids;
@@ -23,6 +26,7 @@ mod reference_methods;
 mod reference_writers;
 mod requirement_reviews;
 mod resolution_decisions;
+mod review_rows_once;
 mod rule_writers;
 mod scope_ingestion;
 pub(crate) use read_fence::FencedStore;
@@ -59,23 +63,20 @@ pub use inputs::{
     CreateAssertionInput, CreateContributionInput, CreateDispositionInput, CreateProposalCardInput,
     CreateQuestionInput, CreateRequirementInput, CreateResolutionInput, CreateRuleInput,
     CreateSourceInput, CreateSynthesisPacketInput, CreateTopicInput, DeclarationReferenceInput,
-    MaterializeImplementationBindingInput, MaterializeVerificationBindingInput, PostMessageInput,
-    ReconcileState, ReconciledResource, TypedAdoptionTarget, TypedDeclarationKind,
-    TypedFieldChange, TypedImplementationInput, TypedRequirementInput, TypedResourceKind,
-    TypedRuleInput, TypedSourceInput, TypedSpecDiagnostic, TypedSpecInput, TypedSpecResult,
-    UpdateQuestionInput,
+    DeletionRefusal, MaterializeImplementationBindingInput, MaterializeVerificationBindingInput,
+    PostMessageInput, ReconcileState, ReconciledResource, TypedAdoptionTarget,
+    TypedDeclarationKind, TypedFieldChange, TypedImplementationInput, TypedRequirementInput,
+    TypedResourceKind, TypedRuleInput, TypedSourceInput, TypedSpecDiagnostic, TypedSpecInput,
+    TypedSpecResult, UpdateQuestionInput,
 };
 pub use proposal_surfaces::{ProposalDemand, ProposalSurfaceReason, SurfacedProposal, TopicClaim};
-pub use requirement_reviews::{
-    requirement_statement_changes, RequirementReviewInput, RequirementStatementChange,
-};
+pub use requirement_reviews::{requirement_statement_changes, RequirementStatementChange};
 pub use scope_ingestion::ScopeShards;
 pub(crate) use statement_policy::StatementWriteError;
-pub use typed_specs::{decide_typed_spec, TypedSpecDecision, TypedSpecView};
+pub use typed_specs::{decide_typed_spec, ReviewHistory, TypedSpecDecision, TypedSpecView};
 pub use typed_statement_policy::TypedSpecWriteError;
 
-use crate::{layout::ProvenanceLayout, repository::RepositoryIdentity, shards};
-use ideation_batches::overlay_records;
+use crate::{layout::ProvenanceLayout, repository::RepositoryIdentity};
 use provenance_core::{
     ensure_record_id_assignable, AssertionRecord, Contribution, DispositionRecord,
     ImplementationBinding, Manifest, Message, ProposalCard, ScopeId, SynthesisPacket, Thread,
@@ -104,18 +105,28 @@ impl StateStore {
 
     /// The committed file versions that the history reads of this store
     /// read: the ones that the repository was given, or else the Git
-    /// history of the layout root.
-    #[cfg(feature = "host")]
+    /// history of the layout root. Without `host` a repository that was
+    /// given none has no committed history, as a layout root that is not a
+    /// Git work tree has none, so its history lists the saved version only.
     pub(crate) fn file_versions(&self) -> std::sync::Arc<dyn crate::review::history::FileVersions> {
-        self.identity
+        let given = self
+            .identity
             .as_ref()
             .and_then(RepositoryIdentity::file_versions)
-            .cloned()
-            .unwrap_or_else(|| {
+            .cloned();
+        #[cfg(feature = "host")]
+        let git = || {
+            Some(
                 std::sync::Arc::new(crate::review::history::GitFileVersions::new(
                     self.layout.root().to_owned(),
-                ))
-            })
+                )) as _,
+            )
+        };
+        #[cfg(not(feature = "host"))]
+        let git = || None;
+        given
+            .or_else(git)
+            .unwrap_or_else(|| std::sync::Arc::new(crate::review::history::NoFileVersions) as _)
     }
 
     /// The clock that the writes of this store read: the one of the
@@ -167,7 +178,7 @@ fn ensure_new_ids_assignable<T>(
     }
     Ok(())
 }
-use readers::{read_ideation_landings, read_jsonl_held, read_message_shards_held};
+use readers::{read_jsonl_held, read_message_shards_held};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug)]
@@ -253,6 +264,8 @@ enum Storage {
     },
 }
 
+/// The records of one swarm run. A landing writes each record to the state
+/// file of its kind.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct IdeationLandingBatch {
     #[serde(default)]
@@ -317,23 +330,6 @@ impl StateStore {
             .into_iter()
             .collect())
     }
-    fn list_contributions_after_direct_read(
-        &self,
-        scope: &ScopeId,
-        after_direct_read: impl FnOnce() -> anyhow::Result<()>,
-    ) -> anyhow::Result<Vec<Contribution>> {
-        self.with_repository_read(|held| {
-            let mut records = shared_parses::read_jsonl_shared(
-                held,
-                &shards::contributions_path(&held.layout, scope),
-            )?;
-            after_direct_read()?;
-            for batch in held.list_ideation_landings(scope)? {
-                overlay_records(&mut records, batch.contributions);
-            }
-            Ok(records)
-        })
-    }
     pub fn list_proposal_cards_with_actor_ids(
         &self,
         scope: &ScopeId,
@@ -368,14 +364,35 @@ impl StateStore {
         self.with_repository_read(|held| {
             let assertions = held.list_assertion_records(scope)?;
             let dispositions = held.list_dispositions(scope)?;
-            Ok(held
-                .list_proposal_definitions(scope)?
-                .into_iter()
-                .map(|mut proposal| {
+            let proposals = held.list_proposal_definitions(scope)?;
+            let withdrawals = held.list_withdrawals(scope)?;
+            let reading = provenance_core::review::read_review_rows(
+                provenance_core::review::StoredReviewRows {
+                    proposals: &proposals,
+                    dispositions: &dispositions,
+                    withdrawals: &withdrawals,
+                },
+            );
+            // A review submission takes its state from the result of its
+            // decisions only when its rows agree; else it keeps its stored
+            // state.
+            let decided = |proposal: &ProposalCard| {
+                !reading.is_submission(&proposal.id)
+                    || reading.agreed_decision(&proposal.id).is_some()
+            };
+            Ok(proposals
+                .iter()
+                .map(|proposal| {
+                    let mut proposal = proposal.clone();
+                    let decisions = if decided(&proposal) {
+                        dispositions.as_slice()
+                    } else {
+                        &[]
+                    };
                     proposal.promotion_state = provenance_core::effective_proposal_state(
                         &proposal,
                         &assertions,
-                        &dispositions,
+                        decisions,
                     );
                     proposal
                 })
@@ -383,16 +400,7 @@ impl StateStore {
         })
     }
     pub fn list_proposal_definitions(&self, scope: &ScopeId) -> anyhow::Result<Vec<ProposalCard>> {
-        self.with_repository_read(|held| {
-            let mut records = shared_parses::read_jsonl_shared(
-                held,
-                &shards::proposal_cards_path(&held.layout, scope),
-            )?;
-            for batch in held.list_ideation_landings(scope)? {
-                overlay_records(&mut records, batch.proposals);
-            }
-            Ok(records)
-        })
+        self.with_repository_read(|held| held.proposal_file_rows_once(scope))
     }
 }
 

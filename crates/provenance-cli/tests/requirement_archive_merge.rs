@@ -2,6 +2,8 @@ use assert_cmd::Command;
 use provenance_macros::verifies;
 use std::path::{Path, PathBuf};
 
+use crate::support::record_review::archive_requirement;
+
 fn run(repo: &str, args: &[&str]) -> String {
     let result = Command::new(assert_cmd::cargo::cargo_bin!("provenance"))
         .args(args)
@@ -29,28 +31,6 @@ fn create(repo: &str, id: &str, refines: Option<&str>) {
         args.extend(["--refines", parent]);
     }
     run(repo, &args);
-}
-
-fn archive(repo: &str, id: &str) {
-    let current: serde_json::Value = serde_json::from_str(&run(
-        repo,
-        &["api", &format!("requirements/{id}"), "--format", "json"],
-    ))
-    .unwrap();
-    let etag = current["data"]["edit"]["etag"].as_str().unwrap();
-    run(
-        repo,
-        &[
-            id,
-            "update",
-            "--if-match",
-            etag,
-            "--status",
-            "archived",
-            "--archived-in-commit-json",
-            r#"{"commit":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}"#,
-        ],
-    );
 }
 
 /// The one Requirement shard of the default scope.
@@ -103,6 +83,8 @@ fn gaps_report_a_live_requirement_whose_parents_a_merge_left_archived() {
             "default",
             "--path-prefix",
             ".",
+            "--disposition-actor-id",
+            "reviewer",
         ])
         .assert()
         .success();
@@ -120,7 +102,12 @@ fn gaps_report_a_live_requirement_whose_parents_a_merge_left_archived() {
     );
 
     std::fs::copy(side("base.jsonl"), &shard).unwrap();
-    archive(repo, "req_parent");
+    // The archive is a status request: the reviewer accepts it.
+    archive_requirement(
+        repo,
+        "req_parent",
+        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    );
     std::fs::copy(&shard, side("ours.jsonl")).unwrap();
     assert_eq!(
         gaps_of_kind(repo, "no_live_parent"),

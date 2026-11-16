@@ -7,12 +7,8 @@ use pulldown_cmark::{Event, Parser};
 use std::path::{Path, PathBuf};
 use std::process::Output;
 
-#[path = "cli_dictionary/support.rs"]
-#[allow(dead_code)]
-mod dictionary_support;
-#[path = "cli_init_typescript/support.rs"]
-#[allow(dead_code)]
-mod support;
+use crate::cli_init_typescript_support as support;
+use crate::dictionary_support;
 
 use support::{link_project_binary, on_path, shell, write_package_json, MANAGERS, PACKAGE_BIN};
 

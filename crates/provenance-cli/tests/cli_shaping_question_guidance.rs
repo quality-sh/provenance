@@ -1,5 +1,4 @@
-#[path = "shaping_support/provenance.rs"]
-mod provenance;
+use crate::provenance;
 
 use predicates::str::contains;
 use provenance::provenance;

@@ -78,11 +78,50 @@ pub fn commit_state(temp: &tempfile::TempDir, message: &str) -> String {
 }
 
 #[path = "../support/initialization.rs"]
-mod initialization;
+pub mod initialization;
 
 /// Uses the same manifest plan as repository initialization.
 #[allow(dead_code)]
 pub fn allow_reviewer(temp: &tempfile::TempDir) {
     let layout = ProvenanceLayout::new(Utf8Path::from_path(temp.path()).unwrap());
     initialization::allow_reviewer(&layout);
+}
+
+/// Accepts the pending submission of one record in `default` as the reviewer
+/// that [`allow_reviewer`] names, through the public decision.
+pub fn accept_pending(store: &StateStore, kind: provenance_core::NodeType, id: &str) {
+    let record = StableId::new(id).unwrap();
+    let pending = store
+        .record_decision_state(&scope(), kind, &record)
+        .unwrap()
+        .pending
+        .unwrap_or_else(|| panic!("{kind:?} {id} has no pending submission"));
+    store
+        .decide_record_review(
+            serde_json::from_value(json!({
+                "scope_id": "default", "proposal_id": pending.proposal_id,
+                "actor": {"identity_type": "human", "id": "reviewer"},
+                "decision": "accepted", "rationale": null,
+                "canonical_artifact": {"artifact_type": kind.as_str(), "artifact_id": id},
+                "feedback": null, "declared_by": null
+            }))
+            .unwrap(),
+        )
+        .unwrap();
+}
+
+/// Accepts the pending status request of one record: the request that sets
+/// an active or archived status.
+pub fn accept_status_request(store: &StateStore, kind: provenance_core::NodeType, id: &str) {
+    let record = StableId::new(id).unwrap();
+    let state = store
+        .record_decision_state(&scope(), kind, &record)
+        .unwrap();
+    assert!(
+        state
+            .pending
+            .is_some_and(|pending| pending.status_request.is_some()),
+        "{kind:?} {id} has no status request"
+    );
+    accept_pending(store, kind, id);
 }

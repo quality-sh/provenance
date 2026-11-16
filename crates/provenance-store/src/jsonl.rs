@@ -5,7 +5,6 @@
 #[cfg(feature = "host")]
 use crate::layout::ProvenanceLayout;
 use crate::publication::{protect_rows, WritePermissions};
-use crate::state_store::readers::{ensure_no_legacy_retirement, parse_line};
 use crate::state_store::StateStore;
 use camino::Utf8Path;
 #[cfg(feature = "host")]
@@ -14,8 +13,14 @@ use serde::{de::DeserializeOwned, Serialize};
 #[cfg(feature = "host")]
 use std::fs::{File, OpenOptions};
 
+mod line;
 mod preservation;
 
+use line::numbered_lines;
+#[cfg(feature = "host")]
+pub(crate) use line::{record_of_line, without_terminator};
+#[cfg(feature = "host")]
+pub(crate) use preservation::Carried;
 use preservation::{LoadedRecords, RawRecord};
 
 /// An exclusive lock on the lock file at a path. Released on drop.
@@ -28,7 +33,9 @@ pub(crate) struct AdvisoryLock {
 impl AdvisoryLock {
     pub(crate) fn acquire(path: &Utf8Path) -> anyhow::Result<Self> {
         if let Some(parent) = path.parent() {
-            std::fs::create_dir_all(parent)?;
+            std::fs::create_dir_all(parent).map_err(|error| {
+                crate::refusal::caused(error, format!("create advisory lock directory {parent}"))
+            })?;
         }
         let file = OpenOptions::new()
             .read(true)
@@ -36,9 +43,10 @@ impl AdvisoryLock {
             .create(true)
             .truncate(false)
             .open(path)
-            .map_err(|error| crate::refusal::fault!("open advisory lock {path}: {error}"))?;
-        file.lock_exclusive()
-            .map_err(|error| crate::refusal::fault!("acquire advisory lock {path}: {error}"))?;
+            .map_err(|error| crate::refusal::caused(error, format!("open advisory lock {path}")))?;
+        file.lock_exclusive().map_err(|error| {
+            crate::refusal::caused(error, format!("acquire advisory lock {path}"))
+        })?;
         Ok(Self { file })
     }
 }
@@ -73,19 +81,44 @@ pub fn write_jsonl_atomic<T: Serialize>(path: &Utf8Path, records: &[T]) -> anyho
 /// Mutates one file of derived state, such as the verification runs, under
 /// its advisory lock, and writes the file in place. The caller holds the
 /// section. Canonical state publishes through the storage port instead.
+///
+/// Each line that the mutation changes or adds is measured as it is stored,
+/// with the members of the stored line that the record type does not know,
+/// and a line over `line_budget` bytes refuses the write before the file
+/// changes.
 #[cfg(feature = "host")]
 pub(crate) fn mutate_jsonl_locked<T, R>(
     path: &Utf8Path,
     lock_path: &Utf8Path,
+    line_budget: usize,
     mutate: impl FnOnce(&mut Vec<T>) -> anyhow::Result<R>,
+) -> anyhow::Result<R>
+where
+    T: DeserializeOwned + Serialize,
+{
+    mutate_carried_jsonl_locked(path, lock_path, line_budget, |records, _| mutate(records))
+}
+
+/// Like [`mutate_jsonl_locked`], but the mutation also gets the bytes that the
+/// stored line of each record carries, so that it can fit a record to the
+/// budget of its stored line.
+#[cfg(feature = "host")]
+pub(crate) fn mutate_carried_jsonl_locked<T, R>(
+    path: &Utf8Path,
+    lock_path: &Utf8Path,
+    line_budget: usize,
+    mutate: impl FnOnce(&mut Vec<T>, &Carried<'_>) -> anyhow::Result<R>,
 ) -> anyhow::Result<R>
 where
     T: DeserializeOwned + Serialize,
 {
     let _lock = AdvisoryLock::acquire(lock_path)?;
     let mut loaded = load_jsonl_file(path)?;
-    let result = mutate(loaded.records_mut())?;
-    let lines = loaded.into_lines(path)?;
+    let (records, carried) = loaded.records_and_carried();
+    let result = mutate(records, &carried)?;
+    let lines = loaded.into_checked_lines(path, |line| {
+        crate::state_store::read_budget::ensure_line_within(line, line_budget)
+    })?;
     guard_jsonl_lines(&files_of(path), path, &lines, &WritePermissions::none())?;
     write_jsonl_lines_atomic_unlocked(path, &lines)
         .map_err(crate::write_error::publication_started)?;
@@ -94,14 +127,21 @@ where
 
 /// Reads the records of one file of derived state, such as the verification
 /// runs, under its advisory lock. A file that does not exist has no records.
+/// Each line gives its record through [`record_of_line`], and the read keeps
+/// no stored line.
 #[cfg(feature = "host")]
-pub(crate) fn read_jsonl_locked<T>(path: &Utf8Path, lock_path: &Utf8Path) -> anyhow::Result<Vec<T>>
-where
-    T: DeserializeOwned + Serialize,
-{
+pub(crate) fn read_jsonl_locked<T: DeserializeOwned>(
+    path: &Utf8Path,
+    lock_path: &Utf8Path,
+) -> anyhow::Result<Vec<T>> {
     let _lock = AdvisoryLock::acquire(lock_path)?;
-    let mut loaded = load_jsonl_file(path)?;
-    Ok(std::mem::take(loaded.records_mut()))
+    if !path.exists() {
+        return Ok(Vec::new());
+    }
+    let contents = std::fs::read(path)?;
+    numbered_lines(&contents)
+        .map(|(number, line)| record_of_line(path, number, line))
+        .collect()
 }
 
 /// Loads the file at `path`, or no records when the file does not exist.
@@ -110,10 +150,7 @@ fn load_jsonl_file<T>(path: &Utf8Path) -> anyhow::Result<LoadedRecords<T>>
 where
     T: DeserializeOwned + Serialize,
 {
-    let contents = path
-        .exists()
-        .then(|| std::fs::read_to_string(path))
-        .transpose()?;
+    let contents = path.exists().then(|| std::fs::read(path)).transpose()?;
     load_jsonl(path, contents.as_deref())
 }
 
@@ -147,7 +184,7 @@ pub(crate) fn mutate_jsonl_bytes_with<T, R>(
 where
     T: DeserializeOwned + Serialize,
 {
-    let mut loaded = load_jsonl(path, contents)?;
+    let mut loaded = load_jsonl(path, contents.map(str::as_bytes))?;
     let (result, changed) = mutate(loaded.records_mut())?;
     if !changed {
         return Ok((result, None));
@@ -157,11 +194,8 @@ where
     Ok((result, Some(jsonl_bytes(&lines))))
 }
 
-/// The read a write is built on, guarded the same way an ordinary read is.
-///
-/// A mutation rewrites the whole shard. Each raw line passes
-/// [`ensure_no_legacy_retirement`](crate::state_store::readers::ensure_no_legacy_retirement),
-/// the same check the read choke point makes, before any record is built.
+/// The read a write is built on: each line of `contents` gives its record
+/// through the line checks of [`line::checked_line`].
 ///
 /// The raw line stays with its typed record. An unchanged record keeps its
 /// raw line when the shard is saved, so the stored JSON line content that
@@ -170,7 +204,7 @@ where
 /// row's top-level unknown members onto its new line, and the write is
 /// refused before anything is published when a changed row holds stored data
 /// that cannot be carried over safely.
-fn load_jsonl<T>(path: &Utf8Path, contents: Option<&str>) -> anyhow::Result<LoadedRecords<T>>
+fn load_jsonl<T>(path: &Utf8Path, contents: Option<&[u8]>) -> anyhow::Result<LoadedRecords<T>>
 where
     T: DeserializeOwned + Serialize,
 {
@@ -178,10 +212,9 @@ where
         return Ok(LoadedRecords::default());
     };
     let mut loaded = LoadedRecords::default();
-    for (index, line) in contents.lines().enumerate() {
-        let value = parse_line(path, index + 1, line)?;
-        ensure_no_legacy_retirement(path, index + 1, &value)?;
-        let (record, raw) = RawRecord::deserialize(path, line, index + 1)?;
+    for (number, line) in numbered_lines(contents) {
+        let line = line::checked_line(path, number, line)?;
+        let (record, raw) = RawRecord::keep(path, line)?;
         loaded.push(record, raw);
     }
     Ok(loaded)

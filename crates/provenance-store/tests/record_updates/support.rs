@@ -1,4 +1,6 @@
-use provenance_core::{protocol::failure::OperationFailure, Manifest, RepoPathPrefix, ScopeId};
+use provenance_core::{
+    protocol::failure::OperationFailure, Manifest, NodeType, RepoPathPrefix, ScopeId,
+};
 use provenance_store::{layout::ProvenanceLayout, operations::catalog::*, state_store::StateStore};
 use serde_json::{json, Value};
 use std::path::PathBuf;
@@ -49,13 +51,11 @@ impl Fixture {
         let layout = ProvenanceLayout::new(root);
         let scope = ScopeId::new("default").unwrap();
         std::fs::create_dir_all(layout.manifest_path().parent().unwrap()).unwrap();
+        let mut manifest = Manifest::default_with_scope(scope.clone(), RepoPathPrefix::new("."));
+        manifest.disposition_actor_ids = vec!["reviewer".to_owned()];
         std::fs::write(
             layout.manifest_path(),
-            serde_json::to_vec(&Manifest::default_with_scope(
-                scope.clone(),
-                RepoPathPrefix::new("."),
-            ))
-            .unwrap(),
+            serde_json::to_vec(&manifest).unwrap(),
         )
         .unwrap();
         let store = provenance_store::repository::Repository::open(dir.path(), "default")
@@ -117,6 +117,7 @@ impl Fixture {
             "create-source" => CreateSource,
             "create-synthesis-packet" => CreateSynthesisPacket,
             "create-topic" => CreateTopic,
+            "decide-record-review" => DecideRecordReview,
             "release-question" => ReleaseQuestion,
             "update-question" => UpdateQuestion,
             "update-requirement" => UpdateRequirementResource,
@@ -131,6 +132,14 @@ impl Fixture {
     }
     pub async fn source(&self) -> Value {
         self.call("create-source", json!({"scope_id":"default","id":"source_one","name":"Policy","source_type":"policy","url":"https://old.example","reference":"section 1","commit_pin":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","supersedes":[]})).await.unwrap()
+    }
+    /// Accepts the pending submission of a record as the reviewer.
+    pub fn accept_pending(&self, kind: &str, id: &str) {
+        crate::review_support::accept_pending(&self.store, node(kind), id);
+    }
+    /// Accepts the pending status request of a record as the reviewer.
+    pub fn accept_status_request(&self, kind: &str, id: &str) {
+        crate::review_support::accept_status_request(&self.store, node(kind), id);
     }
     pub async fn requirement(&self) {
         self.call("create-requirement-native", json!({"scope_id":"default","id":"req_one","statement":"The system saves the record.","status":"active","depends_on":[],"supersedes":[]})).await.unwrap();
@@ -156,4 +165,8 @@ async fn typed<O: Operation>(host: Host, request: Value) -> Result<Value, Value>
         .await
         .map_err(|failure| frame_failure::<O>(failure).error)?;
     Ok(serde_json::to_value(success).unwrap())
+}
+
+fn node(kind: &str) -> NodeType {
+    serde_json::from_value(json!(kind)).unwrap()
 }

@@ -1,12 +1,11 @@
 //! The reads over an id on two lines of its file: each answers at the stored
 //! serial, and its `freshness_error` gives the located fault.
 
-use crate::repository::{
-    at_stored, copy_row, copy_row_with_key, freshness_parts, ideation_repository,
-    merge_assertion_two_times, read_answers,
+use super::repository::{
+    at_stored, copy_row, copy_row_with_key, freshness_parts, ideation_repository, read_answers,
 };
-use crate::support::records::Repository;
-use crate::writes::located;
+use super::support::records::Repository;
+use super::writes::located;
 use provenance_macros::verifies;
 use serde_json::Value;
 
@@ -65,13 +64,8 @@ async fn a_read_over_a_proposal_id_on_two_lines_under_two_keys_answers_at_the_st
 #[tokio::test]
 #[verifies("rule_failed_freshness_answers_at_stored_serial", examples)]
 async fn a_read_over_an_assertion_id_on_two_lines_answers_at_the_stored_serial() {
-    let (answers, expected) = reads_over(
-        "assertions.jsonl",
-        "assertion",
-        "assertion_a",
-        merge_assertion_two_times,
-    )
-    .await;
+    let (answers, expected) =
+        reads_over_a_copied_row("assertions.jsonl", "assertion", "assertion_a").await;
     assert_eq!(answers, expected);
 }
 
@@ -117,7 +111,7 @@ async fn a_read_over_a_synthesis_packet_id_on_two_lines_answers_at_the_stored_se
 async fn a_read_over_ids_on_two_lines_in_two_files_names_the_proposal_file() {
     let (answers, expected) =
         reads_over("proposal_cards.jsonl", "proposal", "proposal_b", |repo| {
-            merge_assertion_two_times(repo);
+            copy_row(repo, "assertions.jsonl", "assertion_a");
             copy_row(repo, "proposal_cards.jsonl", "proposal_b")
         })
         .await;

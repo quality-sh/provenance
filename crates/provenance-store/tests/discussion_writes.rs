@@ -1,6 +1,9 @@
-mod discussion_support;
+use crate::discussion_support;
 use discussion_support::*;
-use provenance_core::{threads::DiscussionStatus, ThreadStatus};
+use provenance_core::{protocol::failure::OperationError, threads::DiscussionStatus, ThreadStatus};
+use provenance_store::operations::catalog::{
+    invoke_typed, PreparedContext, PreparedScope, WriteDiscussion, WriteDiscussionRequest,
+};
 use serde_json::json;
 
 #[test]
@@ -89,4 +92,39 @@ fn typed_parent_scope_and_discussion_membership_are_checked() {
         .write_discussion(serde_json::from_value(bad).unwrap())
         .is_err());
     assert_eq!(store.list_messages(&scope()).unwrap().len(), 1);
+}
+
+/// A native caller of `invoke_typed` skips the external check of `write-discussion`. A status
+/// change of that caller with no actor is refused as `required` on `request.actor`, and the
+/// stored Discussion does not change.
+#[tokio::test]
+#[provenance_macros::verifies("rule_write_actor_required", examples)]
+async fn a_native_status_change_with_no_actor_is_refused() {
+    let (temp, store) = fixture();
+    let started = start(&store, "root");
+    let discussions = temp
+        .path()
+        .join(".provenance/state/scopes/default/threads/discussions.jsonl");
+    let before = std::fs::read_to_string(&discussions).unwrap();
+    let mut request = serde_json::to_value(status(&started, "resolved")).unwrap();
+    request.as_object_mut().unwrap().remove("actor");
+    let request: WriteDiscussionRequest = serde_json::from_value(request).unwrap();
+    let context = PreparedContext::for_scope(PreparedScope {
+        repository: repository(camino::Utf8Path::from_path(temp.path()).unwrap()),
+        requested_target: "selected".into(),
+    });
+
+    let error = invoke_typed::<WriteDiscussion>(context, request)
+        .await
+        .unwrap_err();
+
+    let OperationError::Handler(error) = error else {
+        panic!("expected a write refusal");
+    };
+    assert_eq!(
+        serde_json::to_value(&error).unwrap(),
+        json!({"kind":"invalid_input","field":"request.actor","reason":"required"})
+    );
+    assert_eq!(error.status(), 400);
+    assert_eq!(std::fs::read_to_string(&discussions).unwrap(), before);
 }

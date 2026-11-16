@@ -65,7 +65,7 @@ fn refusal(arguments: &[&str]) -> Value {
     envelope(&String::from_utf8_lossy(&result.stderr))
 }
 
-fn envelope(stderr: &str) -> Value {
+pub fn envelope(stderr: &str) -> Value {
     let text = stderr.trim();
     let text = text.strip_prefix("Error: ").unwrap_or(text);
     serde_json::from_str(text).unwrap_or_else(|error| panic!("{error}: {stderr}"))
@@ -467,12 +467,24 @@ fn directory_file(repo: &str, name: &str, content: &str) -> String {
 
 #[path = "porcelain_api/options.rs"]
 mod options;
+#[path = "porcelain_api/review_cited_resolutions.rs"]
+mod review_cited_resolutions;
 #[path = "porcelain_api/review_conflicts.rs"]
 mod review_conflicts;
 #[path = "porcelain_api/review_cycle.rs"]
 mod review_cycle;
+#[path = "porcelain_api/review_disagreeing_rows.rs"]
+mod review_disagreeing_rows;
 #[path = "porcelain_api/review_history.rs"]
 mod review_history;
+#[path = "porcelain_api/review_merged_decisions.rs"]
+mod review_merged_decisions;
+#[path = "porcelain_api/review_merged_withdrawals.rs"]
+mod review_merged_withdrawals;
+#[path = "porcelain_api/review_record_faults.rs"]
+mod review_record_faults;
+#[path = "porcelain_api/review_row_dependence.rs"]
+mod review_row_dependence;
 #[path = "porcelain_api/review_state_files.rs"]
 mod review_state_files;
 #[path = "porcelain_api/scope.rs"]

@@ -15,7 +15,6 @@ use camino::Utf8Path;
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 
-mod fixture_pdf;
 mod fixture_server;
 mod steps;
 
@@ -93,7 +92,7 @@ fn finish_sandbox(sandbox: &Path, keep: bool, out: &mut String) -> anyhow::Resul
 
 fn run_and_report(sandbox: &Path, out: &mut String) -> anyhow::Result<()> {
     line(out, format_args!("simulated onboarding"));
-    let body = fixture_pdf::dictionary_pdf();
+    let body = crate::fixture_pdf::dictionary_pdf();
     let server =
         FixtureServer::start(body).context("start the loopback dictionary fixture server")?;
     let exe = std::env::current_exe().context("resolve the running executable")?;

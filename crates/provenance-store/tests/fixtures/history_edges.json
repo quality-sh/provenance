@@ -1,0 +1,587 @@
+[
+  {
+    "answer": {
+      "freshness_error": null,
+      "result": {
+        "entries": [
+          {
+            "author": "Reviewer",
+            "before": null,
+            "changed_fields": [
+              "id",
+              "requirement_ids",
+              "scope_id",
+              "severity",
+              "statement",
+              "status"
+            ],
+            "commit": "create",
+            "committed_at": 1700000060,
+            "id": "create",
+            "origin": null,
+            "outcome": "created",
+            "revision": "196c1021fca7a5c44a3e447f1029ff9b169c197ffdf5ab580e77dee8e944d95a"
+          },
+          {
+            "author": "merger",
+            "before": "create",
+            "changed_fields": [
+              "description",
+              "statement"
+            ],
+            "commit": "merge",
+            "committed_at": 1700000480,
+            "id": "merge",
+            "origin": null,
+            "outcome": "changed",
+            "revision": "3be389bbf84ed2aa506930e4b5094469ca247d2e493712b712d42eced492efe0"
+          }
+        ],
+        "has_more": false,
+        "limit": 50,
+        "next_cursor": false
+      }
+    },
+    "call": "review-history default",
+    "request": {
+      "record_id": "rule_a",
+      "record_kind": "rule"
+    }
+  },
+  {
+    "answer": {
+      "freshness_error": null,
+      "result": {
+        "entries": [
+          {
+            "author": "Reviewer",
+            "before": null,
+            "changed_fields": [
+              "id",
+              "requirement_ids",
+              "scope_id",
+              "severity",
+              "statement",
+              "status"
+            ],
+            "commit": "create",
+            "committed_at": 1700000060,
+            "id": "create",
+            "origin": null,
+            "outcome": "created",
+            "revision": "196c1021fca7a5c44a3e447f1029ff9b169c197ffdf5ab580e77dee8e944d95a"
+          }
+        ],
+        "has_more": true,
+        "limit": 1,
+        "next_cursor": true
+      }
+    },
+    "call": "review-history default",
+    "request": {
+      "limit": 1,
+      "record_id": "rule_a",
+      "record_kind": "rule"
+    }
+  },
+  {
+    "answer": {
+      "freshness_error": null,
+      "result": {
+        "entries": [
+          {
+            "author": "merger",
+            "before": "create",
+            "changed_fields": [
+              "description",
+              "statement"
+            ],
+            "commit": "merge",
+            "committed_at": 1700000480,
+            "id": "merge",
+            "origin": null,
+            "outcome": "changed",
+            "revision": "3be389bbf84ed2aa506930e4b5094469ca247d2e493712b712d42eced492efe0"
+          }
+        ],
+        "has_more": false,
+        "limit": 1,
+        "next_cursor": false
+      }
+    },
+    "call": "review-history default",
+    "request": {
+      "cursor": "<cursor>",
+      "limit": 1,
+      "record_id": "rule_a",
+      "record_kind": "rule"
+    }
+  },
+  {
+    "answer": {
+      "freshness_error": null,
+      "result": {
+        "entries": [],
+        "has_more": false,
+        "limit": 50,
+        "next_cursor": false
+      }
+    },
+    "call": "review-history default",
+    "request": {
+      "record_id": "absent",
+      "record_kind": "rule"
+    }
+  },
+  {
+    "answer": {
+      "author": "Reviewer",
+      "before": null,
+      "changed_fields": [
+        "id",
+        "requirement_ids",
+        "scope_id",
+        "severity",
+        "statement",
+        "status"
+      ],
+      "commit": "create",
+      "committed_at": 1700000060,
+      "id": "create",
+      "origin": null,
+      "outcome": "created",
+      "revision": "196c1021fca7a5c44a3e447f1029ff9b169c197ffdf5ab580e77dee8e944d95a"
+    },
+    "call": "review-history-entry default",
+    "request": {
+      "entry_id": "create",
+      "record_id": "rule_a",
+      "record_kind": "rule"
+    }
+  },
+  {
+    "answer": {
+      "author": "merger",
+      "before": "create",
+      "changed_fields": [
+        "description",
+        "statement"
+      ],
+      "commit": "merge",
+      "committed_at": 1700000480,
+      "id": "merge",
+      "origin": null,
+      "outcome": "changed",
+      "revision": "3be389bbf84ed2aa506930e4b5094469ca247d2e493712b712d42eced492efe0"
+    },
+    "call": "review-history-entry default",
+    "request": {
+      "entry_id": "merge",
+      "record_id": "rule_a",
+      "record_kind": "rule"
+    }
+  },
+  {
+    "answer": {
+      "error": {
+        "kind": "resource_not_found"
+      },
+      "status": 404
+    },
+    "call": "review-history-entry default",
+    "request": {
+      "entry_id": "missing",
+      "record_id": "rule_a",
+      "record_kind": "rule"
+    }
+  },
+  {
+    "answer": {
+      "freshness_error": null,
+      "result": {
+        "field": null,
+        "json_text": "{\"id\":\"rule_a\",\"requirement_ids\":[\"req_a\"],\"scope_id\":\"default\",\"severity\":\"high\",\"statement\":\"Each record is stored.\",\"status\":\"review\"}",
+        "next_offset": null,
+        "offset": 0,
+        "version": "create"
+      }
+    },
+    "call": "review-evidence default",
+    "request": {
+      "entry_id": "create",
+      "record_id": "rule_a",
+      "record_kind": "rule",
+      "side": "after"
+    }
+  },
+  {
+    "answer": {
+      "freshness_error": null,
+      "result": {
+        "field": "statement",
+        "json_text": "\"Each record is stored.\"",
+        "next_offset": null,
+        "offset": 0,
+        "version": "create"
+      }
+    },
+    "call": "review-evidence default",
+    "request": {
+      "entry_id": "create",
+      "field": "statement",
+      "record_id": "rule_a",
+      "record_kind": "rule",
+      "side": "after"
+    }
+  },
+  {
+    "answer": {
+      "error": {
+        "kind": "resource_not_found"
+      },
+      "status": 404
+    },
+    "call": "review-evidence default",
+    "request": {
+      "entry_id": "create",
+      "record_id": "rule_a",
+      "record_kind": "rule",
+      "side": "before"
+    }
+  },
+  {
+    "answer": {
+      "error": {
+        "kind": "resource_not_found"
+      },
+      "status": 404
+    },
+    "call": "review-evidence default",
+    "request": {
+      "entry_id": "create",
+      "field": "statement",
+      "record_id": "rule_a",
+      "record_kind": "rule",
+      "side": "before"
+    }
+  },
+  {
+    "answer": {
+      "error": {
+        "field": "offset",
+        "kind": "invalid_input",
+        "reason": "invalid_value"
+      },
+      "status": 400
+    },
+    "call": "review-evidence default",
+    "request": {
+      "entry_id": "create",
+      "offset": 100000,
+      "record_id": "rule_a",
+      "record_kind": "rule",
+      "side": "after"
+    }
+  },
+  {
+    "answer": {
+      "freshness_error": null,
+      "result": {
+        "field": null,
+        "json_text": "{\"description\":\"Alice describes the rule.\",\"id\":\"rule_a\",\"requirement_ids\":[\"req_a\"],\"scope_id\":\"default\",\"severity\":\"high\",\"statement\":\"Each record is stored once.\",\"status\":\"review\"}",
+        "next_offset": null,
+        "offset": 0,
+        "version": "merge"
+      }
+    },
+    "call": "review-evidence default",
+    "request": {
+      "entry_id": "merge",
+      "record_id": "rule_a",
+      "record_kind": "rule",
+      "side": "after"
+    }
+  },
+  {
+    "answer": {
+      "freshness_error": null,
+      "result": {
+        "field": "statement",
+        "json_text": "\"Each record is stored once.\"",
+        "next_offset": null,
+        "offset": 0,
+        "version": "merge"
+      }
+    },
+    "call": "review-evidence default",
+    "request": {
+      "entry_id": "merge",
+      "field": "statement",
+      "record_id": "rule_a",
+      "record_kind": "rule",
+      "side": "after"
+    }
+  },
+  {
+    "answer": {
+      "freshness_error": null,
+      "result": {
+        "field": null,
+        "json_text": "{\"id\":\"rule_a\",\"requirement_ids\":[\"req_a\"],\"scope_id\":\"default\",\"severity\":\"high\",\"statement\":\"Each record is stored.\",\"status\":\"review\"}",
+        "next_offset": null,
+        "offset": 0,
+        "version": "create"
+      }
+    },
+    "call": "review-evidence default",
+    "request": {
+      "entry_id": "merge",
+      "record_id": "rule_a",
+      "record_kind": "rule",
+      "side": "before"
+    }
+  },
+  {
+    "answer": {
+      "freshness_error": null,
+      "result": {
+        "field": "statement",
+        "json_text": "\"Each record is stored.\"",
+        "next_offset": null,
+        "offset": 0,
+        "version": "create"
+      }
+    },
+    "call": "review-evidence default",
+    "request": {
+      "entry_id": "merge",
+      "field": "statement",
+      "record_id": "rule_a",
+      "record_kind": "rule",
+      "side": "before"
+    }
+  },
+  {
+    "answer": {
+      "error": {
+        "field": "offset",
+        "kind": "invalid_input",
+        "reason": "invalid_value"
+      },
+      "status": 400
+    },
+    "call": "review-evidence default",
+    "request": {
+      "entry_id": "merge",
+      "offset": 100000,
+      "record_id": "rule_a",
+      "record_kind": "rule",
+      "side": "after"
+    }
+  },
+  {
+    "answer": {
+      "error": {
+        "kind": "resource_not_found"
+      },
+      "status": 404
+    },
+    "call": "review-evidence default",
+    "request": {
+      "entry_id": "missing",
+      "record_id": "rule_a",
+      "record_kind": "rule",
+      "side": "after"
+    }
+  },
+  {
+    "answer": {
+      "error": {
+        "kind": "resource_not_found"
+      },
+      "status": 404
+    },
+    "call": "review-evidence default",
+    "request": {
+      "entry_id": "missing",
+      "field": "statement",
+      "record_id": "rule_a",
+      "record_kind": "rule",
+      "side": "after"
+    }
+  },
+  {
+    "answer": {
+      "error": {
+        "kind": "resource_not_found"
+      },
+      "status": 404
+    },
+    "call": "review-evidence default",
+    "request": {
+      "entry_id": "missing",
+      "record_id": "rule_a",
+      "record_kind": "rule",
+      "side": "before"
+    }
+  },
+  {
+    "answer": {
+      "error": {
+        "kind": "resource_not_found"
+      },
+      "status": 404
+    },
+    "call": "review-evidence default",
+    "request": {
+      "entry_id": "missing",
+      "field": "statement",
+      "record_id": "rule_a",
+      "record_kind": "rule",
+      "side": "before"
+    }
+  },
+  {
+    "answer": {
+      "error": {
+        "kind": "resource_not_found"
+      },
+      "status": 404
+    },
+    "call": "review-evidence default",
+    "request": {
+      "entry_id": "missing",
+      "offset": 100000,
+      "record_id": "rule_a",
+      "record_kind": "rule",
+      "side": "after"
+    }
+  },
+  {
+    "answer": {
+      "author": "Reviewer",
+      "before": null,
+      "changed_fields": [
+        "description",
+        "id",
+        "scope_id",
+        "statement",
+        "status"
+      ],
+      "commit": "edit_000",
+      "committed_at": 1700000000,
+      "id": "edit_000",
+      "origin": null,
+      "outcome": "created",
+      "revision": "f304f82df1900247f3d2e03454601309fa737d2489005601331e8b5baac635d9"
+    },
+    "call": "review-history-entry default",
+    "request": {
+      "entry_id": "edit_000",
+      "record_id": "req_a",
+      "record_kind": "requirement"
+    }
+  },
+  {
+    "answer": {
+      "author": "Reviewer",
+      "before": "edit_198",
+      "changed_fields": [
+        "statement"
+      ],
+      "commit": "edit_199",
+      "committed_at": 1700011940,
+      "id": "edit_199",
+      "origin": null,
+      "outcome": "changed",
+      "revision": "8831ec26a936f35691db812e6bf1e7c057dd82055db639581ba7ea1211fe8268"
+    },
+    "call": "review-history-entry default",
+    "request": {
+      "entry_id": "edit_199",
+      "record_id": "req_a",
+      "record_kind": "requirement"
+    }
+  },
+  {
+    "answer": {
+      "author": "Reviewer",
+      "before": "edit_199",
+      "changed_fields": [
+        "statement"
+      ],
+      "commit": "edit_200",
+      "committed_at": 1700012000,
+      "id": "edit_200",
+      "origin": null,
+      "outcome": "changed",
+      "revision": "610660618ee184c82a1d29952a615a705f7fa7e2ed1f23c2f7d0cfaf634179ce"
+    },
+    "call": "review-history-entry default",
+    "request": {
+      "entry_id": "edit_200",
+      "record_id": "req_a",
+      "record_kind": "requirement"
+    }
+  },
+  {
+    "answer": {
+      "author": "Reviewer",
+      "before": "edit_203",
+      "changed_fields": [
+        "statement"
+      ],
+      "commit": "edit_204",
+      "committed_at": 1700012240,
+      "id": "edit_204",
+      "origin": null,
+      "outcome": "changed",
+      "revision": "c677c127b18a1c3b70ccb7129f40cc69bb3d942ed89158ba77b6d673e759244d"
+    },
+    "call": "review-history-entry default",
+    "request": {
+      "entry_id": "edit_204",
+      "record_id": "req_a",
+      "record_kind": "requirement"
+    }
+  },
+  {
+    "answer": {
+      "author": null,
+      "before": "edit_204",
+      "changed_fields": [
+        "statement"
+      ],
+      "commit": null,
+      "committed_at": null,
+      "id": "working",
+      "origin": {
+        "discussion_id": "00000000-0000-0000-0000-00000000000a",
+        "message_id": "msg_00000000-0000-0000-0000-000000000009",
+        "thread_id": "thread_requirement_req_a"
+      },
+      "outcome": "changed",
+      "revision": "a7aa084bd88072e1bf282c7606b6098d402e7e9fdcbbe0bca6844320a702cb96"
+    },
+    "call": "review-history-entry default",
+    "request": {
+      "entry_id": "working",
+      "record_id": "req_a",
+      "record_kind": "requirement"
+    }
+  },
+  {
+    "answer": {
+      "error": {
+        "kind": "resource_not_found"
+      },
+      "status": 404
+    },
+    "call": "review-history-entry default",
+    "request": {
+      "entry_id": "missing",
+      "record_id": "req_a",
+      "record_kind": "requirement"
+    }
+  }
+]

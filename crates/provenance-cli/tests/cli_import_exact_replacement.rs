@@ -1,7 +1,6 @@
 use assert_cmd::Command;
 
-#[path = "export_fixture_support/mod.rs"]
-mod export_fixture_support;
+use crate::export_fixture_support;
 
 #[test]
 fn import_replaces_only_target_scope_and_removes_all_stale_target_shards() {
@@ -68,9 +67,6 @@ fn import_replaces_only_target_scope_and_removes_all_stale_target_shards() {
             .unwrap()
             .contains("source_other")
     );
-    assert!(!state
-        .join("scopes/default/ideation/landings.jsonl")
-        .exists());
     assert!(!state.join("scopes/default/threads/2025-01.jsonl").exists());
     Command::cargo_bin("provenance")
         .unwrap()
@@ -179,12 +175,6 @@ fn create_requirement(repo: &std::path::Path, scope: &str, id: &str) {
 
 fn seed_stale_target_shards(repo: &std::path::Path) {
     let scope = repo.join(".provenance/state/scopes/default");
-    std::fs::create_dir_all(scope.join("ideation")).unwrap();
-    std::fs::write(
-        scope.join("ideation/landings.jsonl"),
-        "{\"contributions\":[],\"synthesis_packets\":[],\"proposals\":[],\"assertions\":[],\"dispositions\":[]}\n",
-    )
-    .unwrap();
     std::fs::create_dir_all(scope.join("threads")).unwrap();
     std::fs::write(
         scope.join("threads/2025-01.jsonl"),

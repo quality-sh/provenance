@@ -6,7 +6,7 @@
 //! dispositions keep their place in the history and stay authoritative for
 //! their own proposals; none of them attests the record's current contents.
 
-use super::decision_state::CycleFacts;
+use super::review_rows::{CycleFacts, StoredRows};
 use crate::{families::review_families::ReviewFamilyIndex, state_store::StateStore};
 use provenance_core::{
     protocol::DocumentReviewSummary,
@@ -14,6 +14,7 @@ use provenance_core::{
     DispositionDecision, NodeType, Resolution, ResolutionStatus, ScopeId, StableId,
 };
 use provenance_macros::rule;
+use std::cell::OnceCell;
 use std::collections::HashMap;
 
 pub struct DocumentReviewState {
@@ -62,7 +63,7 @@ impl DocumentReviewState {
 /// proposal of another type that names the record, such as a candidate
 /// answer to a Question, decides nothing about the record.
 #[rule("rule_review_document_hides_rejected_new_records")]
-fn rejected_before_acceptance(state: &RequirementDecisionState, facts: &CycleFacts) -> bool {
+fn rejected_before_acceptance(state: &RequirementDecisionState, facts: &CycleFacts<'_>) -> bool {
     let reviews = state
         .decisions
         .iter()
@@ -79,15 +80,18 @@ fn rejected_before_acceptance(state: &RequirementDecisionState, facts: &CycleFac
 
 impl StateStore {
     /// Builds the current review outcome for each entry and the totals for the document.
+    /// Refuses the whole document when the review rows of one of its records do not agree.
     #[rule("rule_document_entry_has_review_outcome")]
     #[rule("rule_document_has_review_totals")]
+    #[rule("rule_document_read_refuses_with_record")]
     pub(crate) fn document_review_state(
         &self,
         scope: &ScopeId,
         records: &[(NodeType, StableId)],
     ) -> anyhow::Result<DocumentReviewState> {
         self.with_repository_publication(|held| {
-            let facts = CycleFacts::validated(held, scope)?;
+            let stored = StoredRows::read(held, scope)?;
+            let facts = stored.facts()?;
             let mut families = ReviewFamilyIndex::new(held, scope, records);
             let mut states = Vec::new();
             for (kind, id) in records {
@@ -143,32 +147,39 @@ impl StateStore {
         &self,
         record: &ReviewRecord,
     ) -> anyhow::Result<RequirementDecisionState> {
-        let facts = CycleFacts::validated(self, record.scope_id())?;
-        Self::record_decision_state_from_parts(record, &facts)
+        let stored = StoredRows::read(self, record.scope_id())?;
+        Self::record_decision_state_from_parts(record, &stored.facts()?)
     }
 
     /// The decision state of one record from one read of the scope's
-    /// review records.
+    /// review records. Refuses the record when its review rows do not
+    /// agree.
     fn record_decision_state_from_parts(
         record: &ReviewRecord,
-        facts: &CycleFacts,
+        facts: &CycleFacts<'_>,
     ) -> anyhow::Result<RequirementDecisionState> {
         let kind = record.kind();
         let record_id = record.id();
         let current_revision = super::save::current_revision(record)?;
-        let pending = facts
-            .pending_submission_at_revision(kind, record_id, current_revision.as_ref())
-            .map(|proposal| PendingSubmission {
-                proposal_id: proposal.id,
-                revision: proposal
+        let review = facts.record(kind, record_id)?;
+        let pending = review
+            .pending_at(current_revision.as_ref())
+            .cloned()
+            .map(|proposal| {
+                let binding = proposal
                     .record_revision
-                    .expect("pending submissions carry bindings")
-                    .revision,
-                actor: proposal.actor.unwrap_or_default(),
-                revises: proposal.revises,
+                    .expect("pending submissions carry bindings");
+                PendingSubmission {
+                    proposal_id: proposal.id,
+                    revision: binding.revision,
+                    actor: proposal.actor.unwrap_or_default(),
+                    revises: proposal.revises,
+                    status_request: binding.status_request,
+                }
             });
-        let mut recorded: Vec<RecordedDecision> = facts
-            .decisions_of(kind, record_id)
+        let recorded: Vec<RecordedDecision> = review
+            .decisions()
+            .into_iter()
             .map(|(disposition, proposal)| RecordedDecision {
                 revision: proposal
                     .record_revision
@@ -178,7 +189,6 @@ impl StateStore {
                 disposition: disposition.clone(),
             })
             .collect();
-        recorded.sort_by_key(|decision| facts.order_of(&decision.disposition.proposal_id));
         let current_acceptance = recorded
             .iter()
             .filter(|decision| decision.disposition.decision == DispositionDecision::Accepted)
@@ -194,42 +204,68 @@ impl StateStore {
             pending,
             current_acceptance,
             decisions: recorded,
-            withdrawn: facts.withdrawn_submissions(kind, record_id),
+            withdrawn: review.withdrawn(),
         })
     }
+}
 
-    /// The draft, review and proposed Resolutions among `resolutions` whose current
-    /// revision a reviewer accepted. A citation check reads them as approved, because an
-    /// approval does not change the lifecycle status.
-    #[rule("rule_review_acceptance_approves_resolution_citation")]
-    pub(crate) fn accepted_resolution_ids(
-        &self,
+/// Whether a reviewer accepted the current revision of a Resolution of one
+/// scope, for one citation check. The first question reads the review rows
+/// of the scope, and each later question of the check uses that reading, so
+/// a citation check that needs no acceptance reads no review rows.
+pub struct ResolutionAcceptance<'r> {
+    store: &'r StateStore,
+    scope: &'r ScopeId,
+    rows: &'r OnceCell<StoredRows>,
+    facts: Option<CycleFacts<'r>>,
+}
+
+impl ResolutionAcceptance<'_> {
+    /// Gives `check` the acceptance of the Resolutions of `scope`. The
+    /// reading of the review rows lasts for the call of `check` only.
+    pub fn for_one_check<T>(
+        store: &StateStore,
         scope: &ScopeId,
-        resolutions: &[Resolution],
-    ) -> anyhow::Result<Vec<StableId>> {
-        let candidates = resolutions
-            .iter()
-            .filter(|resolution| {
-                matches!(
-                    resolution.status,
-                    ResolutionStatus::Draft | ResolutionStatus::Review | ResolutionStatus::Proposed
-                )
-            })
-            .collect::<Vec<_>>();
-        let mut accepted = Vec::new();
-        if candidates.is_empty() {
-            return Ok(accepted);
-        }
-        let facts = CycleFacts::validated(self, scope)?;
-        for resolution in candidates {
-            let record = ReviewRecord::Resolution(resolution.clone());
-            if Self::record_decision_state_from_parts(&record, &facts)?
-                .current_acceptance
-                .is_some()
-            {
-                accepted.push(resolution.id.clone());
+        check: impl FnOnce(&mut ResolutionAcceptance<'_>) -> T,
+    ) -> T {
+        let rows = OnceCell::new();
+        check(&mut ResolutionAcceptance {
+            store,
+            scope,
+            rows: &rows,
+            facts: None,
+        })
+    }
+}
+
+impl<'r> ResolutionAcceptance<'r> {
+    /// The review state of the scope, read at the first question.
+    fn facts(&mut self) -> anyhow::Result<&CycleFacts<'r>> {
+        match &mut self.facts {
+            Some(facts) => Ok(facts),
+            empty => {
+                let read = StoredRows::read(self.store, self.scope)?;
+                let rows: &'r StoredRows = self.rows.get_or_init(|| read);
+                Ok(empty.insert(rows.facts()?))
             }
         }
-        Ok(accepted)
+    }
+
+    /// Whether `resolution` is a draft, review or proposed Resolution whose
+    /// current revision a reviewer accepted. A citation check reads it as
+    /// approved, because an approval does not change the lifecycle status.
+    /// Refuses with the refusal of a read of `resolution` when its review
+    /// rows do not agree.
+    #[rule("rule_review_acceptance_approves_resolution_citation")]
+    pub fn accepts(&mut self, resolution: &Resolution) -> anyhow::Result<bool> {
+        if !matches!(
+            resolution.status,
+            ResolutionStatus::Draft | ResolutionStatus::Review | ResolutionStatus::Proposed
+        ) {
+            return Ok(false);
+        }
+        let record = ReviewRecord::Resolution(resolution.clone());
+        let state = StateStore::record_decision_state_from_parts(&record, self.facts()?)?;
+        Ok(state.current_acceptance.is_some())
     }
 }

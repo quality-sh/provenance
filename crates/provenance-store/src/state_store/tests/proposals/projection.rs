@@ -33,10 +33,7 @@ fn proposal_projection_rejects_unlisted_disposition_actor() {
     .unwrap();
 
     let error = store.list_proposal_cards(&scope).unwrap_err().to_string();
-    assert!(
-        error.contains("no disposition actors configured"),
-        "{error}"
-    );
+    assert!(error.contains("disposition_actor_ids is empty"), "{error}");
 }
 
 #[test]
@@ -182,38 +179,6 @@ fn ratification_records_a_disposition_without_mutating_proposal_definition() {
         store.surface_proposals(&scope, &demand).unwrap(),
         [] as [crate::state_store::proposal_surfaces::SurfacedProposal; 0]
     );
-}
-
-#[test]
-fn validation_rejects_divergent_duplicate_before_landing_overlay() {
-    let (_dir, store, scope) = initialized_store();
-    let proposal = store
-        .create_proposal_card(proposal_input(
-            &scope,
-            "proposal_duplicate",
-            "Original",
-            PromotionState::Proposed,
-        ))
-        .unwrap();
-    let mut divergent = proposal;
-    divergent.title = "Forged overlay".into();
-    crate::jsonl::write_jsonl_atomic(
-        &crate::shards::ideation_landings_path(&store.layout, &scope),
-        &[crate::state_store::IdeationLandingBatch {
-            contributions: Vec::new(),
-            synthesis_packets: Vec::new(),
-            proposals: vec![divergent],
-            assertions: Vec::new(),
-            dispositions: Vec::new(),
-        }],
-    )
-    .unwrap();
-
-    let error = store
-        .validate_ideation_scope(&scope)
-        .unwrap_err()
-        .to_string();
-    assert!(error.contains("duplicate immutable proposal"), "{error}");
 }
 
 #[test]

@@ -1,3 +1,4 @@
+use super::held_file_tests::stage_two_new_shards;
 use super::read_only::tests::{record_kind_repositories, scope};
 use super::*;
 use crate::state_store::RecordStamp::ResolveFromRepository as StampFromGit;
@@ -28,7 +29,7 @@ fn concurrent_first_access_creates_publication_lock_directories_idempotently() {
 #[test]
 fn source_edit_recovery_runs_before_import_recovery() {
     let directory = tempfile::tempdir().unwrap();
-    let root = Utf8PathBuf::from_path_buf(directory.path().to_path_buf()).unwrap();
+    let root = Utf8PathBuf::from_path_buf(dunce::canonicalize(directory.path()).unwrap()).unwrap();
     let layout = ProvenanceLayout::new(root);
     std::fs::create_dir_all(layout.state_dir()).unwrap();
     std::fs::create_dir_all(layout.import_transactions_dir()).unwrap();
@@ -40,7 +41,13 @@ fn source_edit_recovery_runs_before_import_recovery() {
 
     let error = with_repository_publication(&layout, |_| Ok(())).unwrap_err();
 
-    assert!(error.to_string().contains("EOF"), "{error:#}");
+    assert_eq!(
+        format!("{error:#}"),
+        format!(
+            "read {}: EOF while parsing an object at line 1 column 1",
+            layout.source_edit_marker_path()
+        )
+    );
     assert!(layout.publication_marker_path().exists());
 }
 
@@ -65,77 +72,75 @@ fn recovery_rejects_traversal_outside_import_transactions() {
     )
     .unwrap();
 
-    let error = recover_pending_publication(&layout)
+    let error = with_repository_publication(&layout, |_| Ok(()))
         .unwrap_err()
         .to_string();
 
-    assert!(error.contains("outside the repository cache"), "{error}");
+    assert_eq!(
+        error,
+        format!(
+            "transaction {} is outside {}",
+            layout.import_transactions_dir().join("../../../outside"),
+            dunce::canonicalize(layout.import_transactions_dir())
+                .unwrap()
+                .display()
+        )
+    );
     assert!(outside.join("sentinel").is_file());
 }
 
+/// The description of the Rule names `create_real_directory` as its ancestor
+/// half: the section refuses a link in place of the import transaction
+/// directory before recovery reads the marker, so recovery touches nothing
+/// through the link. The link goes outside the repository, and to a tracked
+/// directory in the repository.
 #[cfg(unix)]
 #[test]
 #[verifies("rule_recovery_stays_in_cache", examples)]
-fn recovery_rejects_symlinked_import_transactions_outside_repository() {
-    let directory = tempfile::tempdir().unwrap();
-    let root = Utf8PathBuf::from_path_buf(directory.path().join("repo")).unwrap();
-    let outside = Utf8PathBuf::from_path_buf(directory.path().join("outside")).unwrap();
-    let layout = ProvenanceLayout::new(root);
-    std::fs::create_dir_all(layout.state_dir()).unwrap();
-    std::fs::create_dir_all(layout.cache_dir()).unwrap();
-    std::fs::create_dir_all(&outside).unwrap();
-    std::os::unix::fs::symlink(&outside, layout.import_transactions_dir()).unwrap();
-    let transaction = layout.import_transactions_dir().join("Documents");
-    std::fs::create_dir_all(&transaction).unwrap();
-    std::fs::write(transaction.join("sentinel"), "keep").unwrap();
-    std::fs::write(
-        layout.publication_marker_path(),
-        serde_json::to_vec(&serde_json::json!({
-            "transaction_dir": transaction,
+fn a_linked_import_transaction_directory_stops_the_section_before_recovery() {
+    for inside_repository in [false, true] {
+        let directory = tempfile::tempdir().unwrap();
+        let root = Utf8PathBuf::from_path_buf(directory.path().join("repo")).unwrap();
+        let target = if inside_repository {
+            root.join("tracked")
+        } else {
+            Utf8PathBuf::from_path_buf(directory.path().join("outside")).unwrap()
+        };
+        let layout = ProvenanceLayout::new(root);
+        std::fs::create_dir_all(layout.state_dir()).unwrap();
+        std::fs::create_dir_all(layout.cache_dir()).unwrap();
+        std::fs::create_dir_all(target.join("transaction")).unwrap();
+        std::fs::write(target.join("transaction/sentinel"), "keep").unwrap();
+        std::os::unix::fs::symlink(&target, layout.import_transactions_dir()).unwrap();
+        let marker = serde_json::json!({
+            "transaction_dir": layout.import_transactions_dir().join("transaction"),
             "phase": "published"
-        }))
-        .unwrap(),
-    )
-    .unwrap();
+        });
+        std::fs::write(
+            layout.publication_marker_path(),
+            serde_json::to_vec(&marker).unwrap(),
+        )
+        .unwrap();
 
-    let error = recover_pending_publication(&layout)
-        .unwrap_err()
-        .to_string();
+        let mut ran = false;
+        let error = with_repository_publication(&layout, |_| {
+            ran = true;
+            Ok(())
+        })
+        .unwrap_err();
 
-    assert!(error.contains("symlink component"), "{error}");
-    assert!(outside.join("Documents/sentinel").is_file());
-}
-
-#[cfg(unix)]
-#[test]
-#[verifies("rule_recovery_stays_in_cache", examples)]
-fn recovery_rejects_symlinked_import_transactions_inside_repository() {
-    let directory = tempfile::tempdir().unwrap();
-    let root = Utf8PathBuf::from_path_buf(directory.path().join("repo")).unwrap();
-    let layout = ProvenanceLayout::new(root.clone());
-    let tracked = root.join("tracked");
-    std::fs::create_dir_all(layout.state_dir()).unwrap();
-    std::fs::create_dir_all(layout.cache_dir()).unwrap();
-    std::fs::create_dir_all(tracked.join("transaction")).unwrap();
-    std::fs::write(tracked.join("transaction/sentinel"), "keep").unwrap();
-    std::os::unix::fs::symlink(&tracked, layout.import_transactions_dir()).unwrap();
-    let transaction = layout.import_transactions_dir().join("transaction");
-    std::fs::write(
-        layout.publication_marker_path(),
-        serde_json::to_vec(&serde_json::json!({
-            "transaction_dir": transaction,
-            "phase": "published"
-        }))
-        .unwrap(),
-    )
-    .unwrap();
-
-    let error = recover_pending_publication(&layout)
-        .unwrap_err()
-        .to_string();
-
-    assert!(error.contains("symlink component"), "{error}");
-    assert!(tracked.join("transaction/sentinel").is_file());
+        assert_eq!(
+            format!("{error:#}"),
+            format!(
+                "publication lock path contains a symlink component: {}",
+                layout.import_transactions_dir()
+            ),
+            "inside the repository: {inside_repository}"
+        );
+        assert!(!ran);
+        assert!(target.join("transaction/sentinel").is_file());
+        assert!(layout.publication_marker_path().is_file());
+    }
 }
 
 #[cfg(unix)]
@@ -163,7 +168,7 @@ fn recovery_rejects_a_symlink_component_even_when_the_written_path_resolves_insi
     )
     .unwrap();
 
-    let error = recover_pending_publication(&layout)
+    let error = with_repository_publication(&layout, |_| Ok(()))
         .unwrap_err()
         .to_string();
 
@@ -194,7 +199,7 @@ fn recovery_clears_published_marker_when_transaction_is_missing() {
     )
     .unwrap();
 
-    recover_pending_publication(&layout).unwrap();
+    with_repository_publication(&layout, |_| Ok(())).unwrap();
 
     assert!(layout.state_dir().is_dir());
     assert!(!layout.publication_marker_path().exists());
@@ -220,7 +225,7 @@ fn recovery_rejects_a_transaction_that_is_a_regular_file() {
     )
     .unwrap();
 
-    let error = recover_pending_publication(&layout)
+    let error = with_repository_publication(&layout, |_| Ok(()))
         .unwrap_err()
         .to_string();
 
@@ -370,7 +375,8 @@ fn a_repository_read_in_the_publication_gap_waits_for_the_publication() {
     with_repository_publication(&layout, |held| {
         with_staged_state(held, false, StampFromGit, |staged| {
             let manifest = staged.layout.manifest_path();
-            staged.publish_shard(&manifest, serde_json::to_vec(&published)?)
+            staged.publish_shard(&manifest, serde_json::to_vec(&published)?)?;
+            stage_two_new_shards(staged)
         })
     })
     .unwrap();
@@ -399,7 +405,7 @@ fn read_only_record_kinds_in_the_publication_swap_find_no_record() {
         }
     });
     let published = with_repository_publication(&live, |held| {
-        with_staged_state(held, false, StampFromGit, |_staged| Ok(()))
+        with_staged_state(held, false, StampFromGit, stage_two_new_shards)
     });
     crate::test_probes::disarm("state_after_backup_rename");
     published.unwrap();

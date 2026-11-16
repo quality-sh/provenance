@@ -1,8 +1,7 @@
 //! A Resolution that the reviewer approves on the review page can be cited at once. The
 //! approval leaves the lifecycle status proposed, and the citation check reads the
 //! accepted current revision as approval.
-#[path = "review_host_support/mod.rs"]
-mod review_host_support;
+use crate::review_host_support;
 
 use provenance_macros::verifies;
 use review_host_support::{
@@ -83,23 +82,29 @@ fn setup() -> (tempfile::TempDir, Host) {
     (repo, host)
 }
 
-/// Approves the current revision of the Resolution as the review page does.
-fn approve(host: &Host) {
-    let proposal = read(host, "/resolutions/res_reject")["decision"]["pending"]["proposal_id"]
+/// Accepts the pending submission of one record as the review page does.
+fn accept_pending(host: &Host, collection: &str, kind: &str, id: &str) {
+    let path = format!("/{collection}/{id}");
+    let proposal = read(host, &path)["decision"]["pending"]["proposal_id"]
         .as_str()
         .unwrap()
         .to_owned();
     let (status, body) = send(
         host,
         "POST",
-        &format!("/resolutions/res_reject/submissions/{proposal}/decide"),
+        &format!("{path}/submissions/{proposal}/decide"),
         None,
         &json!({
             "actor":{"identity_type":"human","id":"reviewer"}, "decision":"accepted",
-            "canonical_artifact":{"artifact_type":"resolution","artifact_id":"res_reject"}
+            "canonical_artifact":{"artifact_type":kind,"artifact_id":id}
         }),
     );
     assert_eq!(status, 200, "{body}");
+}
+
+/// Approves the current revision of the Resolution as the review page does.
+fn approve(host: &Host) {
+    accept_pending(host, "resolutions", "resolution", "res_reject");
     let after = read(host, "/resolutions/res_reject");
     // The approval does not change the lifecycle status.
     assert_eq!(after["status"], "proposed");
@@ -127,6 +132,7 @@ fn an_answer_can_cite_a_resolution_that_the_reviewer_approved() {
 fn a_rule_can_become_active_when_its_resolution_was_approved_in_review() {
     let (_repo, host) = setup();
     approve(&host);
+    accept_pending(&host, "rules", "rule", "rule_keep_result");
     let rule = read(&host, "/rules/rule_keep_result");
     let (status, body) = send(
         &host,
@@ -136,6 +142,13 @@ fn a_rule_can_become_active_when_its_resolution_was_approved_in_review() {
         &json!({"status":"active"}),
     );
     assert_eq!(status, 200, "{body}");
+    let requested = read(&host, "/rules/rule_keep_result");
+    assert_eq!(requested["status"], "review", "{requested}");
+    assert_eq!(
+        requested["decision"]["pending"]["status_request"]["status"], "active",
+        "{requested}"
+    );
+    accept_pending(&host, "rules", "rule", "rule_keep_result");
     assert_eq!(read(&host, "/rules/rule_keep_result")["status"], "active");
 }
 

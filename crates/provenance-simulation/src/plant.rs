@@ -20,6 +20,9 @@ pub enum Plant {
     /// The storage sets the time of the newest message of each set that it
     /// lands to zero, so a later message has no later time (O2).
     BackdateMessage,
+    /// The storage lands each whole set of an engine as a set with the
+    /// atomicity of each key, and records it so (O3).
+    LandWholeSetPerKey,
     /// The clock continues from the last run, so two runs of one case write
     /// other times (L8).
     SharedClock,

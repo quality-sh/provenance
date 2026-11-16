@@ -1,4 +1,4 @@
-mod discussion_support;
+use crate::discussion_support;
 use discussion_support::{fixture, id, repository, scope};
 use provenance_core::protocol::failure::OperationError;
 use provenance_core::threads::DiscussionStatus;

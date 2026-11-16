@@ -1,6 +1,7 @@
 //! A spawned `provenance mcp` and the CLI take the same fields: the change tool and the
 //! CLI record actions store the same records, and get returns the same review link.
 
+use crate::bounded_process::{provenance, Bounded as _};
 use provenance_macros::verifies;
 use provenance_mcp::Client;
 use serde_json::{json, Value};
@@ -8,10 +9,7 @@ use std::process::Stdio;
 
 /// The standard output of one CLI command that succeeds.
 fn cli(args: &[&str]) -> String {
-    let output = assert_cmd::Command::new(assert_cmd::cargo::cargo_bin!("provenance"))
-        .args(args)
-        .output()
-        .unwrap();
+    let output = provenance().args(args).bounded_output();
     assert!(
         output.status.success(),
         "{args:?}: {}",
@@ -20,7 +18,8 @@ fn cli(args: &[&str]) -> String {
     String::from_utf8(output.stdout).unwrap()
 }
 
-fn init(repo: &str) {
+/// Makes a repository with one scope at `repo`.
+pub fn init(repo: &str) {
     cli(&[
         "init",
         "--scope",
@@ -33,13 +32,13 @@ fn init(repo: &str) {
 }
 
 /// One spawned `provenance mcp` process and its connected client.
-struct Server {
+pub struct Server {
     child: tokio::process::Child,
-    client: Client,
+    pub client: Client,
 }
 
 impl Server {
-    async fn start(repo: &str) -> Self {
+    pub async fn start(repo: &str) -> Self {
         let mut child = tokio::process::Command::new(assert_cmd::cargo::cargo_bin!("provenance"))
             .args(["mcp", "--repo", repo])
             .stdin(Stdio::piped())
@@ -56,7 +55,7 @@ impl Server {
         Self { child, client }
     }
 
-    async fn close(mut self) {
+    pub async fn close(mut self) {
         self.client.cancel().await.unwrap();
         let status = self.child.wait().await.unwrap();
         assert!(status.success(), "{status}");
@@ -121,7 +120,7 @@ async fn the_change_tool_and_the_cli_store_the_same_records() {
     for id in ids {
         // The CLI fills these create fields with its own defaults; MCP takes them as given.
         let arguments = json!({"action":"create","target":id,"type":"requirement",
-            "statement":statement,"actor":"cli","status":"active","depends_on":[],"supersedes":[]});
+            "statement":statement,"status":"active","depends_on":[],"supersedes":[]});
         let created = server.client.call("change", arguments).await;
         assert_ne!(created["isError"], json!(true), "{created}");
     }

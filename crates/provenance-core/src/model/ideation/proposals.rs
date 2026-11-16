@@ -83,4 +83,7 @@ pub type Proposal = ProposalCard;
 #[serde(deny_unknown_fields)]
 pub struct RecordRevisionBinding {
     pub revision: StableId,
+    /// The lifecycle status that an approval of the submission sets.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub status_request: Option<crate::review::StatusRequest>,
 }

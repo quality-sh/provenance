@@ -1,9 +1,6 @@
 #![cfg(feature = "test-fixture")]
 
-mod support {
-    pub mod api_fixture;
-    pub mod records;
-}
+use crate::support;
 
 use provenance_porcelain::api::{ApiArguments, ApiMethod, ApiRequest};
 use provenance_porcelain::Porcelain;

@@ -3,10 +3,11 @@
 //! scope byte for byte unchanged.
 
 use assert_cmd::Command;
+use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
-#[path = "export_fixture_support/mod.rs"]
-mod export_fixture_support;
+use crate::export_fixture_support;
+use crate::support::state_files::files_below;
 
 fn init(repo: &Path) {
     Command::cargo_bin("provenance")
@@ -81,25 +82,9 @@ fn import(repo: &Path, input: &Path) -> assert_cmd::assert::Assert {
         .assert()
 }
 
-/// Every file under the stored state, with its exact bytes.
-fn stored_state(repo: &Path) -> Vec<(PathBuf, Vec<u8>)> {
-    fn walk(directory: &Path, files: &mut Vec<(PathBuf, Vec<u8>)>) {
-        let mut entries: Vec<PathBuf> = std::fs::read_dir(directory)
-            .unwrap()
-            .map(|entry| entry.unwrap().path())
-            .collect();
-        entries.sort();
-        for entry in entries {
-            if entry.is_dir() {
-                walk(&entry, files);
-            } else {
-                files.push((entry.clone(), std::fs::read(&entry).unwrap()));
-            }
-        }
-    }
-    let mut files = Vec::new();
-    walk(&repo.join(".provenance"), &mut files);
-    files
+/// Every file under `.provenance`, with its exact bytes.
+fn stored_state(repo: &Path) -> BTreeMap<PathBuf, Vec<u8>> {
+    files_below(repo.join(".provenance"))
 }
 
 #[test]

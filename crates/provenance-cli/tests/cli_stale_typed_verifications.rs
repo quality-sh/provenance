@@ -2,10 +2,8 @@ use provenance_macros::verifies;
 use serde_json::{json, Value};
 use std::path::Path;
 
-#[path = "support/review_paths.rs"]
-mod review_paths;
-#[path = "support/stale_repo.rs"]
-mod stale_repo;
+use crate::stale_repo;
+use crate::support::review_paths;
 use review_paths::provenance;
 use stale_repo::{apply_spec, commit, init_repo as new_repo, write};
 

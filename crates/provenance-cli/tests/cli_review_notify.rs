@@ -2,10 +2,8 @@
 //! through `codex queue`. The tests read what Codex accepted from the thread queue.
 #![cfg(target_os = "linux")]
 
-#[path = "review_host_support/codex.rs"]
-mod codex;
-#[path = "review_host_support/mod.rs"]
-mod review_host_support;
+use crate::codex;
+use crate::review_host_support;
 
 use codex::{notify, parts, registration, replay, Codex};
 use provenance_macros::verifies;
@@ -135,6 +133,44 @@ fn unaccepted_registration_fails_and_leaves_no_registration() {
         "{message}"
     );
     page_rule(&setup.host, "rule_after_refusal", "req_notify");
+    setup.quiet(&setup.thread, 0);
+}
+
+/// A registration whose document read cannot catch up refuses with the text of the
+/// document read refusal, and not with the text of its cause. A read database that the
+/// host cannot write stops the catch-up of a new Requirement line. The observation of
+/// the host reads only the state.
+#[test]
+#[verifies("rule_review_partial_reads_remain_explicit", examples)]
+fn registration_whose_catch_up_fails_refuses_with_the_text_of_the_refusal() {
+    let setup = Setup::start();
+    let database = setup.path().join(".provenance/cache/provenance.db");
+    let mut permissions = std::fs::metadata(&database).unwrap().permissions();
+    permissions.set_readonly(true);
+    std::fs::set_permissions(&database, permissions).unwrap();
+    let shard = setup
+        .path()
+        .join(".provenance/state/scopes/default/requirements/req.jsonl");
+    let text = std::fs::read_to_string(&shard).unwrap();
+    let first = text.lines().next().unwrap();
+    let mut line: serde_json::Value = serde_json::from_str(first).unwrap();
+    line["id"] = json!("req_after_failure");
+    std::fs::write(&shard, format!("{text}{line}\n")).unwrap();
+
+    let output = notify(
+        &setup.host,
+        &setup.codex,
+        setup.path(),
+        "req_notify",
+        "codex",
+        &setup.thread,
+    );
+
+    assert_eq!(
+        refusal(&output),
+        json!({"kind": "operation_failed",
+            "message": "catch-up failed; restart the document read"})
+    );
     setup.quiet(&setup.thread, 0);
 }
 

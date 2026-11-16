@@ -94,7 +94,7 @@ fn import_refuses_cross_kind_keyword_reuse_without_changing_live_state() {
 }
 
 #[test]
-fn import_preserves_a_keyword_contribution_from_a_landing() {
+fn import_preserves_a_stored_keyword_contribution() {
     let dir = tempfile::tempdir().unwrap();
     let repo = dir.path().join("repo");
     init_repo(&repo, None);
@@ -111,8 +111,8 @@ fn import_preserves_a_keyword_contribution_from_a_landing() {
         ])
         .assert()
         .success();
-    let landing_path = repo.join(".provenance/state/scopes/default/ideation/landings.jsonl");
-    std::fs::create_dir_all(landing_path.parent().unwrap()).unwrap();
+    let contributions = repo.join(".provenance/state/scopes/default/ideation/contributions.jsonl");
+    std::fs::create_dir_all(contributions.parent().unwrap()).unwrap();
     let contribution = serde_json::json!({
         "scope_id": "default", "id": "search",
         "target": {"artifact_type": "source", "artifact_id": "source_anchor"},
@@ -122,16 +122,7 @@ fn import_preserves_a_keyword_contribution_from_a_landing() {
         "unsupported_recommendations": [],
         "uncertainty": {"level": "low", "rationale": "Direct"}, "open_questions": []
     });
-    std::fs::write(
-        &landing_path,
-        format!(
-            "{}\n",
-            serde_json::json!({
-                "contributions": [contribution]
-            })
-        ),
-    )
-    .unwrap();
+    std::fs::write(&contributions, format!("{contribution}\n")).unwrap();
     let baseline = dir.path().join("baseline.json");
     export_scope(&repo, &baseline).success();
 
@@ -142,7 +133,6 @@ fn import_preserves_a_keyword_contribution_from_a_landing() {
         std::fs::read(after).unwrap(),
         std::fs::read(baseline).unwrap()
     );
-    assert!(!landing_path.exists());
 }
 
 #[test]
@@ -206,7 +196,8 @@ fn missing_disposition_canonical_artifact_import_is_atomic() {
     import_scope(&repo, &input)
         .failure()
         .stderr(predicates::str::contains(
-            "canonical artifact does not exist",
+            "scopes/default/ideation/dispositions.jsonl line 1: disposition disposition_a \
+             names requirement req_missing, which the scope does not have",
         ));
 
     let after = dir.path().join("after.json");
@@ -279,7 +270,8 @@ fn check_rejects_a_misfiled_disposition_target() {
         .assert()
         .failure()
         .stderr(predicates::str::contains(
-            "canonical artifact does not exist",
+            "scopes/default/ideation/dispositions.jsonl line 1: disposition disposition_a \
+             names requirement req_misfiled, which the scope does not have",
         ));
 }
 

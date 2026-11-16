@@ -12,7 +12,7 @@ fn binary() -> &'static std::path::Path {
 }
 
 /// The standard output of one CLI command that succeeds.
-fn cli(args: &[&str]) -> String {
+pub fn cli(args: &[&str]) -> String {
     let output = assert_cmd::Command::new(binary())
         .args(args)
         .output()
@@ -26,9 +26,14 @@ fn cli(args: &[&str]) -> String {
 }
 
 /// The JSON answer of one CLI command in `repo`.
-fn cli_json(repo: &str, args: &[&str]) -> Value {
+pub fn cli_json(repo: impl AsRef<std::path::Path>, args: &[&str]) -> Value {
     let mut all = args.to_vec();
-    all.extend(["--repo", repo, "--format", "json"]);
+    all.extend([
+        "--repo",
+        repo.as_ref().to_str().unwrap(),
+        "--format",
+        "json",
+    ]);
     serde_json::from_str(&cli(&all)).unwrap()
 }
 
@@ -45,7 +50,7 @@ fn cite(repo: &str, requirement: &str, source: &str) {
 }
 
 /// A Rule under a Requirement that cites a Source.
-fn chain(repo: &str) {
+pub fn chain(repo: &str) {
     cli(&[
         "init",
         "--path",
@@ -95,7 +100,7 @@ fn chain(repo: &str) {
 }
 
 /// The structured result of one successful MCP tool call.
-async fn mcp(client: &Client, tool: &str, arguments: Value) -> Value {
+pub async fn mcp(client: &Client, tool: &str, arguments: Value) -> Value {
     let result = client.call(tool, arguments.clone()).await;
     assert_ne!(
         result["isError"],

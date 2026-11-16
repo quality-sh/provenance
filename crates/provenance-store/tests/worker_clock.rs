@@ -2,8 +2,7 @@
 //! through JavaScript on wasm32. The standard library clock panics in a
 //! Worker, so only the local adapter, which never runs there, may name it.
 
-#[path = "support/memory.rs"]
-mod memory;
+use crate::memory;
 
 use memory::{id, initial_state, scope, FixedClock};
 use provenance_core::{MessageRole, NodeType, RequirementStatus, ThreadParent};

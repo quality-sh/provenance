@@ -1,8 +1,8 @@
 //! Legacy Requirement authoring routed through guarded review writes.
 
 use super::{
-    automatic_submission::AUTHORING_ACTOR,
     input::{CitesEdit, ListEdit, RequirementRelations, SaveRequirement, SingleEdit},
+    write_actor::AUTHORING_ACTOR,
     CreateReviewRequirement,
 };
 use crate::{
@@ -14,7 +14,10 @@ use crate::{
     write_error::{WriteError, WriteFailure},
 };
 use camino::Utf8Path;
-use provenance_core::{review::ReviewRecord, Requirement, ScopeId, SourceReference, StableId};
+use provenance_core::{
+    review::{ReviewRecord, StatusRequest},
+    Requirement, ScopeId, SourceReference, StableId,
+};
 
 impl StateStore {
     pub(crate) fn replace_native_records<T: GraphRecord>(
@@ -37,12 +40,19 @@ impl StateStore {
                     for record in &before {
                         if !replacement.iter().any(|after| after.id() == record.id()) {
                             let record: ReviewRecord = record.clone().into();
+                            let message = format!(
+                                "cannot delete {} {} because a replacement of its record file \
+                                 leaves it out; keep the record in the replacement",
+                                record.kind().as_str(),
+                                record.id().as_str()
+                            );
                             return Err(crate::refusal::refuse!(
                                 (WriteFailure::EnrolledRecordDeletionConflict {
                                     record_kind: record.kind(),
                                     record_id: record.id().clone(),
+                                    message: message.clone(),
                                 }),
-                                "an enrolled graph record cannot be removed by replacement"
+                                "{message}"
                             ));
                         }
                     }
@@ -63,13 +73,29 @@ impl StateStore {
         id: &StableId,
         write: impl FnOnce(&Self) -> anyhow::Result<T>,
     ) -> anyhow::Result<T> {
+        self.create_native_record_with(path, id, None, write)
+    }
+
+    /// Creates one native record and opens its review submission in the same
+    /// write. With a status request, the creation submission is that request.
+    pub(crate) fn create_native_record_with<T: GraphRecord>(
+        &self,
+        path: &Utf8Path,
+        id: &StableId,
+        status_request: Option<StatusRequest>,
+        write: impl FnOnce(&Self) -> anyhow::Result<T>,
+    ) -> anyhow::Result<T> {
         let relative = path.strip_prefix(self.layout.root())?.to_owned();
         let stamp = self.current_record_stamp()?;
         self.with_repository_publication(|held| {
             with_record_state(held, RecordStamp::resolved(stamp), |staged| {
                 let staged_path = staged.layout.root().join(&relative);
                 let created = staged.permitting(&[&staged_path], id.as_str(), write)?;
-                staged.open_creation_submission(&created.clone().into(), AUTHORING_ACTOR)?;
+                let record = created.clone().into();
+                status_request.map_or_else(
+                    || staged.open_creation_submission(&record, AUTHORING_ACTOR),
+                    |request| staged.open_status_request(&record, AUTHORING_ACTOR, request),
+                )?;
                 Ok(created)
             })
         })

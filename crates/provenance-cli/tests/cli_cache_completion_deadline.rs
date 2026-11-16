@@ -7,9 +7,7 @@ use provenance_macros::verifies;
 use serde_json::json;
 use std::time::{Duration, Instant};
 
-mod support {
-    pub mod review_paths;
-}
+use crate::support;
 use support::review_paths::{init, provenance};
 
 #[test]

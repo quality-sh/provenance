@@ -9,9 +9,6 @@ use provenance_macros::rule;
 /// submission of a record at the read budget stays inside the budget.
 const SUMMARY_CHARS: usize = 1000;
 
-/// The submission actor of a server write that names no actor.
-pub(super) const AUTHORING_ACTOR: &str = "authoring";
-
 impl StateStore {
     /// Opens the review submission of a new record in the same write.
     #[rule("rule_native_create_opens_review_submission")]
@@ -64,35 +61,46 @@ impl StateStore {
         if pending || accepted {
             return Ok(());
         }
-        let value = serde_json::to_value(&record)?;
-        let summary = ["statement", "position", "question", "title", "name"]
-            .into_iter()
-            .find_map(|field| value.get(field).and_then(serde_json::Value::as_str))
-            .unwrap_or_else(|| record.id().as_str())
-            .chars()
-            .take(SUMMARY_CHARS)
-            .collect::<String>();
-        let input = SubmitRecordReview {
-            scope_id: record.scope_id().clone(),
-            actor: actor.to_owned(),
-            record_kind: record.kind(),
-            record_id: record.id().clone(),
-            declared_by: value
-                .get("declared_by")
-                .and_then(serde_json::Value::as_str)
-                .map(str::to_owned),
-            title: format!("Review {}", record.id().as_str()),
-            summary,
-            confidence: None,
-            source_ids: Vec::new(),
-            evidence_references: Vec::new(),
-            builds_on: Vec::new(),
-            expected_revision: Some(revision.clone()),
-            revises: None,
-        };
-        check_request_size(&input)?;
+        let input = record_submission(&record, actor, revision)?;
         let path = shards::proposal_cards_path(&self.layout, record.scope_id());
         self.permitting(&[&path], "*", |store| store.commit_submission(input))?;
         Ok(())
     }
+}
+
+/// The submission of one revision of `record` that the server opens, with a
+/// summary from the main text of the record.
+pub(super) fn record_submission(
+    record: &ReviewRecord,
+    actor: &str,
+    revision: &provenance_core::StableId,
+) -> anyhow::Result<SubmitRecordReview> {
+    let value = serde_json::to_value(record)?;
+    let summary = ["statement", "position", "question", "title", "name"]
+        .into_iter()
+        .find_map(|field| value.get(field).and_then(serde_json::Value::as_str))
+        .unwrap_or_else(|| record.id().as_str())
+        .chars()
+        .take(SUMMARY_CHARS)
+        .collect::<String>();
+    let input = SubmitRecordReview {
+        scope_id: record.scope_id().clone(),
+        actor: actor.to_owned(),
+        record_kind: record.kind(),
+        record_id: record.id().clone(),
+        declared_by: value
+            .get("declared_by")
+            .and_then(serde_json::Value::as_str)
+            .map(str::to_owned),
+        title: format!("Review {}", record.id().as_str()),
+        summary,
+        confidence: None,
+        source_ids: Vec::new(),
+        evidence_references: Vec::new(),
+        builds_on: Vec::new(),
+        expected_revision: Some(revision.clone()),
+        revises: None,
+    };
+    check_request_size(&input)?;
+    Ok(input)
 }

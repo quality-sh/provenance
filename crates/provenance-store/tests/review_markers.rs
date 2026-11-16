@@ -1,5 +1,4 @@
-#[allow(dead_code)]
-mod review_support;
+use crate::review_support;
 
 use review_support::*;
 

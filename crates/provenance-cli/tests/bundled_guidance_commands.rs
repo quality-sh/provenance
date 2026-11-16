@@ -117,13 +117,22 @@ fn shell_block_commands(block: &str) -> Vec<String> {
 fn command_fragments(text: &str) -> Vec<String> {
     text.split(['\n', ';'])
         .filter_map(|fragment| {
-            let start = fragment.find("provenance ")?;
+            let start = command_start(fragment)?;
             let command = fragment[start..]
                 .trim()
                 .trim_end_matches(['.', ',', ':', ')', '`']);
             Some(command.split_whitespace().collect::<Vec<_>>().join(" "))
         })
         .collect()
+}
+
+/// The start of the first `provenance ` command in a fragment. A comment directive such as
+/// `// @provenance rule: <rule_id>` is not a command.
+fn command_start(fragment: &str) -> Option<usize> {
+    fragment
+        .match_indices("provenance ")
+        .map(|(start, _)| start)
+        .find(|&start| !fragment[..start].ends_with('@'))
 }
 
 fn check_help(command: &str, repo: &Path) -> Result<(), String> {

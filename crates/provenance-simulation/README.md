@@ -30,7 +30,7 @@ Each layer is one job, so a failure names one layer.
 | L8 | engine, contract | One case gives the same final bytes each time. |
 | O1 | contract | No answer is a write failure (500) unless a fault met the operation. |
 | O2 | contract | The times of the messages increase in the order that they landed. |
-| O3 | contract | A stage lands as one whole set on the revision where it started. |
+| O3 | contract | A stage lands as one set on the revision where it started: a whole set, or a per-key set for a change of one key. |
 
 Each law apart from L0 has a planted test: `tests/engine_planted.rs`,
 `tests/contract_planted.rs` and
@@ -38,8 +38,9 @@ Each law apart from L0 has a planted test: `tests/engine_planted.rs`,
 plants the smallest fault that its law must see. Most faults are in the
 simulated storage, the identity or the repository on disk. Three use a
 stand-in: the CLI L4 test changes the etag that the run recorded, the CLI L7
-test gives the engine a stand-in that refuses a claim, and the O3 test adds
-a second stage to a decision. If the law does not see its fault, the test
+test gives the engine a stand-in that refuses a claim, and the O3 tests add
+a second stage to a decision or post a message in the stage of a decision.
+If the law does not see its fault, the test
 fails with "simulation check broken", and the issue says that a check is
 broken, not a law. `tests/storage_contract.rs` runs the storage contract
 suite of `provenance-store` on the simulated storage. `tests/refused_post.rs`
@@ -91,36 +92,61 @@ law. After a broken law, Hegel shrinks the case; each run of the shrink adds
 only to "shrink runs".
 
 A stop of a CLI write kills the write process at a point of its publish
-that the test sees on disk: an even `at` when the transaction directory of
-the write appears, an odd `at` when the publication marker appears while
-that transaction exists. The order of a publish is in
-`provenance_store::storage::local::whole_set::land`. After the kill, the
-transaction, the marker, the phase of the marker and the live state tell
-where the stop landed. Each stop that a case draws adds 1 to one of these
-rows:
+that the test sees on disk. A write of two keys or more publishes through a
+transaction directory and a publication marker: an even `at` stops it when
+its transaction appears, an odd `at` when the marker appears while that
+transaction exists. The order of this publish is in
+`provenance_store::storage::local::whole_set::land`. A write of one key
+writes a temporary file next to the key in the state tree and renames it to
+the key: each `at` stops it when the temporary file appears. The rename
+comes one file sync later, so the stop can land before or after it, or the
+write can end before the kill. After the kill, the
+transaction, the marker, the phase of the marker, the temporary file and
+the live state tell where the stop landed. Each stop that a case draws adds
+1 to one of these rows:
 
 | Row | What the stop did |
 | --- | ----------------- |
 | stops before the marker | It killed the write while its transaction existed and no marker was there. |
 | stops after the marker and before the install | It killed the write after the marker and before the install of the new state. |
 | stops after the install and before the answer | It killed the write after the install of the new state. |
+| stops before the rename of the key | It killed a one-key write while its temporary file existed, before the rename. |
+| stops after the rename of the key and before the answer | It killed a one-key write after the rename of its temporary file to the key. |
 | stops after the answer | The write gave its answer, a success or a refusal, before the kill. |
-| stops of a write that ended before its stop point | The write ended before the test saw its point, and the state did not change. |
-| stops whose point the test did not see | The write ended and changed the state, but the test did not see its point. |
+| stops of a write that ended before the test saw a point | The write ended before the test saw a point of its publish. |
 | stops of a write that the simulation did not send | The CLI layer has no route for the write, or the read of its etag refused. |
 | stops with no waiting write of the engine | No write of the engine waited, so the stop had no write. |
 | stops of a write that did not end in its limit | The write did not end in the process limit; the case breaks L0. |
 
 The row "stops that left no live state" counts the stops that killed a
 write before its answer and left no live state. The next read recovers
-the live state from the transaction.
+the live state from the transaction. For `stop-after-marker`, this count
+depends on where the stop lands: before or after the rename of the live
+state to its backup. The two places count as one stop, "stops after the
+marker and before the install", so a count of 0 on a system in one run is
+not a fault. The crash tests of the store stop at the backup of the live
+state with no race.
 
-Three probes of the CLI layer stop a write on each run. One stops a claim at
-its transaction, and the stop must land before the marker. One stops a
-claim at the marker, and the stop must land after the marker and before the
-install; a read after the stop must remove the marker and give the state
-before the claim. One stops each kind of write that the simulation sends
-at its transaction, and each stop must kill its write before its answer.
+Four probes of the CLI layer stop a write on each run. The job summary of
+each system counts the stops of each probe in rows of their own: the name
+of the probe, a row of the table above, and the count.
+
+- `stop-before-marker` stops an update of two keys when its transaction
+  appears. The stop must land before the marker.
+- `stop-after-marker` stops the update when its marker appears. The stop
+  must land after the marker and before the install. After each of these
+  two stops, a read must remove the marker and the transaction and give the
+  state before the update.
+- `one-key-write` stops a claim, a write of one key, when its temporary
+  file appears. The stop can land before the rename or after it, or the
+  claim can end with a success before the kill. For a stop before the
+  rename, the state after a read is the state before the claim; the
+  temporary file stays, but no read sees it. For a stop after the rename
+  or a success, only the Topic key changed after a read.
+- `each-kind` stops each kind of write that the simulation sends at its
+  first point. A write of two keys must stop before the marker. A write of
+  one key can stop before or after its rename, or end with a success
+  before the kill.
 
 ## When a failure issue opens
 
@@ -203,5 +229,3 @@ change the other lines; remove the line of a cause when its fix merges.
 
 - The contract job can fail on O1 when an update of a Requirement that does
   not exist answers a write failure (500): GitHub issue 648.
-- The CLI jobs can fail on L6 when the state holds two withdrawals of one
-  review submission: bead provenance-chgs.

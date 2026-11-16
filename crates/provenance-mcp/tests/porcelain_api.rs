@@ -1,13 +1,6 @@
 #![cfg(feature = "test-fixture")]
 
-#[allow(dead_code)]
-mod support {
-    #[path = "../../../provenance-transport/tests/support/api_fixture.rs"]
-    pub mod api_fixture;
-    pub mod api_session;
-    #[path = "../../../provenance-transport/tests/support/records.rs"]
-    pub mod records;
-}
+use crate::support;
 
 use provenance_macros::verifies;
 use provenance_porcelain::api::{ApiArguments, ApiOutcome, ApiRequest};

@@ -140,35 +140,34 @@ each archive commit that is not in the history of `HEAD`.
 
 ## Native CLI
 
-Record commands use the resource address. The record ID comes from the
-address, and `--scope` selects the scope. The CLI response of a Requirement,
-Rule, Resolution, or Topic update adds the review that the update opened:
-`review_url` when a review host runs, or `review_message` when no review host
-runs. The PATCH response has neither field. Scalar fields use flags. Arrays and
-objects use one JSON object on standard input with `--stdin`:
+A record command names the record ID first, and `--scope` selects the scope.
+The CLI response of a Requirement, Rule, Resolution, or Topic update adds the
+review that the update opened: `review_url` when a review host runs, or
+`review_message` when no review host runs. The PATCH response has neither
+field. Scalar fields use flags. Arrays and objects use one JSON object on
+standard input with `--stdin`:
 
 ```sh
 printf '%s' '{"url":"https://example.test/policy","reference":null}' |
-  provenance --repo . --scope default sources source_policy update --stdin
+  provenance source_policy update --repo . --scope default --stdin
 
 printf '%s' '{"status":"approved","approved_by":"reviewer","approved_at":1234}' |
-  provenance --repo . --scope default resolutions resolution_policy update --stdin
+  provenance resolution_policy update --repo . --scope default --stdin
 ```
 
 Here `null` clears `reference`, as on the route. A body that carries `id`,
 `scope_id`, or a header fact is refused.
 
-A Requirement update sends the ETag of the last read. The CLI supplies the
-`actor` default:
+A Requirement update sends the ETag of the last read of the record. The
+`actor` is optional: an update that gives no actor records the actor `authoring`:
 
 ```sh
-provenance req_policy get --view review
+etag=$(provenance req_policy get --repo . --scope default --format json | jq -r .edit.etag)
 printf '%s' '{"description":"Reviewed wording."}' |
-  provenance --repo . --scope default requirements req_policy update \
-    --if-match "$etag" --stdin
+  provenance req_policy update --repo . --scope default --if-match "$etag" --stdin
 ```
 
-Copy `review.edit.etag` unchanged. A value has the form `sha256:` followed by
+Copy `edit.etag` unchanged. A value has the form `sha256:` followed by
 64 lowercase hexadecimal characters.
 
 ## HTTP clients

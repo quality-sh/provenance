@@ -1,4 +1,5 @@
 use super::*;
+use provenance_core::protocol::read_failure::UnparsableStateFile;
 use serde::{Deserialize, Serialize};
 #[derive(Serialize)]
 struct Record {
@@ -74,6 +75,7 @@ fn persistence_failure_after_mutation_reports_a_write_failure() {
     let error = mutate_jsonl_locked(
         &path,
         &root.join("records.lock"),
+        usize::MAX,
         |records: &mut Vec<serde_json::Value>| {
             records.push(serde_json::json!({"id":"one"}));
             // A directory at the destination makes the real atomic replacement fail.
@@ -108,6 +110,7 @@ fn mutation_refusal_keeps_its_type_and_does_not_publish_in_memory_changes() {
     let error = mutate_jsonl_locked(
         &path,
         &root.join("records.lock"),
+        usize::MAX,
         |records: &mut Vec<serde_json::Value>| -> anyhow::Result<()> {
             records.clear();
             Err(SourceFailure::wrap(
@@ -137,6 +140,7 @@ fn unrelated_mutation_keeps_a_nested_unknown_row_exactly() {
     mutate_jsonl_locked(
         &path,
         &root.join("records.lock"),
+        usize::MAX,
         |records: &mut Vec<NestedRecord>| {
             records.push(NestedRecord {
                 id: "two".into(),
@@ -169,6 +173,7 @@ fn mutation_keeps_a_changed_row_with_top_level_unknown_data() {
     mutate_jsonl_locked(
         &path,
         &root.join("records.lock"),
+        usize::MAX,
         |records: &mut Vec<NestedRecord>| {
             records[0].detail.known = "changed".into();
             Ok(())
@@ -196,15 +201,16 @@ fn mutation_refuses_a_changed_row_with_nested_unknown_data() {
     let message = mutate_jsonl_locked(
         &path,
         &root.join("records.lock"),
+        usize::MAX,
         |records: &mut Vec<NestedRecord>| {
             records[0].detail.known = "changed".into();
             Ok(())
         },
     )
     .unwrap_err();
-    let state = crate::state_store::readers::StateLineInvalid::find(&message).unwrap();
+    let state = UnparsableStateFile::find(message.as_ref()).unwrap();
     assert_eq!(
-        (state.line, state.message.as_str()),
+        (state.line(), state.message()),
         (
             1,
             "nested unknown field `detail.extension` cannot survive a typed record change"
@@ -228,15 +234,16 @@ fn mutation_refuses_a_changed_row_with_a_repeated_unknown_field() {
     let message = mutate_jsonl_locked(
         &path,
         &root.join("records.lock"),
+        usize::MAX,
         |records: &mut Vec<NestedRecord>| {
             records[0].detail.known = "changed".into();
             Ok(())
         },
     )
     .unwrap_err();
-    let state = crate::state_store::readers::StateLineInvalid::find(&message).unwrap();
+    let state = UnparsableStateFile::find(message.as_ref()).unwrap();
     assert_eq!(
-        (state.line, state.message.as_str()),
+        (state.line(), state.message()),
         (
             1,
             "repeated top-level member `extension` cannot survive a typed record change"

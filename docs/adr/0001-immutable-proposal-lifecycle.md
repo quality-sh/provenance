@@ -26,7 +26,7 @@ Qualifying swarm proposals carry immutable assertions; qualification uses the co
 including synthesis-only follow-ups. Missing or invalid assertion evidence rejects the whole
 journal batch, and swarm output cannot supply disposition authority.
 Whole-scope import stages and checks the complete state
-directory before publication. A repository publication lock precedes lifecycle and shard locks;
+directory before publication. A repository publication lock precedes shard locks;
 a durable phase marker restores backup or finishes cleanup after interruption. Publication uses
 portable directory renames rather than claiming an unavailable atomic directory exchange.
 Proposal

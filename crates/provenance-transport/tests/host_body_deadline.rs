@@ -1,10 +1,7 @@
 #![cfg(feature = "test-fixture")]
 //! A request body that stalls cannot hold its ingress slot past the request deadline.
 
-mod support {
-    pub mod records;
-    pub mod resource_http;
-}
+use crate::support;
 
 use axum::{body::Body, http::Request};
 use futures::{poll, stream, StreamExt as _};

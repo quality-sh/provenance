@@ -1,74 +1,17 @@
 //! The failing-verification corpus for the Rust side (V11): an error and
 //! a panic both record `failed`, then propagate.
 
-use std::sync::{Mutex, MutexGuard};
+mod support;
 
-use provenance_core::{Manifest, RepoPathPrefix, ScopeId, VerificationRunStatus};
+use provenance_core::VerificationRunStatus;
 use provenance_macros::verifies;
-use provenance_sdk::{operations, verify, Repository};
-use provenance_store::layout::ProvenanceLayout;
+use provenance_sdk::{operations, verify};
+use provenance_store::state_store::CompleteVerificationInput;
+use provenance_store::write_error::{WriteError, WriteFailure};
+use support::{recorded_runs, seeded_rule};
 
-/// Serializes tests that set process environment variables.
-static ENV_LOCK: Mutex<()> = Mutex::new(());
-
-fn repository() -> (tempfile::TempDir, MutexGuard<'static, ()>) {
-    let guard = ENV_LOCK.lock().unwrap();
-    let dir = tempfile::tempdir().unwrap();
-    let root =
-        camino::Utf8PathBuf::from_path_buf(dunce::canonicalize(dir.path()).unwrap()).unwrap();
-    let layout = ProvenanceLayout::new(root.clone());
-    std::fs::create_dir_all(layout.manifest_path().parent().unwrap()).unwrap();
-    std::fs::write(
-        layout.manifest_path(),
-        serde_json::to_string(&Manifest::default_with_scope(
-            ScopeId::new("default").unwrap(),
-            RepoPathPrefix::new("."),
-        ))
-        .unwrap(),
-    )
-    .unwrap();
-    let source = root.join("crates/provenance-sdk/tests/verification.rs");
-    std::fs::create_dir_all(source.parent().unwrap()).unwrap();
-    std::fs::write(source, include_str!("verification.rs")).unwrap();
-    std::env::set_var("PROVENANCE_REPO", root.as_str());
-    (dir, guard)
-}
-
-fn seeded_rule(root: &std::path::Path) -> String {
-    let input: provenance_sdk::TypedSpecInput = serde_json::from_value(serde_json::json!({
-        "spec": "share-links",
-        "declared_by": "spec://rust",
-        "requirements": [{
-            "key": "sharing",
-            "statement": "Users can securely share documentation"
-        }],
-        "rules": [{
-            "key": "expiry",
-            "requirement": "sharing",
-            "statement": "Share links expire within 30 days"
-        }]
-    }))
-    .unwrap();
-    let root = camino::Utf8PathBuf::from_path_buf(root.to_path_buf()).unwrap();
-    let result = operations::apply(&Repository::open(&root, "default").unwrap(), input).unwrap();
-    result
-        .resources
-        .iter()
-        .find(|resource| {
-            matches!(
-                resource.kind,
-                provenance_store::state_store::TypedResourceKind::Rule
-            )
-        })
-        .unwrap()
-        .id
-        .as_str()
-        .to_string()
-}
-
-fn recorded_runs(root: &std::path::Path) -> Vec<provenance_core::VerificationRun> {
-    let root = camino::Utf8PathBuf::from_path_buf(root.to_path_buf()).unwrap();
-    operations::verification_runs(&Repository::open(&root, "default").unwrap(), None).unwrap()
+fn repository() -> (tempfile::TempDir, std::sync::MutexGuard<'static, ()>) {
+    support::repository("verification.rs", include_str!("verification.rs"))
 }
 
 #[test]
@@ -128,4 +71,109 @@ fn an_unwinding_callback_records_failed_then_propagates() {
     assert_eq!(runs.len(), 1);
     assert_eq!(runs[0].status, VerificationRunStatus::Failed);
     assert_eq!(runs[0].error.as_deref(), Some("expiry assertion failed"));
+}
+
+/// Completes the running run of the repository at `root` as passed, as a
+/// callback that completes its own run does. The failed completion of
+/// `verify` that follows is then refused.
+fn complete_the_running_run(root: &std::path::Path) -> String {
+    let run = recorded_runs(root)
+        .into_iter()
+        .find(|run| run.status == VerificationRunStatus::Running)
+        .unwrap();
+    let input = CompleteVerificationInput {
+        run: run.id.as_str().to_owned(),
+        status: "passed".to_owned(),
+        error: None,
+    };
+    operations::complete_verification(&support::open(root), input).unwrap();
+    run.id.as_str().to_owned()
+}
+
+/// A panic payload of a type that only this file has.
+#[derive(Debug, PartialEq)]
+struct ExpiryPanic(&'static str);
+
+/// Implementation aid with no Rule: no Rule states what `verify` gives when
+/// the store refuses its failed completion.
+#[test]
+fn a_callback_error_after_a_refused_completion_holds_the_refusal_as_its_cause() {
+    let (dir, _guard) = repository();
+    let rule = seeded_rule(dir.path());
+    let mut id = String::new();
+
+    let error = verify(&rule, "expiry-holds", || {
+        id = complete_the_running_run(dir.path());
+        Err::<(), String>("thirty-one days".to_string())
+    })
+    .unwrap_err();
+
+    assert_eq!(error.to_string(), "thirty-one days");
+    assert_eq!(
+        format!("{error:#}"),
+        format!("thirty-one days: verification run `{id}` is already complete")
+    );
+    assert!(matches!(
+        WriteError(error).safe(),
+        WriteFailure::AlreadyComplete
+    ));
+    let runs = recorded_runs(dir.path());
+    assert_eq!(runs.len(), 1);
+    assert_eq!(runs[0].status, VerificationRunStatus::Passed);
+}
+
+/// Implementation aid with no Rule: no Rule states what `verify` gives when
+/// the store refuses its failed completion. The test
+/// `a_refused_completion_after_a_panic_goes_to_the_standard_error` runs this
+/// test in a child process and reads its standard error.
+#[test]
+fn a_panic_after_a_refused_completion_goes_on_with_its_own_payload() {
+    let (dir, _guard) = repository();
+    let rule = seeded_rule(dir.path());
+
+    let unwind = std::panic::catch_unwind(|| {
+        let _ = verify(&rule, "expiry-holds", || -> Result<(), String> {
+            complete_the_running_run(dir.path());
+            std::panic::panic_any(ExpiryPanic("expiry assertion failed"))
+        });
+    })
+    .unwrap_err();
+
+    assert_eq!(
+        *unwind.downcast::<ExpiryPanic>().unwrap(),
+        ExpiryPanic("expiry assertion failed")
+    );
+    let runs = recorded_runs(dir.path());
+    assert_eq!(runs.len(), 1);
+    assert_eq!(runs[0].status, VerificationRunStatus::Passed);
+}
+
+/// Implementation aid with no Rule: no Rule states what `verify` gives when
+/// the store refuses its failed completion.
+#[test]
+fn a_refused_completion_after_a_panic_goes_to_the_standard_error() {
+    let child = "a_panic_after_a_refused_completion_goes_on_with_its_own_payload";
+    let output = std::process::Command::new(std::env::current_exe().unwrap())
+        .args(["--exact", child, "--nocapture", "--test-threads=1"])
+        .output()
+        .unwrap();
+
+    assert!(output.status.success());
+    let stderr = String::from_utf8(output.stderr).unwrap();
+    let refusals: Vec<&str> = stderr
+        .lines()
+        .filter(|line| line.contains("is not recorded as failed"))
+        .collect();
+    assert_eq!(refusals.len(), 1, "{stderr}");
+    let id = refusals[0]
+        .strip_prefix("verification run `")
+        .and_then(|rest| rest.split('`').next())
+        .unwrap();
+    assert_eq!(
+        refusals[0],
+        format!(
+            "verification run `{id}` is not recorded as failed: \
+             verification run `{id}` is already complete"
+        )
+    );
 }

@@ -26,10 +26,13 @@
 //! the local-disk adapters, git, the dictionary index files, the queries
 //! and the use cases that read through them.
 
+mod byte_count;
 pub mod cache;
 pub mod canonical_digest;
 pub mod code_refs;
 pub mod current_schema;
+#[cfg(feature = "host")]
+pub mod dictionary_index;
 pub mod dictionary_reference;
 pub mod families;
 #[cfg(all(feature = "host", feature = "test-fixture"))]
@@ -57,6 +60,8 @@ pub mod shards;
 pub mod stale;
 pub mod state_store;
 pub mod statement_analysis;
+#[cfg(all(test, feature = "host"))]
+mod stopped_child;
 pub mod storage;
 mod test_probes;
 #[cfg(feature = "host")]

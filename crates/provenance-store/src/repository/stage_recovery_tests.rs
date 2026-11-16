@@ -9,24 +9,14 @@ use crate::cache::tests::fixtures::{open, seeded_layout, sid};
 use crate::cache::{catch_up_state, open_cache};
 use crate::layout::ProvenanceLayout;
 use crate::state_store::StateStore;
+use crate::stopped_child::{copy_state, names, run_as_child, state_tree, CRASH_PHASES};
 use crate::test_probes;
 use camino::{Utf8Path, Utf8PathBuf};
 use provenance_core::{ScopeId, Stamp};
+use provenance_macros::verifies;
 use std::collections::BTreeMap;
 
 const STAGED_RULE: &str = "rule_staged_publication";
-
-/// Crash probes in publication order, and whether the reopened state is new.
-const CRASH_PHASES: [(&str, bool); 8] = [
-    ("state_prepared", false),
-    ("state_marker_prepared", false),
-    ("state_after_backup_rename", false),
-    ("state_backup_created", false),
-    ("state_before_install", false),
-    ("state_after_install_rename", true),
-    ("state_installed", true),
-    ("state_published", true),
-];
 
 fn scope() -> ScopeId {
     ScopeId::new("default").unwrap()
@@ -40,8 +30,24 @@ fn stamp() -> Stamp {
     .unwrap()
 }
 
-/// Adds one Rule to the staged Rule shard.
+/// Adds one Rule to the staged Rule shard and one Requirement to the staged
+/// Requirement shard. A stage of two shards lands as a whole set, so it
+/// reaches each crash probe of the whole set.
 fn write_rule(staged: &StateStore) -> anyhow::Result<()> {
+    write_one_rule(staged)?;
+    let path = crate::shards::requirements_path(&staged.layout, &scope());
+    let mut requirements = staged.list_requirements(&scope())?;
+    let mut requirement = requirements[0].clone();
+    requirement.id = sid("req_staged_publication");
+    requirement.created = None;
+    requirement.updated = None;
+    requirements.push(requirement);
+    staged.replace_graph_records_guarded(&path, requirements)?;
+    Ok(())
+}
+
+/// Adds one Rule to the staged Rule shard: a stage of one key.
+fn write_one_rule(staged: &StateStore) -> anyhow::Result<()> {
     let path = crate::shards::rules_path(&staged.layout, &scope());
     let mut rules = staged.list_rules(&scope())?;
     let mut rule = rules[0].clone();
@@ -56,34 +62,6 @@ fn write_rule(staged: &StateStore) -> anyhow::Result<()> {
 
 fn stage_rule(repository: &Repository) -> anyhow::Result<()> {
     repository.stage(false, Some(stamp()), write_rule)
-}
-
-/// Every state file under `root`, by path relative to the state directory.
-fn state_tree(root: &Utf8Path) -> BTreeMap<Utf8PathBuf, Vec<u8>> {
-    fn visit(base: &Utf8Path, directory: &Utf8Path, tree: &mut BTreeMap<Utf8PathBuf, Vec<u8>>) {
-        for entry in std::fs::read_dir(directory).unwrap() {
-            let path = Utf8PathBuf::from_path_buf(entry.unwrap().path()).unwrap();
-            if path.is_dir() {
-                visit(base, &path, tree);
-            } else {
-                let relative = path.strip_prefix(base).unwrap().to_owned();
-                tree.insert(relative, std::fs::read(&path).unwrap());
-            }
-        }
-    }
-    let state = ProvenanceLayout::new(root).state_dir();
-    let mut tree = BTreeMap::new();
-    visit(&state, &state, &mut tree);
-    tree
-}
-
-fn copy_state(from: &Utf8Path, to: &Utf8Path) {
-    let target = ProvenanceLayout::new(to).state_dir();
-    for (relative, bytes) in state_tree(from) {
-        let path = target.join(relative);
-        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
-        std::fs::write(path, bytes).unwrap();
-    }
 }
 
 fn serial(repository: &Repository) -> i64 {
@@ -153,6 +131,11 @@ fn assert_reopened(fixture: &Fixture, committed: bool, phase: &str) {
         committed,
         "{phase}: list_rules answers the reopened state"
     );
+    assert_eq!(
+        transactions(&fixture.root),
+        Vec::<Utf8PathBuf>::new(),
+        "{phase}: the cache keeps no transaction data"
+    );
     let expected_serial = if committed {
         fixture.serial + 1
     } else {
@@ -161,45 +144,189 @@ fn assert_reopened(fixture: &Fixture, committed: bool, phase: &str) {
     assert_eq!(serial(&repository), expected_serial, "{phase}: serial");
 }
 
-#[test]
-fn crash_child() {
-    let Ok(root) = std::env::var("PROVENANCE_STAGE_CRASH_ROOT") else {
-        return;
-    };
-    let phase = std::env::var("PROVENANCE_STAGE_CRASH_PHASE").unwrap();
-    let phase = CRASH_PHASES
+/// The entries of the transaction directory of the cache under `root`, in
+/// name order.
+fn transactions(root: &Utf8Path) -> Vec<Utf8PathBuf> {
+    let directory = ProvenanceLayout::new(root).import_transactions_dir();
+    names(&directory)
         .iter()
-        .map(|(label, _)| *label)
-        .find(|label| *label == phase)
-        .expect("known crash phase");
-    let repository = open(&ProvenanceLayout::new(Utf8PathBuf::from(root)));
-    test_probes::arm(phase, || std::process::exit(86));
-    stage_rule(&repository).unwrap();
-    panic!("crash phase was not reached");
+        .map(|name| directory.join(name))
+        .collect()
+}
+
+/// The test that the stop tests run as a child.
+const CHILD: &str = "repository::stage_recovery_tests::crash_child";
+
+/// Runs the staged write of `fixture` in a child process. The probe at
+/// `phase` ends the process with no unwind, as a kill does.
+fn stop_in_child(fixture: &Fixture, phase: &str) {
+    crate::stopped_child::stop_in_child(CHILD, &fixture.root, phase);
 }
 
 #[test]
+fn crash_child() {
+    let phases = CRASH_PHASES.map(|(label, _)| label);
+    run_as_child(&phases, |root| {
+        stage_rule(&open(&ProvenanceLayout::new(root.to_owned()))).unwrap();
+    });
+}
+
+#[test]
+fn one_key_child() {
+    run_as_child(&["synced_file_before_rename"], |root| {
+        let repository = open(&ProvenanceLayout::new(root.to_owned()));
+        repository
+            .stage(false, Some(stamp()), write_one_rule)
+            .unwrap();
+    });
+}
+
+/// A stop between the synced temporary file of the key and its rename keeps
+/// the old bytes of the key. The temporary file stays, and no read sees it.
+#[test]
+#[verifies("rule_one_key_write_set_lands_whole", examples)]
+fn a_one_key_stage_stopped_before_its_rename_keeps_the_key_and_one_temporary_file() {
+    let (_dir, layout, _scope) = seeded_layout();
+    let root = layout.root().to_owned();
+    let before = serial(&open(&layout));
+    let old = state_tree(&root);
+    let key = crate::shards::rules_path(&layout, &scope());
+    let key_dir = key.parent().unwrap().to_owned();
+    crate::stopped_child::stop_in_child(
+        "repository::stage_recovery_tests::one_key_child",
+        &root,
+        "synced_file_before_rename",
+    );
+
+    let temporaries = crate::stopped_child::files_named(&key_dir, ".tmp", "");
+    assert_eq!(temporaries.len(), 1, "{:?}", names(&key_dir));
+    let mut tree = state_tree(&root);
+    tree.retain(|path, _| {
+        !path
+            .file_name()
+            .is_some_and(|name| name.starts_with(".tmp"))
+    });
+    assert!(tree == old, "the stop kept the old bytes of each key");
+    let repository = open(&layout);
+    assert!(!layout.publication_marker_path().exists());
+    assert_eq!(transactions(&root), Vec::<Utf8PathBuf>::new());
+    assert_eq!(serial(&repository), before, "serial");
+    let has_rule = |repository: &Repository| {
+        let rules = repository.store().list_rules(&scope()).unwrap();
+        rules.iter().any(|rule| rule.id.as_str() == STAGED_RULE)
+    };
+    assert!(!has_rule(&repository));
+
+    repository
+        .stage(false, Some(stamp()), write_one_rule)
+        .unwrap();
+    assert!(has_rule(&repository), "a later write of the key lands");
+}
+
+#[test]
+#[verifies("rule_live_projection_shows_only_published_state", examples)]
+#[verifies("rule_stopped_write_leaves_no_transaction_data", examples)]
 fn process_crashes_reopen_as_complete_old_or_new_state() {
     for (phase, committed) in CRASH_PHASES {
         let fixture = fixture();
-        let status = std::process::Command::new(std::env::current_exe().unwrap())
-            .args([
-                "--exact",
-                "repository::stage_recovery_tests::crash_child",
-                "--nocapture",
-            ])
-            .env("PROVENANCE_STAGE_CRASH_ROOT", fixture.root.as_str())
-            .env("PROVENANCE_STAGE_CRASH_PHASE", phase)
-            .stdout(std::process::Stdio::null())
-            .stderr(std::process::Stdio::null())
-            .status()
-            .unwrap();
-        assert_eq!(status.code(), Some(86), "{phase}");
+        stop_in_child(&fixture, phase);
         assert_reopened(&fixture, committed, phase);
     }
 }
 
 #[test]
+#[verifies("rule_stopped_write_leaves_no_transaction_data", examples)]
+fn a_stop_before_the_prepared_marker_leaves_a_transaction_that_the_next_section_removes() {
+    let fixture = fixture();
+    stop_in_child(&fixture, "state_prepared");
+
+    let left = transactions(&fixture.root);
+    assert_eq!(left.len(), 1, "the stopped write left its transaction");
+    assert!(
+        state_tree(&left[0].join("staged-repo")) == fixture.new,
+        "the transaction holds a full copy of the state"
+    );
+    let layout = ProvenanceLayout::new(fixture.root.clone());
+    assert!(!layout.publication_marker_path().exists());
+    assert_reopened(&fixture, false, "state_prepared");
+}
+
+/// The child stops before the Prepared marker. With no write permission on
+/// the import transaction directory, the next section entry cannot remove
+/// the transaction.
+#[cfg(unix)]
+#[test]
+#[verifies("rule_failed_removal_of_stopped_write_names_its_path", examples)]
+fn a_failed_removal_of_a_stopped_transaction_names_the_step_and_the_path() {
+    use std::os::unix::fs::PermissionsExt;
+    let fixture = fixture();
+    stop_in_child(&fixture, "state_prepared");
+    let layout = ProvenanceLayout::new(fixture.root.clone());
+    let left = dunce::canonicalize(&transactions(&fixture.root)[0]).unwrap();
+    let directory = layout.import_transactions_dir();
+
+    std::fs::set_permissions(&directory, std::fs::Permissions::from_mode(0o500)).unwrap();
+    let mut ran = false;
+    let result = crate::publication::with_repository_publication(&layout, |_| {
+        ran = true;
+        Ok(())
+    });
+    std::fs::set_permissions(&directory, std::fs::Permissions::from_mode(0o755)).unwrap();
+
+    let error = crate::write_error::WriteError(result.unwrap_err());
+    assert!(matches!(
+        error.safe(),
+        crate::write_error::WriteFailure::WriteFailed { .. }
+    ));
+    assert_eq!(
+        format!("{:#}", error.0),
+        format!(
+            "remove transaction directory {} (no marker names this directory, thus the store \
+             does not use its data, and a person can remove it): {}",
+            left.display(),
+            std::io::Error::from_raw_os_error(13)
+        )
+    );
+    assert!(!ran, "the section entry does not run the operation");
+    crate::publication::with_repository_publication(&layout, |_| Ok(())).unwrap();
+    assert_eq!(transactions(&fixture.root), Vec::<Utf8PathBuf>::new());
+    assert!(
+        state_tree(&fixture.root) == fixture.old,
+        "the live state does not change"
+    );
+}
+
+/// A link in the transaction directory is an entry that no write makes, so
+/// the test puts it there itself.
+#[cfg(unix)]
+#[test]
+#[verifies("rule_recovery_stays_in_cache", examples)]
+fn the_removal_of_a_stopped_transaction_keeps_a_link_and_its_target() {
+    let fixture = fixture();
+    let layout = ProvenanceLayout::new(fixture.root.clone());
+    let outside = fixture.root.join("outside");
+    std::fs::create_dir(&outside).unwrap();
+    std::fs::write(outside.join("sentinel"), "keep").unwrap();
+    std::fs::create_dir_all(layout.import_transactions_dir()).unwrap();
+    let link = layout.import_transactions_dir().join("link");
+    std::os::unix::fs::symlink(&outside, &link).unwrap();
+    stop_in_child(&fixture, "state_prepared");
+
+    crate::publication::with_repository_publication(&layout, |_| Ok(())).unwrap();
+
+    assert_eq!(transactions(&fixture.root), vec![link.clone()]);
+    assert!(std::fs::symlink_metadata(&link)
+        .unwrap()
+        .file_type()
+        .is_symlink());
+    assert_eq!(
+        std::fs::read_to_string(outside.join("sentinel")).unwrap(),
+        "keep"
+    );
+}
+
+#[test]
+#[verifies("rule_live_projection_shows_only_published_state", examples)]
 fn errors_before_published_roll_back_and_an_error_at_published_keeps_new_state() {
     for (phase, _) in CRASH_PHASES {
         let fixture = fixture();
@@ -213,4 +340,101 @@ fn errors_before_published_roll_back_and_an_error_at_published_keeps_new_state()
         );
         assert_reopened(&fixture, phase == "state_published", phase);
     }
+}
+
+/// The write stops after its Published marker. With no write permission on
+/// the import transaction directory, the next section entry removes the
+/// contents of the transaction and then fails to remove the transaction.
+#[cfg(unix)]
+#[test]
+#[verifies("rule_stopped_write_leaves_no_transaction_data", examples)]
+#[verifies("rule_failed_removal_of_stopped_write_names_its_path", examples)]
+fn a_section_entry_ends_a_published_import_whose_transaction_is_removed_in_part() {
+    use std::os::unix::fs::PermissionsExt;
+    let fixture = fixture();
+    stop_in_child(&fixture, "state_published");
+    let layout = ProvenanceLayout::new(fixture.root.clone());
+    let transaction = transactions(&fixture.root)[0].clone();
+    let directory = layout.import_transactions_dir();
+
+    std::fs::set_permissions(&directory, std::fs::Permissions::from_mode(0o500)).unwrap();
+    let failed = crate::publication::with_repository_publication(&layout, |_| Ok(()));
+    std::fs::set_permissions(&directory, std::fs::Permissions::from_mode(0o755)).unwrap();
+    let error = crate::write_error::WriteError(failed.unwrap_err());
+    assert!(matches!(
+        error.safe(),
+        crate::write_error::WriteFailure::WriteFailed { .. }
+    ));
+    assert_eq!(
+        format!("{:#}", error.0),
+        format!(
+            "remove transaction directory {}: {}",
+            dunce::canonicalize(&transaction).unwrap().display(),
+            std::io::Error::from_raw_os_error(13)
+        )
+    );
+    assert_eq!(
+        std::fs::read_dir(&transaction).unwrap().count(),
+        0,
+        "a part is removed"
+    );
+    assert!(layout.publication_marker_path().exists());
+
+    assert_reopened(&fixture, true, "state_published");
+}
+
+/// The probe after the Published marker takes the write permission from the
+/// import transaction directory, so the removal of the transaction removes
+/// its contents and then fails.
+#[cfg(unix)]
+#[test]
+#[verifies("rule_published_write_succeeds_when_its_cleanup_fails", examples)]
+fn a_published_import_answers_success_when_the_removal_of_its_transaction_fails() {
+    use std::os::unix::fs::PermissionsExt;
+    let fixture = fixture();
+    let layout = ProvenanceLayout::new(fixture.root.clone());
+    let directory = layout.import_transactions_dir();
+    let locked = directory.clone();
+    test_probes::arm("state_published", move || {
+        std::fs::set_permissions(&locked, std::fs::Permissions::from_mode(0o500))?;
+        Ok(())
+    });
+
+    let answer = stage_rule(&open(&layout));
+    test_probes::disarm("state_published");
+    let left = transactions(&fixture.root);
+    std::fs::set_permissions(&directory, std::fs::Permissions::from_mode(0o755)).unwrap();
+
+    answer.unwrap();
+    assert_eq!(left.len(), 1, "the transaction stays");
+    assert_eq!(names(&left[0]), Vec::<String>::new());
+    assert!(layout.publication_marker_path().exists());
+    assert_reopened(&fixture, true, "state_published");
+}
+
+/// The child stops in the write of the Prepared marker: after the probe
+/// before that write, the system ends the child at the first byte of the
+/// temporary file of the marker.
+#[cfg(target_os = "linux")]
+#[test]
+#[verifies("rule_stopped_write_leaves_no_transaction_data", examples)]
+fn a_stop_in_the_write_of_the_import_marker_leaves_no_file_after_the_next_section_entry() {
+    let fixture = fixture();
+    let layout = ProvenanceLayout::new(fixture.root.clone());
+    let marker_temporaries = || {
+        crate::stopped_child::files_named(&layout.cache_dir(), ".import-publication.json.", ".tmp")
+    };
+    assert_eq!(marker_temporaries(), Vec::<String>::new());
+
+    crate::stopped_child::stop_in_child_at_file_size(CHILD, &fixture.root, "state_prepared", 0);
+
+    assert_eq!(
+        marker_temporaries().len(),
+        1,
+        "the stop left the temporary file of the marker"
+    );
+    assert!(!layout.publication_marker_path().exists());
+    crate::publication::with_repository_publication(&layout, |_| Ok(())).unwrap();
+    assert_eq!(marker_temporaries(), Vec::<String>::new());
+    assert_reopened(&fixture, false, "the write of the Prepared marker");
 }

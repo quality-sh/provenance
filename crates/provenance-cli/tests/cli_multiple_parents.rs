@@ -1,9 +1,10 @@
 mod porcelain_authoring_support;
+use crate::support::record_review::archive_requirement;
 use porcelain_authoring_support::{initialized_repo, json_output, provenance};
 use provenance_macros::verifies;
 
 fn parent_repo() -> (tempfile::TempDir, String) {
-    let (directory, repo) = initialized_repo();
+    let (directory, repo) = initialized_repo(Some("reviewer"));
     for id in ["req_p", "req_q", "req_b", "req_shared", "req_child"] {
         json_output(&[
             id,
@@ -285,22 +286,8 @@ fn cli_replacement_keeps_the_declaration_owner_precondition() {
 #[test]
 fn cli_refuses_an_archived_new_parent() {
     let (_directory, repo) = parent_repo();
-    json_output(&[
-        "req_b",
-        "update",
-        "--if-match",
-        read(&repo, "req_b")["edit"]["etag"].as_str().unwrap(),
-        "--repo",
-        &repo,
-        "--actor",
-        "author",
-        "--status",
-        "archived",
-        "--archived-in-commit-json",
-        r#"{"commit":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}"#,
-        "--format",
-        "json",
-    ]);
+    // The archive is a status request: the reviewer accepts it.
+    archive_requirement(&repo, "req_b", "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
     let before = read(&repo, "req_shared");
     replace(&repo, "req_p", "req_b")
         .failure()

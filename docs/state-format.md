@@ -90,14 +90,25 @@ the deleted rows. The store refuses any canonical record that still has a
 `retired` field. The error names record-deletion migration 026.
 
 Requirement review records live in
-`scopes/<scope>/requirements/review.jsonl`. When an applied reconciliation
-restates a Requirement's `statement`, one row per affected Rule records the
-Requirement, the field, both statements, and when the change landed. A review
-is identified by that exact restatement, so re-applying the same change never
+`scopes/<scope>/requirements/review.jsonl`. When a Requirement update, an
+applied reconciliation or a scope import restates a Requirement's `statement`,
+one row for each Rule that cites the Requirement after the change records the
+Requirement, the field, both statements, and when the change landed. A Rule that
+the change removes, or moves to another Requirement, gets no row. A review is
+identified by that exact restatement, so re-applying the same change never
 reopens a cleared review. A verification run for the Rule recorded after the
 change sets `cleared_at` and `cleared_by_run` while keeping the reason; nothing
 is deleted. Plan reads these rows to report review-required evidence, and
-previews the reviews an unapplied diff would raise without writing them.
+previews the reviews an unapplied diff would raise without writing them: the
+same Rules that the apply gives a row.
+
+A scope export file does not hold these rows, so `import` and `export` refuse a
+scope that has one, open or cleared. Thus the first import that changes the
+statement of a Requirement that a Rule cites passes and writes the rows. Each
+later import or export of that scope is refused, also after a verification run
+clears the rows. The records of that scope stay readable and changeable through
+the API routes. `import` and `export` also refuse a scope that has a review
+submission, a Discussion or a withdrawal.
 
 A Rule with no active implementation binding is a valid unimplemented Rule.
 A rule's source document and section are citations and do not count as
@@ -112,9 +123,14 @@ Modern proposal definitions are immutable `proposed` rows. Assertions live in
 `ideation/assertions.jsonl`; dispositions use `ideation/dispositions.jsonl`. All top-level
 fields of an import are closed. Effective state is
 derived in the order
-`proposed`, `asserted`, then disposition. `ideation/landings.jsonl` stores one validated
-swarm batch per line so a run is published atomically. Import validates a staged complete
-state directory and renames it into place only after `check` succeeds.
+`proposed`, `asserted`, then disposition. A swarm landing writes each record of the run to
+the file of its kind: `ideation/contributions.jsonl`, `ideation/synthesis_packets.jsonl`,
+`ideation/proposal_cards.jsonl` or `ideation/assertions.jsonl`. A landing does not write
+dispositions. A landing and a write of one record put the complete file of each kind that they
+write in id order. `import` writes each of these files in the order of the export file, and the
+next landing or write of one record of that kind puts the file in id order. A landing publishes
+its files in one write, so a read gets each record of the run or no record of it. Import validates a staged complete state directory and renames it into place only after
+`check` succeeds.
 
 Pre-lifecycle terminal proposal rows are not rewritten. The compiled, versioned shipped-v1
 fingerprint policy freezes both the exact shipped terminal definitions and their historical
@@ -131,8 +147,8 @@ artifact type and ID; missing, cross-scope, and cross-kind collisions fail close
 write or import publication and during repository checking and cache materialization.
 
 Repository access first takes `.provenance/cache/locks/repository.publication.lock`. Writers then
-take a scope lifecycle lock when applicable and finally a shard lock; this repository, lifecycle,
-shard order is mandatory. Multi-shard writers hold the publication lock for their complete
+take a shard lock; this repository, shard order is mandatory. Ideation writes take no other lock:
+the publication lock is the lock of their read, check and write. Multi-shard writers hold the publication lock for their complete
 operation, and aggregate readers hold it for their complete view or copy one locked snapshot.
 Import holds the publication lock across recovery, snapshot, staged validation, and publication,
 so cooperative readers and writers cannot observe or modify the brief directory-rename gap. Lock

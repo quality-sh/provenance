@@ -130,8 +130,8 @@ limit needs a second approver." The statement holds no semicolon, because the wr
 applies ASD-STE100 Issue 9. Put the behaviour at the limit in a second Rule, or in the
 description. `--source-document` and `--source-section` cite where the obligation was
 read, which here is the policy clause. Rule creation defaults to `draft`. Keep this default
-for an agent-created Rule. When a person ratifies the Rule, pass `--status active`. This
-agent command keeps the `draft` default:
+for an agent-created Rule. `--status active` opens a status request, and the Rule is
+active when an allowed reviewer accepts it. This agent command keeps the `draft` default:
 
 ```sh
 provenance rule_exp_apr_003 create --type rule --scope <scope> \
@@ -149,9 +149,9 @@ file for it. A Rule holds no planned code location at all; the location becomes 
 when a binding exists.
 
 Bind the implementation in the code, so the scanner can see the relationship, and bind
-the test that runs the threshold cases with the same id and its method—in Rust,
-`#[rule("rule_exp_apr_003")]` on `requires_second_approver` and
-`#[verifies("rule_exp_apr_003", examples)]` on the test. If no primary implementation
+the test that runs the threshold cases with the same id and its method: `rule_exp_apr_003`
+on `requires_second_approver` and on the test, with the method `examples`. The Provenance
+section of AGENTS.md gives the binding form for each language. If no primary implementation
 exists—the limit is re-checked inline in three controllers, or nobody has written it
 yet—the Rule remains valid and is Unimplemented. The `provenance-shaping` skill has the
 full Rule and binding flow, and the audit rules that go with it.

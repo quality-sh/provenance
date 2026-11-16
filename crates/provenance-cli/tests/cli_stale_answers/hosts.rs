@@ -1,10 +1,10 @@
 //! A long-running HTTP host and a long-running MCP server give the answer
 //! of a new CLI process, also when they answer the same range again.
 
-use crate::answers::{commit_query, REQUESTS};
-use crate::cases::{cases, RANGES};
-use crate::review_host_support::{self, request, response};
-use crate::support::{
+use super::answers::{commit_query, REQUESTS};
+use super::cases::{cases, RANGES};
+use super::review_host_support::{self, request, response};
+use super::support::{
     cli_error, cli_stale, commit, fixture, function, git, remove_object, write, Fixture,
 };
 use provenance_macros::verifies;
@@ -103,7 +103,7 @@ async fn http_and_mcp_give_the_cli_answers() {
         ("head", fixture.head.as_str()),
     ];
     let (code, cli, stderr) =
-        crate::support::cli_api(fixture.path(), "rules/rule_touched/evidence", &evidence);
+        super::support::cli_api(fixture.path(), "rules/rule_touched/evidence", &evidence);
     assert_eq!(code, 0, "{stderr}");
     assert_ne!(cli["data"]["stale"]["sites"], json!([]));
     let by_http = http_get(&host, "/rules/rule_touched/evidence", &evidence);

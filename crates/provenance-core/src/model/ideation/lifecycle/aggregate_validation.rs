@@ -37,7 +37,7 @@ pub(super) fn validate(aggregate: IdeationAggregate<'_>) -> anyhow::Result<()> {
         .map(|packet| (packet.id.as_str(), packet))
         .collect::<BTreeMap<_, _>>();
     assertion_validation::validate_assertions(&aggregate, &proposals, &synthesis_packets)?;
-    validate_disposition_links(&aggregate)?;
+    validate_disposition_links(&aggregate, &proposals)?;
     assertion_validation::ensure_qualifying_assertions(
         aggregate.proposals,
         aggregate.synthesis_packets,
@@ -180,13 +180,29 @@ pub fn validate_disposition_admissible<'a>(
 /// `provenance-store`'s write gate. What is left is what only a reader of
 /// whole records can ask: that a disposition sits in
 /// the scope its proposal sits in.
-fn validate_disposition_links(aggregate: &IdeationAggregate<'_>) -> anyhow::Result<()> {
+///
+/// Two decisions on one review submission are not a fault of the scope:
+/// [`crate::review::read_review_rows`] decides what they mean, and a read of
+/// their record refuses the decisions that do not agree. The write gate
+/// still refuses a second decision.
+fn validate_disposition_links(
+    aggregate: &IdeationAggregate<'_>,
+    proposals: &BTreeMap<&str, &ProposalCard>,
+) -> anyhow::Result<()> {
     for (index, disposition) in aggregate.dispositions.iter().enumerate() {
+        let review = proposals
+            .get(disposition.proposal_id.as_str())
+            .is_some_and(|proposal| crate::review::is_review_submission(proposal));
+        let recorded = if review {
+            &[][..]
+        } else {
+            &aggregate.dispositions[..index]
+        };
         let proposal = validate_disposition_admissible(
             disposition,
             aggregate.proposals,
             aggregate.assertions,
-            &aggregate.dispositions[..index],
+            recorded,
         )?;
         anyhow::ensure!(
             disposition.scope_id == proposal.scope_id,
@@ -217,7 +233,7 @@ mod disposition_actor_trigger_tests {
     use serde_json::json;
 
     use super::validate_actor_allowlist;
-    use crate::model::{AssertionRecord, PromotionState, ProposalCard};
+    use crate::model::{AssertionRecord, DispositionActorRefusal, PromotionState, ProposalCard};
 
     #[test]
     #[verifies("rule_disposition_actor_allowlist", examples)]
@@ -240,10 +256,12 @@ mod disposition_actor_trigger_tests {
         }))
         .unwrap();
 
-        let error = validate_actor_allowlist(&proposal, &[assertion], "reviewer", &[])
-            .unwrap_err()
-            .to_string();
-        assert!(error.starts_with("no disposition actors configured"));
+        let error = validate_actor_allowlist(&proposal, &[assertion], "reviewer", &[]).unwrap_err();
+        assert_eq!(
+            error.downcast_ref::<DispositionActorRefusal>(),
+            Some(&DispositionActorRefusal::NoActorsConfigured),
+            "{error}"
+        );
 
         proposal.promotion_state = PromotionState::Accepted;
         validate_actor_allowlist(&proposal, &[], "reviewer", &[]).unwrap();

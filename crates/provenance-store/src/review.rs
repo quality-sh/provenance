@@ -11,6 +11,7 @@ mod resource_read;
 pub(crate) use resource_read::RequirementResourceSnapshot;
 mod save;
 pub use input::{ListEdit, RequirementRelations, SaveRequirement};
+pub use save::edit_state;
 
 /// Creates the identity of a review record from the ID source of the store.
 fn new_id(ids: &dyn crate::repository::IdSource) -> provenance_core::StableId {
@@ -52,12 +53,11 @@ fn owner_matches(record: &impl serde::Serialize, owner: Option<&str>) -> anyhow:
     Ok(())
 }
 
-// The file versions port and its contract build without host; the history
-// reads in it and the review reads page through the projection on the host.
+// The history reads read the committed versions through the file versions
+// port, and the working copy through the storage.
 pub mod history;
-#[cfg(feature = "host")]
 mod reads;
-#[cfg(feature = "host")]
+pub(crate) use reads::read_history_entry;
 pub use reads::{read_evidence, read_history};
 
 #[cfg(test)]
@@ -78,25 +78,19 @@ mod create;
 pub use create::CreateReviewRequirement;
 mod authoring;
 mod native_batch;
+pub(crate) mod write_actor;
 pub(crate) use native_batch::NativeRecordBatch;
-#[cfg(feature = "host")]
 mod discussion_discovery;
-#[cfg(feature = "host")]
 mod discussion_messages;
-#[cfg(feature = "host")]
 mod discussion_page;
-#[cfg(feature = "host")]
 mod discussion_reads;
 mod discussion_removal;
 mod typed_adoption;
 #[cfg(test)]
 #[cfg(feature = "host")]
 mod typed_adoption_tests;
-#[cfg(feature = "host")]
 pub use discussion_discovery::{read_discussion_conversation, read_discussion_list};
-#[cfg(feature = "host")]
 pub use discussion_messages::{read_discussion_message, read_discussion_messages};
-#[cfg(feature = "host")]
 pub use discussion_reads::{read_discussion, read_discussions};
 #[cfg(test)]
 #[cfg(feature = "host")]
@@ -107,14 +101,13 @@ pub use decision_input::{
     DecideRecordReview, ReviewFeedback, SubmitRecordReview, WithdrawRecordReview,
 };
 mod automatic_submission;
-mod cycle_index;
 mod decision;
-// The document review reads serve the host queries only.
-#[cfg_attr(not(feature = "host"), allow(dead_code))]
 mod decision_reads;
-#[cfg(feature = "host")]
-pub(crate) use decision_reads::DocumentReviewState;
+mod status_request;
+pub(crate) use decision_reads::{DocumentReviewState, ResolutionAcceptance};
 mod decision_state;
+mod review_row_refusal;
+mod review_rows;
 
 #[cfg(test)]
 #[cfg(feature = "host")]

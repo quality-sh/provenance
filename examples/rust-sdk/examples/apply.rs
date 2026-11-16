@@ -1,0 +1,21 @@
+//! Applies the spec through a separate entry point; building the spec
+//! module alone has no engine or persistence side effect. The example is a
+//! development target, so the application library has no Provenance crate.
+
+#[path = "../tests/provenance_spec/mod.rs"]
+mod provenance_spec;
+
+use provenance_sdk::{operations, Repository, Settings};
+use provenance_spec::share_links;
+
+fn main() -> anyhow::Result<()> {
+    let settings = Settings::from_env();
+    let document = share_links()?;
+    let repository = Repository::discover(settings.repository.clone(), &settings.scope)?;
+    let result = operations::apply(&repository, document.materialize(settings.owner.clone()))?;
+    println!(
+        "created {} updated {} unchanged {}",
+        result.created, result.updated, result.unchanged
+    );
+    Ok(())
+}

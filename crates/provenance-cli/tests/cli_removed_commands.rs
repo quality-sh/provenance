@@ -3,9 +3,7 @@
 use predicates::prelude::*;
 use provenance_macros::verifies;
 
-mod support {
-    pub mod review_paths;
-}
+use crate::support;
 use support::review_paths::{init, provenance};
 
 /// The removed command, with arguments, and the command that replaces it.

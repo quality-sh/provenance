@@ -2,10 +2,7 @@
 //! that each consumer records, each with its declared flags or schema properties. The
 //! three server commands are the only CLI commands outside the registry.
 
-mod support {
-    pub mod review_paths;
-    pub mod surface;
-}
+use crate::support;
 
 use provenance_cli::cli_options::flag_name;
 use provenance_cli::exposed as cli;

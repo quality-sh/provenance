@@ -2,8 +2,7 @@
 //! write, over the memory adapter: each gives its own kind, the storage
 //! receives no write set, and the runs cache does not change.
 
-#[path = "support/memory.rs"]
-mod memory;
+use crate::memory;
 
 use memory::{
     begin_input, key, open_review, verification_repository, FixedClock, Recorded, REVIEWS,
@@ -21,7 +20,10 @@ use std::sync::Arc;
 const BINDINGS: &str = "scopes/default/verifications/binding.jsonl";
 const RUNS: &str = ".provenance/cache/scopes/default/verification-runs.jsonl";
 /// The `file` value of an answer for a line of the runs cache.
-const RUNS_FILE: &str = "verification-runs.jsonl";
+/// The runs cache below the root of the store. The store gives the root, so a
+/// repository with its state in memory names the file as a repository on disk
+/// does.
+const RUNS_FILE: &str = ".provenance/cache/scopes/default/verification-runs.jsonl";
 const BAD_LINE: &[u8] = b"{not json\n";
 
 /// A memory repository with an open review of `rule_expiry`, whose state

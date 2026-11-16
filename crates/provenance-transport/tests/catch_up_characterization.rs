@@ -8,21 +8,16 @@
 //! answer, its order or a refusal.
 #![cfg(feature = "test-fixture")]
 
-mod support {
-    pub mod catch_up_steps;
-    pub mod records;
-    pub mod resource_http;
-    pub mod transcript;
-}
+use crate::support;
 
 use provenance_transport::StatementHost;
 use serde_json::{json, Value};
 use support::catch_up_steps::{write, Answer, Surface, STEPS};
+use support::names::Names;
 use support::records::{allow_reviewer, Repository};
 use support::resource_http::{call, call_with_headers, host};
 use support::transcript::{
     assert_same, copy_without_projection, fingerprint, named_answers, read_all, without_generated,
-    Names,
 };
 
 /// The HTTP routes of one host.
@@ -71,8 +66,8 @@ async fn reads_after_each_write_equal_a_full_rebuild() {
         transcript.push(json!({"step": step, "answers": answers}));
     }
     let text = serde_json::to_string_pretty(&transcript).unwrap();
-    assert_eq!(fingerprint(&transcript[..15]), "841ce06d32c8aee2", "{text}");
-    assert_eq!(fingerprint(&transcript), "0dd73f21afae1653", "{text}");
+    assert_eq!(fingerprint(&transcript[..15]), "4b95c406da338453", "{text}");
+    assert_eq!(fingerprint(&transcript), "88ec84a8a41444de", "{text}");
 }
 
 /// A hand edit that each validator refuses, and the answer the next read
@@ -169,11 +164,20 @@ async fn hand_edits_that_validation_refuses_keep_their_refusals() {
         json!({"read": "/topics/topic_a", "status": 200, "freshness_error": error,
             "items": null, "error": null})
     };
+    let topic_fresh = json!({"read": "/topics/topic_a", "status": 200, "freshness_error": null,
+        "items": null, "error": null});
     let cycle_error = "depends_on forms a cycle: req_c -> req_d -> req_c";
     assert_eq!(cycle, at_stored(cycle_error, topic(cycle_error)));
-    let card_error = "scopes/default/ideation/proposal_cards.jsonl line 10: \
-        duplicate immutable proposal id <generated> at line 1 and at line 10";
-    assert_eq!(duplicate_card, at_stored(card_error, topic(card_error)));
+    // The copied line is a review submission. Two equal lines of one review
+    // row ID read as one row, so the catch-up loads it one time.
+    let fresh = json!([
+        {"read": "/requirements", "status": 200, "freshness_error": null, "items": 3,
+            "error": null},
+        topic_fresh,
+        {"read": "/proposals", "status": 200, "freshness_error": null, "items": 9,
+            "error": null},
+    ]);
+    assert_eq!(duplicate_card, fresh);
     let line_error = "scopes/default/topics/topic.jsonl line 2: EOF while parsing a value";
     let unreadable = json!({"read": "/topics/topic_a", "status": 500, "freshness_error": null,
         "items": null, "error": {"file": "scopes/default/topics/topic.jsonl",

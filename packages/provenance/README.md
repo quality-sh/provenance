@@ -79,17 +79,23 @@ Rule binding and coverage warnings. It does not check Requirement or Rule
 prose. Keep `--path .` when CI must detect missing bindings across the complete
 repository.
 
-## Runtime Rule bindings
+## Rule bindings
 
-The same install supplies inert helpers that put Rule IDs next to production
-implementations and tests. Import these helpers from the `rules` subpath:
+Production code binds to a Rule with a comment directly above the function or
+`const`. The comment needs no import, so an install that omits development
+dependencies loads the application:
 
 ```ts
-import { rule, verifies } from "@quality-sh/provenance/rules";
+// @provenance rule: rule_overtime
+export const paysOvertime = (hours: number) => hours > 38;
+```
 
-export const paysOvertime = rule("rule_overtime", (hours: number) =>
-  hours > 38,
-);
+A test binds evidence with `verifies` from the `rules` subpath. This package
+is a development dependency, so import `verifies` only in test code:
+
+```ts
+import { verifies } from "@quality-sh/provenance/rules";
+import { paysOvertime } from "./pay.js";
 
 test("hours above 38 attract overtime", function overtimeExamples() {
   verifies("rule_overtime", "examples");
@@ -97,15 +103,13 @@ test("hours above 38 attract overtime", function overtimeExamples() {
 });
 ```
 
-`rule` returns the exact function. `verifies` returns nothing. Neither helper
-registers state or changes application behavior. The scanner reads both calls
-and creates the Implementation binding and Verification binding. Keep
-`rule("id",` on one line. Put `verifies("id", "method")` in a named function or
-in a function-valued `const`.
-
-The top-level `rule("local-key")` export remains the Rule declaration builder.
-The `rules` subpath keeps the scanner helpers separate from that authoring
-interface.
+`verifies` returns nothing and does not change the test. The scanner reads the
+comment and the call, and creates the Implementation binding and the
+Verification binding. Put `verifies("id", "method")` in a named function or in
+a function-valued `const`. The top-level `rule("local-key")` export is the Rule
+declaration builder; it is not a binding.
+[Rule bindings](https://github.com/quality-sh/provenance/blob/main/docs/rule-bindings.md)
+gives each form.
 
 Define a spec without touching the engine:
 
@@ -193,10 +197,11 @@ chosen by where the Rule is declared, not inferred from JavaScript object
 reuse. Sources linked with `.from(...)` are collected transitively by `build()`.
 
 A spec cannot set a Rule status. Apply creates each new spec Rule as `draft`.
-To make the Rule active, a person changes its status with
+To make the Rule active, request the status with
 `provenance <id> update --status active --declared-by <owner> --if-match <etag>`,
-where `<owner>` is the declaration owner from `PROVENANCE_SPEC_OWNER`. A later
-apply keeps that status. A new key or a move to a different Requirement gives a
+where `<owner>` is the declaration owner from `PROVENANCE_SPEC_OWNER`. The Rule is
+active when an allowed reviewer accepts the request. A later apply keeps the
+accepted status. A new key or a move to a different Requirement gives a
 new `draft` Rule, and apply deletes the old Rule. A move between a Requirement
 and the spec context keeps the Rule and its status when apply finds one
 existing Rule.

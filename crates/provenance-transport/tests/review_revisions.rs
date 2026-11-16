@@ -1,10 +1,6 @@
 #![cfg(feature = "test-fixture")]
 
-mod support {
-    #[allow(dead_code)]
-    pub mod api_fixture;
-    pub mod records;
-}
+use crate::support;
 
 use axum::{body::Body, http::Request};
 use provenance_macros::verifies;

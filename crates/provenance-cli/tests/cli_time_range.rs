@@ -1,18 +1,18 @@
 //! A time field or a Discussion version past the range of the read
 //! database, ±(2^53 − 1), in a committed record fails as a malformed field
-//! fails: `check` refuses with the file and the line of the record, and a
-//! read or a write over the record refuses as over a malformed record.
+//! fails: `check` refuses with the file and the line of the record, a write
+//! over the record refuses as over a malformed record, and a get gives the
+//! record at the stored serial with a warning that names the file and the
+//! line, as over a malformed record.
 //!
 //! No Rule: an implementation aid. It compares the refusal with the
 //! refusal of a malformed field, so it holds the place of the range check
 //! in the parse and not a text of its own.
 
-use serde_json::Value;
+use serde_json::{json, Value};
 use std::path::{Path, PathBuf};
 
-mod support {
-    pub mod review_paths;
-}
+use crate::support;
 use support::review_paths::{create_requirement, provenance};
 
 /// The one Resolution file of the repository.
@@ -26,8 +26,9 @@ fn resolution_file(root: &Path) -> PathBuf {
     files.remove(0)
 }
 
-/// A repository with one Resolution whose `approved_at` holds `value`.
-fn repository(value: Value) -> (tempfile::TempDir, String) {
+/// A repository with one Resolution whose `approved_at` holds `value`, and
+/// the JSON get of the Resolution before the change of `approved_at`.
+fn repository(value: Value) -> (tempfile::TempDir, String, Value) {
     let (directory, repo) = support::review_paths::init();
     create_requirement(&repo, "req_a");
     provenance()
@@ -51,9 +52,17 @@ fn repository(value: Value) -> (tempfile::TempDir, String) {
         ])
         .assert()
         .success();
+    let get = support::review_paths::json_output(provenance().args([
+        "resolution_a",
+        "get",
+        "--repo",
+        &repo,
+        "--format",
+        "json",
+    ]));
     let path = resolution_file(directory.path());
     set_first_line(&path, "approved_at", value);
-    (directory, repo)
+    (directory, repo, get)
 }
 
 /// Sets `field` of the first record of the file at `path` to `value`.
@@ -184,8 +193,29 @@ fn fails_as_malformed(past: &Case, malformed: &Case, args: &[&str], refusal: Ref
 
 #[test]
 fn a_committed_time_past_the_range_fails_as_a_malformed_field_fails() {
-    let (_past_dir, past) = repository(Value::from(1_i64 << 53));
-    let (_malformed_dir, malformed) = repository(Value::from("soon"));
+    let (_past_dir, past, past_get) = repository(Value::from(1_i64 << 53));
+    let (_malformed_dir, malformed, malformed_get) = repository(Value::from("soon"));
+    for (repo, get, fault) in [
+        (
+            &past,
+            past_get,
+            "invalid value: integer `9007199254740992`, expected an integer from \
+                -9007199254740991 to 9007199254740991",
+        ),
+        (
+            &malformed,
+            malformed_get,
+            "invalid type: string \"soon\", expected i64",
+        ),
+    ] {
+        let mut expected = get;
+        let warning = format!("scopes/default/resolutions/res.jsonl line 1: {fault}");
+        expected["record_metadata"]["freshness_error"] = json!(warning);
+        expected["record_metadata"]["stamp"]["policy"] = json!("catch_up_failed");
+        let (code, out, err) = run(repo, &["resolution_a", "get", "--format", "json"]);
+        let out: Value = serde_json::from_slice(&out).unwrap();
+        assert_eq!((code, out, err), (Some(0), expected, Vec::new()), "{fault}");
+    }
     let past = Case {
         repo: &past,
         id: "resolution_a",
@@ -196,7 +226,6 @@ fn a_committed_time_past_the_range_fails_as_a_malformed_field_fails() {
     };
     for args in [
         &["check", "--format", "json"][..],
-        &["<id>", "get", "--format", "json"][..],
         &[
             "resolution_b",
             "create",

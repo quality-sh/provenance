@@ -2,12 +2,7 @@
 
 use provenance_macros::verifies;
 
-#[allow(dead_code)]
-mod support {
-    pub mod mcp;
-    #[path = "../../../provenance-transport/tests/support/records.rs"]
-    pub mod records;
-}
+use crate::support;
 
 use provenance_store::operations::catalog::{self, Operation as _};
 use provenance_transport::{
@@ -16,8 +11,8 @@ use provenance_transport::{
 };
 use rmcp::model::CallToolRequestParams;
 use serde_json::json;
-use support::mcp::{call, Session};
-use support::records::Repository;
+use support::mcp::{accept_pending, accept_status_request, call, Session};
+use support::records::{allow_reviewer, Repository};
 
 fn access(repository: &Repository) -> FixtureAccess {
     FixtureAccess::new(
@@ -330,6 +325,7 @@ async fn update_status(
 async fn mcp_search_shows_each_record_lifecycle() {
     let repository = Repository::new("The shared graph is searchable.");
     repository.all_kinds();
+    allow_reviewer(&repository);
     let host = StatementHost::with_fixture_access(access(&repository).allow_writes());
     let session = Session::start(host).await;
     let client = &session.client;
@@ -379,6 +375,7 @@ async fn mcp_search_shows_each_record_lifecycle() {
             "{readable}"
         );
     }
+    accept_pending(client, "rules", "rule_shared").await;
     let archived = client
         .call_tool(
             CallToolRequestParams::new("change").with_arguments(
@@ -394,6 +391,7 @@ async fn mcp_search_shows_each_record_lifecycle() {
         .await
         .unwrap();
     assert_ne!(archived.is_error, Some(true), "{archived:?}");
+    accept_status_request(client, "rules", "rule_shared").await;
     let hidden = call(client, "search", json!({"kind":["rule"]})).await;
     assert_eq!(
         hidden.structured_content.as_ref().unwrap()["nodes"],

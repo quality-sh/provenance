@@ -4,23 +4,7 @@ mod resolution;
 mod submission;
 mod withdrawal;
 
-use provenance_core::{IdeationTargetType, NodeType, StableId};
-
-/// Refuses a review submission addressed through another record.
-fn validate_submission_address(
-    proposal: &provenance_core::ProposalCard,
-    addressed: Option<(NodeType, &StableId)>,
-) -> anyhow::Result<()> {
-    let proposal_kind = NodeType::from(proposal.traceability.target.artifact_type);
-    let proposal_id_value = &proposal.traceability.target.artifact_id;
-    if addressed.is_none_or(|(kind, id)| kind == proposal_kind && id == proposal_id_value) {
-        return Ok(());
-    }
-    Err(crate::refusal::refuse!(
-        InvalidUpdate,
-        "the review submission does not belong to the addressed record"
-    ))
-}
+use provenance_core::{IdeationTargetType, NodeType};
 
 const fn target_type(kind: NodeType) -> IdeationTargetType {
     match kind {

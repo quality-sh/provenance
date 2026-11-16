@@ -62,14 +62,39 @@ A word that names an API collection, such as `rules` in `provenance rules list`,
 is not a command. The CLI refuses it with a usage error and shows
 `provenance --help`.
 
-Rule creation defaults to `draft` in the CLI and in catalog operations. Pass
-`--status active` only when a person ratifies the Rule. Coverage reports do not
-produce active-Rule absence findings for a draft Rule.
+A Requirement `create` or `update`, `discuss`, and `reply` take an optional
+`--actor`. A Requirement `create` or `update` or a `discuss` that gives no actor records
+the actor `authoring`, on the CLI, on MCP, and on the HTTP API. A `reply` stores no actor. A
+JSON `null` actor is invalid input. A Rule or Resolution write takes no actor and
+records `authoring`. `submit`, `claim`, and `release` need `--actor`.
+
+Rule creation defaults to `draft` in the CLI and in catalog operations. An
+update with `--status active` or `--status archived`, or a create with
+`--status active`, opens a status request and does not change the status. A
+create with `--status archived` is refused: create the Rule, then request the
+archive. A create with `--status active` writes the Rule as `review` until a
+reviewer accepts the request. Coverage reports do not produce active-Rule
+absence findings for a draft Rule.
+
+A status request of a Rule or a Requirement is a review submission. The result
+of the request gives its Proposal ID under `decision.pending.proposal_id` and
+the call that accepts it. A reviewer on the reviewer list of the repository
+accepts it with `provenance api <collection>/<id>/submissions/<proposal_id>/decide
+--method post --input -`, where `<collection>` is `rules` or `requirements`. The
+input names the reviewer, the decision and the reviewed record:
+`{"actor":{"identity_type":"human","id":"<reviewer>"},"decision":"accepted","canonical_artifact":{"artifact_type":"rule","artifact_id":"<id>"}}`.
+An acceptance with the `agent` identity type needs a prior assertion, which a
+review submission does not have, so it is refused with
+`approval_evidence_required`. The status changes in the write of the
+acceptance. A rejection or a withdrawal keeps the status. With an empty
+reviewer list, nobody can accept the request: the result says so and names
+`provenance init --disposition-actor-id <id>`, which adds a reviewer.
 
 A typed specification cannot set a Rule status, so apply creates each new
-specification Rule as `draft`. To make a specification Rule active, a person
-changes its status with `provenance <id> update --status active
---declared-by <owner> --if-match <etag>`. A later apply keeps that status. If a
+specification Rule as `draft`. To make a specification Rule active, request the
+status with `provenance <id> update --status active --declared-by <owner>
+--if-match <etag>`. The Rule is active when an allowed reviewer accepts the
+request. A later apply keeps the accepted status. If a
 Rule declaration changes its key or moves to a different Requirement, apply
 creates a new `draft` Rule and deletes the old Rule. A move between a
 Requirement and the shared specification context keeps the Rule and its status
@@ -132,11 +157,11 @@ null, while a plain flag on a string-typed field always supplies text. Arrays
 and objects can also come from one JSON object on standard input with
 `--stdin`, which fills only the body fields that no flag assigned and refuses a
 field that a flag already set. Every review record update takes its guard as
-`--if-match`, which must contain `review.edit.etag` from the latest review
-read, unchanged. Requirement, Topic, and Question updates require it. Source,
-Rule, and Resolution updates accept it, and write without a
-check when it is absent. No update accepts the guard as an `--expected-etag`
-flag or as an `expected_etag` body field.
+`--if-match`, which must contain `edit.etag` from the latest record read, or
+`review.edit.etag` from the latest review read, unchanged. Requirement, Topic,
+and Question updates require it. Source, Rule, and Resolution updates accept
+it, and write without a check when it is absent. No update accepts the guard
+as an `--expected-etag` flag or as an `expected_etag` body field.
 
 `provenance api` shows at most 50 routes by default. Use `--filter <text>` to
 select routes or `--limit <number>` to increase the bound. With `--format json`,
@@ -373,6 +398,55 @@ To repair the store by hand:
 
 There is no automatic repair command. The duplicate rows do not always contain
 enough information to select the owning Discussion.
+
+## Repairing review rows that do not agree
+
+The review rows of a record are its review submissions, the decisions on them,
+and their withdrawals. They are in `ideation/proposal_cards.jsonl`,
+`ideation/dispositions.jsonl`, and `ideation/withdrawals.jsonl`. A merge of two
+branches keeps the rows that each branch added, and a person can keep the two
+sides when Git cannot merge a file.
+
+Rows that say the same thing read as one row: one row ID on two equal lines,
+two decisions on one submission with the same result, and two withdrawals of
+one submission. Rows that do not agree make each read and each review write of
+their record refuse with `invalid_state_file`:
+
+- One row ID is on more than one line, and the lines do not have equal
+  contents.
+- The decisions on one submission have different results.
+- One submission has an approval and a withdrawal.
+- More than one submission of one record has the same review cycle.
+
+Each line takes part in each of these tests, also a line of an ID whose lines
+do not agree. Thus the decisions and the withdrawals that name such a
+submission, and the review cycle of each of its lines, give their faults in the
+same read. A write that needs the approval of
+the record gives the same refusal: an active Rule or an answered Question that
+cites a Resolution that is not approved needs the approval of that Resolution.
+
+The refusal names the file and the line of one row, and its message names the
+rows and each line that the repair removes. For example:
+
+```text
+review submission S of requirement req_a has decisions with different results in ideation/dispositions.jsonl: accepted D1 at line 1 and rejected D2 at line 2. To repair, remove each of these lines that has a result that you do not keep, then commit.
+```
+
+Other records, the documents that do not hold the record, and the reads of all
+records of a type continue. `provenance check` reports each of these faults
+with its file and its line.
+
+A withdrawal that names no review submission makes each review read of the
+scope refuse. Its message names the line of the withdrawal.
+
+To repair the rows, do the repair step that the message gives, then commit.
+Some steps give a choice: keep one line of an ID, keep the decisions of one
+result, keep the approval or the withdrawals, or keep one submission. Remove
+only the lines that the step tells you to remove. One run of `provenance check`
+reports each fault of the record, and a repair step does not show a new fault.
+After the repair step of each fault, the reads of the record and
+`provenance check` pass. This is the only hand edit of
+`.provenance/state` that the generated AGENTS.md permits.
 
 ## Agent guidance
 

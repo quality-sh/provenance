@@ -100,6 +100,13 @@ impl FixtureAccess {
     pub(crate) fn bound_identity(&self) -> Option<(String, String)> {
         self.grants.iter().next().cloned()
     }
+    /// The reviewer list in the manifest of the bound repository.
+    pub(crate) fn reviewer_ids(&self) -> Option<Vec<String>> {
+        let (alias, scope) = self.bound_identity()?;
+        let root = self.targets.get(&alias)?;
+        let repository = provenance_store::repository::Repository::open(root, &scope).ok()?;
+        Some(repository.manifest().ok()?.disposition_actor_ids)
+    }
 }
 
 impl crate::HttpCredential for FixtureAccess {
@@ -114,7 +121,7 @@ impl crate::HttpCredential for FixtureAccess {
             != Some(self.authority.as_str())
             || headers.contains_key("origin")
         {
-            return Err(OperationFailure::AccessDenied);
+            return Err(OperationFailure::access_denied());
         }
         Ok(())
     }
@@ -137,7 +144,7 @@ impl FixtureAccess {
         if granted {
             Ok(())
         } else {
-            Err(OperationFailure::AccessDenied)
+            Err(OperationFailure::access_denied())
         }
     }
 }
@@ -189,7 +196,7 @@ impl ContextResolver for FixtureAccess {
                 .iter()
                 .find(|(granted, _)| *granted == target)
                 .map(|(_, scope)| scope.as_str())
-                .ok_or(OperationFailure::AccessDenied)?;
+                .ok_or_else(OperationFailure::access_denied)?;
             return Ok(PreparedContext::for_repository(PreparedRepository {
                 repository: Repository::open(root, scope)?,
                 requested_target: target,

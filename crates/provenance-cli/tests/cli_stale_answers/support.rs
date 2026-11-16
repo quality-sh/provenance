@@ -1,5 +1,5 @@
-use crate::review_paths::provenance;
-pub use crate::stale_repo::{commit, git, init_repo, remove_object, write};
+use super::review_paths::provenance;
+pub use super::stale_repo::{commit, git, init_repo, remove_object, write};
 use serde_json::{json, Value};
 use std::path::{Path, PathBuf};
 
@@ -56,7 +56,7 @@ pub fn apply_rules(repo: &Path, ids: &[&str]) {
             rule
         })
         .collect::<Vec<_>>();
-    crate::stale_repo::apply_spec(
+    super::stale_repo::apply_spec(
         repo,
         &json!({
             "spec": "runtime",

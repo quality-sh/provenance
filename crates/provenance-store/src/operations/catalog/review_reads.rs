@@ -1,9 +1,10 @@
 //! Resource adapters for review history and addressed Discussions.
 use super::{shapes::graph_read_operation, ExecutionNeed};
 use crate::review;
+use provenance_core::review::{EvidencePage, EvidenceQuery, RecordVersion, ReviewHistoryQuery};
 pub use provenance_core::threads::DiscussionResultPage;
 use provenance_core::{
-    review::{EvidencePage, EvidenceQuery, RecordVersion, ReviewHistoryQuery},
+    actor_input::ActorInput,
     threads::{DiscussionGroup, DiscussionMessagesQuery, DiscussionQuery, DiscussionSelector},
     Message, StableId, ThreadParent,
 };
@@ -61,7 +62,8 @@ macro_rules! review_read {
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 pub struct StartDiscussionData {
-    pub actor: String,
+    #[serde(default)]
+    pub actor: ActorInput,
     pub declared_by: Option<String>,
     pub role: provenance_core::MessageRole,
     pub body: String,
@@ -70,7 +72,8 @@ pub struct StartDiscussionData {
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 pub struct ReplyDiscussionData {
-    pub actor: String,
+    #[serde(default)]
+    pub actor: ActorInput,
     pub declared_by: Option<String>,
     pub role: provenance_core::MessageRole,
     pub body: String,
@@ -139,34 +142,15 @@ review_read!(
     HistoryEntryRequest,
     RecordVersion,
     |read, request| async move {
-        let mut cursor = None;
-        loop {
-            let page = review::read_history(
-                &read.repository,
-                read.policy,
-                ReviewHistoryQuery {
-                    record_kind: request.record_kind,
-                    record_id: request.record_id.clone(),
-                    limit: 200,
-                    cursor,
-                },
-            )
-            .await?;
-            if let Some(entry) = page
-                .result
-                .entries
-                .into_iter()
-                .find(|entry| entry.id == request.entry_id)
-            {
-                return Ok(entry);
-            }
-            let Some(next) = page.result.next_cursor else {
-                let missing: anyhow::Error =
-                    provenance_core::protocol::read_failure::ReadFailure::ResourceNotFound.into();
-                return Err(missing.into());
-            };
-            cursor = Some(next);
-        }
+        let entry = review::read_history_entry(
+            &read.repository,
+            read.policy,
+            request.record_kind,
+            request.record_id,
+            request.entry_id,
+        )
+        .await?;
+        Ok(entry.result)
     }
 );
 

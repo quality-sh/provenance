@@ -44,7 +44,7 @@ impl LocalAccess {
                     Some("same-origin" | "none")
                 ))
         {
-            return Err(OperationFailure::AccessDenied);
+            return Err(OperationFailure::access_denied());
         }
         Ok(())
     }
@@ -109,6 +109,17 @@ impl HostAccess for LocalRepository {
             self.scope().as_str().to_owned(),
         ))
     }
+
+    fn reviewer_ids(&self) -> Option<Vec<String>> {
+        self.disposition_actor_ids().ok()
+    }
+
+    fn read_operations(
+        &self,
+    ) -> Option<std::sync::Arc<dyn provenance_store::operations::read_operations::ReadOperations>>
+    {
+        Self::read_operations(self)
+    }
 }
 
 #[cfg(test)]
@@ -158,7 +169,7 @@ mod tests {
             (
                 "foreign host",
                 &[("authorization", bearer), ("host", "127.0.0.1:4101")],
-                Err(OperationFailure::AccessDenied),
+                Err(OperationFailure::access_denied()),
             ),
             (
                 "foreign origin",
@@ -167,7 +178,7 @@ mod tests {
                     ("host", "127.0.0.1:4100"),
                     ("origin", "http://127.0.0.1:4101"),
                 ],
-                Err(OperationFailure::AccessDenied),
+                Err(OperationFailure::access_denied()),
             ),
             (
                 "cross-site fetch",
@@ -176,7 +187,7 @@ mod tests {
                     ("host", "127.0.0.1:4100"),
                     ("sec-fetch-site", "cross-site"),
                 ],
-                Err(OperationFailure::AccessDenied),
+                Err(OperationFailure::access_denied()),
             ),
             (
                 "duplicated host header",
@@ -185,7 +196,7 @@ mod tests {
                     ("host", "127.0.0.1:4100"),
                     ("host", "127.0.0.1:4100"),
                 ],
-                Err(OperationFailure::AccessDenied),
+                Err(OperationFailure::access_denied()),
             ),
             (
                 "missing bearer on a foreign host",

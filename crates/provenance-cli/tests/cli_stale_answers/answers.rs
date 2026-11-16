@@ -1,4 +1,4 @@
-use crate::support::{cli_stale, commit as commit_all, fixture, write, Fixture, Goldens};
+use super::support::{cli_stale, commit as commit_all, fixture, write, Fixture, Goldens};
 use provenance_core::protocol::{StaleQuery, SDK_PROTOCOL_VERSION};
 use provenance_macros::verifies;
 use provenance_store::operations::queries;

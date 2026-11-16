@@ -33,6 +33,21 @@ impl Table {
     pub fn find(&self, name: &str) -> Option<&Listed> {
         self.0.iter().find(|listed| listed.tool.name == name)
     }
+
+    /// Whether the server shows this command: a listed tool is the command, or it has
+    /// the command as an action that the host can run.
+    pub fn shows(&self, command: Command) -> bool {
+        self.0
+            .iter()
+            .any(|listed| listed.commands.contains(&command))
+    }
+
+    /// Whether the change tool is listed with the notify action.
+    pub fn shows_notify(&self) -> bool {
+        self.0.iter().any(
+            |listed| matches!(&listed.runner, Runner::Change(actions) if tools::change_notifies(&actions.listed)),
+        )
+    }
 }
 
 /// One listed tool: the tool that tools/list gives, its compiled input schema, and
@@ -41,6 +56,8 @@ pub struct Listed {
     tool: Tool,
     input: InputCheck,
     runner: Runner,
+    /// The commands that the host can run through this tool.
+    commands: Vec<Command>,
 }
 
 /// What runs the calls of one tool. A tool with an action argument holds its actions.
@@ -51,7 +68,26 @@ enum Runner {
     Api,
     Check,
     Discussions(ActionInput),
-    Change(ActionInput),
+    Change(tools::ChangeActions),
+}
+
+impl Runner {
+    /// The commands that the host can run through the tool of `command`. The discussions
+    /// tool has the reads that the host grants. The change tool has its own command and
+    /// each action that the host grants.
+    fn commands(&self, command: Command, host: &StatementHost) -> Vec<Command> {
+        match self {
+            Self::Discussions(_) => [Action::Discussions, Action::Discussion]
+                .into_iter()
+                .filter(|action| host.porcelain().discussion_is_available(*action))
+                .map(Command::Action)
+                .collect(),
+            Self::Change(actions) => std::iter::once(command)
+                .chain(tools::change_commands(&actions.listed))
+                .collect(),
+            Self::Get | Self::Trace | Self::Search | Self::Api | Self::Check => vec![command],
+        }
+    }
 }
 
 /// One call after its input checks: the tool, and the action that the call selected.
@@ -95,8 +131,11 @@ impl Listed {
                 Runner::Discussions(provenance_porcelain::discussion::action_input()),
             ),
             Command::Change => {
-                let input = tools::change_input(host);
-                (tools::change_tool(host, &input)?, Runner::Change(input))
+                let actions = tools::ChangeActions::new(host);
+                (
+                    tools::change_tool(host, &actions.listed)?,
+                    Runner::Change(actions),
+                )
             }
             Command::Action(_)
             | Command::Prime
@@ -105,6 +144,7 @@ impl Listed {
             | Command::Workspace(_)
             | Command::Dogfood(_) => return None,
         };
+        let commands = runner.commands(command, host);
         let schema = Value::Object((*tool.input_schema).clone());
         let input = InputCheck::new(schema)
             .unwrap_or_else(|error| panic!("the input schema of {} compiles: {error}", tool.name));
@@ -112,18 +152,20 @@ impl Listed {
             tool,
             input,
             runner,
+            commands,
         })
     }
 
     /// Runs one call. A request for another tool is refused first. Then the method
     /// of an api call is put in lower case, the action is selected and its fields are
-    /// checked, and the arguments are checked against the listed input schema.
+    /// checked, and the arguments are checked against the input schema of the selected
+    /// route.
     pub async fn call(
         &self,
         host: &StatementHost,
         arguments: Map<String, Value>,
     ) -> CallToolResult {
-        let (call, arguments) = match self.checked(arguments) {
+        let (call, arguments) = match self.checked(host, arguments) {
             Ok(checked) => checked,
             Err(refused) => return refused,
         };
@@ -140,12 +182,22 @@ impl Listed {
 
     fn checked(
         &self,
+        host: &StatementHost,
         mut arguments: Map<String, Value>,
     ) -> Result<(Call, Map<String, Value>), CallToolResult> {
+        // A notify call on a host with no notify port has the checks of a host with one.
+        let mut notify = None;
         let wrong_tool = match &self.runner {
             Runner::Get => tools::get_refusal(&self.tool.input_schema, &arguments),
             Runner::Discussions(_) => tools::discussions_refusal(&arguments),
-            Runner::Change(input) => tools::change_refusal(input, &arguments),
+            Runner::Change(actions) => match actions.route(host, &arguments) {
+                tools::ChangeRoute::Refuse(refused) => Some(refused),
+                tools::ChangeRoute::Notify(unlisted) => {
+                    notify = Some(unlisted);
+                    None
+                }
+                tools::ChangeRoute::Listed => None,
+            },
             Runner::Trace | Runner::Search | Runner::Api | Runner::Check => None,
         };
         if let Some(refused) = wrong_tool {
@@ -170,9 +222,13 @@ impl Listed {
                 let word = select(input, &mut arguments)?;
                 Call::Discussion(Action::parse(word).expect("a Discussion action"))
             }
-            Runner::Change(input) => Call::Change(select(input, &mut arguments)?),
+            Runner::Change(actions) => {
+                let input = notify.map_or(&actions.listed, |unlisted| &unlisted.input);
+                Call::Change(select(input, &mut arguments)?)
+            }
         };
-        if let Some(refused) = self.input.refusal(&self.tool.name, &given) {
+        let check = notify.map_or(&self.input, |unlisted| &unlisted.check);
+        if let Some(refused) = check.refusal(&self.tool.name, &given) {
             return Err(crate::surface::detail_error(refused));
         }
         Ok((call, arguments))

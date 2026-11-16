@@ -31,6 +31,8 @@ mod execution;
 mod failure;
 #[cfg(feature = "test-fixture")]
 pub mod fixture;
+#[cfg(all(feature = "host", any(test, feature = "dogfood")))]
+mod fixture_pdf;
 #[cfg_attr(not(feature = "host"), allow(dead_code))]
 mod gitignore;
 #[cfg(feature = "host")]
@@ -245,6 +247,11 @@ impl StatementHost {
     /// The repository target and scope that the host access binds, when it binds one.
     pub fn bound_identity(&self) -> Option<(String, String)> {
         self.access.bound_identity()
+    }
+    /// The reviewer list of the bound repository, when the host access can
+    /// read it.
+    pub fn reviewer_ids(&self) -> Option<Vec<String>> {
+        self.access.reviewer_ids()
     }
 
     async fn admit(&self) -> Result<OwnedSemaphorePermit, FailureEnvelope> {

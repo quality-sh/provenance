@@ -4,10 +4,7 @@
 //! a change to how the review state is computed cannot change them.
 #![cfg(feature = "test-fixture")]
 
-mod support {
-    pub mod records;
-    pub mod resource_http;
-}
+use crate::support;
 
 use provenance_transport::StatementHost;
 use serde_json::{json, Value};

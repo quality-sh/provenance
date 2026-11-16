@@ -7,10 +7,6 @@ const NONE: &[CliDefault] = &[];
 const NO_ALIASES: &[ArgumentAlias] = &[];
 const CREATE_REQUIREMENT_DEFAULTS: &[CliDefault] = &[
     CliDefault {
-        field: "actor",
-        value: CliDefaultValue::String("cli"),
-    },
-    CliDefault {
         field: "status",
         value: CliDefaultValue::String("active"),
     },
@@ -23,10 +19,6 @@ const CREATE_REQUIREMENT_DEFAULTS: &[CliDefault] = &[
         value: CliDefaultValue::EmptyArray,
     },
 ];
-const UPDATE_REQUIREMENT_DEFAULTS: &[CliDefault] = &[CliDefault {
-    field: "actor",
-    value: CliDefaultValue::String("cli"),
-}];
 const CREATE_SOURCE_DEFAULTS: &[CliDefault] = &[
     CliDefault {
         field: "source_type",
@@ -469,7 +461,6 @@ fn requirements(out: &mut Vec<Definition>) {
             vec![schema::path("id")],
         )
         .review_update_guard(NodeType::Requirement)
-        .cli_defaults(UPDATE_REQUIREMENT_DEFAULTS)
         .public_patch(&[("description", "description")])
         .target(TargetAction::Update, Some(NodeType::Requirement))
         .review_link(Some(NodeType::Requirement))

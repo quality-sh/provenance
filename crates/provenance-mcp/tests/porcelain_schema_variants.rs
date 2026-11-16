@@ -7,13 +7,7 @@ use provenance_porcelain::get::{Bounds, GetInput, GetOutcome, Traversal, View, V
 use rmcp::{model::CallToolRequestParams, ServiceExt as _};
 use serde_json::{json, Value};
 
-#[allow(dead_code)]
-mod support {
-    #[path = "../../../provenance-transport/tests/support/records.rs"]
-    pub mod records;
-    #[path = "../../../provenance-transport/tests/support/resource_http.rs"]
-    pub mod resource_http;
-}
+use crate::support;
 
 fn target(kind: NodeType) -> String {
     match kind {
@@ -223,7 +217,13 @@ async fn emitted_get_schema_accepts_each_canonical_record_and_tagged_related_kin
         populate(node);
         let outcome = GetOutcome {
             record: node.clone(),
-            result: ViewResult::Record,
+            result: ViewResult::Record {
+                edit: provenance_core::review::RequirementEditState {
+                    etag: format!("sha256:{}", "0".repeat(64)),
+                    revision: None,
+                },
+                review_link: None,
+            },
             record_metadata: None,
         };
         assert_canonical_record(&schema, &serde_json::to_value(outcome).unwrap(), node);

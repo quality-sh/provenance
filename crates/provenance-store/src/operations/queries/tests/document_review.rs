@@ -313,18 +313,20 @@ async fn document_review_totals_follow_the_filter_and_repeat_on_each_page() {
         rejected,
         DispositionDecision::Rejected,
     );
-    store
-        .update_rule(input::<UpdateRuleInput>(json!({
+    // The archive is a status request; its acceptance is the latest
+    // decision of rule_policy.
+    crate::test_support::set_status(&store, NodeType::Rule, "rule_policy", |store| {
+        store.update_rule(input::<UpdateRuleInput>(json!({
             "scope_id":"default", "id":"rule_policy", "status":"archived",
             "archived_in_commit":{"commit":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}
         })))
-        .unwrap();
+    });
 
     let root = root_of(&dir);
     assert_eq!(
         page(&root, 50, false).await["review_totals"],
         json!({
-            "pending":3, "accepted":1, "rejected":1
+            "pending":3, "accepted":2, "rejected":0
         })
     );
     let filtered = page(&root, 1, true).await;

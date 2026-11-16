@@ -19,6 +19,8 @@ pub fn init(repo: &Path) {
             "default",
             "--path-prefix",
             ".",
+            "--disposition-actor-id",
+            "reviewer",
         ])
         .assert()
         .success();
@@ -73,7 +75,7 @@ pub fn create_rule(repo: &Path, id: &str, statement: &str) {
 }
 
 pub fn export(repo: &Path, output: &Path) -> Value {
-    crate::export_fixture_support::make_default_scope_portable(repo);
+    super::export_fixture_support::make_default_scope_portable(repo);
     provenance()
         .args([
             "export",

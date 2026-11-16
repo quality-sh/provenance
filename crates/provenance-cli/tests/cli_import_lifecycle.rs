@@ -4,6 +4,8 @@ mod atomicity;
 mod export_fixture_support;
 #[path = "cli_import_lifecycle/modern_chain.rs"]
 mod modern_chain;
+#[path = "support/modern_lifecycle.rs"]
+mod modern_lifecycle;
 #[path = "cli_import_lifecycle/publication_recovery.rs"]
 mod publication_recovery;
 #[path = "cli_import_lifecycle/shipped_legacy.rs"]

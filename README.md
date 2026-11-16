@@ -1,8 +1,6 @@
 # Provenance
 
-Never lose the *why* behind your decisions.
-
-Provenance is a tool for building requirements traceability, from source to requirement to rule. A Rule is an atomic behavioural obligation that can exist before its implementation; `#[rule("rule_id")]` binds production code to it, and `#[verifies("rule_id", method)]` binds evidence.
+Provenance is a tool for building requirements traceability, from source to requirement to rule. A Rule is an atomic behavioural obligation that can exist before its implementation. A `// @provenance rule: rule_id` comment above production code binds that code to the Rule and adds no package to the application. A test binds evidence with a comment or with a `verifies` helper from a development dependency. See [Rule bindings](docs/rule-bindings.md).
 
 [![Demo of Provenance: project documents become a graph of Requirements and Rules, the agent asks questions, the person approves each Rule in the review pane, the Rules become tickets, rule and verifies annotations link the code to the Rules, and the coverage scan reports what is implemented, what is verified, and the gaps](https://raw.githubusercontent.com/quality-sh/provenance/main/docs/media/demo-preview.webp)](https://raw.githubusercontent.com/quality-sh/provenance/main/docs/media/demo.mp4)
 
@@ -26,8 +24,8 @@ cargo provenance init
 ```
 
 The Cargo initializer finds the current workspace, adds `provenance-sdk` at the
-CLI version, creates the default scope, validates the state, and ignores
-`.provenance/cache/`. In a workspace with multiple packages, use `cargo
+CLI version as a development dependency, creates the default scope, validates
+the state, and ignores `.provenance/cache/`. In a workspace with multiple packages, use `cargo
 provenance init --package <name>`.
 
 For a TypeScript project, run:

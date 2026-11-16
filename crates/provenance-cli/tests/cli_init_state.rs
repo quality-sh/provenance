@@ -2,12 +2,11 @@
 use assert_cmd::prelude::CommandCargoExt;
 use assert_cmd::Command;
 use predicates::str::contains;
+use provenance_store::dictionary_index::load_dictionary_index;
 use serde_json::Value;
 use std::path::Path;
 
-#[path = "cli_dictionary/support.rs"]
-#[allow(dead_code)]
-mod dictionary_support;
+use crate::dictionary_support;
 
 fn init(root: &Path, args: &[&str]) -> assert_cmd::assert::Assert {
     let asset_dir = root.join("asset-cache");
@@ -113,12 +112,12 @@ fn restoring_the_machine_dictionary_index_keeps_the_project_reference_untouched(
         })
         .expect("the first init stored a machine index");
     std::fs::remove_file(index).unwrap();
-    assert!(provenance_ste100::load_dictionary_index(&indexes, &identity).is_err());
+    assert!(load_dictionary_index(&indexes, &identity).is_err());
 
     init(root, &[]).success().stdout(contains("No change."));
 
     assert_eq!(
-        &provenance_ste100::load_dictionary_index(&indexes, &identity).unwrap(),
+        &load_dictionary_index(&indexes, &identity).unwrap(),
         dictionary_support::imported_dictionary()
     );
     assert_eq!(std::fs::read(&reference).unwrap(), reference_bytes);

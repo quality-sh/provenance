@@ -206,7 +206,8 @@ provenance validate proposal --input proposal.json --format json
 ```
 
 The landing command reads extractor/refuter contributions plus merge outputs, validates the
-whole existing-plus-incoming lifecycle aggregate, and appends one atomic landing batch. A
+whole existing-plus-incoming lifecycle aggregate, and writes each record to the state file of
+its kind in one atomic write. A
 proposal-only follow-up may rely on already-landed contribution and synthesis evidence, but a
 qualifying proposal still requires its assertion. A late assertion, lineage,
 or disposition failure writes nothing:
@@ -253,7 +254,7 @@ Proposals:
   rides in that reference's `summary` and in the proposal's own `summary` —
   `<file>:<symbol> implements <what>`. A rule candidate whose symbol survives only in an
   extractor's chat output is a requirement candidate wearing a better label;
-- the backtrace never writes a `#[rule]` binding and never creates a rule record. It hands
+- the backtrace never writes a binding and never creates a rule record. It hands
   the shaping loop a symbol to bind after a human accepts the proposal — proposals only
   (ground rule 1);
 - set structured `confidence` on the proposal (`0.0`-`1.0`) instead of burying the score

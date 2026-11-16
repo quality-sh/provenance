@@ -3,10 +3,12 @@ use provenance_core::{
     validate_optional_commit_pin, ScopeId, StableId, VerificationMethod, VerificationRun,
     VerificationRunStatus,
 };
+use provenance_macros::rule;
 use sha2::{Digest, Sha256};
 use std::collections::BTreeSet;
 use std::io::{BufRead, BufReader, Read};
 
+use super::failure_text::fit_failure_text;
 use super::requirement_reviews::now_millis;
 use super::{
     BeginVerificationInput, CompleteVerificationInput, MaterializeVerificationBindingInput,
@@ -18,11 +20,12 @@ impl StateStore {
     /// writes it only through `VerificationMethod::to_string()` at the
     /// run-row edge.
     ///
-    /// In the section, the checks and the bytes of each write come first.
-    /// Then the binding and the cleared reviews that changed publish as one
-    /// write set, and the run row goes into the cache last. A start that
-    /// changes no binding and clears no review publishes no set. A failure
-    /// of the run row leaves the set that landed before it.
+    /// In the section, the checks and the bytes of each write come first,
+    /// the read budget of the run row included. Then the binding and the
+    /// cleared reviews that changed publish as one write set, and the run row
+    /// goes into the cache last. A start that changes no binding and clears
+    /// no review publishes no set. A failure of the run row leaves the set
+    /// that landed before it.
     pub fn begin_verification(
         &self,
         scope_id: ScopeId,
@@ -57,7 +60,7 @@ impl StateStore {
                 })?;
             let started_at = now_millis(&*held.clock())?;
             let scope = &binding.binding.scope_id;
-            let rows = held.run_rows(scope)?;
+            let rows = held.list_verification_runs(scope)?;
             let binding_id = binding.binding.id.clone();
             let (run, reviews) = held.run_with_cleared_reviews(scope, |named| {
                 let taken = rows.iter().map(|row| row.id.as_str());
@@ -78,26 +81,24 @@ impl StateStore {
                     error: None,
                 })
             })?;
+            super::read_budget::ensure_within_read_budget(&run)?;
             held.publish_shards(binding.shard.into_iter().chain(reviews).collect())?;
             held.add_run_row(&run)?;
             Ok(run)
         })
     }
 
-    /// The rows of the runs cache of `scope_id`. The caller holds the section,
-    /// so no other start adds a row before the row of its run lands.
-    fn run_rows(&self, scope_id: &ScopeId) -> anyhow::Result<Vec<VerificationRun>> {
-        let (path, lock_path) = self.run_files(scope_id);
-        crate::jsonl::read_jsonl_locked(&path, &lock_path)
-    }
-
-    /// Adds `run` as a new row of the runs cache, and refuses a run whose id
-    /// a row already holds.
+    /// Stores `run`, whose Rule exists, as a new row of the runs cache, a file
+    /// of derived state that Git does not track, so that no write to
+    /// Git-tracked state is made for the run. Refuses a run whose id a row
+    /// already holds.
+    #[rule("rule_verification_runs_are_cache")]
     fn add_run_row(&self, run: &VerificationRun) -> anyhow::Result<()> {
         let (path, lock_path) = self.run_files(&run.scope_id);
         crate::jsonl::mutate_jsonl_locked(
             &path,
             &lock_path,
+            run_row_budget(),
             |records: &mut Vec<VerificationRun>| {
                 crate::write_error::ensure!(
                     Fault,
@@ -124,6 +125,9 @@ impl StateStore {
         )
     }
 
+    /// Refuses a completion whose stored run row passes the read budget
+    /// before the runs cache changes. The stored row keeps each member of the
+    /// stored line that the run type does not know, and the budget counts it.
     pub fn complete_verification(
         &self,
         scope_id: &ScopeId,
@@ -139,16 +143,48 @@ impl StateStore {
             status == VerificationRunStatus::Failed || input.error.is_none(),
             "a passed verification cannot carry an error"
         );
+        self.complete_run(scope_id, &run_id, status, |_, _| Ok(input.error))
+    }
+
+    /// Completes the run `run` as failed with `text`, cut from the stored row
+    /// with its completion time so that the row fits the read budget.
+    #[rule("rule_rust_verification_cuts_a_long_failure_text")]
+    pub(crate) fn fail_verification(
+        &self,
+        scope_id: &ScopeId,
+        run: &str,
+        text: &str,
+    ) -> anyhow::Result<VerificationRun> {
+        self.ensure_writable()?;
+        let run_id = StableId::new(run.to_owned())
+            .map_err(|error| crate::refusal::refuse!(InvalidCompletion, "{error:#}"))?;
+        let failed = VerificationRunStatus::Failed;
+        self.complete_run(scope_id, &run_id, failed, |completed, carried| {
+            fit_failure_text(completed, carried, text).map(Some)
+        })
+    }
+
+    /// Completes the running run `run_id` with `status` in one locked change
+    /// of the runs cache. `error` gives the stored error from the completed
+    /// row and from the bytes that its stored line carries.
+    fn complete_run(
+        &self,
+        scope_id: &ScopeId,
+        run_id: &StableId,
+        status: VerificationRunStatus,
+        error: impl FnOnce(&VerificationRun, usize) -> anyhow::Result<Option<String>>,
+    ) -> anyhow::Result<VerificationRun> {
         let completed_at = now_millis(&*self.clock())?;
         self.with_repository_publication(|held| {
             let (path, lock_path) = held.run_files(scope_id);
-            crate::jsonl::mutate_jsonl_locked(
+            crate::jsonl::mutate_carried_jsonl_locked(
                 &path,
                 &lock_path,
-                |records: &mut Vec<VerificationRun>| {
+                run_row_budget(),
+                |records: &mut Vec<VerificationRun>, carried| {
                     let run = records
                         .iter_mut()
-                        .find(|run| run.scope_id == *scope_id && run.id == run_id)
+                        .find(|run| run.scope_id == *scope_id && run.id == *run_id)
                         .ok_or_else(|| {
                             crate::refusal::refuse!(
                                 InvalidCompletion,
@@ -164,31 +200,29 @@ impl StateStore {
                     );
                     run.status = status;
                     run.completed_at = Some(completed_at.max(run.started_at));
-                    run.error = input.error;
+                    run.error = error(run, carried.bytes(run_id.as_str()))?;
                     Ok(run.clone())
                 },
             )
         })
     }
 
+    /// The rows of the runs cache of `scope_id` in file order, each after the
+    /// line checks that a write of the cache makes. A caller that holds the
+    /// section reads rows that no other start changes before it writes.
     pub fn list_verification_runs(
         &self,
         scope_id: &ScopeId,
     ) -> anyhow::Result<Vec<VerificationRun>> {
         let (path, lock_path) = self.run_files(scope_id);
-        crate::jsonl::with_advisory_lock(&lock_path, || {
-            if !path.exists() {
-                return Ok(Vec::new());
-            }
-            std::fs::read_to_string(path)?
-                .lines()
-                .map(|line| serde_json::from_str(line).map_err(Into::into))
-                .collect()
-        })
+        crate::jsonl::read_jsonl_locked(&path, &lock_path)
     }
 
-    /// Reads verification runs through a bounded typed line reader while the
-    /// run file is locked. The digest identifies the exact live input.
+    /// Reads verification runs one line at a time while the run file is
+    /// locked. A line over `maximum` bytes is refused as `page_record_too_large`
+    /// before it is read whole, and each other line gives its run through the
+    /// line checks that a write of the cache makes. The digest identifies the
+    /// exact live input.
     pub(crate) fn read_verification_runs<R>(
         &self,
         scope_id: &ScopeId,
@@ -220,7 +254,7 @@ impl StateStore {
             }
             let digest = hex::encode(hasher.finalize());
             let mut reader = BufReader::new(std::fs::File::open(&path)?);
-            let mut line_number = 0_i64;
+            let mut line_number = 0_usize;
             let mut next = || {
                 let mut bytes = Vec::new();
                 let count = reader
@@ -230,26 +264,16 @@ impl StateStore {
                 if count == 0 {
                     return Ok(None);
                 }
-                if bytes.last() == Some(&b'\n') {
-                    bytes.pop();
-                }
-                if bytes.last() == Some(&b'\r') {
-                    bytes.pop();
-                }
-                if bytes.len() > maximum {
+                let line = crate::jsonl::without_terminator(&bytes);
+                if line.len() > maximum {
                     return Err(
                         provenance_core::protocol::read_failure::ReadFailure::PageRecordTooLarge
                             .into(),
                     );
                 }
                 line_number += 1;
-                let value: serde_json::Value = serde_json::from_slice(&bytes)?;
-                crate::state_store::readers::ensure_no_legacy_retirement(
-                    &path,
-                    usize::try_from(line_number)?,
-                    &value,
-                )?;
-                Ok(Some((line_number, serde_json::from_value(value)?)))
+                let run = crate::jsonl::record_of_line(&path, line_number, line)?;
+                Ok(Some((i64::try_from(line_number)?, run)))
             };
             read(&digest, &mut next)
         })
@@ -310,6 +334,12 @@ fn verification_rule(
         }
     };
     Ok(rule_id)
+}
+
+/// The bytes of one stored line of the runs cache that the reads of the runs
+/// give.
+fn run_row_budget() -> usize {
+    <VerificationRun as super::read_budget::ReadBudget>::read_budget()
 }
 
 fn next_run_id(taken: &BTreeSet<&str>, started_at: i64) -> anyhow::Result<StableId> {

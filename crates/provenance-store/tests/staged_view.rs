@@ -78,7 +78,8 @@ fn add_source(staged: &StateStore, id: &str) -> anyhow::Result<()> {
             sources: &sources,
             ..ScopeShards::default()
         },
-    )
+    )?;
+    Ok(())
 }
 
 fn state_bytes(repository: &Repository) -> BTreeMap<Utf8PathBuf, Vec<u8>> {
@@ -380,7 +381,7 @@ fn an_import_waits_for_a_held_staged_section() {
                     Err(mpsc::RecvTimeoutError::Timeout),
                     "the import waits for the held section"
                 );
-                assert_eq!(on_import.recv_timeout(Duration::from_secs(5)), Ok(Ok(())));
+                assert_eq!(on_import.recv_timeout(Duration::from_secs(5)), Ok(Ok(2)));
             });
             Ok(())
         })

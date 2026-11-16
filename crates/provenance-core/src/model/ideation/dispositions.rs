@@ -8,21 +8,28 @@ use crate::model::ids::{ScopeId, StableId};
 #[error("accepted proposal must be asserted before disposition")]
 pub struct ApprovalEvidenceRequired;
 
-/// The disposition actor cannot decide in this repository.
-///
-/// An empty allowlist means that no configuration exists. It does not mean
-/// that the supplied actor id is refused, so that refusal names the field and
-/// the setup command.
+/// The refusal of a review decision by an actor that the manifest does not
+/// list. Each cause has no field, so its text cannot give an actor ID.
+#[provenance_macros::rule("rule_decision_refusal_hides_reviewer_ids")]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
 pub enum DispositionActorRefusal {
     #[error(
-        "no disposition actors configured: repository manifest disposition_actor_ids is empty; \
-         set it with provenance init --disposition-actor-id <ACTOR_ID>"
+        "The manifest field disposition_actor_ids is empty, thus no actor can make a review \
+         decision. {NEXT_STEP}"
     )]
     NoActorsConfigured,
-    #[error("disposition actor is not in the repository allowlist")]
+    #[error(
+        "The manifest field disposition_actor_ids does not contain the actor of a review \
+         decision. {NEXT_STEP}"
+    )]
     ActorNotListed,
 }
+
+/// The next step that each cause of a [`DispositionActorRefusal`] gives. The
+/// flag replaces the full list, so the caller gives it for each actor.
+const NEXT_STEP: &str = "To change this field, use the command provenance init \
+    --disposition-actor-id <DISPOSITION_ACTOR_ID>. Give --disposition-actor-id one time for each \
+    actor that can make a review decision.";
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]

@@ -1,6 +1,7 @@
 use predicates::prelude::PredicateBooleanExt;
 use predicates::str::contains;
 use provenance_macros::verifies;
+use provenance_store::dictionary_index::store_dictionary_index;
 use std::path::Path;
 
 // The synthetic Issue 9 fixture, shared with the dictionary test target.
@@ -10,9 +11,10 @@ mod dictionary_support;
 
 #[path = "cli_check/archive_commit.rs"]
 mod archive_commit;
+#[path = "cli_check/review_rows.rs"]
+mod review_rows;
 
-#[path = "support/bounded_process.rs"]
-mod bounded_process;
+use crate::bounded_process;
 use bounded_process::Bounded;
 
 #[test]
@@ -194,9 +196,10 @@ fn check_rejects_missing_wrong_kind_and_wrong_scope_canonical_artifacts() {
             ),
         );
 
-        provenance(dir.path())
-            .failure()
-            .stderr(contains("canonical artifact does not exist"));
+        provenance(dir.path()).failure().stderr(contains(format!(
+            "scopes/default/ideation/dispositions.jsonl line 1: disposition disposition_a \
+                 names {artifact_type} {artifact_id}, which the scope does not have"
+        )));
     }
 }
 
@@ -383,7 +386,7 @@ fn strict_check_passes_when_the_referenced_index_is_present() {
     git(&repo, &["config", "user.name", "Test"]);
     init(&repo);
     let dictionary = dictionary_support::imported_dictionary();
-    provenance_ste100::store_dictionary_index(dictionary, &index_directory).unwrap();
+    store_dictionary_index(dictionary, &index_directory).unwrap();
     dictionary_support::write_reference(&repo, dictionary);
     git(&repo, &["add", "."]);
     git(&repo, &["commit", "-m", "initial candidate"]);
@@ -403,7 +406,7 @@ fn strict_check_passes_when_the_referenced_index_is_present() {
         .stdout(contains(r#""category": "graph""#).and(contains(r#""status": "passed""#)));
 }
 
-pub(crate) fn git(repo: &Path, arguments: &[&str]) {
+fn git(repo: &Path, arguments: &[&str]) {
     let output = provenance_store::git_process::git()
         .current_dir(repo)
         .args(arguments)
@@ -415,7 +418,7 @@ pub(crate) fn git(repo: &Path, arguments: &[&str]) {
     );
 }
 
-pub(crate) fn init(repo: &Path) {
+fn init(repo: &Path) {
     bounded_process::provenance()
         .args([
             "init",

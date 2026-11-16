@@ -38,8 +38,9 @@ impl ContextResolver for Target {
 }
 
 fn add_rule(store: &StateStore, scope: &ScopeId, id: &str, status: RuleStatus) {
-    store
-        .create_rule(CreateRuleInput {
+    crate::test_support::create_rule(
+        store,
+        CreateRuleInput {
             archived_in_commit: (status == RuleStatus::Archived).then(|| ArchivedStamp {
                 commit: "a".repeat(40),
                 at: None,
@@ -57,8 +58,8 @@ fn add_rule(store: &StateStore, scope: &ScopeId, id: &str, status: RuleStatus) {
             source_section: None,
             origin_thread: None,
             origin_message: None,
-        })
-        .unwrap();
+        },
+    );
 }
 
 fn add_resolution(store: &StateStore, scope: &ScopeId, id: &str, status: ResolutionStatus) {
@@ -101,7 +102,9 @@ async fn list_rules(root: &camino::Utf8Path, request: Value) -> anyhow::Result<V
     list_family::<crate::operations::family_operations::PageRules>(root, request).await
 }
 
-async fn list_family<O: catalog::Operation>(
+/// Invokes the family page `O` against the store at `root` in the default
+/// scope. A refusal gives its wire failure as JSON text.
+pub(super) async fn list_family<O: catalog::Operation>(
     root: &camino::Utf8Path,
     request: Value,
 ) -> anyhow::Result<Value> {

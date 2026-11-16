@@ -1,4 +1,4 @@
-use crate::support::{dictionary_pdf, init, provenance, reference_path, write_reference};
+use super::support::{dictionary_pdf, init, provenance, reference_path, write_reference};
 use serde_json::Value;
 
 #[test]
@@ -76,7 +76,7 @@ fn status_reports_a_reference_without_an_index_as_built_in_rules() {
     std::fs::create_dir_all(&repo).unwrap();
     std::fs::create_dir_all(&index_directory).unwrap();
     init(&repo);
-    write_reference(&repo, crate::support::imported_dictionary());
+    write_reference(&repo, super::support::imported_dictionary());
 
     let output = status(&repo, &index_directory);
 

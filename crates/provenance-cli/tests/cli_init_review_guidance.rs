@@ -1,5 +1,6 @@
 //! The generated AGENTS.md tells an agent when to start the review host, how to hand the
-//! person its link, what a description holds, and how to write graph state.
+//! person its link, what a description holds, how to write graph state, and how to connect
+//! code to a Rule.
 
 use assert_cmd::Command;
 use provenance_macros::verifies;
@@ -39,7 +40,22 @@ fn init_guidance_requires_cli_or_sdk_writes_and_forbids_direct_state_edits() {
         "{agents}"
     );
     assert!(
-        prose.contains("Do not edit `.provenance/state` directly."),
+        prose.contains("Do not edit `.provenance/state` by hand, with one exception:"),
+        "{agents}"
+    );
+}
+
+#[test]
+#[verifies("rule_init_review_row_hand_repair", examples)]
+fn init_guidance_permits_only_the_review_row_repair_by_hand() {
+    let agents = agents_after_init();
+    let prose = normalized(&agents);
+
+    assert!(
+        prose.contains(
+            "Do not edit `.provenance/state` by hand, with one exception: when a read or \
+             `check` refuses review rows, do the repair step that the refusal gives, then commit."
+        ),
         "{agents}"
     );
 }
@@ -170,4 +186,41 @@ fn init_guidance_registers_a_codex_thread_and_ends_it_with_off() {
     ] {
         assert!(prose.contains(text), "missing {text}\n{agents}");
     }
+}
+
+#[test]
+#[verifies("rule_init_production_binding_comment", examples)]
+fn init_guidance_connects_production_code_with_a_comment() {
+    let agents = agents_after_init();
+    let prose = normalized(&agents);
+
+    assert!(
+        prose.contains(
+            "Connect the production code of a Rule to the Rule with a comment directly above \
+             the function, in each language: `// @provenance rule: <rule_id>`, or \
+             `# @provenance rule: <rule_id>` in Python."
+        ),
+        "{agents}"
+    );
+}
+
+#[test]
+// Implementation aid: no Rule states these sentences. They keep the Provenance packages out of
+// the application dependencies, put the `construction` comment on the type that it verifies, and
+// keep the Rust attribute as an option.
+fn init_guidance_keeps_provenance_packages_out_of_production_dependencies() {
+    let agents = agents_after_init();
+    let prose = normalized(&agents);
+
+    for text in [
+        "The comment adds no package to the application.",
+        "For `construction`, put the comment directly above the type, not above a test; \
+         `#[verifies]` on a type needs `provenance-macros` under `[dependencies]`.",
+        "In Rust, `#[rule(\"<rule_id>\")]` from `provenance-macros` is an option for production \
+         code.",
+    ] {
+        assert!(prose.contains(text), "missing {text}\n{agents}");
+    }
+    assert!(!agents.contains("provenance_sdk"), "{agents}");
+    assert!(!agents.contains("provenance-sdk"), "{agents}");
 }

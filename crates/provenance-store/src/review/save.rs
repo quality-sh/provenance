@@ -18,9 +18,44 @@ pub(super) fn etag(record: &ReviewRecord) -> anyhow::Result<String> {
     ))
 }
 
+/// The refusal of an edit whose guard is not the current etag of the record.
+pub(super) fn edit_conflict(kind: NodeType, current_etag: String) -> anyhow::Error {
+    if kind == NodeType::Requirement {
+        return crate::refusal::refuse!(
+            (WriteFailure::RequirementEditConflict { current_etag }),
+            "stale Requirement edit etag"
+        );
+    }
+    crate::refusal::refuse!(
+        (WriteFailure::RecordEditConflict {
+            record_kind: kind,
+            current_etag,
+        }),
+        "stale record edit etag"
+    )
+}
+
+/// Refuses an edit guard that is not the current etag of `record`.
+pub(super) fn ensure_etag(record: &ReviewRecord, expected: &str) -> anyhow::Result<()> {
+    let current_etag = etag(record)?;
+    if expected != current_etag {
+        return Err(edit_conflict(record.kind(), current_etag));
+    }
+    Ok(())
+}
+
 /// The review revision depends only on the review content of the record.
 pub(super) fn current_revision(record: &ReviewRecord) -> anyhow::Result<Option<StableId>> {
     classifier::review_revision(record.kind(), record).map(Some)
+}
+
+/// The edit state of one record: the etag that a guarded update of the record
+/// checks, and its review revision. Both come from the record content only.
+pub fn edit_state(record: &ReviewRecord) -> anyhow::Result<RequirementEditState> {
+    Ok(RequirementEditState {
+        etag: etag(record)?,
+        revision: current_revision(record)?,
+    })
 }
 
 impl StateStore {
@@ -71,7 +106,7 @@ impl StateStore {
     ) -> anyhow::Result<RequirementEditState> {
         self.with_repository_publication(|held| {
             let record = held.requirement(scope, id)?;
-            Self::record_edit_state_for_record(&record.into())
+            edit_state(&record.into())
         })
     }
 
@@ -83,24 +118,13 @@ impl StateStore {
     ) -> anyhow::Result<RequirementEditState> {
         self.with_repository_publication(|held| {
             let record = crate::families::review_families::record(held, scope, kind, id)?;
-            Self::record_edit_state_for_record(&record)
-        })
-    }
-
-    pub(super) fn record_edit_state_for_record(
-        record: &ReviewRecord,
-    ) -> anyhow::Result<RequirementEditState> {
-        Ok(RequirementEditState {
-            etag: etag(record)?,
-            revision: current_revision(record)?,
+            edit_state(&record)
         })
     }
 
     /// Publishes a Requirement edit and the review state it opens together.
     pub fn save_requirement(&self, input: SaveRequirement) -> anyhow::Result<RequirementEditState> {
-        self.save_requirement_with_origin(input, None, |_, after| {
-            Self::record_edit_state_for_record(&after.into())
-        })
+        self.save_requirement_with_origin(input, None, |_, after| edit_state(&after.into()))
     }
 
     #[cfg_attr(not(feature = "host"), allow(dead_code))]
@@ -121,9 +145,7 @@ impl StateStore {
         input: SaveRequirement,
         origin: &DiscussionOrigin,
     ) -> anyhow::Result<RequirementEditState> {
-        self.save_requirement_with_origin(input, Some(origin), |_, after| {
-            Self::record_edit_state_for_record(&after.into())
-        })
+        self.save_requirement_with_origin(input, Some(origin), |_, after| edit_state(&after.into()))
     }
 
     fn save_requirement_with_origin<R>(
@@ -149,6 +171,11 @@ impl StateStore {
             if let Some(origin) = origin {
                 held.validate_discussion_origin(scope, origin)?;
             }
+            let request = super::status_request::requirement_status_request(&input, &record)?;
+            if let Some(request) = request {
+                held.request_requirement_status(input, &record, request)?;
+                return complete(held, record);
+            }
             let current_etag = etag(&ReviewRecord::from(record.clone()))?;
             let stale = (input.expected_etag != current_etag).then_some(current_etag);
             let stamp = held.current_record_stamp()?;
@@ -165,7 +192,7 @@ impl StateStore {
 
     /// A change to review content creates a new review submission.
     #[rule("rule_content_change_requires_new_review")]
-    fn commit_requirement(
+    pub(super) fn commit_requirement(
         &self,
         input: SaveRequirement,
         before: &Requirement,
@@ -189,10 +216,7 @@ impl StateStore {
             return Ok(before.clone());
         }
         if let Some(current_etag) = stale {
-            return Err(crate::refusal::refuse!(
-                (WriteFailure::RequirementEditConflict { current_etag }),
-                "stale Requirement edit etag"
-            ));
+            return Err(edit_conflict(NodeType::Requirement, current_etag));
         }
         let fields =
             classifier::changed_fields(NodeType::Requirement, &before_record, &after_record)?;

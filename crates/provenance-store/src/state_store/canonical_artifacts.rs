@@ -1,8 +1,8 @@
 use super::StateStore;
 use provenance_core::model::relations::kind_word;
 use provenance_core::{
-    ensure_record_id_assignable, CanonicalArtifact, CanonicalArtifactType, IdeationTarget,
-    NodeType, Scope, ScopeId, StableId,
+    ensure_record_id_assignable, CanonicalArtifact, DispositionRecord, IdeationTarget, NodeType,
+    Scope, ScopeId, StableId,
 };
 use provenance_macros::rule;
 use std::collections::HashSet;
@@ -118,23 +118,20 @@ impl CanonicalArtifactIndex {
         let Some(artifact) = artifact else {
             return Ok(());
         };
-        let kind = match artifact.artifact_type {
-            CanonicalArtifactType::Source => NodeType::Source,
-            CanonicalArtifactType::Requirement => NodeType::Requirement,
-            CanonicalArtifactType::Resolution => NodeType::Resolution,
-            CanonicalArtifactType::Rule => NodeType::Rule,
-            CanonicalArtifactType::Topic => NodeType::Topic,
-            CanonicalArtifactType::Question => NodeType::Question,
-        };
         crate::write_error::ensure!(
             MissingReference,
-            self.entries.contains(&key(kind, &artifact.artifact_id)),
+            self.contains(artifact.artifact_type.into(), &artifact.artifact_id),
             "canonical artifact does not exist in scope {} with kind {:?}: {}",
             self.scope_id.as_str(),
             artifact.artifact_type,
             artifact.artifact_id.as_str()
         );
         Ok(())
+    }
+
+    /// Whether the scope has the record of the kind and the id.
+    pub(super) fn contains(&self, kind: NodeType, id: &StableId) -> bool {
+        self.entries.contains(&key(kind, id))
     }
 
     /// A new contribution or synthesis packet names a record that exists in
@@ -156,6 +153,45 @@ impl CanonicalArtifactIndex {
 }
 
 impl StateStore {
+    /// Refuses a stored Disposition of `dispositions` that names a record
+    /// that the scope does not have. `has_record` tells whether the scope
+    /// has the record of a kind and an id.
+    pub(super) fn ensure_dispositions_name_records(
+        &self,
+        scope: &ScopeId,
+        dispositions: &[DispositionRecord],
+        has_record: impl Fn(NodeType, &StableId) -> bool,
+    ) -> anyhow::Result<()> {
+        for disposition in dispositions {
+            let Some(artifact) = &disposition.canonical_artifact else {
+                continue;
+            };
+            let kind = NodeType::from(artifact.artifact_type);
+            if has_record(kind, &artifact.artifact_id) {
+                continue;
+            }
+            let message = format!(
+                "disposition {} names {} {}, which the scope does not have",
+                disposition.id.as_str(),
+                kind.as_str(),
+                artifact.artifact_id.as_str()
+            );
+            return Err(self.disposition_fault(scope, &disposition.id, message));
+        }
+        Ok(())
+    }
+
+    /// The refusal `invalid_state_file` at the line of the Disposition file
+    /// that stores the Disposition `id`.
+    fn disposition_fault(&self, scope: &ScopeId, id: &StableId, message: String) -> anyhow::Error {
+        super::readers::record_fault(
+            self,
+            &crate::shards::dispositions_path(&self.layout, scope),
+            id.as_str(),
+            message,
+        )
+    }
+
     pub(super) fn canonical_artifact_index(
         &self,
         scope_id: &ScopeId,

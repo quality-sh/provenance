@@ -2,8 +2,7 @@
 //! write set that it receives and can refuse each set that changes a Message
 //! shard.
 
-#[path = "support/memory.rs"]
-mod memory;
+use crate::memory;
 
 use memory::{id, initial_state, memory_repository_over, scope, Failure, Refusing};
 use provenance_core::{Message, MessageRole, NodeType, Thread, ThreadParent};

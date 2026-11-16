@@ -175,7 +175,11 @@ handles, which record the table's family word in the stamp's `attested`
 list; a live part (canonical shards, the working-tree scan, the run
 file, git) only through a handle that records its word in `live`. A
 failed freshness step answers at the stored serial with the policy word
-`catch_up_failed` and the error text beside the answer.
+`catch_up_failed` and the error text beside the answer. The document read
+is the exception: after the read at the stored serial, it refuses with
+`document_catch_up_failed`, and the refusal gives the file, the line and
+the message of a state line that does not parse. With no stored revision,
+it refuses with `no_projection`, as each other read does.
 
 The settings in `.provenance/settings.json` survive a cache delete. The
 file is tracked beside `state/` and `cache/`. Each query loads
@@ -369,9 +373,8 @@ runtime workers.
 | messages | `read_message_shards` | every `threads/YYYY-MM.jsonl` in the scope |
 | implementation_bindings, verification_bindings | `read_jsonl(<shard>)` | own shard |
 | requirement_reviews | `list_requirement_reviews`, direct line parse | own shard |
-| contributions, synthesis_packets, assertion_records | `read_jsonl` plus the `landings.jsonl` overlay | own shard, `ideation/landings.jsonl` |
-| dispositions | `read_jsonl`, landings overlay | own shard, `ideation/landings.jsonl` |
-| proposal_cards | `project_proposal_cards`: validator (validity only), then `effective_proposal_state(card, assertions, dispositions)` | `proposal_cards.jsonl`, `landings.jsonl`, `assertions.jsonl`, `dispositions.jsonl`; the validator also reads `contributions.jsonl`, `synthesis_packets.jsonl`, and the manifest's actor list |
+| contributions, synthesis_packets, assertion_records, dispositions | `read_jsonl(<shard>)` | own shard |
+| proposal_cards | `project_proposal_cards`: validator (validity only), then `effective_proposal_state(card, assertions, dispositions)` | `proposal_cards.jsonl`, `assertions.jsonl`, `dispositions.jsonl`; the validator also reads `contributions.jsonl`, `synthesis_packets.jsonl`, and the manifest's actor list |
 
 Every file in the table lies in the derived scope's directory or in the
 global unit.

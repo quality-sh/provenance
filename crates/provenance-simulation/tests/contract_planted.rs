@@ -11,10 +11,15 @@ mod support {
     pub mod contract_laws;
 }
 
-use provenance_simulation::generate::{Case, Effect, Operation, Task};
+use provenance_core::{
+    DispositionActor, DispositionDecision, IdentityType, MessageRole, NodeType, ThreadParent,
+};
+use provenance_simulation::generate::{Case, Effect, Operation, Task, DECIDER, FIRST_REQUIREMENT};
 use provenance_simulation::laws::Violation;
-use provenance_simulation::{report, run_case, Config, Plant};
+use provenance_simulation::{report, run_case, scope, stable, Config, Plant};
 use provenance_store::repository::Repository;
+use provenance_store::review::DecideRecordReview;
+use provenance_store::state_store::PostMessageInput;
 use support::cases::alone;
 use support::contract::{apply_contract, CONTRACT};
 use support::contract_laws::{
@@ -74,8 +79,7 @@ fn decide_in_two_stages(repository: &Repository, task: &Task) -> anyhow::Result<
     Ok(effect)
 }
 
-// No Rule: proof that O3 can fail. A stand-in lands a decision in two
-// whole sets.
+// No Rule: proof that O3 can fail. A stand-in lands a decision in two sets.
 #[test]
 #[ignore = "a planted fault of the nightly simulation"]
 fn a_decision_in_two_stages_breaks_o3() {
@@ -86,6 +90,60 @@ fn a_decision_in_two_stages_breaks_o3() {
     let config = Config {
         apply: Some(decide_in_two_stages),
         ..planted(None, "O3")
+    };
+    let run = run_case(&case, config);
+    expect_law(stages_land_whole(&run), "O3");
+}
+
+/// A decision that also posts a message in its stage, so the decision
+/// changes two keys. Each other operation runs through the contract.
+fn decide_with_a_message(repository: &Repository, task: &Task) -> anyhow::Result<Effect> {
+    let (Operation::DecideReview { .. }, Some(proposal)) = (&task.op, &task.proposal) else {
+        return apply_contract(repository, task);
+    };
+    repository.stage(false, None, |store| {
+        store.decide_record_review(DecideRecordReview {
+            scope_id: scope(),
+            actor: DispositionActor {
+                identity_type: IdentityType::Human,
+                id: DECIDER.into(),
+                name: None,
+            },
+            proposal_id: stable(proposal),
+            decision: DispositionDecision::Rejected,
+            rationale: Some("The simulation rejects it".into()),
+            canonical_artifact: None,
+            feedback: None,
+            declared_by: None,
+        })?;
+        store.post_thread_message(PostMessageInput {
+            scope_id: scope(),
+            parent: ThreadParent {
+                node_type: NodeType::Requirement,
+                node_id: stable(FIRST_REQUIREMENT),
+            },
+            role: MessageRole::User,
+            body: task.body(),
+        })?;
+        Ok(Effect::Decided {
+            proposal: proposal.clone(),
+        })
+    })
+}
+
+// No Rule: proof that O3 can fail for a per-key set of more than one key.
+// The decision changes two keys in one stage, and the storage lands that
+// whole set with the atomicity of each key.
+#[test]
+#[ignore = "a planted fault of the nightly simulation"]
+fn a_decision_as_a_per_key_set_of_two_keys_breaks_o3() {
+    let case = Case {
+        engines: 2,
+        steps: alone(&[Operation::SubmitReview, Operation::DecideReview { n: 0 }]),
+    };
+    let config = Config {
+        apply: Some(decide_with_a_message),
+        ..planted(Some(Plant::LandWholeSetPerKey), "O3")
     };
     let run = run_case(&case, config);
     expect_law(stages_land_whole(&run), "O3");
