@@ -16,7 +16,7 @@
 //! entry then removes it as a leftover.
 
 use super::durability::temporary_name::{self, is_temporary_name};
-use super::durability::{sync_directory, write_synced_file_named, STATE_TEMPORARY_PREFIX};
+use super::durability::{is_state_temporary_name, sync_directory, write_synced_file_named};
 use super::section::canonical_utf8;
 use crate::layout::ProvenanceLayout;
 use camino::{Utf8Path, Utf8PathBuf};
@@ -181,7 +181,6 @@ fn remove_cache_temporaries(
     kind: TransactionKind,
 ) -> anyhow::Result<()> {
     let marker_prefix = marker_temporary_prefix(&kind.marker(layout));
-    let prefixes = [marker_prefix.as_str(), STATE_TEMPORARY_PREFIX];
     let cache = layout.cache_dir();
     let listed = |error| removal_failure(RemovalStep::List, &cache, error);
     for entry in std::fs::read_dir(&cache).map_err(listed)? {
@@ -189,9 +188,7 @@ fn remove_cache_temporaries(
         let Ok(name) = entry.file_name().into_string() else {
             continue;
         };
-        if !prefixes
-            .iter()
-            .any(|prefix| is_temporary_name(&name, prefix))
+        if !(is_temporary_name(&name, &marker_prefix) || is_state_temporary_name(&name))
             || !entry.file_type().map_err(listed)?.is_file()
         {
             continue;

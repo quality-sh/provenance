@@ -1,12 +1,15 @@
 //! A write of one state key that stops between the sync of its temporary
-//! file and its rename, and a section entry while such a write waits at that
+//! file and its rename, and a second writer while such a write waits at that
 //! point.
 //!
 //! The state directory is in git, so a file that a stopped write leaves there
 //! shows as an untracked file. These tests compare the files below the state
 //! directory before and after the write.
 
-use super::stage_recovery_tests::{scope, serial, stamp, write_one_rule, STAGED_RULE};
+use super::stage_recovery_tests::{
+    scope, serial, stamp, transactions, write_one_requirement, write_one_rule, STAGED_REQUIREMENT,
+    STAGED_RULE,
+};
 use super::Repository;
 use crate::cache::tests::fixtures::{open, seeded_layout};
 use crate::layout::ProvenanceLayout;
@@ -77,12 +80,16 @@ fn a_one_key_write_stopped_before_its_rename_leaves_no_file_in_the_state_directo
     let old = state_tree(&root);
     crate::stopped_child::stop_in_child(CHILD, &root, PROBE);
 
-    assert_eq!(state_files(&root), state_files_of(&old), "state files");
-    assert!(state_tree(&root) == old, "the stop kept the old bytes");
+    assert!(
+        state_tree(&root) == old,
+        "the stop kept the files and bytes"
+    );
     assert_eq!(cache_temporaries(&layout).len(), 1, "temporary file");
 
     let repository = open(&layout);
     assert_eq!(staged_rules(&repository), 0);
+    assert!(!layout.publication_marker_path().exists(), "marker");
+    assert_eq!(transactions(&root), Vec::<Utf8PathBuf>::new());
     assert_eq!(cache_temporaries(&layout), Vec::<String>::new());
     assert_eq!(serial(&repository), before, "serial");
 
@@ -94,14 +101,25 @@ fn a_one_key_write_stopped_before_its_rename_leaves_no_file_in_the_state_directo
     assert_eq!(cache_temporaries(&layout), Vec::<String>::new());
 }
 
+/// The Requirements with the id of the staged Requirement.
+fn staged_requirements(repository: &Repository) -> usize {
+    let requirements = repository.store().list_requirements(&scope()).unwrap();
+    requirements
+        .iter()
+        .filter(|requirement| requirement.id.as_str() == STAGED_REQUIREMENT)
+        .count()
+}
+
+// No Rule: no Rule states that a writer waits for the publication section of
+// another writer. The test shows that the removal of the data of a stopped
+// write at the section entry cannot remove the temporary file of a live
+// write of one key.
 /// While a write of one key waits between the sync of its temporary file and
-/// its rename, a second writer that enters the section waits for the lock.
-/// Its clean-up thus cannot remove the temporary file of the live write, and
-/// both calls succeed.
+/// its rename, a second writer of one key waits to enter the section. So the
+/// removal of stopped data at its entry does not remove the temporary file of
+/// the live write, and both writes land.
 #[test]
-#[verifies("rule_one_key_write_adds_no_other_state_file", examples)]
-#[verifies("rule_stopped_write_leaves_no_transaction_data", examples)]
-fn a_section_entry_waits_for_a_one_key_write_at_its_rename() {
+fn a_second_writer_does_not_remove_the_temporary_file_of_a_live_one_key_write() {
     let (_dir, layout, _scope) = seeded_layout();
     let root = layout.root().to_owned();
     let old = state_files(&root);
@@ -126,30 +144,34 @@ fn a_section_entry_waits_for_a_one_key_write_at_its_rename() {
             landed
         });
         entered_rx.recv_timeout(Duration::from_secs(20)).unwrap();
-        assert_eq!(state_files(&root), old, "state files of the live write");
         assert_eq!(cache_temporaries(layout).len(), 1, "temporary file");
 
         let second = threads.spawn(move || {
-            let count = staged_rules(&open(layout));
+            let landed = open(layout).stage(false, Some(stamp()), write_one_requirement);
             done_tx.send(()).unwrap();
-            count
+            landed
         });
-        assert!(done_rx.recv_timeout(Duration::from_millis(300)).is_err());
+        assert!(
+            done_rx.recv_timeout(Duration::from_millis(300)).is_err(),
+            "the second writer did not wait for the section"
+        );
         assert_eq!(
             cache_temporaries(layout).len(),
             1,
-            "the live write keeps its file"
+            "the live write keeps its temporary file"
         );
 
         release_tx.send(()).unwrap();
         first.join().unwrap().unwrap();
-        assert_eq!(
-            second.join().unwrap(),
-            1,
-            "the second writer reads the write"
-        );
+        second.join().unwrap().unwrap();
     });
-    assert_eq!(staged_rules(&open(&layout)), 1);
+    let repository = open(&layout);
+    assert_eq!(staged_rules(&repository), 1, "the first write landed");
+    assert_eq!(
+        staged_requirements(&repository),
+        1,
+        "the second write landed"
+    );
     assert_eq!(state_files(&root), old, "state files");
     assert_eq!(cache_temporaries(&layout), Vec::<String>::new());
 }

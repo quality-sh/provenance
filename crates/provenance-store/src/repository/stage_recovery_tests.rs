@@ -17,6 +17,7 @@ use provenance_macros::verifies;
 use std::collections::BTreeMap;
 
 pub(super) const STAGED_RULE: &str = "rule_staged_publication";
+pub(super) const STAGED_REQUIREMENT: &str = "req_staged_publication";
 
 pub(super) fn scope() -> ScopeId {
     ScopeId::new("default").unwrap()
@@ -35,10 +36,15 @@ pub(super) fn stamp() -> Stamp {
 /// reaches each crash probe of the whole set.
 fn write_rule(staged: &StateStore) -> anyhow::Result<()> {
     write_one_rule(staged)?;
+    write_one_requirement(staged)
+}
+
+/// Adds one Requirement to the staged Requirement shard: a stage of one key.
+pub(super) fn write_one_requirement(staged: &StateStore) -> anyhow::Result<()> {
     let path = crate::shards::requirements_path(&staged.layout, &scope());
     let mut requirements = staged.list_requirements(&scope())?;
     let mut requirement = requirements[0].clone();
-    requirement.id = sid("req_staged_publication");
+    requirement.id = sid(STAGED_REQUIREMENT);
     requirement.created = None;
     requirement.updated = None;
     requirements.push(requirement);
@@ -146,7 +152,7 @@ fn assert_reopened(fixture: &Fixture, committed: bool, phase: &str) {
 
 /// The entries of the transaction directory of the cache under `root`, in
 /// name order.
-fn transactions(root: &Utf8Path) -> Vec<Utf8PathBuf> {
+pub(super) fn transactions(root: &Utf8Path) -> Vec<Utf8PathBuf> {
     let directory = ProvenanceLayout::new(root).import_transactions_dir();
     names(&directory)
         .iter()

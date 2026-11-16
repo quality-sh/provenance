@@ -20,6 +20,19 @@ impl ProvenanceLayout {
     pub fn state_dir(&self) -> Utf8PathBuf {
         self.provenance_dir().join("state")
     }
+    /// The layout of the repository whose state directory holds `path`: the
+    /// nearest ancestor of `path` that is named `state` and is in a directory
+    /// named `.provenance`. `None` when no state directory holds `path`. The
+    /// test reads only the names in `path` and does not resolve links.
+    pub(crate) fn holding_state_path(path: &Utf8Path) -> Option<Self> {
+        path.ancestors()
+            .find(|ancestor| {
+                ancestor.file_name() == Some("state")
+                    && ancestor.parent().and_then(Utf8Path::file_name) == Some(".provenance")
+            })
+            .and_then(|state| state.parent().and_then(Utf8Path::parent))
+            .map(Self::new)
+    }
     pub fn manifest_path(&self) -> Utf8PathBuf {
         self.state_dir().join("manifest.json")
     }

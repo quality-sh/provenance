@@ -3,9 +3,8 @@
 //! A per-key set lands each key under the advisory lock of its shard. A put
 //! is a temporary file in the cache, a sync of it, a rename onto the key, and
 //! a sync of the directory of the key and of each directory that the put
-//! made. A delete is a remove and a sync
-//! of its directory. A whole set lands as one swap of a changed copy of the
-//! state directory.
+//! made. A delete is a remove and a sync of its directory. A whole set lands
+//! as one swap of a changed copy of the state directory.
 
 use super::{Atomicity, PublishFailure, StateKey, StateStorage, StateView, StorageError, WriteSet};
 use crate::layout::ProvenanceLayout;
@@ -25,6 +24,7 @@ mod recovery;
 mod section;
 mod transactions;
 pub(crate) mod whole_set;
+pub use durability::is_state_temporary_name;
 #[cfg(any(unix, windows))]
 pub(crate) use file_install::FileInstall;
 #[cfg(all(test, unix))]
@@ -54,13 +54,14 @@ pub(crate) use whole_set::copy_directory;
 /// and a rename, so one key lands completely or not at all, and the keys land
 /// one by one, in key order. The temporary file is in the cache, so a put
 /// that stops leaves no file in the state directory, and the next section
-/// entry removes the temporary file. The adapter syncs the file before the rename,
-/// and after the rename its directory and each directory that the put made.
-/// After a delete, it syncs the directory. Thus on Unix, a key that landed
-/// keeps its new bytes, or stays deleted, after a power loss. On Windows, a
-/// directory has no sync: the file sync occurs, but a power loss can lose a
-/// rename, a new directory or a delete. A whole set lands as one swap of a
-/// changed copy of the state directory, so every key lands or no key lands.
+/// entry removes the temporary file. The adapter syncs the file before the
+/// rename, and after the rename its directory and each directory that the put
+/// made. After a delete, it syncs the directory. Thus on Unix, a key that
+/// landed keeps its new bytes, or stays deleted, after a power loss. On
+/// Windows, a directory has no sync: the file sync occurs, but a power loss
+/// can lose a rename, a new directory or a delete. A whole set lands as one
+/// swap of a changed copy of the state directory, so every key lands or no
+/// key lands.
 #[derive(Clone, Debug)]
 pub struct LocalStateStorage {
     layout: ProvenanceLayout,
@@ -90,9 +91,9 @@ impl StateStorage for LocalStateStorage {
     ///
     /// A per-key set lands each key in key order: a put with a temporary
     /// file and a rename, a delete with a remove. It syncs as
-    /// `durability::write_synced_state_file` and `durability::remove_synced_file`
-    /// state. A whole set lands as one swap of the state directory; see
-    /// `whole_set`.
+    /// `durability::write_synced_state_file` and
+    /// `durability::remove_synced_file` state. A whole set lands as one swap
+    /// of the state directory; see `whole_set`.
     fn publish(&self, writes: WriteSet) -> Result<(), PublishFailure> {
         self.ensure_publishable(&writes)?;
         self.land(&writes)
