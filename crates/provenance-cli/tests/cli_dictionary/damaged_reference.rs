@@ -10,8 +10,7 @@
 
 use super::support::{
     answer, dictionary_pdf, file_names, half_reference, init, init_command, provenance,
-    reference_path, reference_problem, reference_refusal, HALF_REFERENCE_MESSAGE,
-    UNAPPROVED_WORD,
+    reference_path, reference_problem, reference_refusal, HALF_REFERENCE_MESSAGE, UNAPPROVED_WORD,
 };
 use provenance_macros::verifies;
 use serde_json::{json, Value};

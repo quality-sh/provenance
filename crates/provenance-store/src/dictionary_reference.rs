@@ -137,9 +137,10 @@ fn unreadable(
     path: &camino::Utf8Path,
     error: &std::io::Error,
 ) -> String {
-    let file = path
-        .strip_prefix(layout.root())
-        .map_or_else(|_| path.to_string(), |below| below.iter().collect::<Vec<_>>().join("/"));
+    let file = path.strip_prefix(layout.root()).map_or_else(
+        |_| path.to_string(),
+        |below| below.iter().collect::<Vec<_>>().join("/"),
+    );
     format!("Provenance cannot read the dictionary reference {file}: {error}")
 }
 
