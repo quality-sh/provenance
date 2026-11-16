@@ -118,7 +118,7 @@ pub enum Stop {
     /// before the write started.
     Answered { before: Entries },
     /// The write ended before the test saw a point.
-    Ended { before: Entries },
+    Ended,
     /// The write did not end in the process limit, so its case breaks L0.
     Limit,
 }
@@ -165,7 +165,7 @@ impl Stop {
                 Landing::AfterRename => AFTER_RENAME,
             },
             Self::Answered { .. } => ANSWERED,
-            Self::Ended { .. } => ENDED,
+            Self::Ended => ENDED,
             Self::Limit => LIMIT,
         }
     }
@@ -212,7 +212,7 @@ pub fn run_stopped(
             Err(text) => return (Some(done(task, Err(text), false)), Stop::Limit),
         };
         let result = answer(&output).and_then(|data| effect(task, &request, &data));
-        return (Some(done(task, result, false)), Stop::Ended { before });
+        return (Some(done(task, result, false)), Stop::Ended);
     };
     let output = running.kill(&what);
     // A process gives its answer at its end: the data of a success on

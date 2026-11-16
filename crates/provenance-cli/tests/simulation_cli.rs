@@ -159,7 +159,7 @@ fn stop_probe(probe: &'static str, stopped: Operation, at: u8, landings: &[Landi
             assert!(stopped[0].result.is_ok(), "{stopped:?}");
             (None, before)
         }
-        [Stop::Ended { .. }] => {
+        [Stop::Ended] => {
             panic!("the write ended before the test saw its point, so the probe tested no stop")
         }
         other => {
