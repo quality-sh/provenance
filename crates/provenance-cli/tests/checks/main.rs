@@ -23,6 +23,8 @@ mod cli_binding_policy;
 mod cli_check;
 #[path = "../cli_check_gaps.rs"]
 mod cli_check_gaps;
+#[path = "../cli_check_merge_driver.rs"]
+mod cli_check_merge_driver;
 #[path = "../cli_check_porcelain.rs"]
 mod cli_check_porcelain;
 #[path = "../cli_check_threads.rs"]

@@ -25,15 +25,24 @@ use provenance_macros::rule;
 /// pattern.
 #[rule("rule_generated_outputs_ignored")]
 pub fn project_ignored(existing: &[u8], pattern: &str) -> anyhow::Result<Vec<u8>> {
-    let existing = std::str::from_utf8(existing).context(".gitignore is not valid UTF-8")?;
-    if existing.lines().any(|line| line.trim() == pattern) {
+    append_line(existing, pattern, ".gitignore")
+}
+
+/// Appends `line` to the bytes of the git file `file_name` unless a line,
+/// with surrounding whitespace removed, is exactly `line`.
+///
+/// Bytes that are not UTF-8 are an error that names `file_name`.
+pub fn append_line(existing: &[u8], line: &str, file_name: &str) -> anyhow::Result<Vec<u8>> {
+    let existing =
+        std::str::from_utf8(existing).with_context(|| format!("{file_name} is not valid UTF-8"))?;
+    if existing.lines().any(|present| present.trim() == line) {
         return Ok(existing.as_bytes().to_vec());
     }
     let mut updated = existing.as_bytes().to_vec();
     if !updated.is_empty() && !updated.ends_with(b"\n") {
         updated.push(b'\n');
     }
-    updated.extend_from_slice(pattern.as_bytes());
+    updated.extend_from_slice(line.as_bytes());
     updated.push(b'\n');
     Ok(updated)
 }

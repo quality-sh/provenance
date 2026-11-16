@@ -50,6 +50,8 @@ mod cli_help_guidance;
 mod cli_init;
 #[path = "../cli_init_long_path.rs"]
 mod cli_init_long_path;
+#[path = "../cli_init_merge_driver.rs"]
+mod cli_init_merge_driver;
 #[path = "../cli_init_review_guidance.rs"]
 mod cli_init_review_guidance;
 #[path = "../cli_init_reviewer.rs"]

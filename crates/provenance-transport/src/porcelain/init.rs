@@ -59,6 +59,7 @@ pub(super) struct InitPlan {
     dictionary: crate::ste_onboarding::Plan,
     scope_ids: Vec<String>,
     reviewer_notice: Option<String>,
+    merge_driver: crate::merge_driver::DriverPlan,
     command: &'static str,
 }
 
@@ -117,6 +118,7 @@ pub(super) fn prepare_init(path: &Utf8Path, options: InitOptions) -> anyhow::Res
         .context("the planned Provenance state is not valid")?;
     let dictionary =
         crate::ste_onboarding::prepare(path, ste_pdf.as_deref(), invocation.command())?;
+    let merge_driver = crate::merge_driver::plan(path, invocation.command());
     let scope_ids: Vec<String> = manifest
         .scopes
         .iter()
@@ -130,6 +132,7 @@ pub(super) fn prepare_init(path: &Utf8Path, options: InitOptions) -> anyhow::Res
         dictionary,
         scope_ids,
         reviewer_notice,
+        merge_driver,
         command: invocation.command(),
     })
 }
@@ -144,6 +147,8 @@ struct PlannedFiles {
     agents_had_section: bool,
     gitignore_bytes: Vec<u8>,
     gitignore_before: FileSnapshot,
+    gitattributes_bytes: Vec<u8>,
+    gitattributes_before: FileSnapshot,
 }
 
 impl PlannedFiles {
@@ -166,6 +171,11 @@ impl PlannedFiles {
             ".provenance/cache/",
         )
         .context("failed to ignore the Provenance cache")?;
+        let gitattributes_before = FileSnapshot::read(path.join(".gitattributes").as_std_path())?;
+        let gitattributes_bytes = crate::gitattributes::project_state_merge(
+            gitattributes_before.bytes().unwrap_or_default(),
+        )
+        .context("failed to send the state files to the merge driver")?;
         Ok(Self {
             manifest_bytes,
             manifest_before,
@@ -174,6 +184,8 @@ impl PlannedFiles {
             agents_had_section,
             gitignore_bytes,
             gitignore_before,
+            gitattributes_bytes,
+            gitattributes_before,
         })
     }
 }
@@ -196,19 +208,23 @@ fn already_ending(
 }
 
 /// Builds the new-versus-changed inventory for the printed summary, or
-/// returns nothing when this run would not write one byte.
+/// returns nothing when this run would not write one byte. `driver_set` is
+/// true when this run set the merge driver of the clone.
 fn build_summary(
     path: &Utf8Path,
     scope_ids: &[String],
     planned: &PlannedFiles,
     skills: &InstallReport,
     dictionary: &crate::ste_onboarding::Plan,
+    driver_set: bool,
 ) -> Option<InitSummary> {
     let manifest_changed =
         planned.manifest_before.bytes() != Some(planned.manifest_bytes.as_slice());
     let agents_changed = planned.agents_before.bytes() != Some(planned.agents_bytes.as_slice());
     let gitignore_changed =
         planned.gitignore_before.bytes() != Some(planned.gitignore_bytes.as_slice());
+    let gitattributes_changed =
+        planned.gitattributes_before.bytes() != Some(planned.gitattributes_bytes.as_slice());
     let skills_unchanged = skills
         .files()
         .iter()
@@ -217,6 +233,8 @@ fn build_summary(
     if !manifest_changed
         && !agents_changed
         && !gitignore_changed
+        && !gitattributes_changed
+        && !driver_set
         && skills_unchanged
         && dictionary_change.is_none()
     {
@@ -260,11 +278,7 @@ fn build_summary(
         } else {
             "added the Provenance section"
         };
-        if planned.agents_before.bytes().is_none() {
-            summary.push_new("AGENTS.md", note);
-        } else {
-            summary.push_changed("AGENTS.md", note);
-        }
+        push_file(&mut summary, "AGENTS.md", &planned.agents_before, note);
     }
     if gitignore_changed {
         if planned.gitignore_before.bytes().is_none() {
@@ -272,6 +286,17 @@ fn build_summary(
         } else {
             summary.push_changed(".gitignore", "added one line");
         }
+    }
+    if gitattributes_changed {
+        let note = "sent state files to the merge driver";
+        let before = &planned.gitattributes_before;
+        push_file(&mut summary, ".gitattributes", before, note);
+    }
+    if driver_set {
+        summary.push_changed(
+            "git config of this clone",
+            "set the merge driver for state files",
+        );
     }
     if let Some(existed) = dictionary_change {
         if existed {
@@ -287,6 +312,15 @@ fn build_summary(
         }
     }
     Some(summary)
+}
+
+/// Lists `path` as new when it did not exist before init, else as changed.
+fn push_file(summary: &mut InitSummary, path: &str, before: &FileSnapshot, note: &str) {
+    if before.bytes().is_none() {
+        summary.push_new(path, note);
+    } else {
+        summary.push_changed(path, note);
+    }
 }
 
 pub(super) fn scope_path_prefix(
@@ -365,6 +399,7 @@ mod tests {
             ".claude",
             "AGENTS.md",
             ".gitignore",
+            ".gitattributes",
         ] {
             assert!(!repo.join(path).exists(), "{path} survived rollback");
         }
