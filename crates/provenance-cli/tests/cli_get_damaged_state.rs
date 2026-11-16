@@ -48,17 +48,36 @@ pub fn run(repo: &str, args: &[&str]) -> (Option<i32>, String, String) {
 }
 
 /// The refusal object of one CLI command that exits with code 1.
-fn cli_refusal(repo: &str, args: &[&str]) -> Value {
+pub fn cli_refusal(repo: &str, args: &[&str]) -> Value {
     let (code, stdout, stderr) = run(repo, &[args, &["--format", "json"][..]].concat());
     assert_eq!((code, stdout.as_str()), (Some(1), ""), "{args:?}: {stderr}");
     crate::porcelain_api::envelope(&stderr)
 }
 
 /// The refusal object of one MCP tool call that fails.
-async fn mcp_refusal(server: &Server, tool: &str, arguments: Value) -> Value {
+pub async fn mcp_refusal(server: &Server, tool: &str, arguments: Value) -> Value {
     let called = server.client.call(tool, arguments).await;
     assert_eq!(called["isError"], json!(true), "{called}");
     serde_json::from_str(called["content"][0]["text"].as_str().unwrap()).unwrap()
+}
+
+/// `refusal` is the refusal of a read with no stored revision whose catch-up failed with
+/// `cause`: its message names the read database, `provenance materialize` and the cause.
+pub fn assert_no_revision_refusal(refusal: &Value, cause: &str) {
+    let message = refusal["error"]["message"].as_str().unwrap();
+    let database = message
+        .strip_prefix("no projection revision in ")
+        .and_then(|rest| {
+            rest.strip_suffix(&format!(
+                "; run `provenance materialize` (catch-up failed: {cause})"
+            ))
+        })
+        .unwrap_or_else(|| panic!("{message}"));
+    assert!(database.ends_with("provenance.db"), "{message}");
+    assert_eq!(
+        refusal,
+        &json!({"error":{"kind":"operation_failed","message":message},"meta":{}})
+    );
 }
 
 /// An update of the Rule with the guard `etag` refuses with `by_cli` on the CLI and with
@@ -229,17 +248,9 @@ async fn a_get_over_a_bad_line_with_no_stored_revision_refuses_on_each_interface
     let server = Server::start(&repo).await;
 
     let by_cli = cli_refusal(&repo, &[RULE, "get"]);
-    let message = by_cli["error"]["message"].as_str().unwrap();
-    let cause = format!(
-        "catch-up failed: {RULES} line {line}: EOF while parsing a value; {STATE_CORRECTIONS}"
-    );
-    let database = message
-        .strip_prefix("no projection revision in ")
-        .and_then(|rest| rest.strip_suffix(&format!("; run `provenance materialize` ({cause})")))
-        .unwrap_or_else(|| panic!("{message}"));
-    assert!(database.ends_with("provenance.db"), "{message}");
-    let refused = json!({"error":{"kind":"operation_failed","message":message},"meta":{}});
-    assert_eq!(by_cli, refused);
+    let cause = format!("{RULES} line {line}: EOF while parsing a value; {STATE_CORRECTIONS}");
+    assert_no_revision_refusal(&by_cli, &cause);
+    let refused = by_cli;
     assert_eq!(
         mcp_refusal(&server, "get", json!({"target":RULE})).await,
         refused
