@@ -342,20 +342,23 @@ mod tests {
             },
         )
         .unwrap();
-        for attempt in 0..100_u8 {
-            std::fs::write(
-                repo.join(format!(
-                    ".AGENTS.md.provenance-{}-{attempt}.tmp",
-                    std::process::id()
-                )),
-                "occupied\n",
-            )
-            .unwrap();
-        }
+        // The probe removes the temporary file of the AGENTS.md write before
+        // its rename, so init fails after it wrote the skill files.
+        let probe_repo = repo.clone();
+        crate::test_probes::arm("project_file_compared", move || {
+            lock_tests::remove_temporary_files(&probe_repo, "AGENTS.md");
+        });
 
         let error = plan.apply().unwrap_err();
+        crate::test_probes::disarm("project_file_compared");
 
-        assert!(format!("{error:#}").contains("could not allocate tmp file"));
+        assert!(
+            format!("{error:#}").starts_with(&format!(
+                "failed to replace {}: ",
+                repo.join("AGENTS.md").as_std_path().display()
+            )),
+            "{error:#}"
+        );
         for path in [
             ".provenance",
             ".agents",

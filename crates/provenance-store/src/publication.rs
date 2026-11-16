@@ -19,7 +19,10 @@ mod source_edit_recovery;
 mod staged;
 mod write_permission;
 #[cfg(feature = "host")]
-pub use crate::storage::local::durability::{sync_directory, sync_tree};
+pub use crate::storage::local::durability::{
+    remove_synced_file_checked, sync_directory, sync_tree, write_synced_file_checked,
+    ChangedUnsynced,
+};
 #[cfg(all(test, unix, feature = "host"))]
 use crate::storage::local::{
     contained_missing_transaction, validated_transaction_dir, TransactionKind,

@@ -1,6 +1,8 @@
 mod access;
 mod archive_history;
 mod canonical_artifacts;
+#[cfg(feature = "host")]
+mod failure_text;
 mod family_readers;
 mod graph_validation;
 mod ideation_batches;

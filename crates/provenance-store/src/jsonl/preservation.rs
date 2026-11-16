@@ -117,6 +117,33 @@ impl<T> LoadedRecords<T> {
     pub(super) const fn records_mut(&mut self) -> &mut Vec<T> {
         &mut self.records
     }
+
+    /// The records, beside the bytes that their stored lines carry.
+    #[cfg(feature = "host")]
+    pub(super) const fn records_and_carried(&mut self) -> (&mut Vec<T>, Carried<'_>) {
+        (&mut self.records, Carried(self.raw.as_slice()))
+    }
+}
+
+/// The members of the stored lines of a loaded file that the record type
+/// does not know, which a changed line of a record carries over.
+#[cfg(feature = "host")]
+pub struct Carried<'a>(&'a [Option<RawRecord>]);
+
+#[cfg(feature = "host")]
+impl Carried<'_> {
+    /// The bytes that the changed line of the record with the stored id `id`
+    /// adds to the JSON form of the record: a comma and each member that the
+    /// record type does not know.
+    pub fn bytes(&self, id: &str) -> usize {
+        self.0
+            .iter()
+            .flatten()
+            .find(|raw| raw.id() == Some(id))
+            .map_or(0, |raw| {
+                raw.unknown.iter().map(|member| member.len() + 1).sum()
+            })
+    }
 }
 
 impl<T: Serialize> LoadedRecords<T> {
@@ -129,7 +156,17 @@ impl<T: Serialize> LoadedRecords<T> {
     /// the row's top-level unknown members are carried onto the new line. The
     /// write is refused when a changed row holds stored data that cannot be
     /// carried over, before anything is published.
-    pub(super) fn into_lines(mut self, path: &Utf8Path) -> anyhow::Result<Vec<String>> {
+    pub(super) fn into_lines(self, path: &Utf8Path) -> anyhow::Result<Vec<String>> {
+        self.into_checked_lines(path, |_| Ok(()))
+    }
+
+    /// Like [`Self::into_lines`], but `written` checks each line that the
+    /// write changes or adds, as it is stored, before the lines are given.
+    pub(super) fn into_checked_lines(
+        mut self,
+        path: &Utf8Path,
+        mut written: impl FnMut(&str) -> anyhow::Result<()>,
+    ) -> anyhow::Result<Vec<String>> {
         let mut lines = Vec::with_capacity(self.records.len());
         let mut added_without_id = false;
         for record in &self.records {
@@ -141,13 +178,17 @@ impl<T: Serialize> LoadedRecords<T> {
             if let Some(id) = record_id(&known) {
                 if let Some(index) = unique_id_match(path, &self.raw, id)? {
                     let raw = take(&mut self.raw, index);
-                    lines.push(raw.changed_line(path, record)?);
+                    let line = raw.changed_line(path, record)?;
+                    written(&line)?;
+                    lines.push(line);
                     continue;
                 }
             } else {
                 added_without_id = true;
             }
-            lines.push(serde_json::to_string(record)?);
+            let line = serde_json::to_string(record)?;
+            written(&line)?;
+            lines.push(line);
         }
         let kept_without_id = self
             .raw
