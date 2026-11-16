@@ -284,3 +284,159 @@ pub fn file_names(directory: &Path) -> Vec<String> {
     names.sort();
     names
 }
+
+/// The exit code, the JSON on standard output and the text on standard error.
+pub fn answer(output: &Output) -> (Option<i32>, serde_json::Value, String) {
+    let stdout = serde_json::from_slice(&output.stdout).unwrap_or_else(|error| {
+        panic!(
+            "stdout must be JSON: {error}: {}",
+            String::from_utf8_lossy(&output.stdout)
+        )
+    });
+    (
+        output.status.code(),
+        stdout,
+        String::from_utf8_lossy(&output.stderr).into_owned(),
+    )
+}
+
+/// A repository with no entry at its dictionary reference path, an empty
+/// machine index directory, and the fixture PDF.
+pub struct ReferenceProject {
+    _scratch: tempfile::TempDir,
+    pub repo: PathBuf,
+    pub index_directory: PathBuf,
+    pdf: PathBuf,
+}
+
+impl ReferenceProject {
+    pub fn empty() -> Self {
+        let scratch = tempfile::tempdir().unwrap();
+        let repo = scratch.path().join("repo");
+        let index_directory = scratch.path().join("index");
+        let pdf = scratch.path().join("dictionary.pdf");
+        std::fs::create_dir_all(&repo).unwrap();
+        std::fs::create_dir_all(&index_directory).unwrap();
+        std::fs::write(&pdf, dictionary_pdf()).unwrap();
+        init_command(&repo, &[])
+            .env("PROVENANCE_STE100_INDEX_DIR", &index_directory)
+            .assert()
+            .success();
+        assert!(std::fs::symlink_metadata(reference_path(&repo)).is_err());
+        Self {
+            _scratch: scratch,
+            repo,
+            index_directory,
+            pdf,
+        }
+    }
+
+    /// A project whose dictionary reference holds `contents`.
+    pub fn with_reference(contents: &str) -> Self {
+        let project = Self::empty();
+        std::fs::write(project.reference(), contents).unwrap();
+        project
+    }
+
+    pub fn reference(&self) -> PathBuf {
+        reference_path(&self.repo)
+    }
+
+    pub fn repo(&self) -> &str {
+        self.repo.to_str().unwrap()
+    }
+
+    /// Runs `provenance` with `arguments` and the machine index directory of
+    /// the project.
+    pub fn run(&self, arguments: &[&str]) -> Output {
+        provenance()
+            .env("PROVENANCE_STE100_INDEX_DIR", &self.index_directory)
+            .args(arguments)
+            .output()
+            .unwrap()
+    }
+
+    pub fn import(&self) -> Output {
+        let pdf = self.pdf.to_str().unwrap();
+        self.run(&["dictionary", "import", "--pdf", pdf, "--repo", self.repo()])
+    }
+
+    pub fn init(&self) -> Output {
+        init_command(&self.repo, &["--ste-pdf", self.pdf.to_str().unwrap()])
+            .env("PROVENANCE_STE100_INDEX_DIR", &self.index_directory)
+            .output()
+            .unwrap()
+    }
+
+    pub fn status(&self) -> (Option<i32>, serde_json::Value, String) {
+        answer(&self.run(&[
+            "dictionary",
+            "status",
+            "--repo",
+            self.repo(),
+            "--format",
+            "json",
+        ]))
+    }
+
+    /// The JSON check of a statement with an unapproved word, with `extra`
+    /// arguments.
+    pub fn statement_check(&self, extra: &[&str]) -> (Option<i32>, serde_json::Value, String) {
+        let statement = format!("The {UNAPPROVED_WORD} item stops.");
+        let mut arguments = vec!["check", "--repo", self.repo(), "--statement", &statement];
+        arguments.extend_from_slice(extra);
+        arguments.extend_from_slice(&["--format", "json"]);
+        answer(&self.run(&arguments))
+    }
+
+    /// The exit code and standard error of a refused write, the bytes of the
+    /// reference after it, and the names in the index directory.
+    pub fn refusal(&self, output: &Output) -> (Option<i32>, String, String, Vec<String>) {
+        (
+            output.status.code(),
+            String::from_utf8_lossy(&output.stderr).into_owned(),
+            std::fs::read_to_string(self.reference()).unwrap(),
+            file_names(&self.index_directory),
+        )
+    }
+}
+
+/// The dictionary status of `project` when its reference cannot load with
+/// `problem`.
+pub fn unloaded_status(
+    project: &ReferenceProject,
+    problem: &str,
+) -> (Option<i32>, serde_json::Value, String) {
+    let status = serde_json::json!({
+        "referenced": true,
+        "index_directory": project.index_directory.display().to_string(),
+        "index_present": false,
+        "analyzer": "built_in_rules",
+        "load_problem": problem,
+    });
+    (Some(0), status, String::new())
+}
+
+/// The statement check when the reference cannot load with `problem`: a
+/// warning that Rule 1.1 did not run, and no finding for the unapproved word.
+pub fn unloaded_check(problem: &str) -> (Option<i32>, serde_json::Value, String) {
+    let check = serde_json::json!({"categories": [{
+        "category": "statements",
+        "status": "findings",
+        "findings": [{"message": format!("ASD-STE100 Rule 1.1 did not run: {problem}")}],
+    }]});
+    (Some(0), check, String::new())
+}
+
+/// The strict statement check when the reference cannot load with
+/// `problem`: the statements category cannot run, its reason is the problem,
+/// and the check fails with the same text.
+pub fn unloaded_strict_check(problem: &str) -> (Option<i32>, serde_json::Value, String) {
+    let check = serde_json::json!({"categories": [{
+        "category": "statements",
+        "status": "unavailable",
+        "findings": [],
+        "unavailable_reason": problem,
+    }]});
+    (Some(1), check, format!("Error: {problem}\n"))
+}

@@ -1,21 +1,20 @@
 //! The review host prepares the projection before it reports that it is ready, so the
 //! first page read has no projection work to do.
 
+#[path = "support"]
+mod support {
+    pub mod no_checks;
+    pub mod user_cache;
+}
+
+use support::no_checks::NoChecks;
+use support::user_cache::use_user_cache;
+
 use provenance_macros::verifies;
-use provenance_porcelain::check::{Category, CheckPort, PortFuture};
 use provenance_review::{HostOptions, RepositoryScope};
 use provenance_store::cache::{catch_up_state, CatchUpReport};
 use provenance_transport::fixture::records::Repository;
 use std::{path::Path, sync::Arc};
-
-/// A check port for a host whose test never runs a check.
-struct NoChecks;
-
-impl CheckPort for NoChecks {
-    fn run<'a>(&'a self, _: Category, _: Option<&'a str>) -> PortFuture<'a> {
-        Box::pin(async { Err("this host runs no checks".to_owned()) })
-    }
-}
 
 #[tokio::test(flavor = "multi_thread")]
 #[verifies("rule_review_host_prepares_projection_at_start", examples)]
@@ -61,12 +60,4 @@ fn remove_projection(root: &Path) {
     if cache.exists() {
         std::fs::remove_dir_all(cache).unwrap();
     }
-}
-
-/// Points every platform's per-user cache at one isolated directory.
-fn use_user_cache(root: &Path) {
-    let cache = root.join("cache");
-    std::env::set_var("HOME", root);
-    std::env::set_var("XDG_CACHE_HOME", &cache);
-    std::env::set_var("LOCALAPPDATA", &cache);
 }

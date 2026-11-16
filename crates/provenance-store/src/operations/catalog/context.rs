@@ -118,14 +118,21 @@ impl PreparedContext {
         }
         Ok(self)
     }
-    pub(super) fn scope(self) -> Result<PreparedScope, OperationFailure> {
-        self.scope.ok_or(OperationFailure::UnavailableNeeds)
+    /// The scope of the operation, after the check that the manifest declares it.
+    pub(super) fn scope(self) -> anyhow::Result<PreparedScope> {
+        let scope = self.scope.ok_or(OperationFailure::UnavailableNeeds)?;
+        declared(&scope.repository)?;
+        Ok(scope)
     }
     pub(super) fn repository(self) -> Result<PreparedRepository, OperationFailure> {
         self.repository.ok_or(OperationFailure::UnavailableNeeds)
     }
-    pub(super) fn graph(self) -> Result<PreparedRead, OperationFailure> {
-        self.read.ok_or(OperationFailure::UnavailableNeeds)
+    /// The graph read of the operation, after the check that the manifest
+    /// declares its scope.
+    pub(super) fn graph(self) -> anyhow::Result<PreparedRead> {
+        let read = self.read.ok_or(OperationFailure::UnavailableNeeds)?;
+        declared(&read.repository)?;
+        Ok(read)
     }
     pub(super) const fn validate_kind(&self, kind: ContextKind) -> Result<(), OperationFailure> {
         let valid = match kind {
@@ -174,6 +181,26 @@ pub trait ContextResolver: Send + Sync {
         context: RequestedContext,
         needs: ExecutionNeeds,
     ) -> Result<PreparedContext, OperationFailure>;
+}
+/// The check of a scoped operation that the manifest declares the scope of
+/// `repository`. The manifest can change after the repository opened, so the
+/// check runs in the operation, before each read of the scope. A manifest that
+/// does not parse gives its own error, which the failure of the operation
+/// classifies as `invalid_state_file`. The error has the paths below the
+/// repository root, as the error of the operation has.
+fn declared(repository: &Repository) -> anyhow::Result<()> {
+    let manifest = repository.manifest().map_err(|error| {
+        crate::write_error::in_repository(repository.layout().root().as_std_path(), error)
+    })?;
+    if manifest
+        .scopes
+        .iter()
+        .any(|scope| &scope.id == repository.scope())
+    {
+        Ok(())
+    } else {
+        Err(crate::refusal::common(OperationFailure::UnknownScope))
+    }
 }
 /// Tests only: a resolver with no repositories.
 #[cfg(test)]

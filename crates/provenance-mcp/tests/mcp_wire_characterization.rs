@@ -14,7 +14,7 @@ use provenance_transport::{
 };
 use serde_json::{json, Value};
 use std::sync::Arc;
-use support::{check_port::FixtureCheckPort, records::Repository};
+use support::{check_port::FixtureCheckPort, first_calls, records::Repository};
 use tokio::io::{AsyncBufReadExt as _, AsyncWriteExt as _, BufReader, DuplexStream, Lines};
 
 const TOOL_LIST_FNV1A: u64 = 7_664_500_741_809_655_526;
@@ -140,8 +140,8 @@ fn check_host() -> StatementHost {
     StatementHost::default().with_check_port(Arc::new(FixtureCheckPort))
 }
 
-/// The instructions of the full host: it shows each command and each record and
-/// Discussion write, and it has no notify port and no repository files.
+/// The instructions of the full host up to its first calls: it shows each command and each
+/// record and Discussion write, and it has no notify port and no repository files.
 const INSTRUCTIONS: &str = "# Provenance\n\n\
 Provenance records requirements, decisions, and the rules that connect them to code.\n\n\
 ## Records\n\n\
@@ -207,8 +207,15 @@ for review.\n\
 - reply: Reply to the addressed Discussion.\n\
 - discussions: List addressed Discussions in a scope or under a record.\n\
 - discussion: Read the addressed Discussion.\n\n\
-For a focused start, call search with {\"text\":\"<text>\"}, then get with \
-{\"target\":\"<id>\",\"view\":\"children\",\"depth\":<N>}.";
+For a focused start, ";
+
+/// `result` with its instructions up to the end of the words before the first calls. The
+/// first calls are pinned in `mcp_instructions.rs`.
+fn without_first_calls(mut result: Value) -> Value {
+    let instructions = result["instructions"].as_str().unwrap_or_default();
+    result["instructions"] = Value::String(first_calls::without_first_calls(instructions));
+    result
+}
 
 fn server_info() -> Value {
     json!({"name":"provenance","version":env!("CARGO_PKG_VERSION")})
@@ -220,7 +227,7 @@ async fn discover_response_keeps_its_fields() {
     let mut wire = Wire::start(full_host(&repository));
     let response = wire.request("server/discover", json!({})).await;
     assert_eq!(
-        response["result"],
+        without_first_calls(response["result"].clone()),
         json!({
             "_meta":{"io.modelcontextprotocol/serverInfo":server_info()},
             "cacheScope":"private",
@@ -248,7 +255,7 @@ async fn initialize_negotiates_the_older_protocols() {
         let mut wire = Wire::bare(full_host(&repository));
         let result = wire.initialize(requested).await;
         assert_eq!(
-            result,
+            without_first_calls(result),
             json!({
                 "protocolVersion":agreed,
                 "capabilities":{"tools":{}},

@@ -21,7 +21,8 @@ pub use change::{
     Actions as ChangeActions, Route as ChangeRoute,
 };
 pub use discussions::{
-    refusal as discussions_refusal, run as call_discussion, tool as discussions_tool,
+    input as discussions_input, refusal as discussions_refusal, run as call_discussion,
+    tool as discussions_tool,
 };
 pub use read_only::get_refusal;
 

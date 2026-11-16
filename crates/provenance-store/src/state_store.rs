@@ -291,13 +291,7 @@ impl StateStore {
     pub fn manifest(&self) -> anyhow::Result<Manifest> {
         self.with_repository_read(|held| {
             let path = held.layout.manifest_path();
-            manifest_from_bytes(&held.read_state(&path)?).map_err(|error| {
-                if error.is::<serde_json::Error>() {
-                    error.context(format!("failed to parse manifest {path}"))
-                } else {
-                    error
-                }
-            })
+            parse_manifest(&path, &held.read_state(&path)?)
         })
     }
 
@@ -411,8 +405,18 @@ pub fn serde_name<T: serde::Serialize>(value: &T) -> anyhow::Result<String> {
         .to_string())
 }
 
-pub(crate) fn manifest_from_bytes(bytes: &[u8]) -> anyhow::Result<Manifest> {
-    Ok(serde_json::from_slice(bytes)?)
+/// Parses the manifest at `path`. A manifest that does not parse refuses as
+/// `invalid_state_file` with the file below the state directory and its line.
+pub fn parse_manifest(path: &camino::Utf8Path, bytes: &[u8]) -> anyhow::Result<Manifest> {
+    serde_json::from_slice(bytes).map_err(|error| {
+        readers::unparsable(
+            path,
+            u64::try_from(error.line()).unwrap_or(u64::MAX),
+            readers::parse_message(&error),
+            None,
+        )
+        .into()
+    })
 }
 
 #[cfg(test)]

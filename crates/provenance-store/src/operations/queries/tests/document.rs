@@ -188,7 +188,8 @@ async fn document_failed_catch_up_precedes_missing_root_in_old_projection() {
             "kind": "document_catch_up_failed",
             "file": "scopes/default/topics/topic.jsonl",
             "line": 1,
-            "message": "expected value"
+            "message": "expected value",
+            "hint": provenance_core::protocol::read_failure::STATE_CORRECTIONS
         })
     );
 

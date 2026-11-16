@@ -58,6 +58,9 @@ pub enum DictionaryResolution {
     /// The reference does not parse, so it names no index. The refusal gives
     /// the file, the line, the parse message and the repair.
     Unparsable(UnparsableStateFile),
+    /// The reference path holds an entry and the read of the file fails. The
+    /// problem gives the file, the system error and the repair.
+    Unreadable(UnreadableReference),
     /// The reference names an index that this machine cannot load.
     Unavailable {
         identity: DictionaryImportIdentity,
@@ -70,6 +73,56 @@ pub enum DictionaryResolution {
 #[cfg(feature = "host")]
 const REFERENCE_REPAIR: &str =
     "get the file again from git or correct its JSON, and then do the command again";
+
+/// The step that repairs a dictionary reference that the process cannot read.
+#[cfg(feature = "host")]
+const UNREADABLE_REPAIR: &str = "make the path a file that this user can read, or get the file \
+     again from git, and then do the command again";
+
+/// A dictionary reference that the process cannot read as a file.
+///
+/// Examples are a directory, a file with no read permission and a link with no
+/// target at the reference path.
+#[derive(Debug)]
+#[cfg(feature = "host")]
+pub struct UnreadableReference {
+    file: String,
+    error: std::io::Error,
+}
+
+#[cfg(feature = "host")]
+impl UnreadableReference {
+    fn new(path: &camino::Utf8Path, error: std::io::Error) -> Self {
+        Self {
+            file: crate::state_store::readers::state_file(path),
+            error,
+        }
+    }
+
+    /// The file below the state directory, with `/` between its parts.
+    pub fn file(&self) -> &str {
+        &self.file
+    }
+
+    /// The error of the read.
+    pub const fn error(&self) -> &std::io::Error {
+        &self.error
+    }
+}
+
+#[cfg(feature = "host")]
+impl std::fmt::Display for UnreadableReference {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let Self { file, error } = self;
+        write!(
+            formatter,
+            "{file}: cannot read the file: {error}; {UNREADABLE_REPAIR}"
+        )
+    }
+}
+
+#[cfg(feature = "host")]
+impl std::error::Error for UnreadableReference {}
 
 /// Parses the reference at `path`. The refusal of a reference that does not
 /// parse gives the file below the state directory, the line, the parse message
@@ -91,11 +144,18 @@ fn parse_reference(
 
 /// Separates a missing reference from a reference that cannot load, so a strict
 /// gate can fail on the second and stay silent on the first.
+///
+/// Only a path with no entry is a missing reference: a link with no target is
+/// a reference that cannot be read.
 #[cfg(feature = "host")]
 pub fn resolve_project_dictionary(layout: &ProvenanceLayout) -> DictionaryResolution {
     let path = dictionary_reference_path(layout);
-    let Ok(bytes) = std::fs::read(path.as_std_path()) else {
-        return DictionaryResolution::NoReference;
+    let bytes = match std::fs::read(path.as_std_path()) {
+        Ok(bytes) => bytes,
+        Err(error) if is_absent(&path, &error) => return DictionaryResolution::NoReference,
+        Err(error) => {
+            return DictionaryResolution::Unreadable(UnreadableReference::new(&path, error))
+        }
     };
     let reference = match parse_reference(&path, &bytes) {
         Ok(reference) => reference,
@@ -121,6 +181,16 @@ pub fn resolve_project_dictionary(layout: &ProvenanceLayout) -> DictionaryResolu
     }
 }
 
+/// Whether the read `error` of `path` comes from a path with no entry. A link
+/// whose target is not there also gives "not found", but the path holds the
+/// link.
+#[cfg(feature = "host")]
+fn is_absent(path: &camino::Utf8Path, error: &std::io::Error) -> bool {
+    error.kind() == std::io::ErrorKind::NotFound
+        && std::fs::symlink_metadata(path)
+            .is_err_and(|entry| entry.kind() == std::io::ErrorKind::NotFound)
+}
+
 /// Loads the referenced dictionary, or nothing when it cannot load.
 #[rule("rule_ste_dictionary_reference_resolution")]
 #[cfg(feature = "host")]
@@ -129,6 +199,7 @@ pub fn load_project_dictionary(layout: &ProvenanceLayout) -> Option<ProjectDicti
         DictionaryResolution::Loaded(dictionary) => Some(dictionary),
         DictionaryResolution::NoReference
         | DictionaryResolution::Unparsable(_)
+        | DictionaryResolution::Unreadable(_)
         | DictionaryResolution::Unavailable { .. } => None,
     }
 }
@@ -213,6 +284,9 @@ pub fn missing_index_warning(layout: &ProvenanceLayout) -> Option<String> {
         DictionaryResolution::NoReference | DictionaryResolution::Loaded(_) => None,
         DictionaryResolution::Unparsable(refusal) => {
             Some(format!("ASD-STE100 Rule 1.1 did not run: {refusal}"))
+        }
+        DictionaryResolution::Unreadable(problem) => {
+            Some(format!("ASD-STE100 Rule 1.1 did not run: {problem}"))
         }
         DictionaryResolution::Unavailable {
             directory, reason, ..

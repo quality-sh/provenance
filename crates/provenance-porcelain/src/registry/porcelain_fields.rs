@@ -4,11 +4,14 @@
 
 use super::{Field, FieldValue, Relation};
 
-pub(super) const VIEWS: &[&str] = &["record", "children", "trace", "impact", "review"];
+pub(super) const VIEWS: &[&str] = &["record", CHILDREN, "trace", "impact", "review"];
+
+/// The view of the records below a record.
+pub const CHILDREN: &str = "children";
 
 /// The get fields after the target, in order.
 pub(super) const GET_FIELDS: &[Field] = &[
-    Field::text("view").values(VIEWS),
+    VIEW,
     DEPTH,
     KIND,
     LIMIT,
@@ -22,7 +25,10 @@ pub(super) const GET_FIELDS: &[Field] = &[
         .doc("The Codex thread UUID for notify."),
 ];
 
-const DEPTH: Field = Field::text("depth")
+/// The get field that selects the view of the target record.
+pub const VIEW: Field = Field::text("view").values(VIEWS);
+/// The get and trace field that bounds the walk from the target record.
+pub const DEPTH: Field = Field::text("depth")
     .of(FieldValue::Count)
     .doc("The number of levels to walk. The default is 1.");
 const KIND: Field = Field::repeated("kind")
@@ -33,11 +39,11 @@ const LIMIT: Field = Field::text("limit")
     .doc("The page size. The default is 50.");
 
 pub(super) const GET_RELATIONS: &[Relation] = &[
-    Relation::Conflicts("review_link", "view"),
-    Relation::Conflicts("review_link", "depth"),
+    Relation::Conflicts("review_link", VIEW.name),
+    Relation::Conflicts("review_link", DEPTH.name),
     Relation::Conflicts("review_link", "kind"),
     Relation::Conflicts("review_link", "limit"),
-    Relation::Requires("notify", "view"),
+    Relation::Requires("notify", VIEW.name),
     Relation::Conflicts("notify", "review_link"),
     Relation::Requires("thread", "notify"),
 ];
@@ -46,9 +52,7 @@ pub(super) const GET_RELATIONS: &[Relation] = &[
 pub(super) const TRACE_FIELDS: &[Field] = &[DEPTH, KIND, LIMIT];
 
 pub(super) const SEARCH_FIELDS: &[Field] = &[
-    Field::text("text")
-        .leading_hyphen()
-        .doc("Text to find in record ids and text."),
+    SEARCH_TEXT,
     Field::text("cursor")
         .leading_hyphen()
         .doc("The continuation from an earlier page of the same search."),
@@ -67,6 +71,11 @@ pub(super) const SEARCH_FIELDS: &[Field] = &[
         .of(FieldValue::Count)
         .doc("Put the Rules bound at this line first. Needs file."),
 ];
+
+/// The search field of the text to find.
+pub const SEARCH_TEXT: Field = Field::text("text")
+    .leading_hyphen()
+    .doc("Text to find in record ids and text.");
 
 pub(super) const API_FIELDS: &[Field] = &[
     Field::text("path").doc("The public API path. Without a path, the catalog routes show."),

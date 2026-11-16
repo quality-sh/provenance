@@ -145,7 +145,10 @@ fn live_digests(repository: &Repository) -> anyhow::Result<Vec<(String, String)>
     if repository.has_local_storage() {
         return folder_digests(&repository.layout().state_dir());
     }
-    view_stored_digests(&repository.storage().read_view()?)
+    view_stored_digests(
+        &repository.layout().manifest_path(),
+        &repository.storage().read_view()?,
+    )
 }
 
 /// The stored digest of each unit of the state files under `state_dir`.
