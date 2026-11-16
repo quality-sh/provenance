@@ -272,17 +272,18 @@ fn a_python_hash_line_below_a_rule_comment_is_part_of_the_comment() {
 
 #[test]
 #[verifies("rule_comment_ends_above_the_first_code_line", examples)]
-fn a_javascript_private_field_below_a_rule_comment_is_code() {
+fn a_javascript_private_field_below_a_rule_comment_ends_the_comment() {
     let source = "export class Counter {\n\
                   \x20 // @provenance rule: rule_count_starts_at_zero\n\
                   \x20 #count = 0;\n\
-                  \n\
-                  \x20 increment() {\n\
-                  \x20   this.#count += 1;\n\
-                  \x20 }\n\
+                  \x20 // @provenance rule: rule_step_is_one\n\
+                  \x20 #step = 1;\n\
                   }\n";
     let report = scan("src/counter.js", source);
 
-    let expected = [site(2, "rule_count_starts_at_zero", None, Some("count"))];
+    let expected = [
+        site(2, "rule_count_starts_at_zero", None, None),
+        site(4, "rule_step_is_one", None, None),
+    ];
     assert_eq!(sites(&report), expected, "{report}");
 }
