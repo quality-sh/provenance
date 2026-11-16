@@ -45,7 +45,10 @@ fn cache_temporaries(layout: &ProvenanceLayout) -> Vec<String> {
     let cache = layout.cache_dir();
     names(&cache)
         .into_iter()
-        .filter(|name| name.ends_with(".tmp") && cache.join(name).is_file())
+        .filter(|name| {
+            std::path::Path::new(name).extension() == Some("tmp".as_ref())
+                && cache.join(name).is_file()
+        })
         .collect()
 }
 
@@ -118,22 +121,22 @@ fn a_section_entry_waits_for_a_one_key_write_at_its_rename() {
                 }
                 Ok(())
             });
-            let landed = open(&layout).stage(false, Some(stamp()), write_one_rule);
+            let landed = open(layout).stage(false, Some(stamp()), write_one_rule);
             test_probes::disarm(PROBE);
             landed
         });
         entered_rx.recv_timeout(Duration::from_secs(20)).unwrap();
         assert_eq!(state_files(&root), old, "state files of the live write");
-        assert_eq!(cache_temporaries(&layout).len(), 1, "temporary file");
+        assert_eq!(cache_temporaries(layout).len(), 1, "temporary file");
 
         let second = threads.spawn(move || {
-            let count = staged_rules(&open(&layout));
+            let count = staged_rules(&open(layout));
             done_tx.send(()).unwrap();
             count
         });
         assert!(done_rx.recv_timeout(Duration::from_millis(300)).is_err());
         assert_eq!(
-            cache_temporaries(&layout).len(),
+            cache_temporaries(layout).len(),
             1,
             "the live write keeps its file"
         );

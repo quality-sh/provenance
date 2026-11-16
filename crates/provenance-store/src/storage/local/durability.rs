@@ -80,7 +80,7 @@ pub(in crate::storage::local) fn write_synced_file_named(
 /// after the rename can also leave the temporary file in the cache, because
 /// the removal of its name from the cache is not synced. The next section
 /// entry removes such a file.
-pub(crate) fn write_synced_state_file(
+pub fn write_synced_state_file(
     layout: &ProvenanceLayout,
     path: &Utf8Path,
     bytes: &[u8],

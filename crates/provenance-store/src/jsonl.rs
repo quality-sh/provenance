@@ -284,10 +284,10 @@ fn guard_jsonl_lines(
 fn write_jsonl_lines_atomic_unlocked(path: &Utf8Path, lines: &[String]) -> anyhow::Result<()> {
     use crate::storage::local::durability::{write_synced_file, write_synced_state_file};
     let bytes = jsonl_bytes(lines);
-    match state_layout(path) {
-        Some(layout) => write_synced_state_file(&layout, path, &bytes),
-        None => write_synced_file(path, &bytes),
-    }
+    state_layout(path).map_or_else(
+        || write_synced_file(path, &bytes),
+        |layout| write_synced_state_file(&layout, path, &bytes),
+    )
 }
 
 /// The lines, each with a final `\n`.

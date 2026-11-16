@@ -83,7 +83,7 @@ fn a_failed_write_of_the_reference_keeps_the_stored_reference() {
     let cache = layout.cache_dir();
     let temporaries = entry_names(&cache)
         .into_iter()
-        .filter(|name| name.ends_with(".tmp"))
+        .filter(|name| std::path::Path::new(name).extension() == Some("tmp".as_ref()))
         .collect::<Vec<_>>();
     assert_eq!(temporaries, Vec::<String>::new());
 }
