@@ -3,6 +3,7 @@
 
 use crate::stale::git::command;
 use camino::Utf8Path;
+use provenance_macros::rule;
 use std::io::{BufRead, BufReader, Read, Write};
 use std::process::{Child, ChildStdin, ChildStdout, Stdio};
 use std::thread::JoinHandle;
@@ -79,9 +80,11 @@ impl Batch {
         self.id_length
     }
 
-    /// The bytes of `relative` at `commit`. `None` when Git holds no object
-    /// at that name. After an error the process can be in the middle of an
-    /// answer, so the caller drops it.
+    /// The bytes of `relative` at `commit`, only when the entry at that name
+    /// is a file: `None` for a submodule entry, a directory or no entry.
+    /// After an error the process can be in the middle of an answer, so the
+    /// caller drops it.
+    #[rule("rule_record_history_text_only_from_file")]
     pub(super) fn bytes(
         &mut self,
         commit: &str,
@@ -100,18 +103,31 @@ impl Batch {
         }
         header.pop();
         let header = std::str::from_utf8(&header)?;
+        // The answer to a name with no object repeats the name, which can
+        // hold spaces, so it is read first.
         if header.ends_with(" missing") {
             return Ok(None);
         }
-        let size = header
-            .rsplit(' ')
-            .next()
-            .and_then(|size| size.parse::<usize>().ok())
-            .ok_or_else(|| crate::refusal::fault!("git cat-file returned an unreadable header"))?;
+        // Git answers a submodule entry to a commit that the repository does
+        // not hold with `submodule`, or with `missing` in a Git that has no
+        // `submodule` answer.
+        let (kind, size) = match header.split(' ').collect::<Vec<_>>()[..] {
+            [_, "submodule"] => return Ok(None),
+            [_, kind, size] => size.parse::<usize>().ok().map(|size| (kind, size)),
+            _ => None,
+        }
+        .ok_or_else(|| {
+            crate::refusal::fault!("git cat-file returned an unreadable header: {header}")
+        })?;
         // The object, then one line break.
         let mut bytes = vec![0; size + 1];
         if self.output.read_exact(&mut bytes).is_err() {
             return Err(self.failure());
+        }
+        // Only a file is a text: a submodule entry names a commit and a
+        // directory names a tree.
+        if kind != "blob" {
+            return Ok(None);
         }
         bytes.truncate(size);
         Ok(Some(bytes))
