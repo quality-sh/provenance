@@ -23,6 +23,32 @@ The shim gives exit code 0 when the check passes, 1 when the check fails or the 
 
 A plain `cargo test` of `provenance-store` or `provenance-transport` alone needs `--features host`, because the engine builds only with that feature.
 
+### Use the shim as your cargo
+
+Use the shim as you use cargo on your own machine. Work in the normal loop: change
+the code, run the test that covers the change, read the result, correct the code,
+and run the test again. Run one test name, one test target, a filter, one crate, or
+a `clippy` call, as often as the work needs.
+
+- The runners cost nothing for this repository, and up to 500 run at one time. Do
+  not save calls. When you need many results, start the calls at the same time and
+  continue with other work while they run.
+- The checks of a pull request confirm work that you know is correct. Do not push
+  to the pull request branch to learn if a correction works.
+- When a check fails, the fault is one test or one command. Read its name from the
+  log, run it with the shim, correct the code, and run it again. Do not run the
+  complete pipeline again for one failed test.
+- When a job fails for a cause that is not in your change, run only the failed
+  jobs again: `gh run rerun <run id> --failed`.
+
+### Remove what slows the work
+
+Each agent removes the cause when work is slow for a reason that is not necessary:
+a wait for a result that a narrow command gives faster, a rule that makes steps go
+one after the other with no need, or a full run where a small run is sufficient.
+If the correction is simple, make it and tell the owner. If the correction has a
+risk, ask the owner first.
+
 A plain `cargo test` of `provenance-mcp` alone needs `--features test-fixture`, because without that feature most of its integration tests compile to nothing, so a run that selects one of them passes with 0 tests.
 
 ## Code standards
