@@ -96,10 +96,10 @@ pub fn message_times_increase(run: &Run) -> Result<(), Violation> {
 }
 
 /// O3: each whole set names the revision where its stage started, and each
-/// operation of an engine that always stages and succeeded landed one set
-/// with a key on that revision: a whole set, or a per-key set of one key. A
-/// set with no key changes nothing, and a write outside every engine lands
-/// as one change of the world with no base, so O3 counts neither.
+/// operation of an engine that always stages and succeeded landed one set on
+/// that revision: a whole set, or a per-key set of one key. A write outside
+/// every engine lands as one change of the world, with no base, so O3 does
+/// not count it.
 pub fn stages_land_whole(run: &Run) -> Result<(), Violation> {
     if let Some(publish) = run
         .publishes
@@ -122,7 +122,6 @@ pub fn stages_land_whole(run: &Run) -> Result<(), Violation> {
     {
         let landed: Vec<_> = publishes_of(run, done)
             .filter(|publish| publish.on_base && publish.outcome == Outcome::Landed)
-            .filter(|publish| publish.keys > 0)
             .collect();
         if landed.len() != 1 {
             return broken(
