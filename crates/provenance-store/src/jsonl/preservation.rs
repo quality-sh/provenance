@@ -120,7 +120,7 @@ impl<T> LoadedRecords<T> {
 
     /// The records, beside the bytes that their stored lines carry.
     #[cfg(feature = "host")]
-    pub(super) fn records_and_carried(&mut self) -> (&mut Vec<T>, Carried<'_>) {
+    pub(super) const fn records_and_carried(&mut self) -> (&mut Vec<T>, Carried<'_>) {
         (&mut self.records, Carried(&self.raw))
     }
 }
@@ -128,14 +128,14 @@ impl<T> LoadedRecords<T> {
 /// The members of the stored lines of a loaded file that the record type
 /// does not know, which a changed line of a record carries over.
 #[cfg(feature = "host")]
-pub(crate) struct Carried<'a>(&'a [Option<RawRecord>]);
+pub struct Carried<'a>(&'a [Option<RawRecord>]);
 
 #[cfg(feature = "host")]
 impl Carried<'_> {
     /// The bytes that the changed line of the record with the stored id `id`
     /// adds to the JSON form of the record: a comma and each member that the
     /// record type does not know.
-    pub(crate) fn bytes(&self, id: &str) -> usize {
+    pub fn bytes(&self, id: &str) -> usize {
         self.0
             .iter()
             .flatten()
