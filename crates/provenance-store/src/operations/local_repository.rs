@@ -159,7 +159,7 @@ pub(crate) mod tests {
     };
 
     /// A repository with one scope `default`, bound under the alias `native`.
-    pub(crate) fn repository() -> (tempfile::TempDir, LocalRepository) {
+    pub fn repository() -> (tempfile::TempDir, LocalRepository) {
         let dir = tempfile::tempdir().unwrap();
         let layout = ProvenanceLayout::new(dir.path().to_str().unwrap());
         std::fs::create_dir_all(layout.state_dir()).unwrap();
