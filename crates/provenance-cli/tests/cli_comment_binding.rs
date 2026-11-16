@@ -425,3 +425,16 @@ fn a_marker_after_a_rust_dereference_on_its_line_does_not_bind() {
 
     assert_eq!(places(&report), [], "{report}");
 }
+
+#[test]
+// Implementation aid: no Rule states where a Python string starts. In Python,
+// `//` is floor division and starts no comment, so the string after it is open.
+fn a_python_string_after_floor_division_holds_no_binding() {
+    let source = "half = total // 2; doc = \"\"\"\n\
+                  @rule(\"rule_in_string\")\n\
+                  def fake(): pass\n\
+                  \"\"\"\n";
+    let report = scan("src/half.py", source);
+
+    assert_eq!(places(&report), [], "{report}");
+}
