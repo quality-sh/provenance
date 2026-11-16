@@ -253,3 +253,39 @@ fn a_manifest_that_does_not_parse_gives_its_fault_as_the_read_error_reason() {
         })
     );
 }
+
+#[cfg(unix)]
+#[test]
+// Implementation aid: a repository open that did not complete gives each cause of its
+// error in the read-error reason, and no Rule states the reason text of a frame.
+fn an_open_failure_gives_each_cause_as_the_read_error_reason() {
+    let repo = repository();
+    create(repo.path(), "req_follow", "requirement", &[]);
+    let feed = review_host_support::scripted_feed::Feed::start(repo.path());
+    feed.send(serde_json::json!({"type":"ready", "epoch":feed.epoch, "sequence":0}));
+    let follow = feed.follow(repo.path());
+    follow.frame();
+    let root = dunce::canonicalize(repo.path()).unwrap();
+    let lock = root.join(".provenance/cache/locks/repository.publication.lock");
+    std::fs::remove_file(&lock).unwrap();
+    std::fs::create_dir(&lock).unwrap();
+    feed.send(
+        serde_json::json!({"type":"reset", "epoch":feed.epoch, "sequence":1, "reason":"recovery"}),
+    );
+
+    let error = follow.frame();
+
+    assert_eq!(
+        error,
+        serde_json::json!({
+            "type": "read-error",
+            "continuity": "unknown",
+            "epoch": feed.epoch,
+            "sequence": 1,
+            "reason": format!(
+                "open publication lock {}: Is a directory (os error 21)",
+                lock.display()
+            ),
+        })
+    );
+}
