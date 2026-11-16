@@ -50,6 +50,8 @@ mod cli_mcp_shared_commands;
 mod cli_mcp_write_actor;
 #[path = "../cli_mcp_write_actor_parity.rs"]
 mod cli_mcp_write_actor_parity;
+#[path = "../cli_state_shard_repeated_field.rs"]
+mod cli_state_shard_repeated_field;
 #[path = "../porcelain_api.rs"]
 mod porcelain_api;
 #[path = "../porcelain_authoring.rs"]
