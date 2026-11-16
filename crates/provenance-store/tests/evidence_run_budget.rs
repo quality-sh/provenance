@@ -69,6 +69,17 @@ fn failed_run(repository: &Repository, row: usize) -> VerificationRun {
     complete_verification(repository, input).unwrap()
 }
 
+/// The evidence query of `rule_expiry` with a limit of 50 runs.
+fn query() -> EvidenceQuery {
+    EvidenceQuery {
+        protocol_version: None,
+        rule: "rule_expiry".to_owned(),
+        base: None,
+        head: None,
+        limit: 50,
+    }
+}
+
 #[tokio::test]
 #[verifies("rule_query_pages_bound_shared_reads", examples)]
 #[verifies("rule_evidence_flags_each_cut_list", examples)]
@@ -76,15 +87,8 @@ async fn the_native_evidence_read_cuts_its_runs_to_the_response_budget() {
     let root = tempfile::tempdir().unwrap();
     let repository = repository(root.path());
     let completed = failed_run(&repository, BUDGET);
-    let query = EvidenceQuery {
-        protocol_version: None,
-        rule: "rule_expiry".to_owned(),
-        base: None,
-        head: None,
-        limit: 50,
-    };
 
-    let answer = queries::evidence(&repository, ReadPolicy::default(), query)
+    let answer = queries::evidence(&repository, ReadPolicy::default(), query())
         .await
         .unwrap()
         .result;
@@ -92,6 +96,29 @@ async fn the_native_evidence_read_cuts_its_runs_to_the_response_budget() {
     assert_eq!(serde_json::to_vec(&completed).unwrap().len(), BUDGET);
     assert_eq!(answer.latest_verification_run, Some(completed));
     assert_eq!(answer.verification_runs, Vec::<VerificationRun>::new());
+    assert!(answer.verification_runs_has_more);
+    assert!(answer.has_more);
+}
+
+/// Two runs of 400 000 bytes and the newest run again as the latest run pass
+/// the response budget: the oldest run leaves the list, and the newest stays.
+#[tokio::test]
+#[verifies("rule_query_pages_bound_shared_reads", examples)]
+#[verifies("rule_evidence_flags_each_cut_list", examples)]
+async fn the_native_evidence_read_keeps_the_newest_run_that_fits_and_leaves_out_the_oldest() {
+    let root = tempfile::tempdir().unwrap();
+    let repository = repository(root.path());
+    let oldest = failed_run(&repository, 400_000);
+    let newest = failed_run(&repository, 400_000);
+
+    let answer = queries::evidence(&repository, ReadPolicy::default(), query())
+        .await
+        .unwrap()
+        .result;
+
+    assert!((oldest.started_at, oldest.id.as_str()) < (newest.started_at, newest.id.as_str()));
+    assert_eq!(answer.verification_runs, vec![newest.clone()]);
+    assert_eq!(answer.latest_verification_run, Some(newest));
     assert!(answer.verification_runs_has_more);
     assert!(answer.has_more);
 }

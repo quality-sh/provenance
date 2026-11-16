@@ -1,75 +1,17 @@
 //! The failing-verification corpus for the Rust side (V11): an error and
 //! a panic both record `failed`, then propagate.
 
-use std::sync::{Mutex, MutexGuard, PoisonError};
+mod support;
 
-use provenance_core::{Manifest, RepoPathPrefix, ScopeId, VerificationRunStatus};
+use provenance_core::VerificationRunStatus;
 use provenance_macros::verifies;
-use provenance_sdk::{operations, verify, Repository};
-use provenance_store::layout::ProvenanceLayout;
+use provenance_sdk::{operations, verify};
+use provenance_store::state_store::CompleteVerificationInput;
+use provenance_store::write_error::{WriteError, WriteFailure};
+use support::{recorded_runs, seeded_rule};
 
-/// Serializes tests that set process environment variables.
-static ENV_LOCK: Mutex<()> = Mutex::new(());
-
-fn repository() -> (tempfile::TempDir, MutexGuard<'static, ()>) {
-    // A failed test leaves the lock poisoned, and the next test still runs.
-    let guard = ENV_LOCK.lock().unwrap_or_else(PoisonError::into_inner);
-    let dir = tempfile::tempdir().unwrap();
-    let root =
-        camino::Utf8PathBuf::from_path_buf(dunce::canonicalize(dir.path()).unwrap()).unwrap();
-    let layout = ProvenanceLayout::new(root.clone());
-    std::fs::create_dir_all(layout.manifest_path().parent().unwrap()).unwrap();
-    std::fs::write(
-        layout.manifest_path(),
-        serde_json::to_string(&Manifest::default_with_scope(
-            ScopeId::new("default").unwrap(),
-            RepoPathPrefix::new("."),
-        ))
-        .unwrap(),
-    )
-    .unwrap();
-    let source = root.join("crates/provenance-sdk/tests/verification.rs");
-    std::fs::create_dir_all(source.parent().unwrap()).unwrap();
-    std::fs::write(source, include_str!("verification.rs")).unwrap();
-    std::env::set_var("PROVENANCE_REPO", root.as_str());
-    (dir, guard)
-}
-
-fn seeded_rule(root: &std::path::Path) -> String {
-    let input: provenance_sdk::TypedSpecInput = serde_json::from_value(serde_json::json!({
-        "spec": "share-links",
-        "declared_by": "spec://rust",
-        "requirements": [{
-            "key": "sharing",
-            "statement": "Users can securely share documentation"
-        }],
-        "rules": [{
-            "key": "expiry",
-            "requirement": "sharing",
-            "statement": "Share links expire within 30 days"
-        }]
-    }))
-    .unwrap();
-    let root = camino::Utf8PathBuf::from_path_buf(root.to_path_buf()).unwrap();
-    let result = operations::apply(&Repository::open(&root, "default").unwrap(), input).unwrap();
-    result
-        .resources
-        .iter()
-        .find(|resource| {
-            matches!(
-                resource.kind,
-                provenance_store::state_store::TypedResourceKind::Rule
-            )
-        })
-        .unwrap()
-        .id
-        .as_str()
-        .to_string()
-}
-
-fn recorded_runs(root: &std::path::Path) -> Vec<provenance_core::VerificationRun> {
-    let root = camino::Utf8PathBuf::from_path_buf(root.to_path_buf()).unwrap();
-    operations::verification_runs(&Repository::open(&root, "default").unwrap(), None).unwrap()
+fn repository() -> (tempfile::TempDir, std::sync::MutexGuard<'static, ()>) {
+    support::repository("verification.rs", include_str!("verification.rs"))
 }
 
 #[test]
@@ -131,148 +73,108 @@ fn an_unwinding_callback_records_failed_then_propagates() {
     assert_eq!(runs[0].error.as_deref(), Some("expiry assertion failed"));
 }
 
-/// The bytes of one run row that the reads of the runs give. The store owns
-/// the number in `read_budget::resource_record_bytes`.
-const BUDGET: usize = 1_048_576 - 16_384;
 
-/// A failure text that makes the failed row of the running run `row` bytes
-/// long. The callback reads the run that `verify` started.
-fn text_for_row(root: &std::path::Path, row: usize) -> String {
-    let mut run = recorded_runs(root)
+/// Completes the running run of the repository at `root` as passed, as a
+/// callback that completes its own run does. The failed completion of
+/// `verify` that follows is then refused.
+fn complete_the_running_run(root: &std::path::Path) -> String {
+    let run = recorded_runs(root)
         .into_iter()
         .find(|run| run.status == VerificationRunStatus::Running)
         .unwrap();
-    run.status = VerificationRunStatus::Failed;
-    run.completed_at = Some(run.started_at);
-    run.error = Some(String::new());
-    "x".repeat(row - serde_json::to_vec(&run).unwrap().len())
-}
-
-/// The newest stored run.
-fn newest_run(root: &std::path::Path) -> provenance_core::VerificationRun {
-    let mut runs = recorded_runs(root);
-    runs.sort_by(|left, right| {
-        (left.started_at, left.id.as_str()).cmp(&(right.started_at, right.id.as_str()))
-    });
-    runs.pop().unwrap()
-}
-
-/// The newest run that the evidence read of `rule` gives.
-fn evidence_run(root: &std::path::Path, rule: &str) -> Option<provenance_core::VerificationRun> {
-    let utf8 = camino::Utf8PathBuf::from_path_buf(root.to_path_buf()).unwrap();
-    let repository = Repository::open(&utf8, "default").unwrap();
-    let query = provenance_core::protocol::EvidenceQuery {
-        protocol_version: Some(provenance_sdk::SDK_PROTOCOL_VERSION),
-        rule: rule.to_owned(),
-        base: None,
-        head: None,
-        limit: 50,
+    let input = CompleteVerificationInput {
+        run: run.id.as_str().to_owned(),
+        status: "passed".to_owned(),
+        error: None,
     };
-    let evidence = tokio::runtime::Runtime::new()
-        .unwrap()
-        .block_on(operations::queries::evidence(
-            &repository,
-            operations::read_policy::ReadPolicy::default(),
-            query,
-        ))
-        .unwrap();
-    evidence.result.latest_verification_run
+    operations::complete_verification(&support::open(root), input).unwrap();
+    run.id.as_str().to_owned()
 }
 
-/// Asserts that `run` failed inside the budget, and that its stored text is
-/// the start of `text` with a mark that gives the byte count of the stored
-/// part and of `text`.
-fn assert_stored_cut(run: &provenance_core::VerificationRun, text: &str) {
-    assert_eq!(run.status, VerificationRunStatus::Failed);
-    assert!(serde_json::to_vec(run).unwrap().len() <= BUDGET);
-    let stored = run.error.as_deref().unwrap();
-    let (kept, mark) = stored.split_at(stored.rfind("… [cut: ").unwrap());
-    assert!(text.starts_with(kept));
-    assert!(kept.len() < text.len());
-    assert_eq!(
-        mark,
-        format!("… [cut: {} of {} bytes]", kept.len(), text.len())
-    );
-}
+/// A panic payload of a type that only this file has.
+#[derive(Debug, PartialEq)]
+struct ExpiryPanic(&'static str);
 
-/// Asserts that `actual` is `expected`. A failure gives the byte counts and
-/// not the texts, which are about 1 MB.
-fn assert_same_text(actual: Option<&str>, expected: &str) {
-    assert!(
-        actual == Some(expected),
-        "a text of {:?} bytes and not the expected text of {} bytes",
-        actual.map(str::len),
-        expected.len()
-    );
-}
-
-/// Asserts that the evidence read of `rule` gives `run` as its newest run.
-fn assert_evidence_gives(
-    root: &std::path::Path,
-    rule: &str,
-    run: &provenance_core::VerificationRun,
-) {
-    let given = evidence_run(root, rule);
-    assert!(
-        given.as_ref() == Some(run),
-        "the evidence read gives {:?} and not the run {}",
-        given.as_ref().map(|given| given.id.as_str()),
-        run.id.as_str()
-    );
-}
-
-/// The payload of a `verify` whose callback panics with the text that `text`
-/// makes. The panic hook prints nothing while the callback runs, so that the
-/// test output holds no text of about 1 MB.
-fn panic_payload_of(rule: &str, text: impl FnOnce() -> String) -> String {
-    let hook = std::panic::take_hook();
-    std::panic::set_hook(Box::new(|_| {}));
-    let unwind = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-        let _ = verify(rule, "expiry-holds", move || -> Result<(), String> {
-            std::panic::panic_any(text())
-        });
-    }));
-    std::panic::set_hook(hook);
-    *unwind.unwrap_err().downcast::<String>().unwrap()
-}
-
+/// Implementation aid with no Rule: no Rule states what `verify` gives when
+/// the store refuses its failed completion.
 #[test]
-#[verifies("rule_rust_verification_cuts_a_long_failure_text", examples)]
-fn a_failure_text_over_the_run_budget_is_stored_cut_and_returned_whole() {
+fn a_callback_error_after_a_refused_completion_holds_the_refusal_as_its_cause() {
     let (dir, _guard) = repository();
     let rule = seeded_rule(dir.path());
-    let fits = verify(&rule, "expiry-holds", || {
-        Err::<(), String>(text_for_row(dir.path(), BUDGET))
-    })
-    .unwrap_err()
-    .to_string();
-    assert_same_text(newest_run(dir.path()).error.as_deref(), &fits);
+    let mut id = String::new();
 
     let error = verify(&rule, "expiry-holds", || {
-        Err::<(), String>(text_for_row(dir.path(), BUDGET + 1))
+        id = complete_the_running_run(dir.path());
+        Err::<(), String>("thirty-one days".to_string())
     })
     .unwrap_err();
 
-    let run = newest_run(dir.path());
-    let text = "x".repeat(fits.len() + 1);
-    assert_same_text(Some(&error.to_string()), &text);
-    assert_stored_cut(&run, &text);
-    assert_evidence_gives(dir.path(), &rule, &run);
+    assert_eq!(error.to_string(), "thirty-one days");
+    assert_eq!(
+        format!("{error:#}"),
+        format!("thirty-one days: verification run `{id}` is already complete")
+    );
+    assert!(matches!(
+        WriteError(error).safe(),
+        WriteFailure::AlreadyComplete
+    ));
+    let runs = recorded_runs(dir.path());
+    assert_eq!(runs.len(), 1);
+    assert_eq!(runs[0].status, VerificationRunStatus::Passed);
 }
 
+/// Implementation aid with no Rule: no Rule states what `verify` gives when
+/// the store refuses its failed completion. The test
+/// `a_refused_completion_after_a_panic_goes_to_the_standard_error` runs this
+/// test in a child process and reads its standard error.
 #[test]
-#[verifies("rule_rust_verification_cuts_a_long_failure_text", examples)]
-fn a_panic_text_over_the_run_budget_is_stored_cut_and_the_panic_goes_on_whole() {
+fn a_panic_after_a_refused_completion_goes_on_with_its_own_payload() {
     let (dir, _guard) = repository();
     let rule = seeded_rule(dir.path());
-    let fits = panic_payload_of(&rule, || text_for_row(dir.path(), BUDGET));
-    assert_same_text(newest_run(dir.path()).error.as_deref(), &fits);
 
-    let payload = panic_payload_of(&rule, || text_for_row(dir.path(), BUDGET + 1));
+    let unwind = std::panic::catch_unwind(|| {
+        let _ = verify(&rule, "expiry-holds", || -> Result<(), String> {
+            complete_the_running_run(dir.path());
+            std::panic::panic_any(ExpiryPanic("expiry assertion failed"))
+        });
+    })
+    .unwrap_err();
 
-    let run = newest_run(dir.path());
-    let text = "x".repeat(fits.len() + 1);
-    assert_same_text(Some(&payload), &text);
-    assert_stored_cut(&run, &text);
-    assert_evidence_gives(dir.path(), &rule, &run);
+    assert_eq!(
+        *unwind.downcast::<ExpiryPanic>().unwrap(),
+        ExpiryPanic("expiry assertion failed")
+    );
+    let runs = recorded_runs(dir.path());
+    assert_eq!(runs.len(), 1);
+    assert_eq!(runs[0].status, VerificationRunStatus::Passed);
+}
+
+/// Implementation aid with no Rule: no Rule states what `verify` gives when
+/// the store refuses its failed completion.
+#[test]
+fn a_refused_completion_after_a_panic_goes_to_the_standard_error() {
+    let child = "a_panic_after_a_refused_completion_goes_on_with_its_own_payload";
+    let output = std::process::Command::new(std::env::current_exe().unwrap())
+        .args(["--exact", child, "--nocapture", "--test-threads=1"])
+        .output()
+        .unwrap();
+
+    assert!(output.status.success());
+    let stderr = String::from_utf8(output.stderr).unwrap();
+    let refusals: Vec<&str> = stderr
+        .lines()
+        .filter(|line| line.contains("is not recorded as failed"))
+        .collect();
+    assert_eq!(refusals.len(), 1, "{stderr}");
+    let id = refusals[0]
+        .strip_prefix("verification run `")
+        .and_then(|rest| rest.split('`').next())
+        .unwrap();
+    assert_eq!(
+        refusals[0],
+        format!(
+            "verification run `{id}` is not recorded as failed: \
+             verification run `{id}` is already complete"
+        )
+    );
 }
