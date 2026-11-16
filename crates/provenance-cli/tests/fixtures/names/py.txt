@@ -62,3 +62,36 @@ def after_star():
 @rule("rule_decorator_below_comment")
 def pays_both():
     return True
+
+# @provenance rule: rule_group_comment_first
+
+# @provenance rule: rule_group_comment_second
+def grouped_comments():
+    pass
+
+
+@rule("rule_group_property_first")
+@property
+@rule("rule_group_property_second")
+def grouped_property(self):
+    return 1
+
+
+# @provenance rule: rule_subscript_decorator
+@handlers[0].register
+def subscripted():
+    pass
+
+
+# @provenance rule: rule_long_subscript_decorator
+@handlers[
+    "#"
+].register
+def long_subscripted():
+    pass
+
+
+totals = [
+    # @provenance rule: rule_inside_brackets
+    hours,
+]

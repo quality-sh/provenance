@@ -1,0 +1,10 @@
+rule_struct Payroll
+rule_method Pays
+rule_interface Rates
+rule_generic_func Max
+rule_type_group -
+rule_var -
+rule_literal_result -
+rule_literal_parameter -
+rule_literal_func_result -
+rule_call_argument -

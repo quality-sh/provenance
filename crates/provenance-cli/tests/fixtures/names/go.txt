@@ -31,3 +31,16 @@ func Later() {}
 var Limit = 38
 
 func AfterVar() {}
+
+func body() {
+	// @provenance rule: rule_literal_result
+	func() error { return nil }()
+	// @provenance rule: rule_literal_parameter
+	func(x int) int { return x }(3)
+	// @provenance rule: rule_literal_func_result
+	func(x int) func() int { return nil }(3)
+	run(
+		// @provenance rule: rule_call_argument
+		func() {},
+	)
+}

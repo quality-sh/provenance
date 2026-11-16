@@ -120,10 +120,15 @@ fn item_names(report: &Value) -> Vec<(String, Option<String>)> {
         .collect()
 }
 
-fn named(pairs: &[(&str, Option<&str>)]) -> Vec<(String, Option<String>)> {
-    pairs
-        .iter()
-        .map(|(rule, name)| ((*rule).to_owned(), name.map(str::to_owned)))
+/// The Rule id and the item name of each site in the names file `names`, in
+/// line order. A `-` is no item name.
+fn names_file(names: &str) -> Vec<(String, Option<String>)> {
+    names
+        .lines()
+        .map(|line| {
+            let (rule, name) = line.split_once(' ').unwrap();
+            (rule.to_owned(), (name != "-").then(|| name.to_owned()))
+        })
         .collect()
 }
 
@@ -132,32 +137,7 @@ fn named(pairs: &[(&str, Option<&str>)]) -> Vec<(String, Option<String>)> {
 fn a_rust_binding_names_the_function_or_type_below_it() {
     let report = scan("src/pay.rs", include_str!("fixtures/names/rs.txt"));
 
-    let expected = named(&[
-        ("rule_struct", Some("Payroll")),
-        ("rule_impl_block", None),
-        ("rule_enum", Some("Shift")),
-        ("rule_generic_struct", Some("Ledger")),
-        ("rule_const_fn", Some("limit")),
-        ("rule_async_fn", Some("pays_overtime")),
-        ("rule_trait", Some("Rates")),
-        ("rule_alias", Some("Hours")),
-        ("rule_attribute_enum", Some("Kind")),
-        ("rule_attribute_struct", Some("Entry")),
-        ("rule_attribute_impl", None),
-        ("rule_const_then_doc", None),
-        ("rule_static", None),
-        ("rule_mod", None),
-        ("rule_long_derive", Some("Wide")),
-        ("rule_attribute_long_derive", Some("WideEntry")),
-        ("rule_raw_identifier", Some("match")),
-        ("rule_block_comment", Some("hidden_after_block")),
-        ("rule_inline_comment", Some("inline_after_comment")),
-        ("rule_deref_statement", None),
-        ("rule_nested_comment", Some("after_nested")),
-        ("rule_stacked_first", Some("stacked")),
-        ("rule_stacked_second", Some("stacked")),
-        ("rule_end", None),
-    ]);
+    let expected = names_file(include_str!("fixtures/names/rs.names"));
     assert_eq!(item_names(&report), expected, "{report}");
 }
 
@@ -166,19 +146,7 @@ fn a_rust_binding_names_the_function_or_type_below_it() {
 fn a_python_binding_names_the_function_or_class_below_it() {
     let report = scan("src/pay.py", include_str!("fixtures/names/py.txt"));
 
-    let expected = named(&[
-        ("rule_class", Some("Payroll")),
-        ("rule_method", Some("pays")),
-        ("rule_decorated_async", Some("test_pays")),
-        ("rule_decorated_class", Some("Ledger")),
-        ("rule_assignment", None),
-        ("rule_if_block", None),
-        ("rule_long_decorator", Some("test_long")),
-        ("rule_decorator", Some("pays_holiday")),
-        ("rule_star_assignment", None),
-        ("rule_comment_above_decorator", Some("pays_both")),
-        ("rule_decorator_below_comment", Some("pays_both")),
-    ]);
+    let expected = names_file(include_str!("fixtures/names/py.names"));
     assert_eq!(item_names(&report), expected, "{report}");
 }
 
@@ -187,14 +155,7 @@ fn a_python_binding_names_the_function_or_class_below_it() {
 fn a_go_binding_names_the_function_or_type_below_it() {
     let report = scan("src/pay.go", include_str!("fixtures/names/go.txt"));
 
-    let expected = named(&[
-        ("rule_struct", Some("Payroll")),
-        ("rule_method", Some("Pays")),
-        ("rule_interface", Some("Rates")),
-        ("rule_generic_func", Some("Max")),
-        ("rule_type_group", None),
-        ("rule_var", None),
-    ]);
+    let expected = names_file(include_str!("fixtures/names/go.names"));
     assert_eq!(item_names(&report), expected, "{report}");
 }
 
@@ -203,24 +164,7 @@ fn a_go_binding_names_the_function_or_type_below_it() {
 fn a_java_binding_names_the_method_or_type_below_it() {
     let report = scan("src/Pay.java", include_str!("fixtures/names/java.txt"));
 
-    let expected = named(&[
-        ("rule_final_class", Some("Payroll")),
-        ("rule_field", None),
-        ("rule_long_annotation", Some("cast")),
-        ("rule_static_method", Some("paysOvertime")),
-        ("rule_annotated_test", Some("paysOvertimeExamples")),
-        ("rule_constructor", Some("Payroll")),
-        ("rule_doc_inline", Some("pays")),
-        ("rule_synchronized", None),
-        ("rule_generic_call", None),
-        ("rule_default_arrow", None),
-        ("rule_default_label", None),
-        ("rule_wrapped_generic", Some("max")),
-        ("rule_annotation_type", Some("Audited")),
-        ("rule_record", Some("Shift")),
-        ("rule_enum", Some("Color")),
-        ("rule_interface", Some("Shape")),
-    ]);
+    let expected = names_file(include_str!("fixtures/names/java.names"));
     assert_eq!(item_names(&report), expected, "{report}");
 }
 
@@ -229,28 +173,7 @@ fn a_java_binding_names_the_method_or_type_below_it() {
 fn a_typescript_binding_names_the_exported_declaration_below_it() {
     let report = scan("src/pay.ts", include_str!("fixtures/names/ts.txt"));
 
-    let expected = named(&[
-        ("rule_class", Some("Token")),
-        ("rule_interface", Some("Shape")),
-        ("rule_alias", Some("Hours")),
-        ("rule_default_class", Some("Ledger")),
-        ("rule_decorated_method", Some("total")),
-        ("rule_arrow_property", None),
-        ("rule_describe", None),
-        ("rule_async_function", Some("paysOvertime")),
-        ("rule_const_enum", Some("Shift")),
-        ("rule_abstract_class", Some("Base")),
-        ("rule_generator_method", Some("shifts")),
-        ("rule_getter", Some("total")),
-        ("rule_setter", Some("total")),
-        ("rule_optional_method", None),
-        ("rule_parameter_properties", Some("constructor")),
-        ("rule_ternary", None),
-        ("rule_call_then_block", None),
-        ("rule_internal_doc", Some("hidden")),
-        ("rule_export_decorated", Some("Sealed")),
-        ("rule_default_decorated", Some("SealedDefault")),
-    ]);
+    let expected = names_file(include_str!("fixtures/names/ts.names"));
     assert_eq!(item_names(&report), expected, "{report}");
 }
 
@@ -259,16 +182,6 @@ fn a_typescript_binding_names_the_exported_declaration_below_it() {
 fn a_javascript_binding_names_the_exported_declaration_below_it() {
     let report = scan("src/pay.js", include_str!("fixtures/names/js.txt"));
 
-    let expected = named(&[
-        ("rule_class", Some("Token")),
-        ("rule_default_function", Some("pays")),
-        ("rule_generator", Some("shifts")),
-        ("rule_test_callback", None),
-        ("rule_arrow_test", None),
-        ("rule_anonymous_default", None),
-        ("rule_generator_method", Some("hours")),
-        ("rule_let", Some("first")),
-        ("rule_var", Some("counter")),
-    ]);
+    let expected = names_file(include_str!("fixtures/names/js.names"));
     assert_eq!(item_names(&report), expected, "{report}");
 }

@@ -122,4 +122,68 @@ pub fn after_nested() {}
 #[rule("rule_stacked_second")]
 pub fn stacked() {}
 
+// @provenance rule: rule_union
+pub union Bits {
+    whole: u32,
+}
+
+// @provenance rule: rule_unsafe_fn
+pub unsafe fn raw_hours() {}
+
+// @provenance rule: rule_extern_fn
+pub extern "C" fn exported_hours() {}
+
+impl Ledger {
+    // @provenance rule: rule_default_fn
+    default fn total() {}
+}
+
+// @provenance rule: rule_group_comment_first
+
+// @provenance rule: rule_group_comment_second
+fn grouped_comments() {}
+
+#[rule("rule_group_blank_first")]
+
+#[rule("rule_group_blank_second")]
+fn grouped_blank() {}
+
+#[verifies("rule_group_test_first", examples)]
+#[test]
+#[verifies("rule_group_test_second", examples)]
+fn grouped_test() {}
+
+#[rule("rule_group_inline_first")]
+#[inline]
+#[rule("rule_group_inline_second")]
+fn grouped_inline() {}
+
+#[rule("rule_group_doc_first")]
+/// The hours of a shift.
+#[rule("rule_group_doc_second")]
+fn grouped_doc() {}
+
+#[rule("rule_group_plain_first")]
+// A plain comment.
+#[rule("rule_group_plain_second")]
+fn grouped_plain() {}
+
+#[rule("rule_group_const_first")]
+const LIMIT: u32 = 38;
+#[rule("rule_group_const_second")]
+fn after_const() {}
+
+fn sums(hours: u32) -> u32 {
+    hours
+        // @provenance rule: rule_after_operator
+        + extra(hours)
+}
+
+fn calls() {
+    pays(
+        // @provenance rule: rule_call_argument
+        fn_hours,
+    );
+}
+
 // @provenance rule: rule_end
