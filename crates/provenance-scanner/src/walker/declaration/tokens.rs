@@ -95,7 +95,7 @@ fn push_words<'a>(language: Language, code: &'a str, line: usize, tokens: &mut V
 
 /// The comment syntax of a language other than Rust.
 fn comment_syntax(language: Language) -> CommentSyntax {
-    if language == Language::Python {
+    if language.hash_starts_comment() {
         CommentSyntax::Hash
     } else {
         CommentSyntax::CStyle

@@ -170,8 +170,6 @@ tokens as a statement:
   binding, such as a TypeScript `@Injectable({` or a Python `@decorator(`
   whose arguments span lines with a binding comment in them: the binding
   inside the arguments starts no statement, so both bindings have no name.
-- A Rust attribute directly below a binding comment is not scanned as a
-  binding: the comment takes in the attribute line.
 
 A marker in a block comment that code follows on the same line, such as
 `/* @provenance rule: rule_overtime */ function pays() {}`, does not bind

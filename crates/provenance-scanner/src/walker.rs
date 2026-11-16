@@ -46,6 +46,11 @@ impl Language {
             _ => None,
         }
     }
+
+    /// Whether `#` starts a comment in this language.
+    pub(crate) const fn hash_starts_comment(self) -> bool {
+        matches!(self, Self::Python)
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, serde::Serialize)]
@@ -258,7 +263,7 @@ fn scan_file_contents(
             idx += 1;
             continue;
         };
-        let (comment, end_idx) = collect_annotation_comment(&lines, idx, marker_position);
+        let (comment, end_idx) = collect_annotation_comment(language, &lines, idx, marker_position);
         let parsed = parse_annotations(&comment);
         warnings.extend(parsed.warnings);
         let first = annotations.len();
@@ -333,14 +338,18 @@ fn is_annotation_comment_line(
     line: &str,
     started_in_block_comment: bool,
 ) -> bool {
-    if started_in_block_comment {
-        return true;
-    }
+    started_in_block_comment || is_comment_line(language, line)
+}
+
+/// Whether `line` is a comment line of `language`: after leading whitespace
+/// it starts with `//`, `/*`, or `*`, or with `#` in a language where `#`
+/// starts a comment.
+fn is_comment_line(language: Language, line: &str) -> bool {
     let trimmed = line.trim_start();
     trimmed.starts_with("//")
         || trimmed.starts_with("/*")
         || trimmed.starts_with('*')
-        || (language == Language::Python && trimmed.starts_with('#'))
+        || (language.hash_starts_comment() && trimmed.starts_with('#'))
 }
 
 /// The item name of a JavaScript or TypeScript call site whose last line is
@@ -405,13 +414,17 @@ fn enclosing_script_function(lines: &[&str], idx: usize) -> Option<String> {
     None
 }
 
+/// The annotation comment that starts on line `start` and continues on each
+/// comment line of `language` directly below it, with the index of its last
+/// line.
 fn collect_annotation_comment(
+    language: Language,
     lines: &[&str],
     start: usize,
     marker_position: usize,
 ) -> (String, usize) {
     let mut end = start;
-    while end + 1 < lines.len() && is_comment_continuation(lines[end + 1]) {
+    while end + 1 < lines.len() && is_comment_line(language, lines[end + 1]) {
         end += 1;
     }
     let mut comment = lines[start][marker_position..].to_string();
@@ -420,15 +433,6 @@ fn collect_annotation_comment(
         comment.push_str(continuation);
     }
     (comment, end)
-}
-
-fn is_comment_continuation(line: &str) -> bool {
-    let trimmed = line.trim_start();
-    trimmed.starts_with("//")
-        || trimmed.starts_with('#')
-        || trimmed.starts_with('*')
-        || trimmed.starts_with("/*")
-        || trimmed.starts_with("*/")
 }
 
 fn token_after(line: &str, marker: &str) -> Option<String> {
