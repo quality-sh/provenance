@@ -71,7 +71,17 @@ fn origin_and_clone() -> (tempfile::TempDir, std::path::PathBuf) {
     init(root, &origin);
     git(root, &origin, &["add", "."]);
     git(root, &origin, &["commit", "--quiet", "-m", "init"]);
-    git(root, root, &["clone", "--quiet", "origin", "clone"]);
+    // The skill links of init are symbolic links, which a clone on Windows
+    // keeps only with core.symlinks.
+    let clone_args = [
+        "-c",
+        "core.symlinks=true",
+        "clone",
+        "--quiet",
+        "origin",
+        "clone",
+    ];
+    git(root, root, &clone_args);
     let clone = root.join("clone");
     (directory, clone)
 }

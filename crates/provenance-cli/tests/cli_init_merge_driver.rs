@@ -199,7 +199,17 @@ fn init_in_a_fresh_clone_sets_only_the_driver() {
     let origin = host.repository("origin");
     host.init(&origin, &[]);
     host.commit_all(&origin, "init");
-    host.git_ok(host.root(), &["clone", "--quiet", "origin", "clone"]);
+    // The skill links of init are symbolic links, which a clone on Windows
+    // keeps only with core.symlinks.
+    let clone_args = [
+        "-c",
+        "core.symlinks=true",
+        "clone",
+        "--quiet",
+        "origin",
+        "clone",
+    ];
+    host.git_ok(host.root(), &clone_args);
     let clone = host.root().join("clone");
     assert_eq!(host.local_driver(&clone), None);
 
