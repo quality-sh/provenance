@@ -2,17 +2,19 @@
 //!
 //! With `SIMULATION_STATS_DIR` set, each count goes to
 //! `<dir>/<layer>.json` after each case. The summary shows them, so that a
-//! night whose cases did not reach a fault is visible. Only the random test
-//! of a layer counts: it calls [`record`] first, so that a probe or a
-//! planted test in its own process writes no counts file. The counts
-//! describe the cases up to the first broken law; after it, Hegel runs the
-//! shrink, and each run of the shrink adds only to "shrink runs".
+//! night whose cases did not reach a fault is visible. The random test of a
+//! layer calls [`record`] first. A probe calls [`record_probe`] first, and
+//! its counts go to `<dir>/<layer>.probe.<name>.json`, so that the summary
+//! shows where its stops landed in rows of their own. A planted test in its
+//! own process writes no counts file. The counts describe the cases up to
+//! the first broken law; after it, Hegel runs the shrink, and each run of
+//! the shrink adds only to "shrink runs".
 
 use crate::storage::Outcome;
 use crate::Run;
 use std::collections::BTreeMap;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Mutex, PoisonError};
+use std::sync::{Mutex, OnceLock, PoisonError};
 
 static COUNTS: Mutex<BTreeMap<String, BTreeMap<&'static str, u64>>> = Mutex::new(BTreeMap::new());
 
@@ -23,12 +25,22 @@ static RECORDING: AtomicBool = AtomicBool::new(false);
 /// the shrink.
 static SHRINKING: AtomicBool = AtomicBool::new(false);
 
+/// The name of the probe of this process, when a probe counts.
+static PROBE: OnceLock<&'static str> = OnceLock::new();
+
 /// The count of the runs of the shrink.
 const SHRINK_RUNS: &str = "shrink runs";
 
 /// Turns on the counts of this test process.
 pub fn record() {
     RECORDING.store(true, Ordering::Relaxed);
+}
+
+/// Turns on the counts of the probe `name`, the test of this process. Its
+/// counts go to a file of their own.
+pub fn record_probe(name: &'static str) {
+    PROBE.get_or_init(|| name);
+    record();
 }
 
 /// Notes that a random case broke a law: the runs after it are the shrink.
@@ -67,7 +79,11 @@ fn write(layer: &str, name: &'static str, amount: u64) {
     let Some(directory) = std::env::var_os("SIMULATION_STATS_DIR") else {
         return;
     };
-    let path = std::path::Path::new(&directory).join(format!("{layer}.json"));
+    let file = PROBE.get().map_or_else(
+        || format!("{layer}.json"),
+        |probe| format!("{layer}.probe.{probe}.json"),
+    );
+    let path = std::path::Path::new(&directory).join(file);
     let written = std::fs::create_dir_all(&directory).and_then(|()| std::fs::write(&path, json));
     if let Err(error) = written {
         eprintln!("could not write {}: {error}", path.display());
