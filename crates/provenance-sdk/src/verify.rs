@@ -9,7 +9,7 @@ use provenance_macros::rule;
 use provenance_store::operations;
 use provenance_store::repository::Repository;
 use provenance_store::state_store::{
-    fit_failure_text, BeginVerificationInput, CompleteVerificationInput, DeclarationReferenceInput,
+    BeginVerificationInput, CompleteVerificationInput, DeclarationReferenceInput,
 };
 
 use crate::Settings;
@@ -86,21 +86,17 @@ pub fn verify<'a, E: std::fmt::Display>(
             commit: None,
         },
     )?;
-    let complete = |status: &str, error: Option<String>| {
-        operations::complete_verification(
-            &repository,
-            CompleteVerificationInput {
-                run: run.id.as_str().to_string(),
-                status: status.to_string(),
-                error,
-            },
-        )
-    };
-    // The store cuts a failure text that does not fit the run row.
-    let fail = |text: &str| complete("failed", Some(fit_failure_text(&run, text)?));
+    let fail = |text: &str| operations::fail_verification(&repository, run.id.as_str(), text);
     match catch_unwind(AssertUnwindSafe(callback)) {
         Ok(Ok(())) => {
-            complete("passed", None)?;
+            operations::complete_verification(
+                &repository,
+                CompleteVerificationInput {
+                    run: run.id.as_str().to_string(),
+                    status: "passed".to_string(),
+                    error: None,
+                },
+            )?;
             Ok(())
         }
         Ok(Err(error)) => {

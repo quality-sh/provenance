@@ -112,6 +112,31 @@ pub fn complete_verification(
 }
 
 #[cfg(feature = "host")]
+/// Completes one verification run as failed with `text`, cut to fit the read
+/// budget of its run row.
+pub fn fail_verification(
+    repository: &Repository,
+    run: &str,
+    text: &str,
+) -> anyhow::Result<provenance_core::VerificationRun> {
+    let begun = verification_runs(repository, None)?
+        .into_iter()
+        .find(|row| row.id.as_str() == run)
+        .ok_or_else(|| {
+            crate::refusal::refuse!(InvalidCompletion, "verification run `{run}` does not exist")
+        })?;
+    let error = crate::state_store::fit_failure_text(&begun, text)?;
+    complete_verification(
+        repository,
+        CompleteVerificationInput {
+            run: run.to_owned(),
+            status: "failed".to_owned(),
+            error: Some(error),
+        },
+    )
+}
+
+#[cfg(feature = "host")]
 /// Lists verification runs, optionally for one Rule.
 pub fn verification_runs(
     repository: &Repository,
