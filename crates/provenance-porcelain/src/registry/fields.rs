@@ -53,6 +53,15 @@ pub struct Field {
 }
 
 impl Field {
+    /// The word that stands for a value of the field in a command form: `<N>` for a count,
+    /// and the field name in angle brackets for each other field.
+    pub fn placeholder(&self) -> Cow<'static, str> {
+        match self.value {
+            FieldValue::Count => Cow::Borrowed("<N>"),
+            _ => Cow::Owned(format!("<{}>", self.name)),
+        }
+    }
+
     const fn new(name: &'static str, value: FieldValue, repeated: bool) -> Self {
         Self {
             name,
@@ -245,17 +254,17 @@ impl Fields {
     }
 }
 
-/// The field of a typed input that names the target record, when the grammar of its
-/// command takes a target.
-pub const TARGET: Field = Field::text("target");
 /// The repository root that a command opens.
 pub const REPO: Field = Field::text("repo").default(".");
 /// The scope that a command opens.
 pub const SCOPE: Field = Field::text("scope").default("default");
 
+/// The value of the `format` field that selects JSON.
+pub const JSON: &str = "json";
+
 /// The `format` field of a command whose result is only JSON.
 pub const fn json_format(default: Option<&'static str>) -> Field {
-    let field = Field::text("format").values(&["json"]);
+    let field = Field::text("format").values(&[JSON]);
     match default {
         Some(default) => field.default(default),
         None => field,

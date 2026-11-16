@@ -3,39 +3,37 @@ use provenance_cli::cli_options::flag_name;
 use provenance_cli::exposed;
 use provenance_macros::rule;
 use provenance_porcelain::action::Action;
-use provenance_porcelain::guidance;
-use provenance_porcelain::registry::{json_format, Command, FieldValue, PrimeFormat, SCOPE};
+use provenance_porcelain::guidance::{self, FIRST_STEPS};
+use provenance_porcelain::registry::{json_format, Command, PrimeFormat, JSON, SCOPE};
 
-/// The text before the first commands, and the text before and after each command.
-const FIRST_STEPS: (&str, &str, &str) =
-    ("\n\nFor a focused start, run:\n", "\n- `provenance ", "`");
+/// The text before the first commands.
+const BEFORE_COMMANDS: &str = "\n\nFor a focused start, run:\n";
 
-/// The first commands that the CLI suggests after the shared guidance, when the CLI shows
-/// their commands: the CLI form of each first step, its fields as flags, and the scope and
-/// the JSON format.
+/// The first commands that the CLI suggests after the shared guidance: the CLI form of
+/// each first step, with its arguments, the scope, and the JSON format as flags. The CLI
+/// shows search and get in each build, so it gives each first step.
 fn first_steps() -> String {
-    let format = json_format(None);
-    let options = [(SCOPE, None), (format, format.values.first().copied())];
-    let lines: Vec<String> = guidance::first_steps(exposed::shows)
-        .map(|(command, fields)| {
-            let flags = fields.iter().chain(&options).map(|(field, value)| {
-                let value = match (value, field.value) {
-                    (Some(value), _) => (*value).to_owned(),
-                    (None, FieldValue::Count) => "<N>".to_owned(),
-                    (None, _) => format!("<{}>", field.name),
-                };
-                format!(" --{} {value}", flag_name(field))
-            });
-            let (_, start, end) = FIRST_STEPS;
-            let form = exposed::form(&command.declaration());
-            format!("{start}{form}{}{end}", flags.collect::<String>())
-        })
-        .collect();
-    if lines.is_empty() {
-        return String::new();
+    let mut text = String::from(BEFORE_COMMANDS);
+    for step in FIRST_STEPS {
+        text.push_str("\n- `provenance ");
+        text.push_str(&exposed::form(&step.command.declaration()));
+        let arguments = step
+            .arguments
+            .iter()
+            .map(|argument| (flag_name(&argument.field), argument.value()))
+            .chain([
+                (flag_name(&SCOPE), SCOPE.placeholder()),
+                (flag_name(&json_format(None)), JSON.into()),
+            ]);
+        for (flag, value) in arguments {
+            text.push_str(" --");
+            text.push_str(&flag);
+            text.push(' ');
+            text.push_str(&value);
+        }
+        text.push('`');
     }
-    let (before, _, _) = FIRST_STEPS;
-    format!("{before}{}", lines.concat())
+    text
 }
 
 /// The CLI form of an action on a record, with the update and create actions, when the

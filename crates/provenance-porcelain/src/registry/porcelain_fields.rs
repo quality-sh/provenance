@@ -7,7 +7,7 @@ use super::{Field, FieldValue, Relation};
 pub(super) const VIEWS: &[&str] = &["record", CHILDREN, "trace", "impact", "review"];
 
 /// The view of the records below a record.
-pub const CHILDREN: &str = "children";
+pub(crate) const CHILDREN: &str = "children";
 
 /// The get fields after the target, in order.
 pub(super) const GET_FIELDS: &[Field] = &[
@@ -25,7 +25,9 @@ pub(super) const GET_FIELDS: &[Field] = &[
         .doc("The Codex thread UUID for notify."),
 ];
 
+/// The get field that selects the view of the target record.
 pub const VIEW: Field = Field::text("view").values(VIEWS);
+/// The get and trace field that bounds the walk from the target record.
 pub const DEPTH: Field = Field::text("depth")
     .of(FieldValue::Count)
     .doc("The number of levels to walk. The default is 1.");
@@ -70,6 +72,7 @@ pub(super) const SEARCH_FIELDS: &[Field] = &[
         .doc("Put the Rules bound at this line first. Needs file."),
 ];
 
+/// The search field of the text to find.
 pub const SEARCH_TEXT: Field = Field::text("text")
     .leading_hyphen()
     .doc("Text to find in record ids and text.");

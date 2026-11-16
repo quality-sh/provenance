@@ -2,12 +2,15 @@
 //! and the first calls when the server shows their commands.
 
 use crate::listed::Table;
-use provenance_porcelain::guidance::{first_steps, guidance_for, Shown};
-use provenance_porcelain::registry::{Command, Field, FieldValue, TARGET};
-use std::fmt::Write;
+use provenance_porcelain::guidance::{first_steps, guidance_for, FirstStep, Shown};
+use provenance_porcelain::registry::{Command, FieldValue, Grammar};
 
-/// The text before the first calls, between two calls, and after the last call.
-const FIRST_STEPS: (&str, &str, &str) = ("\n\nFor a focused start, call ", ", then ", ".");
+/// The text before the first calls.
+const BEFORE_CALLS: &str = "\n\nFor a focused start, call ";
+/// The text between two first calls.
+const BETWEEN_CALLS: &str = ", then ";
+/// The text after the last first call.
+const AFTER_CALLS: &str = ".";
 
 /// The instructions of a server that shows the commands of `table`, each with its MCP
 /// name, and the first calls when the server shows their commands.
@@ -25,37 +28,36 @@ pub fn instructions(table: &Table) -> String {
     let guidance = guidance_for(&commands, &writes, table.notify());
     let mut text = guidance.guidance;
     let shown = |command: Command| table.commands().any(|other| other == command);
-    let calls: Vec<String> = first_steps(shown)
-        .map(|(command, fields)| call(command, fields))
-        .collect();
+    let calls: Vec<String> = first_steps(shown).iter().map(call).collect();
     if !calls.is_empty() {
-        let (before, between, after) = FIRST_STEPS;
-        write!(text, "{before}{}{after}", calls.join(between))
-            .expect("writing to a String cannot fail");
+        text.push_str(BEFORE_CALLS);
+        text.push_str(&calls.join(BETWEEN_CALLS));
+        text.push_str(AFTER_CALLS);
     }
     text
 }
 
-/// One first call: the tool name of `command` and its input, with the target and `fields`.
-/// A field has its selected value, or a placeholder.
-fn call(command: Command, fields: &[(Field, Option<&str>)]) -> String {
-    let target = command
+/// One first call: the tool name of the command of `step` and its input, with the target
+/// and the arguments of the step. A count is a JSON number and each other value a string.
+fn call(step: &FirstStep) -> String {
+    let target = step
+        .command
         .declaration()
         .grammar
         .takes_target()
-        .then(|| format!("\"{}\":\"<id>\"", TARGET.name));
-    let fields = fields.iter().map(|(field, value)| {
-        let value = match (value, field.value) {
-            (Some(value), _) => format!("\"{value}\""),
-            (None, FieldValue::Count) => "<N>".to_owned(),
-            (None, _) => format!("\"<{}>\"", field.name),
+        .then(|| format!("\"{}\":\"<id>\"", Grammar::TARGET));
+    let arguments = step.arguments.iter().map(|argument| {
+        let value = argument.value();
+        let value = match argument.field.value {
+            FieldValue::Count => value.into_owned(),
+            _ => format!("\"{value}\""),
         };
-        format!("\"{}\":{value}", field.name)
+        format!("\"{}\":{value}", argument.field.name)
     });
-    let input: Vec<String> = target.into_iter().chain(fields).collect();
+    let input: Vec<String> = target.into_iter().chain(arguments).collect();
     format!(
         "{} with {{{}}}",
-        crate::exposed::name(command),
+        crate::exposed::name(step.command),
         input.join(",")
     )
 }

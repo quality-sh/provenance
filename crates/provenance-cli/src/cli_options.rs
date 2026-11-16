@@ -2,7 +2,9 @@
 //! `--kebab-case` flag and each target field as a positional argument; the options here
 //! are the CLI's, not fields of a command.
 
-use provenance_porcelain::registry::{json_format, Declaration, Field, Relation, REPO, SCOPE};
+use provenance_porcelain::registry::{
+    json_format, Declaration, Field, Relation, REPO, SCOPE, VIEW,
+};
 
 /// The repository options that the porcelain commands and the commands after them take.
 pub const GLOBAL_OPTIONS: &[Field] = &[
@@ -41,7 +43,7 @@ pub fn field_help(field: &Field) -> Option<&'static str> {
 
 /// The relations of the get options with each other and with the get fields.
 pub const GET_OPTION_RELATIONS: &[Relation] = &[
-    Relation::Requires("follow", "view"),
+    Relation::Requires("follow", VIEW.name),
     Relation::Conflicts("follow", "review_link"),
     Relation::Conflicts("follow", "notify"),
     Relation::Requires("no_open", "review_link"),

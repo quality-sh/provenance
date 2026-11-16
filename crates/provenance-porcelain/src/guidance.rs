@@ -4,6 +4,7 @@ use crate::action::Action;
 use crate::registry::{Command, Declaration, Field, CHILDREN, DEPTH, SEARCH_TEXT, VIEW};
 use provenance_macros::rule;
 use serde::Serialize;
+use std::borrow::Cow;
 use std::fmt::Write;
 
 /// The same domain text for each consumer. A consumer adds its own first steps.
@@ -59,14 +60,52 @@ const CHANGE: (&str, &str) = (
      their fields.",
 );
 
-/// A first step: a command, and the fields that it gives after its target, each with the
-/// value that the step selects, when it selects one.
-type Step = (Command, &'static [(Field, Option<&'static str>)]);
+/// A first step: a command, and the arguments that it gives after its target.
+#[derive(Clone, Copy, Debug)]
+pub struct FirstStep {
+    pub command: Command,
+    pub arguments: &'static [Argument],
+}
 
-/// The first steps, as [`first_steps`] gives them.
-const FIRST_STEPS: [Step; 2] = [
-    (Command::Search, &[(SEARCH_TEXT, None)]),
-    (Command::Get, &[(VIEW, Some(CHILDREN)), (DEPTH, None)]),
+/// An argument of a first step: a field, and the value that the step selects for it, when
+/// it selects one.
+#[derive(Clone, Copy, Debug)]
+pub struct Argument {
+    pub field: Field,
+    selected: Option<&'static str>,
+}
+
+impl Argument {
+    /// The value of the argument: the value that the step selects, or else the placeholder
+    /// of the field.
+    pub fn value(&self) -> Cow<'static, str> {
+        self.selected
+            .map_or_else(|| self.field.placeholder(), Cow::Borrowed)
+    }
+}
+
+/// The first steps: search on a text, then get of the records below one record.
+pub const FIRST_STEPS: &[FirstStep] = &[
+    FirstStep {
+        command: Command::Search,
+        arguments: &[Argument {
+            field: SEARCH_TEXT,
+            selected: None,
+        }],
+    },
+    FirstStep {
+        command: Command::Get,
+        arguments: &[
+            Argument {
+                field: VIEW,
+                selected: Some(CHILDREN),
+            },
+            Argument {
+                field: DEPTH,
+                selected: None,
+            },
+        ],
+    },
 ];
 
 /// A command that an interface shows: a registry command, or a command that the interface
@@ -102,9 +141,7 @@ pub fn guidance_for(
     };
     let mut text = String::from(DOMAIN);
     let opening: Vec<String> = [
-        first_steps(shown)
-            .next()
-            .map(|_| SEARCH_THEN_GET.to_owned()),
+        (!first_steps(shown).is_empty()).then(|| SEARCH_THEN_GET.to_owned()),
         create_sentence(shown),
     ]
     .into_iter()
@@ -143,24 +180,21 @@ pub fn guidance_for(
 
 /// The first steps of an interface that shows each command for which `shown` is true.
 ///
-/// The steps are search on a text, then get of the records below one record. Each step is
-/// a command and the fields that it gives after its target, each with the value that the
-/// step selects, when it selects one. An interface that does not show search and get has
-/// no first steps.
-pub fn first_steps(shown: impl Fn(Command) -> bool) -> impl Iterator<Item = Step> {
-    let all = FIRST_STEPS.iter().all(|(command, _)| shown(*command));
-    FIRST_STEPS.into_iter().filter(move |_| all)
+/// An interface that shows the command of each step has [`FIRST_STEPS`]; another interface
+/// has no first steps.
+pub fn first_steps(shown: impl Fn(Command) -> bool) -> &'static [FirstStep] {
+    if FIRST_STEPS.iter().all(|step| shown(step.command)) {
+        FIRST_STEPS
+    } else {
+        &[]
+    }
 }
 
-/// The description of the discussions command with the Discussion reads of `granted`.
-///
-/// The command lists Discussions and reads one. With the list, the description is the
-/// description of the list; with only the read of one Discussion, it is the description of
-/// that read. No read gives no description.
+/// The description of the discussions command with the Discussion reads of `granted`: the
+/// description of the read that the command selects without an action argument. No granted
+/// read gives no description.
 pub fn discussions_description(granted: impl Fn(Action) -> bool) -> Option<&'static str> {
-    [Action::Discussions, Action::Discussion]
-        .into_iter()
-        .find(|action| granted(*action))
+    crate::discussion::default_read(granted)
         .map(|action| Command::Action(action).declaration().description)
 }
 
