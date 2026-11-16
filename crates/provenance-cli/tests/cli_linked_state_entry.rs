@@ -92,7 +92,6 @@ async fn a_linked_record_file_gives_its_path_below_the_repository_on_each_read()
     server.close().await;
 
     let refused = (Some(1), String::new(), format!("Error: {CAUSE}\n"));
-    assert_eq!(cli, [refused.clone(), refused.clone(), refused]);
     let operation = json!({"error": {"kind": "operation_failed", "message": CAUSE}, "meta": {}});
     let read_failed = json!({"error": {"kind": "read_failed", "cause": CAUSE, "message": CAUSE},
         "meta": {}});
@@ -107,7 +106,10 @@ async fn a_linked_record_file_gives_its_path_below_the_repository_on_each_read()
         json!({"tool": tool, "isError": true, "text": structured.to_string(),
             "structured": structured})
     });
-    assert_eq!(answers, expected);
+    assert_eq!(
+        (&cli, &answers),
+        (&vec![refused.clone(), refused.clone(), refused], &expected.to_vec())
+    );
 
     let canonical = dunce::canonicalize(directory.path()).unwrap();
     let output = format!("{cli:?}{answers:?}");
