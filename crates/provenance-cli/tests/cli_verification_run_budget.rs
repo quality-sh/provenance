@@ -9,7 +9,8 @@ use std::process::Output;
 use crate::support::review_paths::provenance;
 
 /// The bytes of one stored row that the page read and the member read of
-/// the runs give.
+/// the runs give. The store owns the number in
+/// `read_budget::resource_record_bytes`.
 const BUDGET: usize = 1_048_576 - 16_384;
 
 fn api(repo: &Path, path: &str, input: Option<&Value>) -> Output {
