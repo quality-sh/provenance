@@ -65,6 +65,8 @@ mod cli_review_session;
 mod cli_review_startup;
 #[path = "../cli_review_submission_characterization.rs"]
 mod cli_review_submission_characterization;
+#[path = "../cli_review_undeclared_scope.rs"]
+mod cli_review_undeclared_scope;
 #[path = "../cli_review_uninitialized.rs"]
 mod cli_review_uninitialized;
 #[path = "../cli_review_unknown_routes.rs"]

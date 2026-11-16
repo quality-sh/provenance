@@ -1,10 +1,11 @@
 //! A document read through the MCP `api` tool whose catch-up fails on a
 //! state line that does not parse gives the file, the line and the parse
-//! message of that line.
+//! message of that line, and the steps that correct the state.
 #![cfg(feature = "test-fixture")]
 
 use crate::support;
 
+use provenance_core::protocol::read_failure::STATE_CORRECTIONS;
 use provenance_macros::verifies;
 use serde_json::{json, Value};
 use support::fixture_host::read_only;
@@ -25,6 +26,7 @@ async fn read_document(client: &Client) -> (Option<bool>, Value) {
 #[tokio::test]
 #[verifies("rule_state_parse_refusal_names_the_line", examples)]
 #[verifies("rule_document_catch_up_refusal_gives_typed_cause", examples)]
+#[verifies("rule_state_parse_refusal_names_the_corrections", examples)]
 async fn a_document_read_gives_the_line_that_stops_its_catch_up() {
     let repo = Repository::new("The shared graph is readable.");
     let session = Session::start(read_only(&repo)).await;
@@ -43,7 +45,8 @@ async fn a_document_read_gives_the_line_that_stops_its_catch_up() {
                 "kind": "document_catch_up_failed",
                 "file": "scopes/default/requirements/req.jsonl",
                 "line": 1,
-                "message": "invalid type: string \"req_parent\", expected a sequence"
+                "message": "invalid type: string \"req_parent\", expected a sequence",
+                "hint": STATE_CORRECTIONS
             },
             "meta": {}
         })

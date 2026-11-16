@@ -7,7 +7,7 @@
 use super::review_cycle::describe;
 use super::review_disagreeing_rows::{
     check_reports, check_reports_all, line_of, only_req_a_refuses, refused, remove_lines, row,
-    state_file,
+    state_file, KEEP_ONE_LINE,
 };
 use super::review_history::{commit, git};
 use super::review_merged_decisions::{
@@ -43,8 +43,7 @@ fn submission_on_lines(repo: &str, submission: &str) -> Value {
     let (first, second) = (holding[0], holding[1]);
     json!({"kind":"invalid_state_file", "file":state_file(PROPOSALS), "line":second,
         "message":format!("review submission {submission} is on lines {first} and {second} of \
-            ideation/proposal_cards.jsonl with different contents. To repair, keep one of these \
-            lines and remove the others, then commit.")})
+            ideation/proposal_cards.jsonl with different contents"), "hint":KEEP_ONE_LINE})
 }
 
 /// Flow: a reviewer rejects the submission of `req_a`, the agent withdraws
@@ -140,8 +139,8 @@ fn an_approval_and_a_withdrawal_of_a_submission_on_lines_that_disagree() {
     let withdrawn = json!({"kind":"invalid_state_file", "file":state_file(WITHDRAWALS), "line":1,
         "message":format!("review submission {submission} of requirement req_a is accepted and \
             withdrawn. The approvals in ideation/dispositions.jsonl: {approval} at line 1. The \
-            withdrawals in ideation/withdrawals.jsonl: {withdrawal} at line 1. To repair, remove \
-            each approval line or each withdrawal line, then commit.")});
+            withdrawals in ideation/withdrawals.jsonl: {withdrawal} at line 1"),
+        "hint":"To repair, remove each approval line or each withdrawal line, then commit."});
     only_req_a_refuses(&repo, &submission_on_lines(&repo, &submission));
     // The write of req_c sorted the file again, so the lines moved.
     let on_lines = submission_on_lines(&repo, &submission);
@@ -202,11 +201,12 @@ fn two_changes_of_one_record_merged_give_two_submissions_with_one_cycle() {
     let second = line_naming(&repo, PROPOSALS, "id", &submissions[1]);
     let expected = json!({"kind":"invalid_state_file", "file":state_file(PROPOSALS),
         "line":second,
-        "message":format!("requirement req_a has 2 review submissions with review cycle 2. To \
-            repair, keep one submission and remove the lines of each other submission, then \
-            commit. The lines of {}: {}. The lines of {}: {}.", submissions[0],
+        "message":format!("requirement req_a has 2 review submissions with review cycle 2. The \
+            lines of {}: {}. The lines of {}: {}", submissions[0],
             submission_lines(&repo, &submissions[0]), submissions[1],
-            submission_lines(&repo, &submissions[1]))});
+            submission_lines(&repo, &submissions[1])),
+        "hint":"To repair, keep one submission and remove the lines of each other submission, \
+            then commit."});
     assert_eq!(refused(&repo, &["api", "requirements/req_a"]), expected);
     check_reports(&repo, &expected);
     read(&repo, &["api", "requirements/req_b/document"]);

@@ -130,8 +130,8 @@ async fn rows(client: &Client, repo: &Repository) -> Vec<Value> {
         json!({"file":"scopes/default/ideation/proposal_cards.jsonl",
             "kind":"invalid_state_file", "line":second,
             "message":format!("review submission submission_by_hand is on lines {first} and \
-                {second} of ideation/proposal_cards.jsonl with different contents. To repair, \
-                keep one of these lines and remove the others, then commit.")}),
+                {second} of ideation/proposal_cards.jsonl with different contents"),
+            "hint":"To repair, keep one of these lines and remove the others, then commit."}),
         "the MCP read gives the envelope of the API read"
     );
     rows.push(json!({"is_error":answer["is_error"], "row":answer["row"]}));
@@ -231,6 +231,7 @@ async fn each_refusal_keeps_its_mcp_error_object() {
         {
             "error": {
                 "file": "scopes/default/requirements/req.jsonl",
+                "hint": provenance_core::protocol::read_failure::STATE_CORRECTIONS,
                 "kind": "invalid_state_file",
                 "line": 2,
                 "message": "missing field `scope_id`"
@@ -241,6 +242,7 @@ async fn each_refusal_keeps_its_mcp_error_object() {
         {
             "error": {
                 "file": "scopes/default/requirements/req.jsonl",
+                "hint": provenance_core::protocol::read_failure::STATE_CORRECTIONS,
                 "kind": "invalid_state_file",
                 "line": 2,
                 "message": "missing field `scope_id`"

@@ -24,7 +24,9 @@ pub enum OpenFailure {
     Settings(#[from] SettingsError),
     /// The initialized-graph gate did not complete: an I/O failure, a lock
     /// failure, a manifest that is not a file, or a manifest that does not parse.
-    #[error("{0:#}")]
+    /// The text and the causes are those of the error, so a caller that shows
+    /// only the text of the failure shows the fault.
+    #[error(transparent)]
     Io(anyhow::Error),
 }
 
