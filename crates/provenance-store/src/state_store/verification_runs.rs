@@ -8,6 +8,7 @@ use sha2::{Digest, Sha256};
 use std::collections::BTreeSet;
 use std::io::{BufRead, BufReader, Read};
 
+use super::failure_text::fit_failure_text;
 use super::requirement_reviews::now_millis;
 use super::{
     BeginVerificationInput, CompleteVerificationInput, MaterializeVerificationBindingInput,
@@ -142,17 +143,48 @@ impl StateStore {
             status == VerificationRunStatus::Failed || input.error.is_none(),
             "a passed verification cannot carry an error"
         );
+        self.complete_run(scope_id, &run_id, status, |_, _| Ok(input.error))
+    }
+
+    /// Completes the run `run` as failed with `text`, cut from the stored row
+    /// with its completion time so that the row fits the read budget.
+    #[rule("rule_rust_verification_cuts_a_long_failure_text")]
+    pub(crate) fn fail_verification(
+        &self,
+        scope_id: &ScopeId,
+        run: &str,
+        text: &str,
+    ) -> anyhow::Result<VerificationRun> {
+        self.ensure_writable()?;
+        let run_id = StableId::new(run.to_owned())
+            .map_err(|error| crate::refusal::refuse!(InvalidCompletion, "{error:#}"))?;
+        let failed = VerificationRunStatus::Failed;
+        self.complete_run(scope_id, &run_id, failed, |completed, carried| {
+            fit_failure_text(completed, carried, text).map(Some)
+        })
+    }
+
+    /// Completes the running run `run_id` with `status` in one locked change
+    /// of the runs cache. `error` gives the stored error from the completed
+    /// row and from the bytes that its stored line carries.
+    fn complete_run(
+        &self,
+        scope_id: &ScopeId,
+        run_id: &StableId,
+        status: VerificationRunStatus,
+        error: impl FnOnce(&VerificationRun, usize) -> anyhow::Result<Option<String>>,
+    ) -> anyhow::Result<VerificationRun> {
         let completed_at = now_millis(&*self.clock())?;
         self.with_repository_publication(|held| {
             let (path, lock_path) = held.run_files(scope_id);
-            crate::jsonl::mutate_jsonl_locked(
+            crate::jsonl::mutate_carried_jsonl_locked(
                 &path,
                 &lock_path,
                 run_row_budget(),
-                |records: &mut Vec<VerificationRun>| {
+                |records: &mut Vec<VerificationRun>, carried| {
                     let run = records
                         .iter_mut()
-                        .find(|run| run.scope_id == *scope_id && run.id == run_id)
+                        .find(|run| run.scope_id == *scope_id && run.id == *run_id)
                         .ok_or_else(|| {
                             crate::refusal::refuse!(
                                 InvalidCompletion,
@@ -168,7 +200,7 @@ impl StateStore {
                     );
                     run.status = status;
                     run.completed_at = Some(completed_at.max(run.started_at));
-                    run.error = input.error;
+                    run.error = error(run, carried.bytes(run_id.as_str()))?;
                     Ok(run.clone())
                 },
             )

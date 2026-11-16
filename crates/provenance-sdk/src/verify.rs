@@ -86,6 +86,7 @@ pub fn verify<'a, E: std::fmt::Display>(
             commit: None,
         },
     )?;
+    // The store cuts a failure text that does not fit the run row.
     let fail = |text: &str| operations::fail_verification(&repository, run.id.as_str(), text);
     match catch_unwind(AssertUnwindSafe(callback)) {
         Ok(Ok(())) => {

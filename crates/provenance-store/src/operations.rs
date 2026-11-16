@@ -119,21 +119,9 @@ pub fn fail_verification(
     run: &str,
     text: &str,
 ) -> anyhow::Result<provenance_core::VerificationRun> {
-    let begun = verification_runs(repository, None)?
-        .into_iter()
-        .find(|row| row.id.as_str() == run)
-        .ok_or_else(|| {
-            crate::refusal::refuse!(InvalidCompletion, "verification run `{run}` does not exist")
-        })?;
-    let error = crate::state_store::fit_failure_text(&begun, text)?;
-    complete_verification(
-        repository,
-        CompleteVerificationInput {
-            run: run.to_owned(),
-            status: "failed".to_owned(),
-            error: Some(error),
-        },
-    )
+    repository
+        .store()
+        .fail_verification(repository.scope(), run, text)
 }
 
 #[cfg(feature = "host")]
