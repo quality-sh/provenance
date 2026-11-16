@@ -225,7 +225,7 @@ impl Invocation {
         let format = args.common.format();
         let context = args.common.context();
         if args.action == Some(TargetVerb::Trace) {
-            catalog_cli::ensure_only_fields(&matches, &["kind", "depth", "limit"]);
+            catalog_cli::ensure_only_fields(&matches, &["kind", registry::DEPTH.name, "limit"]);
             let input = provenance_porcelain::get::TraceInput {
                 target: args.target,
                 depth: args.depth,
@@ -244,8 +244,8 @@ impl Invocation {
                 &matches,
                 &[
                     "kind",
-                    "view",
-                    "depth",
+                    registry::VIEW.name,
+                    registry::DEPTH.name,
                     "limit",
                     "review-link",
                     "no-open",

@@ -61,7 +61,9 @@ impl SearchArgs {
     pub fn from_matches(matches: &ArgMatches) -> Self {
         Self {
             common: Common::from_matches(matches),
-            text: matches.get_one::<String>("text").cloned(),
+            text: matches
+                .get_one::<String>(registry::SEARCH_TEXT.name)
+                .cloned(),
             cursor: matches.get_one::<String>("cursor").cloned(),
             kind: kinds(matches),
             limit: matches.get_one::<usize>("limit").copied(),
@@ -236,8 +238,8 @@ impl TargetArgs {
                 .unwrap_or_default(),
             action: matches.get_one::<TargetVerb>("action").copied(),
             record_type: matches.get_one::<NodeType>("type").copied(),
-            view: matches.get_one::<String>("view").cloned(),
-            depth: matches.get_one::<usize>("depth").copied(),
+            view: matches.get_one::<String>(registry::VIEW.name).cloned(),
+            depth: matches.get_one::<usize>(registry::DEPTH.name).copied(),
             kind: kinds(matches),
             limit: matches.get_one::<usize>("limit").copied(),
             delivery: Delivery::Read,

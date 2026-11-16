@@ -86,23 +86,30 @@ fn remove_unused_definitions(schema: &mut Value) {
     }
 }
 
-/// The input of the discussions command with an action argument: the two Discussion
-/// reads. Without the action argument, the command lists Discussions.
-pub fn action_input() -> crate::action_input::ActionInput {
-    crate::action_input::ActionInput::new(Some(Action::Discussions.as_str()))
-        .with_action(
-            Action::Discussions.as_str(),
-            input_schema(Action::Discussions),
-        )
-        .with_action(
-            Action::Discussion.as_str(),
-            input_schema(Action::Discussion),
-        )
+/// The Discussion reads of the discussions command, in order: the list, then the read of
+/// one Discussion.
+const READS: [Action; 2] = [Action::Discussions, Action::Discussion];
+
+/// The read that the discussions command selects without an action argument: the first of
+/// its reads that `granted` grants. No granted read gives no read.
+pub fn default_read(granted: impl Fn(Action) -> bool) -> Option<Action> {
+    READS.into_iter().find(|action| granted(*action))
 }
 
-/// The flat input schema of the discussions command with an action argument.
-pub fn action_input_schema() -> serde_json::Value {
-    action_input().schema()
+/// The input of the discussions command with an action argument that offers each read that
+/// `granted` grants. Without the action argument, the command runs [`default_read`]. No
+/// granted read gives no input.
+pub fn action_input(granted: impl Fn(Action) -> bool) -> Option<crate::action_input::ActionInput> {
+    let default = default_read(&granted)?;
+    let input = crate::action_input::ActionInput::new(Some(default.as_str()));
+    Some(
+        READS
+            .into_iter()
+            .filter(|action| granted(*action))
+            .fold(input, |input, action| {
+                input.with_action(action.as_str(), input_schema(action))
+            }),
+    )
 }
 
 /// The field of the port request that the target fills: the record parent or the

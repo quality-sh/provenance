@@ -1,9 +1,10 @@
 //! Domain guidance shared by each consumer.
 
 use crate::action::Action;
-use crate::registry::{Command, Declaration};
+use crate::registry::{Command, Declaration, Field, CHILDREN, DEPTH, SEARCH_TEXT, VIEW};
 use provenance_macros::rule;
 use serde::Serialize;
+use std::borrow::Cow;
 use std::fmt::Write;
 
 /// The same domain text for each consumer. A consumer adds its own first steps.
@@ -59,6 +60,54 @@ const CHANGE: (&str, &str) = (
      their fields.",
 );
 
+/// A first step: a command, and the arguments that it gives after its target.
+#[derive(Clone, Copy, Debug)]
+pub struct FirstStep {
+    pub command: Command,
+    pub arguments: &'static [Argument],
+}
+
+/// An argument of a first step: a field, and the value that the step selects for it, when
+/// it selects one.
+#[derive(Clone, Copy, Debug)]
+pub struct Argument {
+    pub field: Field,
+    selected: Option<&'static str>,
+}
+
+impl Argument {
+    /// The value of the argument: the value that the step selects, or else the placeholder
+    /// of the field.
+    pub fn value(&self) -> Cow<'static, str> {
+        self.selected
+            .map_or_else(|| self.field.placeholder(), Cow::Borrowed)
+    }
+}
+
+/// The first steps: search on a text, then get of the records below one record.
+pub const FIRST_STEPS: &[FirstStep] = &[
+    FirstStep {
+        command: Command::Search,
+        arguments: &[Argument {
+            field: SEARCH_TEXT,
+            selected: None,
+        }],
+    },
+    FirstStep {
+        command: Command::Get,
+        arguments: &[
+            Argument {
+                field: VIEW,
+                selected: Some(CHILDREN),
+            },
+            Argument {
+                field: DEPTH,
+                selected: None,
+            },
+        ],
+    },
+];
+
 /// A command that an interface shows: a registry command, or a command that the interface
 /// declares itself.
 #[derive(Clone, Copy, Debug)]
@@ -92,7 +141,7 @@ pub fn guidance_for(
     };
     let mut text = String::from(DOMAIN);
     let opening: Vec<String> = [
-        (shown(Command::Search) && shown(Command::Get)).then(|| SEARCH_THEN_GET.to_owned()),
+        (!first_steps(shown).is_empty()).then(|| SEARCH_THEN_GET.to_owned()),
         create_sentence(shown),
     ]
     .into_iter()
@@ -127,6 +176,26 @@ pub fn guidance_for(
     }
     text.truncate(text.trim_end().len());
     Guidance { guidance: text }
+}
+
+/// The first steps of an interface that shows each command for which `shown` is true.
+///
+/// An interface that shows the command of each step has [`FIRST_STEPS`]; another interface
+/// has no first steps.
+pub fn first_steps(shown: impl Fn(Command) -> bool) -> &'static [FirstStep] {
+    if FIRST_STEPS.iter().all(|step| shown(step.command)) {
+        FIRST_STEPS
+    } else {
+        &[]
+    }
+}
+
+/// The description of the discussions command with the Discussion reads of `granted`: the
+/// description of the read that the command selects without an action argument. No granted
+/// read gives no description.
+pub fn discussions_description(granted: impl Fn(Action) -> bool) -> Option<&'static str> {
+    crate::discussion::default_read(granted)
+        .map(|action| Command::Action(action).declaration().description)
 }
 
 /// The create sentence, when create is shown. Its second clause stays only when an

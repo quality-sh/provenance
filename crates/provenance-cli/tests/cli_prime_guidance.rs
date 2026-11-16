@@ -132,11 +132,6 @@ async fn cli_and_mcp_share_the_same_guidance() {
             );
         }
     }
-    assert!(text.contains("`provenance search --text <text>"), "{text}");
-    assert!(
-        instructions.contains("call search with {\"text\":\"<text>\"}"),
-        "{instructions}"
-    );
     let tools = client.tools().await;
     for name in ["get", "search", "trace", "discussions"] {
         let tool = tools.iter().find(|tool| tool["name"] == name).unwrap();

@@ -15,6 +15,7 @@ mod support {
     pub mod api_session;
     #[path = "../../../provenance-transport/tests/support/check_port.rs"]
     pub mod check_port;
+    pub mod first_calls;
     #[cfg(feature = "test-fixture")]
     pub mod fixture_host;
     #[cfg(feature = "test-fixture")]
@@ -44,10 +45,14 @@ mod host_invocation;
 mod mcp_action_fields;
 #[path = "../mcp_change_results.rs"]
 mod mcp_change_results;
+#[path = "../mcp_discussions_grants.rs"]
+mod mcp_discussions_grants;
 #[path = "../mcp_document_catch_up_cause.rs"]
 mod mcp_document_catch_up_cause;
 #[path = "../mcp_error_envelopes.rs"]
 mod mcp_error_envelopes;
+#[path = "../mcp_first_steps.rs"]
+mod mcp_first_steps;
 #[path = "../mcp_guidance.rs"]
 mod mcp_guidance;
 #[path = "../mcp_instruction_names.rs"]

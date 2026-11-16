@@ -140,7 +140,7 @@ impl Listed {
             ),
             Command::Action(Action::Discussions) => (
                 tools::discussions_tool(host)?,
-                Runner::Discussions(provenance_porcelain::discussion::action_input()),
+                Runner::Discussions(tools::discussions_input(host)?),
             ),
             Command::Change => {
                 let actions = tools::ChangeActions::new(host);
