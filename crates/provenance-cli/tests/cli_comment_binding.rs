@@ -96,3 +96,92 @@ fn a_second_comment_for_one_rule_names_the_rule_in_the_finding() {
         "{report}"
     );
 }
+
+/// The Rule id and the item name of each site in a scan report, in line order.
+fn item_names(report: &Value) -> Vec<(String, Option<String>)> {
+    let mut sites = ["annotations", "bindings"]
+        .iter()
+        .flat_map(|key| report[key].as_array().unwrap())
+        .map(|site| {
+            let name = site["function_name"]
+                .as_str()
+                .or_else(|| site["item_name"].as_str());
+            (
+                site["line"].as_u64().unwrap(),
+                site["rule_id"].as_str().unwrap().to_owned(),
+                name.map(str::to_owned),
+            )
+        })
+        .collect::<Vec<_>>();
+    sites.sort();
+    sites
+        .into_iter()
+        .map(|(_, rule, name)| (rule, name))
+        .collect()
+}
+
+/// The Rule id and the item name of each site in the names file `names`, in
+/// line order. A `-` is no item name.
+fn names_file(names: &str) -> Vec<(String, Option<String>)> {
+    names
+        .lines()
+        .map(|line| {
+            let (rule, name) = line.split_once(' ').unwrap();
+            (rule.to_owned(), (name != "-").then(|| name.to_owned()))
+        })
+        .collect()
+}
+
+#[test]
+#[verifies("rule_site_item_name_is_the_declaration_below", examples)]
+fn a_rust_binding_names_the_function_or_type_below_it() {
+    let report = scan("src/pay.rs", include_str!("fixtures/names/rs.txt"));
+
+    let expected = names_file(include_str!("fixtures/names/rs.names"));
+    assert_eq!(item_names(&report), expected, "{report}");
+}
+
+#[test]
+#[verifies("rule_site_item_name_is_the_declaration_below", examples)]
+fn a_python_binding_names_the_function_or_class_below_it() {
+    let report = scan("src/pay.py", include_str!("fixtures/names/py.txt"));
+
+    let expected = names_file(include_str!("fixtures/names/py.names"));
+    assert_eq!(item_names(&report), expected, "{report}");
+}
+
+#[test]
+#[verifies("rule_site_item_name_is_the_declaration_below", examples)]
+fn a_go_binding_names_the_function_or_type_below_it() {
+    let report = scan("src/pay.go", include_str!("fixtures/names/go.txt"));
+
+    let expected = names_file(include_str!("fixtures/names/go.names"));
+    assert_eq!(item_names(&report), expected, "{report}");
+}
+
+#[test]
+#[verifies("rule_site_item_name_is_the_declaration_below", examples)]
+fn a_java_binding_names_the_method_or_type_below_it() {
+    let report = scan("src/Pay.java", include_str!("fixtures/names/java.txt"));
+
+    let expected = names_file(include_str!("fixtures/names/java.names"));
+    assert_eq!(item_names(&report), expected, "{report}");
+}
+
+#[test]
+#[verifies("rule_site_item_name_is_the_declaration_below", examples)]
+fn a_typescript_binding_names_the_exported_declaration_below_it() {
+    let report = scan("src/pay.ts", include_str!("fixtures/names/ts.txt"));
+
+    let expected = names_file(include_str!("fixtures/names/ts.names"));
+    assert_eq!(item_names(&report), expected, "{report}");
+}
+
+#[test]
+#[verifies("rule_site_item_name_is_the_declaration_below", examples)]
+fn a_javascript_binding_names_the_exported_declaration_below_it() {
+    let report = scan("src/pay.js", include_str!("fixtures/names/js.txt"));
+
+    let expected = names_file(include_str!("fixtures/names/js.names"));
+    assert_eq!(item_names(&report), expected, "{report}");
+}

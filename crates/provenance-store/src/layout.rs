@@ -155,16 +155,9 @@ pub fn with_initialized_graph<R>(
         || {
             let path = layout.manifest_path();
             let manifest = match std::fs::metadata(&path) {
-                Ok(metadata) if metadata.is_file() => crate::state_store::manifest_from_bytes(
-                    &std::fs::read(&path)?,
-                )
-                .map_err(|error| {
-                    if error.is::<serde_json::Error>() {
-                        error.context(format!("failed to parse manifest {path}"))
-                    } else {
-                        error
-                    }
-                })?,
+                Ok(metadata) if metadata.is_file() => {
+                    crate::state_store::parse_manifest(&path, &std::fs::read(&path)?)?
+                }
                 Ok(_) => {
                     return Err(crate::refusal::fault!(
                         "Provenance graph manifest is not a file"

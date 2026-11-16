@@ -3,8 +3,8 @@
 A binding puts a Rule id next to code. An Implementation binding marks the
 primary production code of a Rule, and a Verification binding marks a test.
 The binding does not define the Rule; a Rule may exist before any code is bound
-to it. The scanner reads source files line by line and does not parse a syntax
-tree.
+to it. The scanner reads source files as lines and code tokens, and does not
+parse a syntax tree.
 
 Production code never needs Provenance as a dependency. A test dependency is a
 development dependency, so test code can import the helpers below.
@@ -40,18 +40,158 @@ together when you move code.
 The scanner reads the marker only on a comment line: after leading whitespace,
 the line starts with `//`, `/*`, or `*` (or `#` in Python), or the line is
 inside an open block comment. A marker after code on the same line does not
-bind. The comment binds the Rule whatever item comes below it. The scanner
-takes the item name from the six lines below the comment:
+bind. The comment binds the Rule whatever item comes below it.
 
-- Rust, Python, Go: the first `fn`, `def`, or `func` in those lines. A `const`,
-  a `static`, or a type gives no name, and a function lower in the six lines,
-  such as a method of the type, gives its own name.
-- JavaScript, TypeScript: the first `function`, `const`, `let`, or `var`
-  declaration. On any other line the scanner takes the word after the first
-  space, so `class Token` gives `Token` and `export class Token` gives `class`.
-- Java: the word after the first space of the first line that has one, so
-  `boolean paysOvertime(int hours) {` gives `paysOvertime` and
-  `public static boolean paysOvertime(int hours) {` gives `static`.
+The item name of the comment is the name of the declaration that starts
+directly below it. Comments, empty lines, attributes, decorators, and
+annotations between the comment and the declaration do not change the name,
+and a declaration can take any number of lines. Bindings above one declaration
+all get the name of that declaration, so in
+
+```rust
+// @provenance rule: rule_overtime
+#[inline]
+#[rule("rule_hours")]
+pub fn pays_overtime(hours: u32) -> bool {
+```
+
+the comment and the attribute both get `pays_overtime`.
+
+A binding gets a name only when it is at the start of a statement: at the
+start of the file, or after `;`, `{`, or `}`. In Rust, the bracket that opens
+the body of a macro call, as in `name!(`, also starts a statement. In Python, a
+statement starts at the start of a logical line. In Go, JavaScript, and
+TypeScript, a line break outside parentheses and square brackets also starts a
+statement when the two lines fit:
+
+- The line above does not end with a token that needs a right side: an
+  operator, `,`, `.`, `=>`, `?`, `:`, or a word such as `extends`,
+  `implements`, `typeof`, `new`, `in`, `of`, `instanceof`, `else`, `const`, or
+  `func`. A line that ends with `return`, `break`, `continue`, `throw`, or
+  `yield` ends its statement.
+- The line below does not start with a token that continues an expression: a
+  binary operator, `.`, `?`, `:`, `,`, `)`, `]`, `(`, `[`, a template literal,
+  `in`, `instanceof`, `as`, or `satisfies`.
+- A line that ends with `>`, as a JSX element or a type argument list does,
+  starts a statement only when a declaration keyword such as `function`,
+  `class`, `const`, or `export` starts the line below.
+
+A binding inside a statement has no name: for example a binding inside the
+arguments of a call or of a decorator, after an operator, or between the parts
+of a conditional expression `ready ? start(a) : stop`.
+
+The scanner does not parse a syntax tree. The scanner removes each comment
+span, from `/*` to `*/` or from `//` (or `#` in Python) to the end of the line,
+and reads the text that is left as code tokens. The first tokens of the
+statement below the binding must make one of the declaration forms below, or
+the binding has no name. A form with a keyword gives a name only when the
+complete head fits: the keyword, a name that is not a reserved word of the
+language, and a token that can follow the name in that form (the follower).
+
+- Rust: after `pub` or `pub(...)`, `default`, `async`, `unsafe`, `extern` with
+  its ABI string, and `const` before `fn`:
+  - `fn` and the name, then `(` or `<`;
+  - `struct` and the name, then `{`, `(`, `<`, `;`, or `where`;
+  - `enum` or `union` and the name, then `{`, `<`, or `where`;
+  - `trait` and the name, then `{`, `<`, `:`, or `where`;
+  - `type` and the name, then `=`, `<`, `;`, `:`, or `where`.
+
+  A raw identifier `r#match` gives `match`. A `$name` metavariable of a
+  `macro_rules!` body is not a name.
+- Python: after `async`, `def` and the name, then `(` or `[`; or `class` and
+  the name, then `:`, `(`, or `[`.
+- Go: `type` and the name, then a type; `func`, the name, and `(` or `[`; or
+  `func`, a receiver, the name, and `(`. A function literal such as
+  `func() error { ... }()` has no name.
+- JavaScript, TypeScript: after decorators and the modifiers `export`,
+  `default`, `declare`, `abstract`, `async`, `public`, `private`, `protected`,
+  `static`, `readonly`, `override`, and `accessor`:
+  - `function` or `function*` and the name, then `(` or `<`;
+  - `class` and the name, then `{`, `<`, `extends`, or `implements`;
+  - `interface` and the name, then `{`, `<`, or `extends`;
+  - `type` and the name, then `=` or `<`;
+  - `enum` or `const enum` and the name, then `{`;
+  - `namespace` and the name, then `{` or `.`;
+  - `const`, `let`, or `var` and the name, then `=`, `:`, `!`, `,`, or `;`.
+    `let first, second` gives `first`.
+  - A method: an optional `*`, `get`, or `set`, the name, type parameters, and
+    a parameter list that a return type or a `{` on the line of its `)`
+    follows. So `public async total(): Promise<number> {` gives `total`, and
+    `delete(id: string): void {}` gives `delete`.
+  - A property after a class modifier such as `private` or `readonly`: the
+    name, and a type, a value, or `;`. So `private count = 0;` gives `count`.
+  - These words in the place of a method name or a property name give no
+    name, because a statement that starts with them has the tokens of a
+    method: `if`, `for`, `while`, `switch`, `catch`, `with`, `case`, and
+    `async`.
+- Java: after annotations and modifiers:
+  - `class` and the name, then `{`, `<`, `extends`, `implements`, or `permits`;
+    `interface` and the name, then `{`, `<`, `extends`, or `permits`; `enum`
+    and the name, then `{` or `implements`; `record` and the name, then `(` or
+    `<`; `@interface` and the name, then `{`.
+  - A method: type parameters, a return type, the name, and `(`. A return type
+    can be a qualified name with type arguments, so
+    `public java.util.List<String> names() {` gives `names`.
+  - A constructor, or an enum constant with a body: the name, its arguments,
+    and `{` or `throws`. So `ONE(1) {` in an enum gives `ONE`.
+  - A field after `public`, `protected`, `private`, `static`, `transient`, or
+    `volatile`: a type, the name, and `=`, `;`, or `,`.
+  - A Java keyword such as `if`, `return`, `new`, `throw`, `yield`, or `var`
+    in the place of the type or the name gives no name.
+
+Limits: these forms give no item name on purpose, because the tokens at the
+start of the statement do not make a declaration form above, or make the same
+tokens as a statement:
+
+- Rust: an `impl` block, a `const`, a `static`, a `mod`, a `macro_rules!`, a
+  struct field, and an enum variant.
+- Python: an assignment.
+- Go: a `type (` group, a `var`, a `const`, a function literal, a struct
+  field, and a method of an interface.
+- JavaScript, TypeScript: an arrow function, also in a `const` with the name of
+  the `const`, `export default function () {}`, an anonymous
+  `export default class extends Base {`, an import or export specifier such as
+  `type Foo,` in `import { ... }`, an optional method
+  `pays?(hours: number): boolean;`, an enum member, an interface property, a
+  property with no class modifier such as `total = () => {`, a class member
+  whose name is the keyword of a form above, such as `type()`, a method named
+  with a word of the list above, and a method whose `{` is on a line below its
+  `)`: the tokens are the same as a call statement that a block follows. A
+  test call such as `test("hours above 38", () => {` and a `describe(...)` call
+  give no name.
+- Java: a field with no modifier or with only `final`, because a local
+  variable has the same tokens; an enum constant with no body, such as
+  `TWO(2),`, because a call statement has the same tokens; a statement such as
+  a call, a qualified call `Collections.<String>emptyList();`, or
+  `synchronized (lock) {`.
+- A binding inside a statement, as above. A binding inside an expression of
+  more than one line has no name.
+- A binding above a decorator or an attribute whose arguments hold another
+  binding, such as a TypeScript `@Injectable({` or a Python `@decorator(`
+  whose arguments span lines with a binding comment in them: the binding
+  inside the arguments starts no statement, so both bindings have no name.
+- A Rust attribute directly below a binding comment is not scanned as a
+  binding: the comment takes in the attribute line.
+
+A marker in a block comment that code follows on the same line, such as
+`/* @provenance rule: rule_overtime */ function pays() {}`, does not bind
+correctly: the scanner takes the rest of the line into the Rule id. Put the
+comment on its own line.
+
+A Rust `#[rule]` or `#[verifies]` attribute and a Python `@rule` decorator take
+their item name by the same rules. A call does not:
+
+- In JavaScript and TypeScript, `rule("id", ...)` and `verifies("id",
+  "method")` take the name of the assignment on their line, or on the line
+  above when that line ends with `=`. A `verifies` call that has no assignment
+  takes the name of the function around it.
+- In Go and Java, `rule("id", ...)` takes the name of the assignment on its
+  line, or on the line above when that line ends with `=`. So Go
+  `x := rule("rule_overtime", 1)` and Java
+  `int x = rule("rule_overtime", 1);` give `x`.
+
+These rules read words on lines, not the declaration forms, so they can give a
+word that is not the name of a declaration.
 
 ## Test code
 

@@ -265,7 +265,8 @@ async fn the_dictionary_import_action_refuses_a_reference_that_does_not_parse() 
 }
 
 /// The materialize action over a record file with a line that does not parse gives the
-/// `invalid_state_file` failure with the relative file path, the line and the message.
+/// `invalid_state_file` failure with the relative file path, the line, the message and the
+/// steps that correct the state.
 #[tokio::test]
 #[verifies("rule_state_parse_refusal_names_the_line", examples)]
 async fn the_materialize_action_names_a_record_line_that_does_not_parse() {
@@ -291,7 +292,8 @@ async fn the_materialize_action_names_a_record_line_that_does_not_parse() {
     assert_eq!(
         result["structuredContent"]["error"],
         json!({"kind":"invalid_state_file","file":"scopes/default/requirements/req.jsonl",
-               "line":1,"message":"EOF while parsing an object"}),
+               "line":1,"message":"EOF while parsing an object",
+               "hint":provenance_core::protocol::read_failure::STATE_CORRECTIONS}),
         "{result}"
     );
     wire.close().await;

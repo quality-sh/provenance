@@ -24,6 +24,10 @@ pub trait HandlerFailure: std::error::Error + Serialize + WireSchema + Send + 's
     fn log_cause(&self) -> Option<String> {
         None
     }
+    /// The text of this failure for a caller that gives text and no failure object.
+    fn message(&self) -> String {
+        self.to_string()
+    }
 }
 
 /// Each failure that a call of one operation gives. `OperationFailure` is this set for an
@@ -36,6 +40,10 @@ pub trait CallFailure:
     fn failure_status(&self) -> u16;
     /// The native cause of a failure of no known kind, kept out of the wire answer.
     fn log_cause(&self) -> Option<String>;
+    /// The text of this failure for a caller that gives text and no failure
+    /// object. A failure of no known kind gives the cause of its wire answer,
+    /// with no absolute path of the repository.
+    fn message(&self) -> String;
 }
 
 impl CallFailure for OperationFailure {
@@ -44,6 +52,9 @@ impl CallFailure for OperationFailure {
     }
     fn log_cause(&self) -> Option<String> {
         None
+    }
+    fn message(&self) -> String {
+        self.to_string()
     }
 }
 
@@ -58,6 +69,12 @@ impl<F: HandlerFailure> CallFailure for OperationError<F> {
         match self {
             Self::Common(_) => None,
             Self::Handler(failure) => failure.log_cause(),
+        }
+    }
+    fn message(&self) -> String {
+        match self {
+            Self::Common(failure) => failure.to_string(),
+            Self::Handler(failure) => failure.message(),
         }
     }
 }

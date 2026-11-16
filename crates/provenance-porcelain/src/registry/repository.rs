@@ -133,7 +133,7 @@ pub(super) const fn declaration(command: RepositoryCommand) -> Declaration {
     match command {
         RepositoryCommand::Init => Declaration::named(
             "init",
-            "Set up Provenance in a repository and install the agent skills",
+            "Set up Provenance in a repository and install the agent skills.",
             Fields::new(INIT_FIELDS, init_schema).relations(&[
                 Relation::Requires("path_prefix", "scope"),
                 Relation::Conflicts("clear_disposition_actors", "disposition_actor_id"),
@@ -148,7 +148,7 @@ pub(super) const fn declaration(command: RepositoryCommand) -> Declaration {
         RepositoryCommand::Materialize => Declaration {
             name: "materialize",
             description: "Build the local query cache again from the graph files of the \
-                          repository",
+                          repository.",
             grammar: Grammar::Name,
             input: Input::None,
             internal: false,
@@ -156,14 +156,14 @@ pub(super) const fn declaration(command: RepositoryCommand) -> Declaration {
         },
         RepositoryCommand::Export => Declaration::named(
             "export",
-            "Write the records of one scope as a scope export file",
+            "Write the records of one scope as a scope export file.",
             Fields::new(EXPORT_FIELDS, export_schema),
         )
         .bound(),
         RepositoryCommand::Import => Declaration::named(
             "import",
             "Replace the records of one scope with a scope export file and delete each \
-             record that is not in the file",
+             record that is not in the file.",
             Fields::new(IMPORT_FIELDS, import_schema),
         )
         .bound(),
@@ -176,23 +176,23 @@ pub(super) const fn declaration(command: RepositoryCommand) -> Declaration {
         .internal(),
         RepositoryCommand::Validate => Declaration::named(
             "validate",
-            "Check one artifact file against its schema and its record checks",
+            "Check one artifact file against its schema and its record checks.",
             Fields::new(VALIDATE_FIELDS, validate_schema).target(&["artifact"]),
         ),
         RepositoryCommand::SchemaShow => Declaration::named(
             "schema show",
-            "Show the JSON Schema of one artifact type",
+            "Show the JSON Schema of one artifact type.",
             Fields::new(SCHEMA_SHOW_FIELDS, schema_show_schema).target(&["artifact"]),
         ),
         RepositoryCommand::DictionaryImport => Declaration::named(
             "dictionary import",
-            "Import the ASD-STE100 Issue 9 dictionary from one local PDF file",
+            "Import the ASD-STE100 Issue 9 dictionary from one local PDF file.",
             Fields::new(DICTIONARY_IMPORT_FIELDS, dictionary_import_schema),
         )
         .bound(),
         RepositoryCommand::DictionaryStatus => Declaration::named(
             "dictionary status",
-            "Report the committed dictionary reference and the analyzer it selects",
+            "Report the committed dictionary reference and the analyzer it selects.",
             Fields::new(DICTIONARY_STATUS_FIELDS, dictionary_status_schema),
         )
         .bound_repository(),

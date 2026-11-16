@@ -169,41 +169,9 @@ fn inactive_current_bindings(
     implementations: &[ImplementationBinding],
     verifications: &[VerificationBinding],
 ) -> Vec<InactiveCurrentBinding> {
-    let mut current = Vec::new();
-    for scan in scans {
-        for location in &scan.annotations {
-            if let Some(status) = inactive.get(location.annotation.rule.as_str()) {
-                current.push(InactiveCurrentBinding {
-                    rule_id: location.annotation.rule.clone(),
-                    status: status.clone(),
-                    origin: InactiveBindingOrigin::Scanned,
-                    role: InactiveBindingRole::Implementation,
-                    file_path: location.file_path.clone(),
-                    line: Some(location.line),
-                    verification_method: None,
-                });
-            }
-        }
-        for binding in &scan.bindings {
-            if let Some(status) = inactive.get(binding.rule_id.as_str()) {
-                let (role, verification_method) = match SourceSite::Attribute(binding).role() {
-                    SourceSiteRole::Implementation => (InactiveBindingRole::Implementation, None),
-                    SourceSiteRole::Verification(method) => {
-                        (InactiveBindingRole::Verification, Some(method))
-                    }
-                };
-                current.push(InactiveCurrentBinding {
-                    rule_id: binding.rule_id.clone(),
-                    status: status.clone(),
-                    origin: InactiveBindingOrigin::Scanned,
-                    role,
-                    file_path: binding.file_path.clone(),
-                    line: Some(binding.line),
-                    verification_method,
-                });
-            }
-        }
-    }
+    let mut current = source_sites(scans)
+        .filter_map(|site| scanned_binding(inactive, site))
+        .collect::<Vec<_>>();
     current.extend(implementations.iter().filter_map(|binding| {
         let status = inactive.get(binding.rule_id.as_str())?;
         Some(InactiveCurrentBinding {
@@ -229,4 +197,26 @@ fn inactive_current_bindings(
         })
     }));
     current
+}
+
+/// A scanned site of an inactive Rule, with the role that its syntax declares.
+#[rule("rule_report_inactive_test_site_is_a_verification")]
+fn scanned_binding(
+    inactive: &BTreeMap<&str, RuleStatus>,
+    site: SourceSite<'_>,
+) -> Option<InactiveCurrentBinding> {
+    let status = inactive.get(site.rule_id())?;
+    let (role, verification_method) = match site.role() {
+        SourceSiteRole::Implementation => (InactiveBindingRole::Implementation, None),
+        SourceSiteRole::Verification(method) => (InactiveBindingRole::Verification, Some(method)),
+    };
+    Some(InactiveCurrentBinding {
+        rule_id: site.rule_id().to_string(),
+        status: status.clone(),
+        origin: InactiveBindingOrigin::Scanned,
+        role,
+        file_path: site.file_path().to_path_buf(),
+        line: Some(site.line()),
+        verification_method,
+    })
 }

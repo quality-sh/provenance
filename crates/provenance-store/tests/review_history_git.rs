@@ -241,10 +241,11 @@ async fn merge_that_resolves_a_conflict_to_new_content_adds_one_version() {
         .unwrap_err()
         .to_string();
     assert!(
-        refusal.contains(
-            "requirement req_a has 2 review submissions with review cycle 2. To repair, keep one \
-             submission and remove the lines of each other submission, then commit."
-        ),
+        refusal.contains("requirement req_a has 2 review submissions with review cycle 2. ")
+            && refusal.ends_with(
+                "; To repair, keep one submission and remove the lines of each other submission, \
+                 then commit."
+            ),
         "{refusal}"
     );
     // The merger removes the line of one of them, as the refusal says:

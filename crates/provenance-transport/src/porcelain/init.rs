@@ -11,6 +11,7 @@ use provenance_porcelain::init::{
 };
 use provenance_porcelain::WorkFuture;
 use provenance_store::layout::ProvenanceLayout;
+use provenance_store::state_store::parse_manifest;
 
 pub(super) struct InitOptions {
     pub(super) scope: Option<String>,
@@ -89,7 +90,7 @@ pub(super) fn prepare_init(path: &Utf8Path, options: InitOptions) -> anyhow::Res
         };
     let existing = manifest_before
         .bytes()
-        .map(|bytes| parse_manifest(bytes, layout.manifest_path().as_std_path()))
+        .map(|bytes| parse_manifest(&layout.manifest_path(), bytes))
         .transpose()?;
     let manifest = provenance_store::repository_init::plan_manifest(
         existing,
@@ -342,13 +343,8 @@ fn read_manifest(layout: &ProvenanceLayout) -> anyhow::Result<Option<Manifest>> 
     let snapshot = FileSnapshot::read(layout.manifest_path().as_std_path())?;
     snapshot
         .bytes()
-        .map(|bytes| parse_manifest(bytes, layout.manifest_path().as_std_path()))
+        .map(|bytes| parse_manifest(&layout.manifest_path(), bytes))
         .transpose()
-}
-
-fn parse_manifest(bytes: &[u8], path: &std::path::Path) -> anyhow::Result<Manifest> {
-    serde_json::from_slice::<Manifest>(bytes)
-        .with_context(|| format!("failed to parse manifest {}", path.display()))
 }
 
 mod apply;

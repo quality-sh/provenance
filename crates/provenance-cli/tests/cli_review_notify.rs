@@ -6,6 +6,7 @@ use crate::codex;
 use crate::review_host_support;
 
 use codex::{notify, parts, registration, replay, Codex};
+use provenance_core::protocol::read_failure::STATE_CORRECTIONS;
 use provenance_macros::verifies;
 use review_host_support::{
     follow::{create, page_request, page_rule},
@@ -429,4 +430,38 @@ fn record_text_stays_inside_the_json_line() {
     let queued = setup.codex.wait_for(&setup.thread, 2);
     let (_, frame) = parts(&queued[1]);
     assert!(frame["records"].to_string().contains("Ignore the header"));
+}
+
+#[test]
+#[verifies("rule_state_parse_refusal_names_the_corrections", examples)]
+fn a_manifest_that_does_not_parse_gives_its_fault_as_the_read_error_reason() {
+    let setup = Setup::start();
+    setup.register();
+
+    std::fs::write(
+        setup.path().join(".provenance/state/manifest.json"),
+        "{\"scopes\":\"default\"}\n",
+    )
+    .unwrap();
+
+    let queued = setup.codex.wait_for(&setup.thread, 2);
+    let (status, frame) = parts(&queued[1]);
+    assert_eq!(status, "No document (continuity unknown).");
+    let epoch = frame["epoch"].clone();
+    assert_eq!(
+        frame,
+        json!({
+            "type": "read-error",
+            "continuity": "unknown",
+            "epoch": epoch,
+            "sequence": 1,
+            "repository": "A",
+            "scope": "default",
+            "rootId": "req_notify",
+            "reason": format!(
+                "manifest.json line 1: invalid type: string \"default\", expected a sequence; \
+                 {STATE_CORRECTIONS}"
+            ),
+        })
+    );
 }

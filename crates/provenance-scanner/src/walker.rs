@@ -10,6 +10,7 @@ use bindings::parse_binding_or_warn;
 pub use bounded::scan_path_bounded;
 use consumed::{consume_binding_lines, consume_comment_lines};
 pub use ignore::selects_source_path;
+use names::Sites;
 use rust_lines::{rust_annotation_marker_position, rust_line_states, RustLexicalState};
 
 mod bindings;
@@ -17,7 +18,9 @@ mod bounded;
 #[cfg(test)]
 mod bounded_tests;
 mod consumed;
+mod declaration;
 mod ignore;
+mod names;
 mod rust_lines;
 mod script_literals;
 
@@ -184,31 +187,35 @@ fn scan_file_contents(
     content: &str,
     lexical_content: &str,
 ) -> FileScan {
-    let mut annotations = Vec::new();
-    let mut bindings = Vec::new();
-    let mut warnings = Vec::new();
+    let (mut annotations, mut bindings, mut warnings) = (Vec::new(), Vec::new(), Vec::new());
     let original_lines = content.lines().collect::<Vec<_>>();
     let lines = lexical_content.lines().collect::<Vec<_>>();
     let rust_states = rust_line_states(language, &lines);
+    let mut sites = Sites::new(language, &lines, &original_lines);
     let mut idx = 0;
     let mut in_block_comment = false;
     let mut multiline_delimiter = None;
     while idx < lines.len() {
         let started_in_multiline_string = multiline_delimiter.is_some();
-        let Some(line) = code_outside_multiline_string(
-            lines[idx],
-            multiline_style(language),
-            &mut multiline_delimiter,
-            in_block_comment,
-        ) else {
-            idx += 1;
-            continue;
-        };
         let started_in_block_comment = in_block_comment;
-        if language != Language::Python {
-            in_block_comment =
-                block_comment_state(line, in_block_comment, language == Language::Rust);
-        }
+        let line = match multiline_style(language) {
+            None => lines[idx],
+            Some(style) => {
+                let Some(code) = code_outside_multiline_string(
+                    lines[idx],
+                    style,
+                    &mut multiline_delimiter,
+                    in_block_comment,
+                ) else {
+                    idx += 1;
+                    continue;
+                };
+                if language != Language::Python {
+                    in_block_comment = block_comment_state(code, in_block_comment);
+                }
+                code
+            }
+        };
         let binding = (language != Language::Rust || rust_states[idx] == RustLexicalState::Code)
             .then(|| {
                 parse_binding_or_warn(
@@ -223,51 +230,52 @@ fn scan_file_contents(
             .flatten();
         if let Some(binding) = binding {
             let end_idx = idx + binding.extra_lines;
-            let item_name = binding_item_name(language, &lines, end_idx, binding.verification);
-            bindings.push(AttributeBinding {
-                file_path: file_path.to_path_buf(),
-                line: idx + 1,
-                anchor: EvidenceAnchor::new(item_name.clone(), original_lines[idx]),
-                item_name,
-                rule_id: binding.rule_id,
-                verification: binding.verification,
-            });
             consume_binding_lines(
                 language,
                 &lines[idx + 1..=end_idx],
                 &mut multiline_delimiter,
                 &mut in_block_comment,
             );
+            sites.binding(idx, end_idx, bindings.len());
+            bindings.push(AttributeBinding {
+                file_path: file_path.to_path_buf(),
+                line: idx + 1,
+                anchor: EvidenceAnchor::new(None, original_lines[idx]),
+                item_name: None,
+                rule_id: binding.rule_id,
+                verification: binding.verification,
+            });
             idx = end_idx + 1;
             continue;
         }
-        let marker_position = annotation_marker_start(
+        let Some(marker_position) = annotation_marker_start(
             language,
             lines[idx],
             rust_states[idx],
             started_in_block_comment,
             started_in_multiline_string,
-        );
-        let Some(marker_position) = marker_position else {
+        ) else {
             idx += 1;
             continue;
         };
         let (comment, end_idx) = collect_annotation_comment(&lines, idx, marker_position);
         let parsed = parse_annotations(&comment);
         warnings.extend(parsed.warnings);
-        let function_name = next_function_name(language, &lines[end_idx.saturating_add(1)..]);
+        let first = annotations.len();
         for annotation in parsed.annotations {
             annotations.push(AnnotationLocation {
                 file_path: file_path.to_path_buf(),
                 line: idx + 1,
-                function_name: function_name.clone(),
-                anchor: EvidenceAnchor::new(function_name.clone(), original_lines[idx]),
+                function_name: None,
+                anchor: EvidenceAnchor::new(None, original_lines[idx]),
                 annotation,
             });
         }
+        sites.comment(idx, first..annotations.len());
         consume_comment_lines(language, &lines[idx + 1..=end_idx], &mut in_block_comment);
         idx = end_idx + 1;
     }
+    sites.name(&rust_states, &mut annotations, &mut bindings);
     FileScan {
         file_path: file_path.to_path_buf(),
         language,
@@ -277,12 +285,16 @@ fn scan_file_contents(
     }
 }
 
-const fn multiline_style(language: Language) -> MultilineStyle {
+/// The multiline strings of `language`. Rust has none here: the Rust line
+/// states hold its strings and comments.
+const fn multiline_style(language: Language) -> Option<MultilineStyle> {
     match language {
-        Language::JavaScript | Language::TypeScript | Language::Go => MultilineStyle::Backtick,
-        Language::Python => MultilineStyle::TripleBoth,
-        Language::Java => MultilineStyle::TripleDouble,
-        Language::Rust => MultilineStyle::RustRaw,
+        Language::JavaScript | Language::TypeScript | Language::Go => {
+            Some(MultilineStyle::Backtick)
+        }
+        Language::Python => Some(MultilineStyle::TripleBoth),
+        Language::Java => Some(MultilineStyle::TripleDouble),
+        Language::Rust => None,
     }
 }
 
@@ -331,15 +343,13 @@ fn is_annotation_comment_line(
         || (language == Language::Python && trimmed.starts_with('#'))
 }
 
-fn binding_item_name(
-    language: Language,
+/// The item name of a JavaScript or TypeScript call site whose last line is
+/// `idx`.
+fn script_call_name(
     lines: &[&str],
     idx: usize,
     verification: Option<Verification>,
 ) -> Option<String> {
-    if matches!(language, Language::Rust | Language::Python) {
-        return next_item_name(language, &lines[idx + 1..]);
-    }
     assignment_name(lines[idx]).or_else(|| {
         if verification.is_some() {
             enclosing_script_function(lines, idx)
@@ -395,27 +405,6 @@ fn enclosing_script_function(lines: &[&str], idx: usize) -> Option<String> {
     None
 }
 
-/// Like `next_function_name`, but looks past other attribute lines such as
-/// `#[test]`, and also accepts type definitions (`construction` bindings sit
-/// on types, not functions).
-fn next_item_name(language: Language, following: &[&str]) -> Option<String> {
-    following
-        .iter()
-        .filter(|line| !line.trim_start().starts_with("#["))
-        .take(6)
-        .find_map(|line| {
-            let line = line.trim();
-            function_name(language, line).or_else(|| type_name(line))
-        })
-}
-
-fn type_name(line: &str) -> Option<String> {
-    ["struct ", "enum ", "trait ", "type "]
-        .iter()
-        .find(|marker| line.contains(*marker))
-        .and_then(|marker| token_after(line, marker))
-}
-
 fn collect_annotation_comment(
     lines: &[&str],
     start: usize,
@@ -440,37 +429,6 @@ fn is_comment_continuation(line: &str) -> bool {
         || trimmed.starts_with('*')
         || trimmed.starts_with("/*")
         || trimmed.starts_with("*/")
-}
-
-fn next_function_name(language: Language, following: &[&str]) -> Option<String> {
-    following
-        .iter()
-        .take(6)
-        .find_map(|line| function_name(language, line.trim()))
-}
-
-fn function_name(language: Language, line: &str) -> Option<String> {
-    let marker = match language {
-        Language::Rust => "fn ",
-        Language::Python => "def ",
-        Language::Go => "func ",
-        Language::JavaScript | Language::TypeScript | Language::Java => " ",
-    };
-    if matches!(language, Language::JavaScript | Language::TypeScript) {
-        if line.contains("function ") {
-            return token_after(line, "function ");
-        }
-        for declaration in ["const ", "let ", "var "] {
-            if line.contains(declaration) {
-                return token_after(line, declaration);
-            }
-        }
-    }
-    if language == Language::Go && line.starts_with("func (") {
-        let after_receiver = line.split_once(") ")?.1;
-        return token_after(after_receiver, "");
-    }
-    token_after(line, marker)
 }
 
 fn token_after(line: &str, marker: &str) -> Option<String> {

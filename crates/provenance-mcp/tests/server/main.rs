@@ -50,8 +50,12 @@ mod mcp_document_catch_up_cause;
 mod mcp_error_envelopes;
 #[path = "../mcp_guidance.rs"]
 mod mcp_guidance;
+#[path = "../mcp_instruction_names.rs"]
+mod mcp_instruction_names;
 #[path = "../mcp_instructions.rs"]
 mod mcp_instructions;
+#[path = "../mcp_manifest_fault.rs"]
+mod mcp_manifest_fault;
 #[path = "../mcp_plumbing_names.rs"]
 mod mcp_plumbing_names;
 #[path = "../mcp_read_tools_do_not_write.rs"]

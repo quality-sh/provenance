@@ -1,9 +1,10 @@
 //! Review rows of one record that do not agree refuse each read and each
 //! review write of that record with `invalid_state_file` at the line of the
-//! second row. The message names the rows and each line that the repair
-//! removes. The other records, the list reads and the cache catch-up
-//! continue, `provenance check` reports the same fault, and after the person
-//! removes the named lines and commits, the reads and `check` pass.
+//! second row. The message names the rows and their lines, and the hint
+//! gives the repair, which names each line that it removes. The other
+//! records, the list reads and the cache catch-up continue, `provenance check`
+//! reports the same fault, and after the person removes the named lines and
+//! commits, the reads and `check` pass.
 
 use super::review_history::{commit, git};
 use super::review_merged_decisions::{
@@ -64,6 +65,10 @@ pub(super) fn only_req_a_refuses(repo: &str, expected: &Value) {
     create(repo, "req_c");
 }
 
+/// The repair of a row ID on lines that do not agree.
+pub(super) const KEEP_ONE_LINE: &str =
+    "To repair, keep one of these lines and remove the others, then commit.";
+
 pub(super) fn state_file(file: &str) -> String {
     file.trim_start_matches(".provenance/state/").to_owned()
 }
@@ -83,10 +88,11 @@ pub(super) fn check_reports_all(repo: &str, expected: &[Value]) {
     assert_eq!(result.status.code(), Some(1), "{stderr}");
     let findings = expected.iter().map(|fault| {
         format!(
-            "{} line {}: {}",
+            "{} line {}: {}; {}",
             fault["file"].as_str().unwrap(),
             fault["line"],
-            fault["message"].as_str().unwrap()
+            fault["message"].as_str().unwrap(),
+            fault["hint"].as_str().unwrap()
         )
     });
     assert_eq!(
@@ -144,8 +150,9 @@ fn decisions_with_different_results_refuse_their_record() {
     let expected = json!({"kind":"invalid_state_file", "file":state_file(DISPOSITIONS), "line":2,
         "message":format!("review submission {submission} of requirement req_a has decisions \
             with different results in ideation/dispositions.jsonl: {} at line 1 and {} at line \
-            2. To repair, remove each of these lines that has a result that you do not keep, \
-            then commit.", decision_at(&repo, 1), decision_at(&repo, 2))});
+            2", decision_at(&repo, 1), decision_at(&repo, 2)),
+        "hint":"To repair, remove each of these lines that has a result that you do not keep, \
+            then commit."});
     only_req_a_refuses(&repo, &expected);
     check_reports(&repo, &expected);
     let listed = fresh_list(&repo, "dispositions");
@@ -192,8 +199,8 @@ fn an_approval_and_withdrawals_refuse_their_record() {
         "message":format!("review submission {submission} of requirement req_a is accepted and \
             withdrawn. The approvals in ideation/dispositions.jsonl: {} at line 1. The \
             withdrawals in ideation/withdrawals.jsonl: {} at line 1 and withdrawal_by_hand at \
-            line 2. To repair, remove each approval line or each withdrawal line, then commit.",
-            approval.as_str().unwrap(), withdrawal.as_str().unwrap())});
+            line 2", approval.as_str().unwrap(), withdrawal.as_str().unwrap()),
+        "hint":"To repair, remove each approval line or each withdrawal line, then commit."});
     only_req_a_refuses(&repo, &expected);
     check_reports(&repo, &expected);
 
@@ -204,17 +211,18 @@ fn an_approval_and_withdrawals_refuse_their_record() {
     check_passes(&repo);
 }
 
-/// The message of two submissions of `req_a` with review cycle 1, with the
-/// lines of each.
+/// The refusal of two submissions of `req_a` with review cycle 1: the lines
+/// of each in the message, and the repair in the hint.
 fn one_cycle_message(repo: &str, submissions: [&str; 2]) -> (Value, usize) {
     let line = |submission: &str| line_of(repo, PROPOSALS, &format!("\"id\":\"{submission}\""));
     let (first, second) = (line(submissions[0]), line(submissions[1]));
     let expected = json!({"kind":"invalid_state_file", "file":state_file(PROPOSALS),
         "line":second,
-        "message":format!("requirement req_a has 2 review submissions with review cycle 1. To \
-            repair, keep one submission and remove the lines of each other submission, then \
-            commit. The lines of {}: ideation/proposal_cards.jsonl line {first}. The lines of \
-            {}: ideation/proposal_cards.jsonl line {second}.", submissions[0], submissions[1])});
+        "message":format!("requirement req_a has 2 review submissions with review cycle 1. The \
+            lines of {}: ideation/proposal_cards.jsonl line {first}. The lines of {}: \
+            ideation/proposal_cards.jsonl line {second}", submissions[0], submissions[1]),
+        "hint":"To repair, keep one submission and remove the lines of each other submission, \
+            then commit."});
     (expected, second)
 }
 
@@ -274,13 +282,12 @@ fn a_decision_id_on_two_different_lines_refuses_its_record() {
     let message = |first: usize, second: usize| {
         format!(
             "decision {} is on lines {first} and {second} of ideation/dispositions.jsonl with \
-             different contents. To repair, keep one of these lines and remove the others, then \
-             commit.",
+             different contents",
             copied["id"].as_str().unwrap()
         )
     };
     let expected = json!({"kind":"invalid_state_file", "file":state_file(DISPOSITIONS), "line":2,
-        "message":message(1, 2)});
+        "message":message(1, 2), "hint":KEEP_ONE_LINE});
     only_req_a_refuses(&repo, &expected);
     let listed = fresh_list(&repo, "dispositions");
     assert_eq!(listed["data"]["items"], json!([]), "neither line loads");
@@ -293,7 +300,7 @@ fn a_decision_id_on_two_different_lines_refuses_its_record() {
         line_of(&repo, DISPOSITIONS, "Name the owner."),
     );
     let expected = json!({"kind":"invalid_state_file", "file":state_file(DISPOSITIONS),
-        "line":second, "message":message(first, second)});
+        "line":second, "message":message(first, second), "hint":KEEP_ONE_LINE});
     check_reports(&repo, &expected);
     remove_lines(&repo, &[(DISPOSITIONS, second)]);
     let state = read(&repo, &["api", "requirements/req_a"])["data"]["decision"].clone();
