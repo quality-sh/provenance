@@ -3,7 +3,7 @@
 //! of a record answers at that serial with a warning that names the file and
 //! the line of the row, on the CLI and on a spawned `provenance mcp`. The api
 //! read of the record, the review view and an update refuse with that row, and
-//! the document read refuses with the failed catch-up. When the read database
+//! the document read of a Requirement refuses with the failed catch-up. When the read database
 //! holds no revision, the get and `provenance materialize` refuse.
 
 use provenance_macros::verifies;
@@ -60,7 +60,12 @@ async fn a_get_over_a_withdrawal_that_names_no_submission_warns_at_the_stored_se
     );
     let document = answer(
         &repo,
-        &["api", &format!("rules/{RULE}/document"), "--format", "json"],
+        &[
+            "api",
+            "requirements/req_overtime/document",
+            "--format",
+            "json",
+        ],
     );
     let catch_up = json!({"error":{"file":WITHDRAWALS,"hint":REPAIR,
         "kind":"document_catch_up_failed","line":1,"message":MESSAGE},"meta":{}});
