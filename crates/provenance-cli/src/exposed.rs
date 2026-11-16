@@ -67,9 +67,10 @@ pub fn shows(command: Command) -> bool {
     EXPOSED.contains(&command)
 }
 
-/// Each form that selects the command of `declaration` on the CLI, with ` or ` between two
-/// forms: the words of its name, when its name selects it, and `<id>` and its name, when
-/// it acts on a record, as in `<id> update`.
+/// Each form that selects the command of `declaration` on the CLI, joined by ` or `.
+///
+/// The forms are the words of its name, when its name selects it, and `<id>` and its name,
+/// when it acts on a record, as in `<id> update`.
 pub fn form(declaration: &Declaration) -> String {
     let named = crate::cli_options::words(declaration).map(|words| words.join(" "));
     let on_record = declaration
