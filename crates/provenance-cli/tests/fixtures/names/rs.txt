@@ -190,4 +190,11 @@ const OPENS: &str = r#"a"/*"#;
 #[rule("rule_after_raw_string")]
 fn after_raw_string() {}
 
+declare_input!(
+    #[rule("rule_in_macro_body")]
+    struct MacroInput {
+        hours: u32,
+    }
+);
+
 // @provenance rule: rule_end

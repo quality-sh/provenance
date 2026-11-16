@@ -2,7 +2,9 @@
 //! the site.
 //!
 //! In the languages with braces, a statement starts at the start of the file
-//! and after `;`, `{`, or `}`. In Go, JavaScript, and TypeScript, the end of a
+//! and after `;`, `{`, or `}`. In Rust, the bracket that opens the body of a
+//! macro call, as in `name!(`, also starts a statement, because the body can
+//! hold items. In Go, JavaScript, and TypeScript, the end of a
 //! line also ends a statement when the last token of the line can end one,
 //! outside parentheses and square brackets. In Python, a statement starts at
 //! the start of a logical line. Attributes, decorators, and annotations do not
@@ -58,6 +60,10 @@ struct Above<'a> {
     attribute: Attribute,
     /// The last code token outside attributes.
     last: Option<&'a str>,
+    /// The code token before the last one.
+    before_last: Option<&'a str>,
+    /// Whether the last code token opens the body of a Rust macro call.
+    macro_body: bool,
     /// The brackets that are open, outside attributes.
     open: Vec<char>,
 }
@@ -68,6 +74,8 @@ impl<'a> Above<'a> {
             language,
             attribute: Attribute::Outside,
             last: None,
+            before_last: None,
+            macro_body: false,
             open: Vec::new(),
         }
     }
@@ -115,6 +123,11 @@ impl<'a> Above<'a> {
     }
 
     fn push_code(&mut self, token: &'a str) {
+        self.macro_body = self.language == Language::Rust
+            && matches!(token, "(" | "[" | "{")
+            && self.last == Some("!")
+            && self.before_last.is_some_and(|word| word.starts_with(is_word));
+        self.before_last = self.last;
         match token {
             "(" | "[" | "{" => self.open.extend(token.chars()),
             ")" | "]" | "}" => {
@@ -135,7 +148,8 @@ impl<'a> Above<'a> {
         let in_block = matches!(self.open.last(), None | Some('{'));
         match self.language {
             Language::Python => self.open.is_empty() && last != "\\",
-            Language::Rust | Language::Java => matches!(last, ";" | "{" | "}"),
+            Language::Rust => self.macro_body || matches!(last, ";" | "{" | "}"),
+            Language::Java => matches!(last, ";" | "{" | "}"),
             Language::Go | Language::JavaScript | Language::TypeScript => {
                 matches!(last, ";" | "{" | "}") || (in_block && ends_line_statement(last))
             }
