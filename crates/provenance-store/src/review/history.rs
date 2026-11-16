@@ -22,7 +22,9 @@ pub use versions::{BoxFuture, FileVersion, FileVersions};
 
 use super::classifier;
 use crate::{
-    families::review_families, jsonl::numbered_lines, merge::ShardFamily, shards,
+    families::review_families,
+    jsonl::{committed_line_value, numbered_lines},
+    shards,
     state_store::StateStore,
 };
 use camino::Utf8Path;
@@ -160,14 +162,14 @@ fn lineage(files: &[FileVersion], records: &[Option<Value>]) -> Vec<usize> {
     chain
 }
 
-/// The record with `id` in the text of the JSONL record file at `path`. Each
-/// line goes through the line reader of the file. A line that the reader
-/// refuses, such as a committed conflict marker or a line that holds a member
-/// two times, holds no record.
+/// The record with `id` in the text of the JSONL record file at `path`. A
+/// line that is not one JSON value, such as a committed conflict marker, or
+/// that holds a top-level member two times holds no record. The text can be
+/// of a past commit, so a record of another shape than the current record
+/// type is a record.
 fn find(path: &Utf8Path, text: &str, id: &StableId) -> Option<Value> {
-    let read_line = ShardFamily::for_shard_path(path).line_reader();
     numbered_lines(text.as_bytes())
-        .filter_map(|(number, line)| read_line(path, number, line).ok())
+        .filter_map(|(number, line)| committed_line_value(path, number, line).ok())
         .map(|(_, value)| value)
         .find(|value| value.get("id").and_then(Value::as_str) == Some(id.as_str()))
 }

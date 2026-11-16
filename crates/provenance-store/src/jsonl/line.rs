@@ -171,6 +171,23 @@ pub fn untyped_line_value<'a>(
     Ok((text, value))
 }
 
+/// The text and the JSON value of the line `bytes`, line `number` of `path`,
+/// for a line of a past commit. The line is UTF-8, it is one JSON value, and
+/// it holds each top-level member one time. The checks of a record type and
+/// of the `retired` member do not apply, because a line of a past commit
+/// holds the record shape of its commit. A refusal is `invalid_state_file`
+/// at the line.
+pub fn committed_line_value<'a>(
+    path: &Utf8Path,
+    number: usize,
+    bytes: &'a [u8],
+) -> anyhow::Result<(&'a str, serde_json::Value)> {
+    let text = utf8_text(path, number, bytes)?;
+    let value = serde_json::from_str(text).map_err(|error| located(path, number, &error))?;
+    members_once(path, number, text)?;
+    Ok((text, value))
+}
+
 /// The line `bytes` as text, or `invalid_state_file` at the line when it is
 /// not UTF-8.
 fn utf8_text<'a>(path: &Utf8Path, number: usize, bytes: &'a [u8]) -> anyhow::Result<&'a str> {
