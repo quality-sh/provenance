@@ -1,6 +1,7 @@
 //! A `// @provenance rule:` comment connects production code to a Rule through
 //! `check --bindings`, and a second comment for the same Rule is a finding that
-//! names the Rule in a form that is true for each binding form.
+//! names the Rule in a form that is true for each binding form. The comment
+//! ends above the first line that is not a comment line of its language.
 use assert_cmd::Command;
 use provenance_macros::verifies;
 use serde_json::Value;
@@ -184,4 +185,104 @@ fn a_javascript_binding_names_the_exported_declaration_below_it() {
 
     let expected = names_file(include_str!("fixtures/names/js.names"));
     assert_eq!(item_names(&report), expected, "{report}");
+}
+
+/// The line, the Rule id, the verification method and the item name of each
+/// site in a scan report, in line order. No method is an implementation site.
+type Site = (u64, String, Option<String>, Option<String>);
+
+fn sites(report: &Value) -> Vec<Site> {
+    let text = |site: &Value, key: &str| site[key].as_str().map(str::to_owned);
+    let mut sites = ["annotations", "bindings"]
+        .iter()
+        .flat_map(|key| report[key].as_array().unwrap())
+        .map(|site| {
+            (
+                site["line"].as_u64().unwrap(),
+                text(site, "rule_id").unwrap(),
+                text(site, "verification"),
+                text(site, "function_name").or_else(|| text(site, "item_name")),
+            )
+        })
+        .collect::<Vec<_>>();
+    sites.sort();
+    sites
+}
+
+fn site(line: u64, rule: &str, method: Option<&str>, name: Option<&str>) -> Site {
+    (
+        line,
+        rule.to_owned(),
+        method.map(str::to_owned),
+        name.map(str::to_owned),
+    )
+}
+
+#[test]
+#[verifies("rule_comment_ends_above_the_first_code_line", examples)]
+fn a_rust_verifies_attribute_below_a_rule_comment_is_a_second_site() {
+    let source = "// @provenance rule: rule_paid_hours\n\
+                  #[verifies(\"rule_overtime\", examples)]\n\
+                  fn overtime_is_paid() {}\n";
+    let report = scan("src/pay.rs", source);
+
+    let expected = [
+        site(1, "rule_paid_hours", None, Some("overtime_is_paid")),
+        site(
+            2,
+            "rule_overtime",
+            Some("examples"),
+            Some("overtime_is_paid"),
+        ),
+    ];
+    assert_eq!(sites(&report), expected, "{report}");
+}
+
+#[test]
+#[verifies("rule_comment_ends_above_the_first_code_line", examples)]
+fn a_rust_rule_attribute_below_a_rule_comment_is_a_second_site() {
+    let source = "// @provenance rule: rule_paid_hours\n\
+                  #[rule(\"rule_overtime\")]\n\
+                  pub fn pays_overtime() {}\n";
+    let report = scan("src/pay.rs", source);
+
+    let expected = [
+        site(1, "rule_paid_hours", None, Some("pays_overtime")),
+        site(2, "rule_overtime", None, Some("pays_overtime")),
+    ];
+    assert_eq!(sites(&report), expected, "{report}");
+}
+
+#[test]
+#[verifies("rule_comment_ends_above_the_first_code_line", examples)]
+fn a_python_hash_line_below_a_rule_comment_is_part_of_the_comment() {
+    let source = "# @provenance rule: rule_overtime\n\
+                  # @provenance verification: examples\n\
+                  def test_overtime_is_paid():\n    assert True\n";
+    let report = scan("tests/test_pay.py", source);
+
+    let expected = [site(
+        1,
+        "rule_overtime",
+        Some("examples"),
+        Some("test_overtime_is_paid"),
+    )];
+    assert_eq!(sites(&report), expected, "{report}");
+}
+
+#[test]
+#[verifies("rule_comment_ends_above_the_first_code_line", examples)]
+fn a_javascript_private_field_below_a_rule_comment_is_code() {
+    let source = "export class Counter {\n\
+                  \x20 // @provenance rule: rule_count_starts_at_zero\n\
+                  \x20 #count = 0;\n\
+                  \n\
+                  \x20 increment() {\n\
+                  \x20   this.#count += 1;\n\
+                  \x20 }\n\
+                  }\n";
+    let report = scan("src/counter.js", source);
+
+    let expected = [site(2, "rule_count_starts_at_zero", None, Some("count"))];
+    assert_eq!(sites(&report), expected, "{report}");
 }
