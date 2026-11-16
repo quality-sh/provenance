@@ -12,10 +12,9 @@ use serde_json::Value;
 /// The `freshness_error` of a read over the fault `refusal`.
 fn freshness(refusal: &Value) -> String {
     let (file, line) = (refusal["file"].as_str().unwrap(), &refusal["line"]);
-    format!(
-        "{file} line {line}: {}",
-        refusal["message"].as_str().unwrap()
-    )
+    let message = refusal["message"].as_str().unwrap();
+    let hint = refusal["hint"].as_str().unwrap();
+    format!("{file} line {line}: {message}; {hint}")
 }
 
 /// The reads of a Requirement and of the three ideation lists after the

@@ -3,6 +3,7 @@ use serde_json::json;
 
 mod authorize_order;
 mod ideation;
+mod publication_gap;
 mod scope_mismatch;
 
 #[derive(Debug, serde::Serialize, thiserror::Error)]

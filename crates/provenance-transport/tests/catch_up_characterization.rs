@@ -10,6 +10,7 @@
 
 use crate::support;
 
+use provenance_core::protocol::read_failure::STATE_CORRECTIONS;
 use provenance_transport::StatementHost;
 use serde_json::{json, Value};
 use support::catch_up_steps::{write, Answer, Surface, STEPS};
@@ -67,7 +68,7 @@ async fn reads_after_each_write_equal_a_full_rebuild() {
     }
     let text = serde_json::to_string_pretty(&transcript).unwrap();
     assert_eq!(fingerprint(&transcript[..15]), "4b95c406da338453", "{text}");
-    assert_eq!(fingerprint(&transcript), "88ec84a8a41444de", "{text}");
+    assert_eq!(fingerprint(&transcript), "51845083c6512b10", "{text}");
 }
 
 /// A hand edit that each validator refuses, and the answer the next read
@@ -178,11 +179,14 @@ async fn hand_edits_that_validation_refuses_keep_their_refusals() {
             "error": null},
     ]);
     assert_eq!(duplicate_card, fresh);
-    let line_error = "scopes/default/topics/topic.jsonl line 2: EOF while parsing a value";
+    let line_error = format!(
+        "scopes/default/topics/topic.jsonl line 2: EOF while parsing a value; {STATE_CORRECTIONS}"
+    );
     let unreadable = json!({"read": "/topics/topic_a", "status": 500, "freshness_error": null,
         "items": null, "error": {"file": "scopes/default/topics/topic.jsonl",
-            "kind": "invalid_state_file", "line": 2, "message": "EOF while parsing a value"}});
-    assert_eq!(broken_topic, at_stored(line_error, unreadable));
+            "kind": "invalid_state_file", "line": 2, "message": "EOF while parsing a value",
+            "hint": STATE_CORRECTIONS}});
+    assert_eq!(broken_topic, at_stored(&line_error, unreadable));
     assert_eq!(
         missing_artifact,
         json!([

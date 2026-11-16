@@ -9,6 +9,7 @@
 use super::repository::{
     add_broken_line, answers, at_stored, copy_row, ideation_repository, refused, IDEATION,
 };
+use provenance_core::protocol::read_failure::STATE_CORRECTIONS;
 use serde_json::json;
 
 const BROKEN: &str = "EOF while parsing an object";
@@ -19,8 +20,9 @@ async fn a_bad_line_in_the_assertion_file_refuses_before_a_proposal_id_on_two_li
     copy_row(&repo, "proposal_cards.jsonl", "proposal_b");
     let line = add_broken_line(&repo, "assertions.jsonl");
     let assertions = json!({"kind":"invalid_state_file",
-        "file":format!("{IDEATION}/assertions.jsonl"), "line":line, "message":BROKEN});
-    let fault = format!("{IDEATION}/assertions.jsonl line {line}: {BROKEN}");
+        "file":format!("{IDEATION}/assertions.jsonl"), "line":line, "message":BROKEN,
+        "hint":STATE_CORRECTIONS});
+    let fault = format!("{IDEATION}/assertions.jsonl line {line}: {BROKEN}; {STATE_CORRECTIONS}");
     let mut expected = vec![
         refused("POST /proposals", &assertions),
         refused("POST /proposals/proposal_b/assertions", &assertions),

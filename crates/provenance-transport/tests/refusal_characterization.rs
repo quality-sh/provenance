@@ -6,6 +6,7 @@
 
 use crate::support;
 
+use provenance_core::protocol::read_failure::STATE_CORRECTIONS;
 use serde_json::{json, Value};
 use support::decisions::accept_pending;
 use support::records::Repository;
@@ -375,7 +376,7 @@ fn expected_rows() -> Value {
         {"error":{"kind":"resource_not_found"},"row":"read a missing requirement","status":404},
         {"error":{"kind":"resource_not_found"},"row":"read a missing history entry","status":404},
         {"error":{"kind":"access_denied"},"row":"write on a read-only host","status":403},
-        {"error":{"file":"scopes/default/requirements/req.jsonl","kind":"invalid_state_file","line":3,"message":"missing field `scope_id`"},"row":"read a shard with a bad line","status":500},
-        {"error":{"file":"scopes/default/requirements/req.jsonl","kind":"invalid_state_file","line":3,"message":"missing field `scope_id`"},"row":"write to a shard with a bad line","status":500}
+        {"error":{"file":"scopes/default/requirements/req.jsonl","hint":STATE_CORRECTIONS,"kind":"invalid_state_file","line":3,"message":"missing field `scope_id`"},"row":"read a shard with a bad line","status":500},
+        {"error":{"file":"scopes/default/requirements/req.jsonl","hint":STATE_CORRECTIONS,"kind":"invalid_state_file","line":3,"message":"missing field `scope_id`"},"row":"write to a shard with a bad line","status":500}
     ])
 }

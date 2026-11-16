@@ -122,7 +122,7 @@ impl<'g> UnitReader<'g> {
                 .view
                 .get(&key)
                 .ok_or_else(|| crate::refusal::fault!("missing manifest: {path}"))?;
-            return Ok((crate::state_store::manifest_from_bytes(bytes)?, digests));
+            return Ok((crate::state_store::parse_manifest(&path, bytes)?, digests));
         }
         let manifest = pass.store.manifest()?;
         for scope in &manifest.scopes {

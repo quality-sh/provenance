@@ -35,6 +35,9 @@ impl ShardLine {
     }
 }
 
+/// The step that corrects a duplicate Message ID.
+const DUPLICATE_MESSAGE_ID_REPAIR: &str = "see docs/cli.md#repairing-a-duplicate-message-id";
+
 /// Duplicate Message identities are refused with every stored row location.
 #[rule("rule_duplicate_message_id_names_lines")]
 pub fn ensure_unique_message_ids(
@@ -65,9 +68,10 @@ pub fn ensure_unique_message_ids(
         // The refusal is at the second row with the id. The message gives
         // each row with its shard path below the state directory, because the
         // message reaches the caller as it is.
-        return Err(crate::refusal::state_fault(
+        return Err(crate::refusal::corrected_state_fault(
             locations[1],
-            format!("Message ID {id} appears more than once: {lines}; see docs/cli.md#repairing-a-duplicate-message-id"),
+            format!("Message ID {id} appears more than once: {lines}"),
+            DUPLICATE_MESSAGE_ID_REPAIR,
         ));
     }
     Ok(())

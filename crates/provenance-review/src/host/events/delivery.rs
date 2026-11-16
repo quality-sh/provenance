@@ -338,7 +338,7 @@ async fn read(
     }
     read.map_err(|error| {
         let (epoch, sequence) = follower.position();
-        OutputFrame::read_error(epoch, sequence, error.to_string())
+        OutputFrame::read_error(epoch, sequence, &error)
     })
 }
 

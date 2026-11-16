@@ -96,6 +96,8 @@ pub enum WriteFailure {
         file: String,
         line: u64,
         message: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        hint: Option<String>,
     },
     /// A write failure of no known kind. `cause` is the display chain of the
     /// native error. A path below the repository in it is relative to the
@@ -158,6 +160,7 @@ impl From<&UnparsableStateFile> for WriteFailure {
             file: state.file().to_owned(),
             line: state.line(),
             message: state.message().to_owned(),
+            hint: state.hint().map(str::to_owned),
         }
     }
 }
@@ -307,6 +310,14 @@ impl WriteError {
     pub fn unclassified_cause(&self) -> Option<String> {
         (self.common().is_none() && matches!(self.safe(), WriteFailure::WriteFailed { .. }))
             .then(|| format!("{:#}", native(&self.0)))
+    }
+    /// The cause of the wire answer for an error of no known kind, with each
+    /// path relative to the repository.
+    pub(crate) fn unclassified_message(&self) -> Option<String> {
+        match (self.common(), self.safe()) {
+            (None, WriteFailure::WriteFailed { cause }) => Some(cause),
+            _ => None,
+        }
     }
     /// A common refusal that a write raised, such as an unknown scope; it
     /// keeps its own kind and status, as a read does.

@@ -1,5 +1,6 @@
 //! The refusal of `merge-jsonl` when a side holds rows that it cannot merge.
 
+use provenance_core::protocol::read_failure::STATE_CORRECTIONS;
 use provenance_macros::verifies;
 use serde_json::json;
 
@@ -56,11 +57,10 @@ fn merge_jsonl_names_the_side_and_the_lines_of_a_duplicate_id() {
         (
             Some(1),
             true,
-            vec![
+            vec![format!(
                 "Error: scopes/default/rules/rule.jsonl line 3: ours holds record id rule_a \
-                 at line 1 and at line 3"
-                    .to_owned()
-            ]
+                 at line 1 and at line 3; {STATE_CORRECTIONS}"
+            )]
         )
     );
 }

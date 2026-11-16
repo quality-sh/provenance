@@ -30,6 +30,8 @@ mod cli_get_damaged_state;
 mod cli_get_edit_etag;
 #[path = "../cli_get_trace.rs"]
 mod cli_get_trace;
+#[path = "../cli_linked_state_entry.rs"]
+mod cli_linked_state_entry;
 #[path = "../cli_mcp_api_catalog.rs"]
 mod cli_mcp_api_catalog;
 #[path = "../cli_mcp_optional_actor.rs"]

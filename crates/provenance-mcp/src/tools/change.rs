@@ -302,11 +302,12 @@ fn readable(structured: Value, text: String) -> CallToolResult {
 
 /// The failure of one repository command. A host refusal keeps its kind. A state file
 /// that does not parse, anywhere in the cause chain, gives its `invalid_state_file`
-/// failure, with its hint when it has one. Each other failure is `operation_failed`, and
+/// failure with its hint. Each other failure is `operation_failed`, and
 /// the message names each cause.
 fn failed(error: &(dyn std::error::Error + Send + Sync + 'static)) -> CallToolResult {
     if let Some(state) = UnparsableStateFile::find(error) {
-        return crate::surface::detail_error(Value::Object(state.failure_object()));
+        let failure = serde_json::to_value(state.failure()).expect("a failure is JSON");
+        return crate::surface::detail_error(failure);
     }
     let mut detail = error.downcast_ref::<OperationFailure>().map_or_else(
         || json!({"kind": "operation_failed"}),

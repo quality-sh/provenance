@@ -85,7 +85,10 @@ pub async fn dispatch_check(repo: &str, json: bool, input: CheckInput) -> anyhow
         println!("{}", render_check(&report));
     }
     if report.categories.iter().any(CategoryReport::refuses) {
-        let details = report
+        // Two categories that stop on one cause give the same text. The error
+        // line gives each text one time.
+        let mut details = Vec::new();
+        for detail in report
             .categories
             .iter()
             .filter(|category| category.status != Status::Passed)
@@ -96,9 +99,12 @@ pub async fn dispatch_check(repo: &str, json: bool, input: CheckInput) -> anyhow
                     .map(|finding| finding.message.as_str())
                     .chain(category.unavailable_reason.as_deref())
             })
-            .collect::<Vec<_>>()
-            .join("; ");
-        anyhow::bail!(details);
+        {
+            if !details.contains(&detail) {
+                details.push(detail);
+            }
+        }
+        anyhow::bail!(details.join("; "));
     }
     Ok(())
 }

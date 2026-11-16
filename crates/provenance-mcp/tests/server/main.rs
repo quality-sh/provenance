@@ -56,6 +56,8 @@ mod mcp_guidance;
 mod mcp_instruction_names;
 #[path = "../mcp_instructions.rs"]
 mod mcp_instructions;
+#[path = "../mcp_manifest_fault.rs"]
+mod mcp_manifest_fault;
 #[path = "../mcp_plumbing_names.rs"]
 mod mcp_plumbing_names;
 #[path = "../mcp_read_tools_do_not_write.rs"]
