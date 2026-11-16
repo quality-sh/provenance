@@ -1,7 +1,8 @@
 //! The Git child processes of the test process.
 
 /// The ids of the Git child processes of the test process. On Unix a child
-/// that ended and that the test process did not wait for is still listed.
+/// that ended and that the test process did not wait for is still listed. On
+/// Windows a child that ended is not listed.
 pub fn git_children() -> Vec<u32> {
     let test = std::process::id();
     processes()
@@ -11,41 +12,55 @@ pub fn git_children() -> Vec<u32> {
                 && std::path::Path::new(name)
                     .file_stem()
                     .is_some_and(|stem| stem.eq_ignore_ascii_case("git"))
-                && started_after_test(*id)
+                && counts(*id)
         })
         .map(|(id, _, _)| id)
         .collect()
 }
 
 /// On Unix a process whose parent ends gets a new parent, so the parent id
-/// is enough.
+/// is enough. A child that ended stays in the process list only until its
+/// parent waits for it, so a listed child is one that its parent did not
+/// stop and wait for.
 #[cfg(unix)]
-const fn started_after_test(_: u32) -> bool {
+const fn counts(_: u32) -> bool {
     true
 }
 
-/// Whether the process `id` started after the test process. On Windows a
-/// process keeps the parent id after its parent ends, and Windows gives that
-/// id to a new process again. A Git process of an ended process that had
-/// the id of the test process started before the test process. A process
-/// that the test cannot open is not listed.
+/// Whether the process `id` runs and started after the test process.
+///
+/// On Windows a process keeps the parent id after its parent ends, and
+/// Windows gives that id to a new process again. A Git process of an ended
+/// process that had the id of the test process started before the test
+/// process.
+///
+/// A process that ended stays in the process list until each process that
+/// holds it lets it go, for example the host of its console. The parent
+/// cannot make that happen, so a process that ended is not listed, also
+/// when its parent did not wait for it. A process that the test cannot open
+/// is not listed.
 #[cfg(windows)]
-fn started_after_test(id: u32) -> bool {
-    use windows_sys::Win32::Foundation::CloseHandle;
+fn counts(id: u32) -> bool {
+    use windows_sys::Win32::Foundation::{CloseHandle, WAIT_TIMEOUT};
     use windows_sys::Win32::System::Threading::{
-        GetCurrentProcess, OpenProcess, PROCESS_QUERY_LIMITED_INFORMATION,
+        GetCurrentProcess, OpenProcess, WaitForSingleObject, PROCESS_QUERY_LIMITED_INFORMATION,
+        PROCESS_SYNCHRONIZE,
     };
+    let access = PROCESS_QUERY_LIMITED_INFORMATION | PROCESS_SYNCHRONIZE;
     // SAFETY: the call takes no pointer, and a zero handle is a failure.
-    let process = unsafe { OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, id) };
+    let process = unsafe { OpenProcess(access, 0, id) };
     if process == 0 {
         return false;
     }
+    // SAFETY: `process` is an open handle with wait access. A zero wait
+    // gives `WAIT_TIMEOUT` only while the process runs.
+    let runs = unsafe { WaitForSingleObject(process, 0) } == WAIT_TIMEOUT;
     let started = creation_time(process);
     // SAFETY: `process` is an open handle, and it is closed once, here.
     unsafe { CloseHandle(process) };
     // SAFETY: the call takes no pointer and gives a handle that needs no close.
     let test = creation_time(unsafe { GetCurrentProcess() });
-    started
+    runs && started
         .zip(test)
         .is_some_and(|(started, test)| started >= test)
 }
