@@ -411,9 +411,14 @@ pub fn session(host: &Host) -> String {
     session["session"].as_str().unwrap().to_owned()
 }
 
+/// Builds a request to the host with the limit of a host operation.
+///
+/// The host does the work of a CLI read for each answer, and no contract
+/// gives that work a time. So the client waits as long as the test waits
+/// for a CLI process, and a request fails only when the host does not answer.
 pub fn request(host: &Host, method: &str, path: &str, auth: bool) -> ureq::Request {
     let req = ureq::AgentBuilder::new()
-        .timeout(Duration::from_secs(5))
+        .timeout(waits::LIMIT)
         .build()
         .request(
             method,
@@ -432,8 +437,27 @@ pub fn request(host: &Host, method: &str, path: &str, auth: bool) -> ureq::Reque
 pub fn response(result: Result<ureq::Response, ureq::Error>) -> ureq::Response {
     match result {
         Ok(response) | Err(ureq::Error::Status(_, response)) => response,
+        Err(error) if timed_out(&error) => panic!(
+            "the review host did not answer within {:?}: {error}",
+            waits::LIMIT
+        ),
         Err(error) => panic!("{error}"),
     }
+}
+
+/// Tells if the request failed because its time limit passed.
+fn timed_out(error: &ureq::Error) -> bool {
+    let mut cause: Option<&(dyn std::error::Error + 'static)> = std::error::Error::source(error);
+    while let Some(error) = cause {
+        if error
+            .downcast_ref::<std::io::Error>()
+            .is_some_and(|error| error.kind() == std::io::ErrorKind::TimedOut)
+        {
+            return true;
+        }
+        cause = error.source();
+    }
+    false
 }
 
 pub fn list_discussions(host: &Host) -> ureq::Response {
