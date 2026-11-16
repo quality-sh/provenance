@@ -55,6 +55,8 @@ mod cli_stale_answers;
 mod cli_stale_typed_implementations;
 #[path = "../cli_stale_typed_verifications.rs"]
 mod cli_stale_typed_verifications;
+#[path = "../cli_verification_run_budget.rs"]
+mod cli_verification_run_budget;
 #[path = "../report_build.rs"]
 mod report_build;
 #[path = "../report_inactive_binding_roles.rs"]

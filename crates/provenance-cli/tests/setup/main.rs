@@ -59,6 +59,8 @@ mod cli_init_scope_guidance;
 mod cli_init_skill_guidance;
 #[path = "../cli_init_state.rs"]
 mod cli_init_state;
+#[path = "../cli_init_stopped_replacement.rs"]
+mod cli_init_stopped_replacement;
 #[path = "../cli_init_typescript_commands.rs"]
 mod cli_init_typescript_commands;
 #[path = "../cli_init_typescript_missing_package.rs"]
@@ -78,6 +80,8 @@ mod cli_repo_context_help;
 mod cli_routing;
 #[path = "../cli_sdk_lifecycle.rs"]
 mod cli_sdk_lifecycle;
+#[path = "../cli_skills_non_utf8_folder.rs"]
+mod cli_skills_non_utf8_folder;
 #[path = "../command_surface.rs"]
 mod command_surface;
 #[allow(dead_code)]

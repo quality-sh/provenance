@@ -95,6 +95,9 @@ fn text(result: &Value) -> &str {
     result["content"][0]["text"].as_str().unwrap()
 }
 
+/// The `provenance mcp` server of the binary gives the instructions of the library server
+/// for the same repository, and its tools give the output of the CLI commands. The text of
+/// the instructions is pinned in the tests of `provenance-mcp`.
 #[tokio::test]
 #[verifies("rule_mcp_command_uses_cli_repository", examples)]
 async fn mcp_serves_the_tools_of_the_cli_repository() {
@@ -104,15 +107,15 @@ async fn mcp_serves_the_tools_of_the_cli_repository() {
     let server = Server::start(&repo).await;
     let client = &server.client;
 
-    // prime and the server instructions hold the same shared guidance; each adds its
-    // own first steps.
-    let prime = cli(&["prime", "--repo", &repo]);
-    let shared = provenance_porcelain::guidance::guidance().guidance;
-    assert!(prime.starts_with(&shared), "{prime}");
-    assert_eq!(
-        client.instructions().as_deref(),
-        Some(provenance_mcp::instructions().as_str())
-    );
+    // The library server on the host of the CLI repository is the reference.
+    let context = provenance_transport::repository::RepoContext::new(&repo, "default");
+    let host = provenance_cli::porcelain::local_host(&context).unwrap();
+    let (local_io, server_io) = tokio::io::duplex(256 * 1024);
+    let local = tokio::spawn(async move { provenance_mcp::serve(host, server_io).await.unwrap() });
+    let local_client = Client::connect(local_io).await.unwrap();
+    assert_eq!(client.instructions(), local_client.instructions());
+    local_client.cancel().await.unwrap();
+    local.await.unwrap().cancel().await.unwrap();
     let tools = client.tools().await;
     let names: Vec<&str> = tools
         .iter()

@@ -50,6 +50,8 @@ mod mcp_document_catch_up_cause;
 mod mcp_error_envelopes;
 #[path = "../mcp_guidance.rs"]
 mod mcp_guidance;
+#[path = "../mcp_instruction_names.rs"]
+mod mcp_instruction_names;
 #[path = "../mcp_instructions.rs"]
 mod mcp_instructions;
 #[path = "../mcp_plumbing_names.rs"]
@@ -106,5 +108,7 @@ mod review_write_transports;
 mod surface_names;
 #[path = "../typed_plan_refusals.rs"]
 mod typed_plan_refusals;
+#[path = "../verification_run_budget.rs"]
+mod verification_run_budget;
 #[path = "../wire.rs"]
 mod wire;

@@ -1,4 +1,4 @@
-Serve local review assets and authorized repository operations
+Serve local review assets and authorized repository operations.
 
 Usage: provenance review [OPTIONS] --repo <REPO> --repository-id <REPOSITORY_ID> --scope <SCOPE>
 
