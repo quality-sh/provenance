@@ -1,0 +1,185 @@
+// @provenance rule: rule_keyword_package
+package pay;
+
+// @provenance rule: rule_keyword_import
+import java.util.List;
+
+// @provenance rule: rule_final_class
+public final class Payroll {
+    // @provenance rule: rule_field
+    private static final int LIMIT = 38;
+
+    // @provenance rule: rule_long_annotation
+    @SuppressWarnings({
+        "unchecked",
+        "rawtypes",
+        "deprecation",
+        "serial",
+        "cast",
+    })
+    void cast() {}
+
+    // @provenance rule: rule_static_method
+    public static boolean paysOvertime(int hours) {
+        return hours > 38;
+    }
+
+    // @provenance verification: examples
+    // @provenance rule: rule_annotated_test
+    @Test
+    @DisplayName("hours above 38")
+    void paysOvertimeExamples() {
+        assertTrue(paysOvertime(39));
+    }
+
+    // @provenance rule: rule_constructor
+    public Payroll(int hours) {
+        this.hours = hours;
+    }
+
+    // @provenance rule: rule_doc_inline
+    /** Pays. */ public int pays() { return 1; }
+    public int nextMethod() { return 2; }
+
+    void run() {
+        // @provenance rule: rule_synchronized
+        synchronized (lock) {
+            work();
+        }
+        // @provenance rule: rule_generic_call
+        Collections.<String>emptyList();
+        switch (hours) {
+            case 1 -> work();
+            // @provenance rule: rule_default_arrow
+            default -> rest(hours);
+        }
+        switch (hours) {
+            case 1:
+                break;
+            // @provenance rule: rule_default_label
+            default:
+                rest(hours);
+        }
+    }
+
+    // @provenance rule: rule_wrapped_generic
+    public static <T extends Comparable<T>> T
+            max(java.util.List<T> items) {
+        return items.get(0);
+    }
+}
+
+// @provenance rule: rule_annotation_type
+public @interface Audited {}
+
+// @provenance rule: rule_record
+public record Shift(int hours) {}
+
+// @provenance rule: rule_enum
+public enum Color { RED }
+
+// @provenance rule: rule_interface
+interface Shape {}
+
+class Ledger {
+    // @provenance rule: rule_qualified_return
+    public java.util.List<String> names() {
+        return null;
+    }
+
+    // @provenance rule: rule_unmodified_qualified_return
+    java.util.Map.Entry<String, Integer> first() {
+        return null;
+    }
+
+    // @provenance rule: rule_private_field
+    private int count = 0;
+
+    // @provenance rule: rule_plain_field
+    int plain;
+
+    void body(boolean ready) {
+        int x = ready ?
+            // @provenance rule: rule_multiline_ternary
+            pick(a) :
+            other;
+        // @provenance rule: rule_qualified_call
+        Collections.emptyList();
+        // @provenance rule: rule_generic_qualified_call
+        Collections.<String>emptyList();
+    }
+}
+
+enum Rate {
+    // @provenance rule: rule_constant_body
+    ONE(1) {
+    },
+    // @provenance rule: rule_constant_plain
+    TWO(2);
+
+    // @provenance rule: rule_enum_constructor
+    Rate(int value) {
+    }
+}
+
+// @provenance rule: rule_group_comment_first
+
+// @provenance rule: rule_group_comment_second
+@Deprecated
+class Grouped {}
+
+class Keywords {
+    int keywords(boolean ready) {
+        // @provenance rule: rule_keyword_if
+        if (ready) {
+        }
+        // @provenance rule: rule_keyword_for
+        for (int i : shifts) {
+        }
+        // @provenance rule: rule_keyword_while
+        while (ready) {
+        }
+        // @provenance rule: rule_keyword_switch
+        switch (ready) {
+            // @provenance rule: rule_keyword_case
+            case pick(ready) -> {
+            }
+        }
+        // @provenance rule: rule_keyword_try
+        try {
+        }
+        // @provenance rule: rule_keyword_catch
+        catch (Exception error) {
+        }
+        // @provenance rule: rule_keyword_finally
+        finally {
+        }
+        // @provenance rule: rule_keyword_do
+        do {
+        } while (ready);
+        if (ready) {
+        }
+        // @provenance rule: rule_keyword_else
+        else run(ready);
+        // @provenance rule: rule_keyword_throw
+        throw failure(ready);
+        // @provenance rule: rule_keyword_new
+        new Payroll(ready);
+        // @provenance rule: rule_keyword_assert
+        assert valid(ready);
+        // @provenance rule: rule_keyword_yield
+        yield pick(ready);
+        // @provenance rule: rule_keyword_this
+        this.pays(ready);
+        // @provenance rule: rule_keyword_super
+        super.pays(ready);
+        // @provenance rule: rule_keyword_var
+        var total = sum(ready);
+        // @provenance rule: rule_keyword_break
+        break outer;
+        // @provenance rule: rule_keyword_continue
+        continue outer;
+        // @provenance rule: rule_keyword_return
+        return total(ready);
+    }
+}
