@@ -79,9 +79,10 @@ const REFERENCE_REPAIR: &str =
 const UNREADABLE_REPAIR: &str = "make the path a file that this user can read, or get the file \
      again from git, and then do the command again";
 
-/// A dictionary reference path that holds an entry that the process cannot
-/// read as a file, for example a directory, a file with no read permission or
-/// a link with no target.
+/// A dictionary reference that the process cannot read as a file.
+///
+/// Examples are a directory, a file with no read permission and a link with no
+/// target at the reference path.
 #[derive(Debug)]
 #[cfg(feature = "host")]
 pub struct UnreadableReference {
@@ -142,9 +143,10 @@ fn parse_reference(
 }
 
 /// Separates a missing reference from a reference that cannot load, so a strict
-/// gate can fail on the second and stay silent on the first. Only a path with
-/// no entry is a missing reference: a link with no target is a reference that
-/// cannot be read.
+/// gate can fail on the second and stay silent on the first.
+///
+/// Only a path with no entry is a missing reference: a link with no target is
+/// a reference that cannot be read.
 #[cfg(feature = "host")]
 pub fn resolve_project_dictionary(layout: &ProvenanceLayout) -> DictionaryResolution {
     let path = dictionary_reference_path(layout);
