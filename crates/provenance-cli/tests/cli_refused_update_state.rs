@@ -109,8 +109,8 @@ fn get(repo: &str, id: &str) -> Value {
     serde_json::from_slice(&output.stdout).unwrap()
 }
 
-/// Reads the ETag of `id`, changes the text field `change` of the record, and
-/// then runs `<id> update <flag> <target> --if-match <ETag of the read>`.
+/// Reads the edit `etag` of `id`, changes the text field `change` of the record, and
+/// then runs `<id> update <flag> <target> --if-match <etag of the read>`.
 /// Checks that the stale guard wins over the missing target and that no state
 /// file changes.
 fn assert_stale_guard_wins(id: &str, record_kind: &str, change: &str, flag: &str, target: &str) {
