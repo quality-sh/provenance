@@ -39,11 +39,11 @@ const LIMIT: Field = Field::text("limit")
     .doc("The page size. The default is 50.");
 
 pub(super) const GET_RELATIONS: &[Relation] = &[
-    Relation::Conflicts("review_link", "view"),
-    Relation::Conflicts("review_link", "depth"),
+    Relation::Conflicts("review_link", VIEW.name),
+    Relation::Conflicts("review_link", DEPTH.name),
     Relation::Conflicts("review_link", "kind"),
     Relation::Conflicts("review_link", "limit"),
-    Relation::Requires("notify", "view"),
+    Relation::Requires("notify", VIEW.name),
     Relation::Conflicts("notify", "review_link"),
     Relation::Requires("thread", "notify"),
 ];
