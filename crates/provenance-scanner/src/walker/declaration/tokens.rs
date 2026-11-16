@@ -8,7 +8,7 @@
 
 use std::ops::ControlFlow;
 
-use crate::binding_lexer::{lex_line, multiline_parts, CommentSyntax, Piece};
+use crate::binding_lexer::{lex_line, multiline_parts, Piece};
 use crate::walker::rust_lines::{rust_pieces, RustLexicalState};
 use crate::walker::{multiline_style, Language};
 
@@ -37,14 +37,19 @@ pub(in crate::walker) fn file_tokens<'a>(
                 rust_pieces(line, &mut state, |range, piece| pieces.push((range, piece)));
             }
             Some(style) => {
-                let parts =
-                    multiline_parts(line, style, &mut multiline_delimiter, in_block_comment);
+                let parts = multiline_parts(
+                    line,
+                    style,
+                    language.comment_syntax(),
+                    &mut multiline_delimiter,
+                    in_block_comment,
+                );
                 if let Some(parts) = parts {
                     let offset = parts.code.start;
                     in_block_comment = lex_line(
                         &line[parts.code],
                         in_block_comment,
-                        comment_syntax(language),
+                        language.comment_syntax(),
                         |range, piece| {
                             pieces.push((range.start + offset..range.end + offset, piece));
                             ControlFlow::Continue(())
@@ -90,15 +95,6 @@ fn push_words<'a>(language: Language, code: &'a str, line: usize, tokens: &mut V
             text: &code[start..end],
             line,
         });
-    }
-}
-
-/// The comment syntax of a language other than Rust.
-const fn comment_syntax(language: Language) -> CommentSyntax {
-    if language.hash_starts_comment() {
-        CommentSyntax::Hash
-    } else {
-        CommentSyntax::CStyle
     }
 }
 

@@ -29,7 +29,7 @@ pub(super) struct Sites<'a> {
 
 struct Unnamed {
     line: usize,
-    /// The index of the first line below the site.
+    /// The index of the first line that can hold the item of the site.
     below: usize,
     site: Site,
 }
@@ -58,11 +58,12 @@ impl<'a> Sites<'a> {
         }
     }
 
-    /// A comment on line `line` that holds the annotations at `annotations`.
-    pub(super) fn comment(&mut self, line: usize, annotations: Range<usize>) {
+    /// A comment on line `line` that holds the annotations at `annotations`,
+    /// with its item on line `below` or a line below it.
+    pub(super) fn comment(&mut self, line: usize, below: usize, annotations: Range<usize>) {
         self.unnamed.push(Unnamed {
             line,
-            below: line + 1,
+            below,
             site: Site::Comment(annotations),
         });
     }

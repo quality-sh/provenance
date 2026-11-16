@@ -9,6 +9,7 @@ use super::Language;
 use std::ops::Range;
 
 use crate::binding_lexer::{rust_character_literal_end, Piece};
+use crate::language::CommentSyntax;
 use crate::parser::annotation_marker_positions;
 use crate::string_context::marker_is_inside_quoted_region;
 
@@ -44,6 +45,9 @@ pub(super) fn rust_annotation_marker_position(
         .min()
 }
 
+/// The comments of Rust. Its block comments nest, so a state counts the depth.
+const RUST_COMMENTS: CommentSyntax = Language::Rust.comment_syntax();
+
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub(super) enum RustLexicalState {
     Code,
@@ -70,45 +74,51 @@ pub(super) fn rust_pieces(
     let mut index = 0;
     while index < bytes.len() {
         match *state {
-            RustLexicalState::Code => match bytes[index] {
-                b'/' if bytes.get(index + 1) == Some(&b'/') => break,
-                b'/' if bytes.get(index + 1) == Some(&b'*') => {
+            RustLexicalState::Code => {
+                let rest = &bytes[index..];
+                if RUST_COMMENTS.starts_line_comment(rest) {
+                    break;
+                }
+                if let Some(open) = RUST_COMMENTS.block_open_at(rest) {
                     end_code(index, &mut code_start, &mut visit);
                     *state = RustLexicalState::BlockComment(1);
-                    index += 2;
+                    index += open;
+                    continue;
                 }
-                b'\'' => {
-                    if let Some(end) = rust_character_literal_end(line, index + 1) {
-                        end_code(index, &mut code_start, &mut visit);
-                        visit(index..end + 1, Piece::Quoted);
-                        index = end + 1;
-                    } else {
-                        code_start.get_or_insert(index);
-                        index += 1;
+                match bytes[index] {
+                    b'\'' => {
+                        if let Some(end) = rust_character_literal_end(line, index + 1) {
+                            end_code(index, &mut code_start, &mut visit);
+                            visit(index..end + 1, Piece::Quoted);
+                            index = end + 1;
+                        } else {
+                            code_start.get_or_insert(index);
+                            index += 1;
+                        }
                     }
-                }
-                b'"' => {
-                    end_code(index, &mut code_start, &mut visit);
-                    quote_start = Some(index);
-                    *state = RustLexicalState::Quoted;
-                    index += 1;
-                }
-                b'r' => {
-                    if let Some(hashes) = raw_string_hashes(&bytes[index + 1..]) {
+                    b'"' => {
                         end_code(index, &mut code_start, &mut visit);
                         quote_start = Some(index);
-                        *state = RustLexicalState::Raw(hashes);
-                        index += hashes + 2;
-                    } else {
+                        *state = RustLexicalState::Quoted;
+                        index += 1;
+                    }
+                    b'r' => {
+                        if let Some(hashes) = raw_string_hashes(&bytes[index + 1..]) {
+                            end_code(index, &mut code_start, &mut visit);
+                            quote_start = Some(index);
+                            *state = RustLexicalState::Raw(hashes);
+                            index += hashes + 2;
+                        } else {
+                            code_start.get_or_insert(index);
+                            index += 1;
+                        }
+                    }
+                    _ => {
                         code_start.get_or_insert(index);
                         index += 1;
                     }
                 }
-                _ => {
-                    code_start.get_or_insert(index);
-                    index += 1;
-                }
-            },
+            }
             RustLexicalState::Quoted => match bytes[index] {
                 b'\\' => index = (index + 2).min(bytes.len()),
                 b'"' => {
@@ -138,16 +148,17 @@ pub(super) fn rust_pieces(
                 }
             }
             RustLexicalState::BlockComment(depth) => {
-                if bytes[index..].starts_with(b"/*") {
+                let rest = &bytes[index..];
+                if let Some(open) = RUST_COMMENTS.block_open_at(rest) {
                     *state = RustLexicalState::BlockComment(depth + 1);
-                    index += 2;
-                } else if bytes[index..].starts_with(b"*/") {
+                    index += open;
+                } else if let Some(close) = RUST_COMMENTS.block_close_at(rest) {
                     *state = if depth == 1 {
                         RustLexicalState::Code
                     } else {
                         RustLexicalState::BlockComment(depth - 1)
                     };
-                    index += 2;
+                    index += close;
                 } else {
                     index += 1;
                 }

@@ -4,6 +4,7 @@
 mod binding_lexer;
 mod coverage;
 mod coverage_anchors;
+mod language;
 mod rule_evidence;
 mod site;
 
