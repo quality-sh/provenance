@@ -74,8 +74,7 @@ fn answer(repo: &str, args: &[&str]) -> Value {
 
 #[tokio::test]
 #[verifies("rule_failed_freshness_answers_at_stored_serial", examples)]
-async fn a_get_and_a_list_read_over_a_withdrawal_that_names_no_submission_warn_at_the_stored_serial(
-) {
+async fn the_get_and_the_list_read_warn_at_the_stored_serial() {
     let (directory, repo, clean) = stored();
     let listed = cli_json(&repo, &["api", "rules"]);
     write_lost_withdrawal(directory.path());
@@ -91,8 +90,7 @@ async fn a_get_and_a_list_read_over_a_withdrawal_that_names_no_submission_warn_a
 
 #[tokio::test]
 #[verifies("rule_inconsistent_records_refusal_names_records", examples)]
-async fn the_api_read_the_review_view_and_an_update_over_a_withdrawal_that_names_no_submission_refuse_with_its_line(
-) {
+async fn the_api_read_the_review_view_and_an_update_refuse_with_the_line() {
     let (directory, repo, clean) = stored();
     write_lost_withdrawal(directory.path());
     let server = Server::start(&repo).await;
@@ -114,7 +112,7 @@ async fn the_api_read_the_review_view_and_an_update_over_a_withdrawal_that_names
 
 #[test]
 #[verifies("rule_document_catch_up_refusal_gives_typed_cause", examples)]
-fn a_document_read_over_a_withdrawal_that_names_no_submission_refuses_with_the_failed_catch_up() {
+fn the_document_read_refuses_with_the_failed_catch_up() {
     let (directory, repo, _) = stored();
     write_lost_withdrawal(directory.path());
 
@@ -127,7 +125,7 @@ fn a_document_read_over_a_withdrawal_that_names_no_submission_refuses_with_the_f
 
 #[tokio::test]
 #[verifies("rule_no_revision_refuses_and_names_materialize", examples)]
-async fn a_get_over_a_withdrawal_that_names_no_submission_with_no_stored_revision_refuses() {
+async fn the_get_with_no_stored_revision_refuses() {
     let directory = tempfile::tempdir().unwrap();
     let repo = directory.path().to_str().unwrap().to_owned();
     chain(&repo);
