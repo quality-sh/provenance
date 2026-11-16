@@ -136,7 +136,10 @@ fn symbol_for_row(probe: &Value, row: usize) -> String {
 /// evidence of `rule_shared`.
 async fn restate(host: &StatementHost) {
     let (_, requirement) = call(host, "GET", "/requirements/req_shared", None).await;
-    let etag = requirement["data"]["edit"]["etag"].as_str().unwrap().to_owned();
+    let etag = requirement["data"]["edit"]["etag"]
+        .as_str()
+        .unwrap()
+        .to_owned();
     let body = json!({"data": {"actor": "fixture", "statement": "The evidence stays readable."}});
     let path = "/requirements/req_shared";
     let headers = [("if-match", etag.as_str())];

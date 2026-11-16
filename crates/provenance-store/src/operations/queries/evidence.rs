@@ -1,5 +1,5 @@
 use crate::operations::reader::{Live, ReadContext, PAGE_BYTES};
-use provenance_core::protocol::{take_page, EvidenceQuery, EvidenceResult, Stamped, StaleEvidence};
+use provenance_core::protocol::{take_page, EvidenceQuery, EvidenceResult, StaleEvidence, Stamped};
 use provenance_core::{
     ImplementationBinding, RequirementReview, StableId, VerificationBinding, VerificationRun,
 };
