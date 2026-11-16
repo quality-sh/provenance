@@ -119,13 +119,16 @@ fn two_updates_at_once_have_one_winner() {
 /// Runs a case with a stop at `at` and checks it: an update, a create on a
 /// branch that git merges back through `provenance merge-jsonl`, and the
 /// write `stopped` that the stop kills. The stop must land at one of
-/// `landings`. A one-key write can also end before the kill: then it must
-/// answer success. After the stop, one read runs through the CLI. Then no
-/// marker and no transaction are there, and the state is the state before
-/// `stopped`, with only the Topic key changed for a stop after a rename or a
-/// write that ended. The temporary file of a one-key write stays only for a
-/// stop before its rename, and no read sees it. The run must keep the laws.
-/// The job summary counts the landing of the stop under `probe`.
+/// `landings`. A one-key write can also answer after the test saw its
+/// temporary file and before the kill: then it must answer success. A write
+/// that ends before the test sees its point fails the probe, because then
+/// the probe tested no stop. A stop before the rename keeps each file below
+/// the state directory and its bytes, and leaves the temporary file in the
+/// cache. After the stop, one read runs through the CLI. Then no marker, no
+/// transaction and no temporary file of the write are there, and the state
+/// is the state before `stopped`, with only the Topic key changed for a stop
+/// after a rename or a write that answered. The run must keep the laws. The
+/// job summary counts the landing of the stop under `probe`.
 fn stop_probe(probe: &'static str, stopped: Operation, at: u8, landings: &[Landing]) {
     provenance_simulation::stats::record_probe(probe);
     let started = Instant::now();
@@ -151,10 +154,13 @@ fn stop_probe(probe: &'static str, stopped: Operation, at: u8, landings: &[Landi
             );
             (Some(landed), &landed.before)
         }
-        [Stop::Answered { before } | Stop::Ended { before }] if one_key => {
+        [Stop::Answered { before }] if one_key => {
             let (_, stopped) = &fixture.groups[2];
             assert!(stopped[0].result.is_ok(), "{stopped:?}");
             (None, before)
+        }
+        [Stop::Ended { .. }] => {
+            panic!("the write ended before the test saw its point, so the probe tested no stop")
         }
         other => {
             let rows: Vec<_> = other.iter().map(Stop::row).collect();
@@ -192,14 +198,27 @@ fn stop_probe(probe: &'static str, stopped: Operation, at: u8, landings: &[Landi
             "{row}: after the read, the state is not the state before the write: {changed:?}"
         );
     }
-    // The section entry removes a transaction with no marker, and recovery
-    // the transaction that a marker names. Nothing removes a temporary file
-    // that a stop left before the rename.
+    // A stop before the rename keeps each file of the state tree and its
+    // bytes; the test saw the temporary file in the cache after the kill.
+    // The section entry of the read removes a transaction with no marker and
+    // the temporary file of a one-key write, and recovery the transaction
+    // that a marker names.
     if let [Stop::Landed(landed)] = fixture.stops.as_slice() {
-        assert_eq!(
-            landed.made.exists(),
-            landed.landing == Landing::BeforeRename,
-            "{row}: the transaction or the temporary file of the write after the read"
+        if landed.landing == Landing::BeforeRename {
+            let (files_before, files_after) = &landed.files;
+            assert_eq!(
+                files_after.keys().collect::<Vec<_>>(),
+                files_before.keys().collect::<Vec<_>>(),
+                "{row}: the files below the state directory after the kill"
+            );
+            assert!(
+                files_after == files_before,
+                "{row}: a file below the state directory changed its bytes"
+            );
+        }
+        assert!(
+            !landed.made.exists(),
+            "{row}: the transaction or the temporary file of the write stays after the read"
         );
     }
     report::probe_laws(&layer(), check(&case, &fixture.finish(started)));
@@ -225,9 +244,11 @@ fn a_merged_branch_and_a_stop_after_the_marker_keep_the_laws() {
 }
 
 // No Rule: a probe of the nightly simulation. It runs `stop_probe` on a
-// claim, a write of one key, with the stop when its temporary file appears.
-// The rename comes one file sync later, so the kill lands before or after
-// it, or the write ends first. Each landing has its own asserts.
+// claim, a write of one key, with the stop when its temporary file appears
+// in the cache. The rename comes one file sync later, so the kill lands
+// before or after it, or the write answers first. Each landing has its own
+// asserts. A write that ends before the test sees its temporary file fails
+// the probe.
 #[test]
 #[ignore = "a probe of the nightly simulation"]
 fn a_merged_branch_and_a_stop_of_a_one_key_write_keep_the_laws() {
@@ -242,7 +263,9 @@ fn a_merged_branch_and_a_stop_of_a_one_key_write_keep_the_laws() {
 // No Rule: a probe that each kind of write that the simulation sends
 // publishes through a transaction or a temporary file. A stop at the first
 // point kills a write of two keys before the marker. A write of one key
-// stops before or after its rename, or ends with a success first. A record
+// stops before or after its rename, or answers with a success after the test
+// saw its temporary file. A write that ends before the test sees its point
+// fails the probe. A record
 // has one pending submission at most. So a submit that no stop meets gives
 // the stopped withdrawal its proposal, and a second withdrawal ends that
 // submission if the stop landed before the rename. Then the stopped submit
@@ -300,7 +323,7 @@ fn a_stop_at_the_first_point_of_each_kind_of_write_keeps_the_laws() {
             .all(|(n, (stop, done))| match stop {
                 Stop::Landed(landed) if n < 2 => landed.landing == Landing::BeforeMarker,
                 Stop::Landed(landed) => one_key.contains(&landed.landing),
-                Stop::Answered { .. } | Stop::Ended { .. } => n >= 2 && done.result.is_ok(),
+                Stop::Answered { .. } => n >= 2 && done.result.is_ok(),
                 _ => false,
             });
     let rows: Vec<_> = run.stops.iter().map(Stop::row).collect();

@@ -4,21 +4,23 @@
 //! A write of two keys or more publishes through a transaction directory and
 //! a publication marker. The order of these steps and the phases of the
 //! marker are in `provenance_store::storage::local::whole_set::land`. A write
-//! of one key writes a temporary file next to the key in the state tree,
-//! syncs it, and renames it to the key (`durability::write_synced_file`). The
-//! test lists the directory of the transactions, the directory of the marker
-//! and the state tree, and kills the write process when it sees the point of
-//! the stop. A one-key write has one point: its temporary file appears. The
-//! rename comes one file sync later, so the kill can land before or after
-//! it. A kill does not let the process remove its transaction, its marker or
-//! its temporary file. So after the kill, these entries, the phase of the
-//! marker and the live state tell where the stop landed.
+//! of one key writes a temporary file in the cache, syncs it, and renames it
+//! onto the key (`durability::write_synced_state_file`); the store tells its
+//! name with `is_state_temporary_name`. The test lists the directory of the
+//! transactions, the directory of the marker and the cache, and kills the
+//! write process when it sees the point of the stop. A one-key write has one
+//! point: its temporary file appears in the cache. The rename comes one file
+//! sync later, so the kill can land before or after it. A kill does not let
+//! the process remove its transaction, its marker or its temporary file. So
+//! after the kill, these entries, the phase of the marker and the live state
+//! tell where the stop landed.
 
 use super::{answer, done, effect, layer, panicked, parse, refusal_kind, request, Running};
 use crate::fixture::state_entries;
 use provenance_simulation::generate::Task;
 use provenance_simulation::{stats, Done};
 use provenance_store::layout::ProvenanceLayout;
+use provenance_store::storage::local::is_state_temporary_name;
 use provenance_store::storage::StateKey;
 use std::collections::{BTreeMap, BTreeSet};
 use std::ffi::OsString;
@@ -32,11 +34,16 @@ const LOOK_INTERVAL: Duration = Duration::from_micros(100);
 /// The state of a repository, or the error of its read.
 pub type Entries = Result<BTreeMap<StateKey, Vec<u8>>, String>;
 
+/// Each file below a directory, with its bytes. A read of the state as
+/// [`Entries`] does not show a file that is not a state key, so the probe
+/// also compares the files.
+pub type Files = BTreeMap<PathBuf, Vec<u8>>;
+
 /// A point of the publish where a stop kills the write process.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Point {
     /// The transaction of the write appears, or the temporary file of a
-    /// one-key write appears in the state tree.
+    /// one-key write appears in the cache.
     First,
     /// The publication marker appears while the transaction of the write
     /// exists. A one-key write has no second point: the stop kills it at
@@ -60,7 +67,7 @@ impl Point {
 enum Made {
     /// The transaction of a write of two keys or more.
     Transaction(PathBuf),
-    /// The temporary file of a one-key write, in the state tree.
+    /// The temporary file of a one-key write, in the cache.
     Temporary(PathBuf),
 }
 
@@ -76,7 +83,8 @@ pub enum Landing {
     /// The new state is installed: the marker says so, or the write removed
     /// its transaction and its marker.
     AfterInstall,
-    /// The temporary file of the key is there; the key did not change.
+    /// The temporary file of the key is in the cache; the key did not
+    /// change.
     BeforeRename,
     /// The key has its new bytes; the write did not answer.
     AfterRename,
@@ -90,6 +98,9 @@ pub struct Landed {
     pub made: PathBuf,
     /// The state before the write started.
     pub before: Entries,
+    /// The files below the state directory and their bytes, before the
+    /// write started and after the kill.
+    pub files: (Files, Files),
     /// A live state is there after the kill.
     pub live_state: bool,
 }
@@ -192,6 +203,7 @@ pub fn run_stopped(
     };
     let what = format!("write {}", request.path);
     let before = state_entries(root);
+    let files_before = files(layout.state_dir().as_std_path());
     let watch = Watch::new(layout);
     let mut running = Running::start(request.spawn(root));
     let Some(made) = watch.reach(&mut running, Point::of(at)) else {
@@ -227,6 +239,7 @@ pub fn run_stopped(
             Made::Transaction(path) | Made::Temporary(path) => path,
         },
         before,
+        files: (files_before, files(layout.state_dir().as_std_path())),
         live_state: layout.state_dir().exists(),
     };
     (
@@ -243,15 +256,16 @@ struct Watch<'a> {
     layout: &'a ProvenanceLayout,
     /// The transactions before the write started.
     before: BTreeSet<OsString>,
-    /// The temporary files in the state tree before the write started: an
-    /// earlier stop before a rename leaves its temporary file.
+    /// The temporary files of one-key writes in the cache before the write
+    /// started: an earlier stop before a rename leaves its temporary file
+    /// until the next entry to the publication section.
     temporary_before: BTreeSet<PathBuf>,
 }
 
 impl<'a> Watch<'a> {
     fn new(layout: &'a ProvenanceLayout) -> Self {
         let before = names(layout.import_transactions_dir().as_std_path());
-        let temporary_before = temporary_files(layout.state_dir().as_std_path());
+        let temporary_before = state_temporaries(layout);
         Self {
             layout,
             before,
@@ -259,10 +273,10 @@ impl<'a> Watch<'a> {
         }
     }
 
-    /// A temporary file in the state tree that was not there before the
-    /// write started.
+    /// A temporary file of a one-key write in the cache that was not there
+    /// before the write started.
     fn new_temporary(&self) -> Option<PathBuf> {
-        temporary_files(self.layout.state_dir().as_std_path())
+        state_temporaries(self.layout)
             .into_iter()
             .find(|path| !self.temporary_before.contains(path))
     }
@@ -289,8 +303,9 @@ impl<'a> Watch<'a> {
     /// appeared: each entry to the publication section recovers a marker
     /// that an earlier stop left, before the write makes its transaction
     /// (`LocalSectionLock::acquire_checked`). A write that made a
-    /// transaction makes no temporary file in the state tree. A one-key
-    /// write is reached when its temporary file appears, at each point.
+    /// transaction makes no temporary file of a one-key write. A one-key
+    /// write is reached when its temporary file appears in the cache, at
+    /// each point.
     fn reach(&self, running: &mut Running, point: Point) -> Option<Made> {
         let mut made = None;
         while running.runs() {
@@ -350,19 +365,40 @@ fn landing(layout: &ProvenanceLayout, transaction: &Path) -> Landing {
     }
 }
 
-/// The paths of the temporary files of one-key writes below `directory`:
-/// each file whose name starts with `.tmp`, the prefix of `tempfile`.
-fn temporary_files(directory: &Path) -> BTreeSet<PathBuf> {
-    let mut found = BTreeSet::new();
+/// The paths of the temporary files of one-key writes in the cache of
+/// `layout`: each file directly in the cache whose name the store gives to
+/// such a file.
+fn state_temporaries(layout: &ProvenanceLayout) -> BTreeSet<PathBuf> {
+    let cache = layout.cache_dir();
+    let Ok(entries) = std::fs::read_dir(&cache) else {
+        return BTreeSet::new();
+    };
+    entries
+        .flatten()
+        .filter(|entry| {
+            entry
+                .file_name()
+                .to_str()
+                .is_some_and(is_state_temporary_name)
+                && entry.file_type().is_ok_and(|kind| kind.is_file())
+        })
+        .map(|entry| entry.path())
+        .collect()
+}
+
+/// Each file below `directory` with its bytes, or none when it does not
+/// exist.
+fn files(directory: &Path) -> Files {
+    let mut found = Files::new();
     let Ok(entries) = std::fs::read_dir(directory) else {
         return found;
     };
     for entry in entries.flatten() {
         let path = entry.path();
         if entry.file_type().is_ok_and(|kind| kind.is_dir()) {
-            found.extend(temporary_files(&path));
-        } else if entry.file_name().to_string_lossy().starts_with(".tmp") {
-            found.insert(path);
+            found.extend(files(&path));
+        } else if let Ok(bytes) = std::fs::read(&path) {
+            found.insert(path, bytes);
         }
     }
     found
