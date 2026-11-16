@@ -140,7 +140,9 @@ impl Carried<'_> {
             .iter()
             .flatten()
             .find(|raw| raw.id() == Some(id))
-            .map_or(0, |raw| raw.unknown.iter().map(|member| member.len() + 1).sum())
+            .map_or(0, |raw| {
+                raw.unknown.iter().map(|member| member.len() + 1).sum()
+            })
     }
 }
 

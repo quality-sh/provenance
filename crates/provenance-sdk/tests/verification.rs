@@ -73,7 +73,6 @@ fn an_unwinding_callback_records_failed_then_propagates() {
     assert_eq!(runs[0].error.as_deref(), Some("expiry assertion failed"));
 }
 
-
 /// Completes the running run of the repository at `root` as passed, as a
 /// callback that completes its own run does. The failed completion of
 /// `verify` that follows is then refused.

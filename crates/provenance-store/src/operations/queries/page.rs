@@ -1,8 +1,8 @@
 //! Count the successful native envelope before an answer leaves.
+use crate::byte_count::ByteCount;
 use provenance_core::protocol::{
     read_failure::ReadFailure, QueryResponse, Stamped, QUERY_RESPONSE_BYTES,
 };
-use crate::byte_count::ByteCount;
 use serde::Serialize;
 
 pub fn checked<R: Serialize>(
