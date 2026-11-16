@@ -1,6 +1,7 @@
 use anyhow::Context;
 use camino::{Utf8Path, Utf8PathBuf};
 use provenance_core::coverage::EvidenceAnchor;
+use provenance_macros::rule;
 
 use crate::binding_lexer::{block_comment_state, code_outside_multiline_string, MultilineStyle};
 use crate::parser::{annotation_marker_position, parse_annotations, Verification};
@@ -415,8 +416,8 @@ fn enclosing_script_function(lines: &[&str], idx: usize) -> Option<String> {
 }
 
 /// The annotation comment that starts on line `start` and continues on each
-/// comment line of `language` directly below it, with the index of its last
-/// line.
+/// comment line of `language` below it, with the index of its last line.
+#[rule("rule_comment_ends_above_the_first_code_line")]
 fn collect_annotation_comment(
     language: Language,
     lines: &[&str],
