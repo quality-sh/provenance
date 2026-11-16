@@ -1,44 +1,44 @@
 //! The item names of the sites of one file, given after the walk, when the
 //! line of each site is known.
 //!
-//! The read of a comment site stops at the next comment site, and the read of
-//! an attribute or a decorator stops at the next site. An attribute or a
-//! decorator directly above the next site, as in a stack of attributes, takes
-//! the name of that site. So the reads of the comment sites of a file do not
-//! overlap, the reads of the other sites do not overlap, and a bracket that
-//! does not close costs one read of the file and not one read for each site.
+//! The scanner lexes the file one time. The read of a comment, attribute, or
+//! decorator site covers the code tokens from the line below the site to the
+//! next such site. When those tokens hold only attributes, decorators, or
+//! annotations, the declaration is below the next site, and the site takes
+//! the name of the next site. So each site above one declaration gets the
+//! name of that declaration. The reads do not overlap, so the sites of a file
+//! read each token at most one time.
 
 use std::ops::Range;
 
 use provenance_core::coverage::EvidenceAnchor;
 
-use super::declaration::{self, LineStart};
+use super::declaration::{self, file_tokens, statement_starts, Read, Token};
+use super::rust_lines::RustLexicalState;
 use super::{script_call_name, AnnotationLocation, AttributeBinding, Language};
 
-/// The sites of one file and the walker's lexical state below each site that
-/// the reader names.
+/// The sites of one file.
 pub(super) struct Sites<'a> {
     language: Language,
     lines: &'a [&'a str],
     original_lines: &'a [&'a str],
-    comment_lines: Vec<usize>,
-    site_lines: Vec<usize>,
-    unnamed: Vec<Unnamed<'a>>,
+    sites: Vec<Unnamed>,
 }
 
-struct Unnamed<'a> {
+struct Unnamed {
     line: usize,
     /// The index of the first line below the site.
     below: usize,
-    start: LineStart<'a>,
     site: Site,
 }
 
 enum Site {
     /// The annotations of one comment, at these indexes.
     Comment(Range<usize>),
-    /// The binding at this index.
-    Binding(usize),
+    /// The attribute or the decorator at this index of the bindings.
+    Attribute(usize),
+    /// The call at this index of the bindings.
+    Call(usize),
 }
 
 impl<'a> Sites<'a> {
@@ -52,90 +52,124 @@ impl<'a> Sites<'a> {
             language,
             lines,
             original_lines,
-            comment_lines: Vec::new(),
-            site_lines: Vec::new(),
-            unnamed: Vec::new(),
+            sites: Vec::new(),
         }
     }
 
     /// A comment on line `line` that holds the annotations at `annotations`.
-    pub(super) fn comment(&mut self, line: usize, start: LineStart<'a>, annotations: Range<usize>) {
-        self.comment_lines.push(line);
-        self.site_lines.push(line);
-        self.unnamed.push(Unnamed {
+    pub(super) fn comment(&mut self, line: usize, annotations: Range<usize>) {
+        self.sites.push(Unnamed {
             line,
             below: line + 1,
-            start,
             site: Site::Comment(annotations),
         });
     }
 
     /// An attribute, a decorator, or a call from `line` to `last`, at the
     /// index `binding` of the bindings of the file.
-    pub(super) fn binding(
-        &mut self,
-        line: usize,
-        last: usize,
-        start: LineStart<'a>,
-        binding: usize,
-    ) {
-        self.site_lines.push(line);
-        self.unnamed.push(Unnamed {
+    pub(super) fn binding(&mut self, line: usize, last: usize, binding: usize) {
+        let site = if matches!(self.language, Language::Rust | Language::Python) {
+            Site::Attribute(binding)
+        } else {
+            Site::Call(binding)
+        };
+        self.sites.push(Unnamed {
             line,
             below: last + 1,
-            start,
-            site: Site::Binding(binding),
+            site,
         });
     }
 
-    /// Gives each site its item name and the anchor of that name. A
-    /// JavaScript or TypeScript call takes its name by the rules of
-    /// `script_call_name`.
+    /// Gives each site its item name and the anchor of that name. A call
+    /// takes its name by the rules of `script_call_name`.
     pub(super) fn name(
         self,
+        rust_states: &[RustLexicalState],
         annotations: &mut [AnnotationLocation],
         bindings: &mut [AttributeBinding],
     ) {
-        let (language, lines, original_lines) = (self.language, self.lines, self.original_lines);
-        let mut next_site: Option<(usize, Option<String>)> = None;
-        for unnamed in self.unnamed.into_iter().rev() {
-            let boundaries = match unnamed.site {
-                Site::Comment(_) => &self.comment_lines,
-                Site::Binding(_) => &self.site_lines,
+        let Self {
+            language,
+            lines,
+            original_lines,
+            sites,
+        } = self;
+        let tokens = file_tokens(language, lines, rust_states);
+        let (calls, declared): (Vec<_>, Vec<_>) = sites
+            .into_iter()
+            .partition(|unnamed| matches!(unnamed.site, Site::Call(_)));
+        let site_lines = declared.iter().map(|unnamed| unnamed.line).collect::<Vec<_>>();
+        let starts = statement_starts(language, &tokens, &site_lines);
+        let bounds = declared
+            .iter()
+            .map(|unnamed| (unnamed.below, unnamed.line))
+            .collect::<Vec<_>>();
+        let ranges = read_ranges(&tokens, &bounds);
+        let mut next_name = None;
+        let mut names = vec![None; declared.len()];
+        for index in (0..declared.len()).rev() {
+            let read = declaration::item_name(language, &tokens[ranges[index].clone()]);
+            let name = match read {
+                Read::Declaration(name) => name,
+                Read::NextSite => next_name.take(),
             };
-            let next = boundaries.partition_point(|line| *line < unnamed.below);
-            let end = boundaries.get(next).map_or(lines.len(), |line| *line);
-            let below = &lines[unnamed.below.min(end)..end];
-            let binding = match unnamed.site {
-                Site::Binding(index) => Some(index),
-                Site::Comment(_) => None,
-            };
-            let stacked = next_site
-                .take()
-                .filter(|(line, _)| binding.is_some() && *line == unnamed.below);
-            let name = match (binding, stacked) {
-                (Some(index), _) if !matches!(language, Language::Rust | Language::Python) => {
-                    script_call_name(lines, unnamed.below - 1, bindings[index].verification)
-                }
-                (_, Some((_, name))) => name,
-                _ => declaration::item_name(language, below, unnamed.start),
-            };
-            next_site = Some((unnamed.line, name.clone()));
-            match unnamed.site {
-                Site::Comment(range) => {
-                    for annotation in &mut annotations[range] {
-                        let line = original_lines[annotation.line - 1];
-                        annotation.anchor = EvidenceAnchor::new(name.clone(), line);
-                        annotation.function_name.clone_from(&name);
-                    }
-                }
-                Site::Binding(index) => {
-                    let binding = &mut bindings[index];
-                    let line = original_lines[binding.line - 1];
-                    binding.anchor = EvidenceAnchor::new(name.clone(), line);
-                    binding.item_name = name;
-                }
+            next_name = name.clone();
+            names[index] = name.filter(|_| starts[index]);
+        }
+        for (unnamed, name) in declared.into_iter().zip(names) {
+            set(original_lines, &unnamed.site, name, annotations, bindings);
+        }
+        for unnamed in calls {
+            if let Site::Call(index) = unnamed.site {
+                let verification = bindings[index].verification;
+                let name = script_call_name(lines, unnamed.below - 1, verification);
+                set(original_lines, &unnamed.site, name, annotations, bindings);
             }
         }
     }
+
 }
+
+/// Gives the site `site` the item name `name` and the anchor of that name.
+fn set(
+    original_lines: &[&str],
+    site: &Site,
+    name: Option<String>,
+    annotations: &mut [AnnotationLocation],
+    bindings: &mut [AttributeBinding],
+) {
+    match site {
+        Site::Comment(range) => {
+            for annotation in &mut annotations[range.clone()] {
+                let line = original_lines[annotation.line - 1];
+                annotation.anchor = EvidenceAnchor::new(name.clone(), line);
+                annotation.function_name.clone_from(&name);
+            }
+        }
+        Site::Attribute(index) | Site::Call(index) => {
+            let binding = &mut bindings[*index];
+            let line = original_lines[binding.line - 1];
+            binding.anchor = EvidenceAnchor::new(name.clone(), line);
+            binding.item_name = name;
+        }
+    }
+}
+
+/// The range of the tokens that the read of each site covers. `sites` holds
+/// the first line below each site and the line of the site, in line order. A
+/// read covers the tokens from the first line below its site to the line of
+/// the next site, so the ranges do not overlap.
+fn read_ranges(tokens: &[Token<'_>], sites: &[(usize, usize)]) -> Vec<Range<usize>> {
+    let first_at = |line: usize| tokens.partition_point(|token| token.line < line);
+    sites
+        .iter()
+        .enumerate()
+        .map(|(index, (below, _))| {
+            let end = sites.get(index + 1).map_or(tokens.len(), |(_, next)| first_at(*next));
+            first_at(*below).min(end)..end
+        })
+        .collect()
+}
+
+#[cfg(test)]
+mod tests;

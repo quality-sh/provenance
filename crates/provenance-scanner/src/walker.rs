@@ -9,7 +9,6 @@ use crate::{Annotation, ParseWarning};
 use bindings::parse_binding_or_warn;
 pub use bounded::scan_path_bounded;
 use consumed::{consume_binding_lines, consume_comment_lines};
-use declaration::LineStart;
 pub use ignore::selects_source_path;
 use names::Sites;
 use rust_lines::{rust_annotation_marker_position, rust_line_states, RustLexicalState};
@@ -192,9 +191,6 @@ fn scan_file_contents(
     let original_lines = content.lines().collect::<Vec<_>>();
     let lines = lexical_content.lines().collect::<Vec<_>>();
     let rust_states = rust_line_states(language, &lines);
-    let start_below = |next: usize, in_block_comment: bool, delimiter: Option<String>| {
-        line_start(&rust_states[next..], language, in_block_comment, delimiter)
-    };
     let mut sites = Sites::new(language, &lines, &original_lines);
     let mut idx = 0;
     let mut in_block_comment = false;
@@ -235,8 +231,7 @@ fn scan_file_contents(
                 &mut multiline_delimiter,
                 &mut in_block_comment,
             );
-            let start = start_below(end_idx + 1, in_block_comment, multiline_delimiter.clone());
-            sites.binding(idx, end_idx, start, bindings.len());
+            sites.binding(idx, end_idx, bindings.len());
             bindings.push(AttributeBinding {
                 file_path: file_path.to_path_buf(),
                 line: idx + 1,
@@ -271,12 +266,11 @@ fn scan_file_contents(
                 annotation,
             });
         }
-        let start = start_below(idx + 1, in_block_comment, multiline_delimiter.clone());
-        sites.comment(idx, start, first..annotations.len());
+        sites.comment(idx, first..annotations.len());
         consume_comment_lines(language, &lines[idx + 1..=end_idx], &mut in_block_comment);
         idx = end_idx + 1;
     }
-    sites.name(&mut annotations, &mut bindings);
+    sites.name(&rust_states, &mut annotations, &mut bindings);
     FileScan {
         file_path: file_path.to_path_buf(),
         language,
@@ -338,24 +332,6 @@ fn is_annotation_comment_line(
         || trimmed.starts_with("/*")
         || trimmed.starts_with('*')
         || (language == Language::Python && trimmed.starts_with('#'))
-}
-
-/// The lexical state of the walker at the first of `rust_states`, the
-/// states of the lines below a binding.
-fn line_start(
-    rust_states: &[RustLexicalState],
-    language: Language,
-    in_block_comment: bool,
-    multiline_delimiter: Option<String>,
-) -> LineStart<'_> {
-    if language == Language::Rust {
-        LineStart::Rust(rust_states)
-    } else {
-        LineStart::Carried {
-            in_block_comment,
-            multiline_delimiter,
-        }
-    }
 }
 
 /// The item name of a JavaScript or TypeScript call site whose last line is
