@@ -170,9 +170,6 @@ tokens as a statement:
   binding, such as a TypeScript `@Injectable({` or a Python `@decorator(`
   whose arguments span lines with a binding comment in them: the binding
   inside the arguments starts no statement, so both bindings have no name.
-- In JavaScript and TypeScript, a regular expression literal that holds an
-  unclosed bracket, on a line with no `;`, can hide the start of the next
-  statement.
 - A Rust attribute directly below a binding comment is not scanned as a
   binding: the comment takes in the attribute line.
 
