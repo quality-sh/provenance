@@ -353,7 +353,7 @@ mod tests {
     fn a_syntax_fault_wins_over_a_repeated_field() {
         assert_eq!(
             refusal::<Record>(r#"{"id":"rule_a","id":"rule_b","#),
-            (3, "EOF while parsing an object".to_owned())
+            (3, "EOF while parsing a value".to_owned())
         );
     }
 
