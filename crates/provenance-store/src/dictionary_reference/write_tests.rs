@@ -95,10 +95,10 @@ fn a_cache_that_refuses_the_temporary_file_is_named_in_the_error() {
     let (layout, state, index) = repository(&temp);
     let path = dictionary_reference_path(&layout);
     std::fs::write(&path, STORED).expect("store a reference");
+    // An entry to the section makes the cache and the directories in it.
+    crate::publication::with_repository_publication(&layout, |_| Ok(()))
+        .expect("enter the section");
     let cache = layout.cache_dir();
-    let lock = layout.publication_lock_path();
-    std::fs::create_dir_all(lock.parent().expect("the lock has a directory"))
-        .expect("make the cache and its lock directory");
 
     let closed = close(&cache, Closed::Writes);
     let result = set_project_dictionary(&layout, &import(), index.as_std_path());
@@ -114,8 +114,7 @@ fn a_cache_that_refuses_the_temporary_file_is_named_in_the_error() {
     let tried = text
         .strip_prefix(&start)
         .and_then(|rest| rest.strip_suffix('"'))
-        .map(Utf8Path::new)
-        .unwrap_or_else(|| panic!("{text}"));
+        .map_or_else(|| panic!("{text}"), Utf8Path::new);
     assert_eq!(tried.parent(), Some(cache.as_path()), "{text}");
     assert!(
         tried
