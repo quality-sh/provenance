@@ -7,7 +7,7 @@ use super::{Field, FieldValue, Relation};
 pub(super) const VIEWS: &[&str] = &["record", CHILDREN, "trace", "impact", "review"];
 
 /// The view of the records below a record.
-pub(crate) const CHILDREN: &str = "children";
+pub const CHILDREN: &str = "children";
 
 /// The get fields after the target, in order.
 pub(super) const GET_FIELDS: &[Field] = &[
