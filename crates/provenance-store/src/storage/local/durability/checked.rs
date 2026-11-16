@@ -8,6 +8,8 @@ use std::path::Path;
 
 #[cfg(test)]
 mod tests;
+#[cfg(all(test, windows))]
+mod windows_tests;
 
 /// The length of the random part of a temporary file name.
 const RANDOM_LENGTH: usize = 6;

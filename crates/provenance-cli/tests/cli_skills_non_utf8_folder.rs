@@ -1,18 +1,32 @@
 //! `provenance skills install` in a folder whose path is not UTF-8. Linux
-//! keeps a file name as bytes. macOS refuses a file name that is not UTF-8,
-//! and Windows keeps a file name as UTF-16, so these tests run on Linux only.
-#![cfg(target_os = "linux")]
+//! keeps a file name as bytes, so a name can hold a byte that is not UTF-8.
+//! Windows keeps a file name as UTF-16 units, so a name can hold a surrogate
+//! with no pair, which is not UTF-8. macOS refuses a file name that is not
+//! UTF-8, so these tests do not run there.
+#![cfg(any(target_os = "linux", windows))]
 
 use assert_cmd::Command;
-use std::ffi::OsStr;
-use std::os::unix::ffi::OsStrExt;
 use std::path::{Path, PathBuf};
 
 const SKILL: &str = "provenance-fork-tournament";
 
 /// A new folder in `parent` whose name has the byte 0xFF, which is not UTF-8.
+#[cfg(target_os = "linux")]
 fn non_utf8_folder(parent: &Path) -> PathBuf {
-    let folder = parent.join(OsStr::from_bytes(b"skills-\xff"));
+    use std::os::unix::ffi::OsStrExt;
+    make_non_utf8_folder(parent.join(std::ffi::OsStr::from_bytes(b"skills-\xff")))
+}
+
+/// A new folder in `parent` whose name has the surrogate 0xD800 with no pair,
+/// which is not UTF-8.
+#[cfg(windows)]
+fn non_utf8_folder(parent: &Path) -> PathBuf {
+    use std::os::windows::ffi::OsStringExt;
+    let units: Vec<u16> = "skills-".encode_utf16().chain([0xD800]).collect();
+    make_non_utf8_folder(parent.join(std::ffi::OsString::from_wide(&units)))
+}
+
+fn make_non_utf8_folder(folder: PathBuf) -> PathBuf {
     std::fs::create_dir(&folder).unwrap();
     assert!(folder.to_str().is_none());
     folder
