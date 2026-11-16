@@ -73,7 +73,7 @@ pub(super) const SEARCH_FIELDS: &[Field] = &[
 ];
 
 /// The search field of the text to find.
-pub const SEARCH_TEXT: Field = Field::text("text")
+pub const SEARCH_TEXT: Field = Field::text("query")
     .leading_hyphen()
     .doc("Text to find in record ids and text.");
 
