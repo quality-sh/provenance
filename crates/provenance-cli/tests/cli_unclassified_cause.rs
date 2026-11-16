@@ -10,8 +10,10 @@ use support::review_paths::{create_requirement, provenance};
 
 const REQUIREMENTS: &str = ".provenance/state/scopes/default/requirements/req.jsonl";
 
-/// The start of the cause. The rest is the text of the operating system.
-const CAUSE: &str = "failed to persist temporary file: ";
+/// The start of the cause: the failed rename of the temporary file onto the
+/// shard. The rest is the text of the operating system.
+const CAUSE: &str =
+    "rename a temporary file to .provenance/state/scopes/default/requirements/req.jsonl: ";
 
 /// A repository whose requirement shard is a directory, so that a write of
 /// the family fails with an I/O error of no known kind.
