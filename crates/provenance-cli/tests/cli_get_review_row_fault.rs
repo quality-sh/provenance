@@ -2,7 +2,9 @@
 //! the scope disagree. When the read database holds a stored revision, the get
 //! of a record answers at that serial with a warning that names the file and
 //! the line of the row, on the CLI and on a spawned `provenance mcp`. The api
-//! read of the record, the review view and an update refuse with that row.
+//! read of the record, the review view and an update refuse with that row, and
+//! the document read refuses with the failed catch-up. When the read database
+//! holds no revision, the get and `provenance materialize` refuse.
 
 use provenance_macros::verifies;
 use serde_json::{json, Value};
@@ -56,6 +58,16 @@ async fn a_get_over_a_withdrawal_that_names_no_submission_warns_at_the_stored_se
         api,
         json!({"code":1,"stdout":"","stderr":format!("Error: {refused}\n")})
     );
+    let document = answer(
+        &repo,
+        &["api", &format!("rules/{RULE}/document"), "--format", "json"],
+    );
+    let catch_up = json!({"error":{"file":WITHDRAWALS,"hint":REPAIR,
+        "kind":"document_catch_up_failed","line":1,"message":MESSAGE},"meta":{}});
+    assert_eq!(
+        document,
+        json!({"code":1,"stdout":"","stderr":format!("Error: {catch_up}\n")})
+    );
     assert_eq!(
         answer(&repo, &[RULE, "--view", "review"]),
         json!({"code":1,"stdout":"","stderr":format!("Error: {warning}\n")})
@@ -63,4 +75,41 @@ async fn a_get_over_a_withdrawal_that_names_no_submission_warns_at_the_stored_se
     let etag = clean.0["edit"]["etag"].as_str().unwrap();
     assert_update_refused(&server, &repo, etag, &refused, &refused).await;
     server.close().await;
+}
+
+#[tokio::test]
+#[verifies("rule_no_revision_refuses_and_names_materialize", examples)]
+async fn a_get_over_a_withdrawal_that_names_no_submission_with_no_stored_revision_refuses() {
+    let directory = tempfile::tempdir().unwrap();
+    let repo = directory.path().to_str().unwrap().to_owned();
+    chain(&repo);
+    write_lost_withdrawal(directory.path());
+    std::fs::remove_dir_all(directory.path().join(".provenance/cache")).unwrap();
+    let server = Server::start(&repo).await;
+
+    let (code, stdout, stderr) = run(&repo, &[RULE, "get", "--format", "json"]);
+    assert_eq!((code, stdout.as_str()), (Some(1), ""), "{stderr}");
+    let by_cli = crate::porcelain_api::envelope(&stderr);
+    let message = by_cli["error"]["message"].as_str().unwrap();
+    let cause = format!("catch-up failed: {WITHDRAWALS} line 1: {MESSAGE}; {REPAIR}");
+    let database = message
+        .strip_prefix("no projection revision in ")
+        .and_then(|rest| rest.strip_suffix(&format!("; run `provenance materialize` ({cause})")))
+        .unwrap_or_else(|| panic!("{message}"));
+    assert!(database.ends_with("provenance.db"), "{message}");
+    assert_eq!(
+        by_cli,
+        json!({"error":{"kind":"operation_failed","message":message},"meta":{}})
+    );
+    let called = server.client.call("get", json!({"target":RULE})).await;
+    assert_eq!(called["isError"], json!(true), "{called}");
+    let by_mcp: Value =
+        serde_json::from_str(called["content"][0]["text"].as_str().unwrap()).unwrap();
+    assert_eq!(by_mcp, by_cli);
+    server.close().await;
+
+    assert_eq!(
+        answer(&repo, &["materialize"]),
+        json!({"code":1,"stdout":"","stderr":format!("Error: {WITHDRAWALS} line 1: {MESSAGE}; {REPAIR}\n")})
+    );
 }

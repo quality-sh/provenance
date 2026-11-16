@@ -24,12 +24,15 @@ fn write_withdrawals(repo: &Repository, lines: &[String]) {
     std::fs::write(path, lines.join("\n") + "\n").unwrap();
 }
 
+/// The record read over a stored revision refuses with the Withdrawal.
 #[tokio::test]
 #[verifies("rule_inconsistent_records_refusal_names_records", examples)]
 async fn a_withdrawal_that_names_no_submission_is_located() {
     let repo = Repository::new("The shared graph is readable.");
-    write_withdrawals(&repo, &[withdrawal("withdrawal_lost", "proposal_missing")]);
     let host = host(&repo, false);
+    let (status, read) = call(&host, "GET", "/requirements/req_shared", None).await;
+    assert_eq!(status, 200, "{read}");
+    write_withdrawals(&repo, &[withdrawal("withdrawal_lost", "proposal_missing")]);
     let (status, failure) = call(&host, "GET", "/requirements/req_shared", None).await;
     assert_eq!(status, 500, "{failure}");
     assert_eq!(
@@ -37,6 +40,22 @@ async fn a_withdrawal_that_names_no_submission_is_located() {
         json!({"kind":"invalid_state_file", "file":WITHDRAWALS, "line":1,
             "message":"withdrawal withdrawal_lost names no review submission: proposal_missing",
             "hint":"To repair, remove ideation/withdrawals.jsonl line 1, then commit."}),
+    );
+}
+
+/// With no stored revision, the catch-up that builds the read database
+/// refuses the Withdrawal, so the record read refuses with `no_projection`.
+/// The host gives no cause text over HTTP, so no Rule about a located refusal
+/// binds this test.
+#[tokio::test]
+async fn a_withdrawal_that_names_no_submission_with_no_stored_revision_refuses() {
+    let repo = Repository::new("The shared graph is readable.");
+    write_withdrawals(&repo, &[withdrawal("withdrawal_lost", "proposal_missing")]);
+    let host = host(&repo, false);
+    let (status, failure) = call(&host, "GET", "/requirements/req_shared", None).await;
+    assert_eq!(
+        (status, failure),
+        (409, json!({"error":{"kind":"no_projection"},"meta":{}}))
     );
 }
 
