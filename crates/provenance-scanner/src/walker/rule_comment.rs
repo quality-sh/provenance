@@ -35,15 +35,14 @@ pub(super) fn rule_comment_at(
     start: usize,
     at_start: LineStart,
 ) -> Option<RuleComment> {
-    let marker_position = annotation_marker_start(
+    let marker_position = annotation_marker_start(language, lines[start], at_start)?;
+    rule_comment(
         language,
-        lines[start],
-        at_start.rust_state,
-        at_start.in_block_comment,
-        at_start.in_multiline_string,
-    )?;
-    let state = CommentState::new(language, at_start.rust_state, at_start.in_block_comment);
-    rule_comment(language, lines, start, marker_position, state)
+        lines,
+        start,
+        marker_position,
+        CommentState::new(language, at_start),
+    )
 }
 
 /// Finds the annotation marker on a line the comment-line gate admits.
@@ -53,13 +52,12 @@ pub(super) fn rule_comment_at(
 /// block comment is open at its start. A marker trailing code on the same
 /// line never binds. Past the gate, markers sitting inside string literals
 /// quoted within the comment are still skipped.
-fn annotation_marker_start(
-    language: Language,
-    line: &str,
-    rust_state: RustLexicalState,
-    started_in_block_comment: bool,
-    started_in_multiline_string: bool,
-) -> Option<usize> {
+fn annotation_marker_start(language: Language, line: &str, at_start: LineStart) -> Option<usize> {
+    let LineStart {
+        rust_state,
+        in_block_comment,
+        in_multiline_string,
+    } = at_start;
     let starts_comment = language
         .comment_syntax()
         .starts_comment(line.trim_start().as_bytes());
@@ -73,7 +71,7 @@ fn annotation_marker_start(
             .then(|| rust_annotation_marker_position(line, rust_state))
             .flatten();
     }
-    (!started_in_multiline_string && (started_in_block_comment || starts_comment))
+    (!in_multiline_string && (in_block_comment || starts_comment))
         .then(|| annotation_marker_position(line))
         .flatten()
 }
@@ -89,16 +87,16 @@ enum CommentState {
 
 impl CommentState {
     /// The comment state at the start of a line of `language`.
-    const fn new(language: Language, rust_state: RustLexicalState, in_block_comment: bool) -> Self {
+    const fn new(language: Language, at_start: LineStart) -> Self {
         match language {
-            Language::Rust => Self::Rust(rust_state),
+            Language::Rust => Self::Rust(at_start.rust_state),
             Language::Python
             | Language::JavaScript
             | Language::TypeScript
             | Language::Java
             | Language::Go => Self::Lexed {
                 syntax: language.comment_syntax(),
-                open: in_block_comment,
+                open: at_start.in_block_comment,
             },
         }
     }
