@@ -1,6 +1,6 @@
 use super::{
     inputs::{ResolutionClearField, UpdateResolutionInput},
-    invalid, missing, optional, required_text, set, validate_final_relations,
+    invalid, missing, optional, required_text, set,
 };
 use crate::{review, shards, state_store::StateStore};
 use provenance_core::{validate_resolution_input_content, Resolution, ResolutionInput};
@@ -30,6 +30,7 @@ impl StateStore {
         let inputs = validate_inputs(input.inputs)?;
         self.mutate_graph_record_checked(
             &path,
+            &scope,
             expected_etag.as_deref(),
             |store, records: &mut Vec<Resolution>| {
                 let position = records
@@ -98,7 +99,6 @@ impl StateStore {
                 )?;
                 Ok(record.clone())
             },
-            |store, record| validate_final_relations(store, &scope, record),
         )
     }
 }

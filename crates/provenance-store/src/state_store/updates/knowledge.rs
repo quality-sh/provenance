@@ -1,6 +1,6 @@
 use super::{
     inputs::{RuleClearField, SourceClearField, UpdateRuleInput, UpdateSourceInput},
-    missing, optional, owner_matches, required_text, set, validate_final_relations,
+    missing, optional, owner_matches, required_text, set,
 };
 use crate::{review, shards, state_store::StateStore};
 use provenance_core::{validate_optional_commit_pin, Rule, Source};
@@ -16,6 +16,7 @@ impl StateStore {
         let expected_etag = input.expected_etag.clone();
         self.mutate_graph_record_checked(
             &path,
+            &scope,
             expected_etag.as_deref(),
             |store, records: &mut Vec<Source>| {
                 let position = records
@@ -64,7 +65,6 @@ impl StateStore {
                     .map_err(|error| crate::refusal::refuse!(InvalidCommitPin, "{error:#}"))?;
                 Ok(record.clone())
             },
-            |store, record| validate_final_relations(store, &scope, record),
         )
     }
 
@@ -76,6 +76,7 @@ impl StateStore {
         let expected_etag = input.expected_etag.clone();
         self.mutate_graph_record_checked(
             &path,
+            &scope,
             expected_etag.as_deref(),
             |store, records: &mut Vec<Rule>| {
                 let position = records
@@ -142,7 +143,6 @@ impl StateStore {
                 )?;
                 Ok(record.clone())
             },
-            |store, record| validate_final_relations(store, &scope, record),
         )
     }
 }
