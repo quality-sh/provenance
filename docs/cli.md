@@ -255,6 +255,45 @@ The review host binds one repository, one scope, and one credential to each
 connection. See [review-host.md](review-host.md). Import and export operate on a
 complete scope. They remain separate from resource writes.
 
+## JSONL merge driver
+
+State is one record per line, so the line merge of git makes conflicts when two
+branches change different records. `provenance merge-jsonl` merges state files
+by record id. `provenance init` sets this up:
+
+- It adds this line to `.gitattributes`, unless the file has that line:
+
+  ```
+  .provenance/state/**/*.jsonl merge=provenance-jsonl
+  ```
+
+- Git does not keep the command of a merge driver in the repository, so init
+  also sets `merge.provenance-jsonl.driver` in the local git configuration of
+  the clone. The value is the command that runs Provenance in the project,
+  followed by `merge-jsonl %O %A %B --output %A --path %P`. For a native
+  install the command is `provenance`, which git finds on `PATH`. When a git
+  configuration level already sets the driver, init keeps that value.
+
+Run `provenance init` one time in each clone. In a new clone it changes no file
+and sets only the driver. Outside a git work tree, or when git does not run,
+init writes `.gitattributes` and prints a notice. Git runs the driver from the
+top folder of the work tree. A TypeScript project in a subfolder has a command
+that does not run from there, so init does not set the driver and prints the
+command to set by hand.
+
+`provenance check --graph` shows a finding when git sends state files to the
+driver and the clone has no command for it. The finding does not change the
+exit code. Without the driver, git merges state files line by line.
+
+The placeholders are the full contract of the command. `%O %A %B` are the
+temporary base, ours, and theirs files. `--output %A` writes the merged records
+over the ours file, which git reads. `--path %P` is the path of the file in the
+repository, which tells the merge the record kind. The command exits non-zero
+when the merge has a conflict or when the merged records fail the write checks;
+git then leaves the path unmerged. The JSON report names each conflicting
+record, its kind (`add_add`, `divergent_edit`, or `delete_modify`), and the
+base, ours, and theirs versions.
+
 ## MCP server
 
 `provenance mcp --repo <repository> --scope <scope>` starts an MCP server on
