@@ -21,7 +21,11 @@ pub(crate) use versions::NoFileVersions;
 pub use versions::{BoxFuture, FileVersion, FileVersions};
 
 use super::classifier;
-use crate::{families::review_families, shards, state_store::StateStore};
+use crate::{
+    families::review_families, jsonl::numbered_lines, merge::ShardFamily, shards,
+    state_store::StateStore,
+};
+use camino::Utf8Path;
 use provenance_core::review::{RecordVersion, SaveOutcome};
 use provenance_core::{NodeType, ScopeId, StableId};
 use provenance_macros::rule;
@@ -90,7 +94,7 @@ impl StateStore {
         };
         let committed = found::committed(history.as_ref(), &files, paths, kind, id).await?;
         let mut versions = committed.versions.clone();
-        let working = working.as_deref().and_then(|text| find(text, id));
+        let working = working.as_deref().and_then(|text| find(&path, text, id));
         if let Some(record) = working {
             if committed
                 .head
@@ -156,11 +160,15 @@ fn lineage(files: &[FileVersion], records: &[Option<Value>]) -> Vec<usize> {
     chain
 }
 
-/// The record with `id` in the text of one JSONL record file. A line that is
-/// not a JSON record, such as a committed conflict marker, holds no record.
-fn find(text: &str, id: &StableId) -> Option<Value> {
-    text.lines()
-        .filter_map(|line| serde_json::from_str::<Value>(line).ok())
+/// The record with `id` in the text of the JSONL record file at `path`. Each
+/// line goes through the line reader of the file. A line that the reader
+/// refuses, such as a committed conflict marker or a line that holds a member
+/// two times, holds no record.
+fn find(path: &Utf8Path, text: &str, id: &StableId) -> Option<Value> {
+    let read_line = ShardFamily::for_shard_path(path).line_reader();
+    numbered_lines(text.as_bytes())
+        .filter_map(|(number, line)| read_line(path, number, line).ok())
+        .map(|(_, value)| value)
         .find(|value| value.get("id").and_then(Value::as_str) == Some(id.as_str()))
 }
 

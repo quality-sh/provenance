@@ -6,6 +6,7 @@ use super::origins::{self, Outcome};
 use super::texts::each_text;
 use super::versions::{FileVersion, FileVersions};
 use super::{find, lineage, push_version, Source, VersionedRecord};
+use camino::Utf8Path;
 use provenance_core::{NodeType, StableId};
 use serde_json::Value;
 use std::collections::BTreeSet;
@@ -72,7 +73,10 @@ pub(super) async fn committed(
         .map(|file| file.commit.as_str())
         .collect::<Vec<_>>();
     each_text(history, paths.records, &commits, |text| {
-        records.push(text.as_deref().and_then(|text| find(text, id)));
+        records.push(
+            text.as_deref()
+                .and_then(|text| find(Utf8Path::new(paths.records), text, id)),
+        );
     })
     .await?;
     let head = records.last().cloned().flatten();
