@@ -201,9 +201,12 @@ fn fenced(
     ViewStore::sharing(repository, parses).fenced(scope, directories)
 }
 
+/// Refuses a scope whose records a read of the store refuses: the ideation
+/// records, the relation fields and the review rows.
 fn validate(store: &GuardedStore<'_>, scope: &ScopeId) -> anyhow::Result<()> {
     store.validate_ideation_scope(scope)?;
-    store.validate_graph_scope(scope)
+    store.validate_graph_scope(scope)?;
+    store.validate_review_scope(scope)
 }
 
 /// A projection from a different validator version requires a full rebuild.
