@@ -121,7 +121,7 @@ impl<T> LoadedRecords<T> {
     /// The records, beside the bytes that their stored lines carry.
     #[cfg(feature = "host")]
     pub(super) const fn records_and_carried(&mut self) -> (&mut Vec<T>, Carried<'_>) {
-        (&mut self.records, Carried(&self.raw))
+        (&mut self.records, Carried(self.raw.as_slice()))
     }
 }
 
