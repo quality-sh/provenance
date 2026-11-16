@@ -93,11 +93,12 @@ fn a_failed_write_of_the_reference_keeps_the_stored_reference() {
 fn a_cache_that_refuses_the_temporary_file_is_named_in_the_error() {
     let temp = tempfile::tempdir().expect("make a temporary directory");
     let (layout, state, index) = repository(&temp);
-    set_project_dictionary(&layout, &import(), index.as_std_path())
-        .expect("the first write makes the cache and its lock");
     let path = dictionary_reference_path(&layout);
-    let stored = std::fs::read(&path).expect("read the reference");
+    std::fs::write(&path, STORED).expect("store a reference");
     let cache = layout.cache_dir();
+    let lock = layout.publication_lock_path();
+    std::fs::create_dir_all(lock.parent().expect("the lock has a directory"))
+        .expect("make the cache and its lock directory");
 
     let closed = close(&cache, Closed::Writes);
     let result = set_project_dictionary(&layout, &import(), index.as_std_path());
@@ -122,7 +123,10 @@ fn a_cache_that_refuses_the_temporary_file_is_named_in_the_error() {
             .is_some_and(crate::storage::local::is_state_temporary_name),
         "{text}"
     );
-    assert_eq!(std::fs::read(&path).expect("read the reference"), stored);
+    assert_eq!(
+        std::fs::read_to_string(&path).expect("read the reference"),
+        STORED
+    );
     assert_eq!(entry_names(&state), ["dictionary.json"]);
 }
 
