@@ -306,10 +306,7 @@ fn a_member_two_times_in_a_file_of_no_known_type_refuses_and_names_ours() {
         answer,
         (
             Some(1),
-            format!(
-                "Error: fixtures/merge/ours.jsonl line 1: ours: duplicate field `zz`; \
-                 {STATE_CORRECTIONS}\n"
-            )
+            "Error: fixtures/merge/ours.jsonl line 1: ours: duplicate field `zz`\n".to_owned()
         )
     );
 }
