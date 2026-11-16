@@ -276,9 +276,18 @@ fn guard_jsonl_lines(
     protect_rows(store, path, &records, permissions)
 }
 
+/// Writes `lines` to the file at `path` with a temporary file and a rename.
+/// A file below a state directory gets its temporary file in the cache, so
+/// a stopped write leaves no file in the state directory: the caller then
+/// holds the section of that repository.
 #[cfg(feature = "host")]
 fn write_jsonl_lines_atomic_unlocked(path: &Utf8Path, lines: &[String]) -> anyhow::Result<()> {
-    crate::storage::local::durability::write_synced_file(path, &jsonl_bytes(lines))
+    use crate::storage::local::durability::{write_synced_file, write_synced_state_file};
+    let bytes = jsonl_bytes(lines);
+    match state_layout(path) {
+        Some(layout) => write_synced_state_file(&layout, path, &bytes),
+        None => write_synced_file(path, &bytes),
+    }
 }
 
 /// The lines, each with a final `\n`.
@@ -298,17 +307,24 @@ fn with_state_publication<R>(
     path: &Utf8Path,
     run: impl FnOnce() -> anyhow::Result<R>,
 ) -> anyhow::Result<R> {
-    if let Some(state) = path.ancestors().find(|p| {
-        p.file_name() == Some("state")
-            && p.parent().and_then(Utf8Path::file_name) == Some(".provenance")
-    }) {
-        let layout = crate::layout::ProvenanceLayout::new(
-            state.parent().and_then(Utf8Path::parent).unwrap(),
-        );
+    if let Some(layout) = state_layout(path) {
         crate::publication::with_repository_publication(&layout, |_| run())
     } else {
         run()
     }
+}
+
+/// The layout of the repository whose state directory holds `path`, if a
+/// state directory holds it.
+#[cfg(feature = "host")]
+fn state_layout(path: &Utf8Path) -> Option<crate::layout::ProvenanceLayout> {
+    path.ancestors()
+        .find(|p| {
+            p.file_name() == Some("state")
+                && p.parent().and_then(Utf8Path::file_name) == Some(".provenance")
+        })
+        .and_then(|state| state.parent().and_then(Utf8Path::parent))
+        .map(|root| crate::layout::ProvenanceLayout::new(root.to_owned()))
 }
 
 #[cfg(test)]

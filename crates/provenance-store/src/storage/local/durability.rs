@@ -1,9 +1,16 @@
+use crate::layout::ProvenanceLayout;
 use camino::{Utf8Path, Utf8PathBuf};
+use provenance_macros::rule;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 
 mod checked;
+pub(in crate::storage::local) mod temporary_name;
 pub use checked::{remove_synced_file_checked, write_synced_file_checked};
+
+/// The prefix of the name of the temporary file of a write of one state key,
+/// in the cache. The section entry removes each file of this name form.
+pub(in crate::storage::local) const STATE_TEMPORARY_PREFIX: &str = ".state-key.provenance-";
 
 /// A failure of [`replace_file`]. Its text is the start of the text of a
 /// `tempfile` persist failure. Its source is the I/O error, so that the
@@ -51,6 +58,61 @@ pub(in crate::storage::local) fn write_synced_file_named(
     builder: &tempfile::Builder<'_, '_>,
 ) -> anyhow::Result<()> {
     let (temporary, parent, first_made) = write_temporary(path.as_std_path(), bytes, builder)?;
+    install_synced(temporary, path, parent, first_made)
+}
+
+/// Writes `bytes` to the state file at `path` as [`write_synced_file`] does,
+/// with a temporary file in the cache of `layout` and not in the state
+/// directory. The state directory is in git, so a stopped write must leave
+/// no file there. The name of the temporary file starts with
+/// [`STATE_TEMPORARY_PREFIX`], and the rename moves it from the cache onto
+/// `path`. A whole-set write also renames from the cache into the state
+/// directory, so both are on one file system.
+///
+/// The caller holds the section lock of `layout`. The section entry removes
+/// each temporary file of this name form, so with no lock it can remove the
+/// file of this write before the rename.
+///
+/// After the rename, the call syncs the directory of `path` and each
+/// directory that it made, as [`write_synced_file`] does. It does not sync
+/// the cache. A stop or a power loss before the rename leaves `path` with
+/// its old bytes and can leave the temporary file in the cache. A power loss
+/// after the rename can also leave the temporary file in the cache, because
+/// the removal of its name from the cache is not synced. The next section
+/// entry removes such a file.
+pub(crate) fn write_synced_state_file(
+    layout: &ProvenanceLayout,
+    path: &Utf8Path,
+    bytes: &[u8],
+) -> anyhow::Result<()> {
+    let (parent, first_made) = make_parent(path.as_std_path())?;
+    let temporary = write_state_temporary(layout, path, bytes)?;
+    install_synced(temporary, path, parent, first_made)
+}
+
+/// A temporary file with `bytes` for the state file at `path`, in the cache
+/// of `layout`, so that a write of a state key adds no file to the state
+/// directory.
+#[rule("rule_one_key_write_adds_no_other_state_file")]
+fn write_state_temporary(
+    layout: &ProvenanceLayout,
+    path: &Utf8Path,
+    bytes: &[u8],
+) -> anyhow::Result<tempfile::NamedTempFile> {
+    let cache = layout.cache_dir();
+    std::fs::create_dir_all(&cache).map_err(step_failure("make directory", cache.as_std_path()))?;
+    let builder = temporary_name::builder(STATE_TEMPORARY_PREFIX);
+    write_temporary_in(cache.as_std_path(), path.as_std_path(), bytes, &builder)
+}
+
+/// Syncs `temporary`, replaces `path` with it, and syncs `parent`, the
+/// directory of `path`, and each directory up to the parent of `first_made`.
+fn install_synced(
+    temporary: tempfile::NamedTempFile,
+    path: &Utf8Path,
+    parent: &Path,
+    first_made: Option<&Path>,
+) -> anyhow::Result<()> {
     temporary
         .as_file()
         .sync_all()
@@ -122,6 +184,15 @@ fn write_temporary<'a>(
     bytes: &[u8],
     builder: &tempfile::Builder<'_, '_>,
 ) -> anyhow::Result<(tempfile::NamedTempFile, &'a Path, Option<&'a Path>)> {
+    let (parent, first_made) = make_parent(path)?;
+    let temporary = write_temporary_in(parent, path, bytes, builder)?;
+    Ok((temporary, parent, first_made))
+}
+
+/// Makes the directory of `path` and each directory above it that does not
+/// exist. Gives that directory and the highest directory that the call made,
+/// if it made one.
+fn make_parent(path: &Path) -> anyhow::Result<(&Path, Option<&Path>)> {
     let parent = parent_of(path)?;
     let mut first_made = None;
     for directory in parent.ancestors() {
@@ -131,13 +202,25 @@ fn write_temporary<'a>(
         first_made = Some(directory);
     }
     std::fs::create_dir_all(parent).map_err(step_failure("make directory", parent))?;
-    let mut temporary = crate::long_path::extended(parent)
+    Ok((parent, first_made))
+}
+
+/// A temporary file with `bytes` in `directory`, with the name that
+/// `builder` gives. An error names `path`, the file that the temporary file
+/// is for.
+fn write_temporary_in(
+    directory: &Path,
+    path: &Path,
+    bytes: &[u8],
+    builder: &tempfile::Builder<'_, '_>,
+) -> anyhow::Result<tempfile::NamedTempFile> {
+    let mut temporary = crate::long_path::extended(directory)
         .and_then(|directory| builder.tempfile_in(directory))
         .map_err(step_failure("make a temporary file for", path))?;
     temporary
         .write_all(bytes)
         .map_err(step_failure("write a temporary file for", path))?;
-    Ok((temporary, parent, first_made))
+    Ok(temporary)
 }
 
 /// Tells if `directory` exists. A failure gives `find directory <path>` and
@@ -193,8 +276,8 @@ fn step_failure<'a>(
     move |error| crate::refusal::caused(error, format!("{step} {}", path.display()))
 }
 
-/// Replaces the file at `target` with `temporary`, a file in the same
-/// directory. The target has all of the new bytes or keeps its old bytes. A
+/// Replaces the file at `target` with `temporary`, a file on the same file
+/// system. The target has all of the new bytes or keeps its old bytes. A
 /// handle that a reader has open on the target does not make the replace fail
 /// when that handle lets other handles delete the file, as `std::fs` handles
 /// do. The temporary file stays open until the rename returns. After a

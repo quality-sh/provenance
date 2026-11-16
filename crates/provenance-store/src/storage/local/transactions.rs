@@ -15,7 +15,8 @@
 //! transaction back after the store cleared its marker, and the next section
 //! entry then removes it as a leftover.
 
-use super::durability::{sync_directory, write_synced_file_named};
+use super::durability::temporary_name::{self, is_temporary_name};
+use super::durability::{sync_directory, write_synced_file_named, STATE_TEMPORARY_PREFIX};
 use super::section::canonical_utf8;
 use crate::layout::ProvenanceLayout;
 use camino::{Utf8Path, Utf8PathBuf};
@@ -55,7 +56,7 @@ pub enum RemovalStep {
     Read,
     Transaction,
     Unpublished,
-    MarkerTemporary,
+    Temporary,
     Marker,
     Marked,
     PreparedFile,
@@ -79,7 +80,7 @@ where
             "remove transaction directory {path} (no marker names this directory, thus the \
              store does not use its data, and a person can remove it)"
         ),
-        RemovalStep::MarkerTemporary => format!("remove temporary file {path}"),
+        RemovalStep::Temporary => format!("remove temporary file {path}"),
         RemovalStep::Marker => format!("remove marker {path}"),
         RemovalStep::Marked => format!("end the write that {path} names"),
         RemovalStep::PreparedFile => format!("remove prepared file {path}"),
@@ -90,12 +91,10 @@ where
     crate::refusal::caused(error, context)
 }
 
-/// The suffix of the temporary file of a marker write.
-const MARKER_TEMPORARY_SUFFIX: &str = ".tmp";
-
 /// Writes `bytes` to the marker of `kind`, as `write_synced_file` does. The
-/// temporary file of the write is `.<marker name>.<random>.tmp` in the
-/// cache, so that the section entry can find it after a stop.
+/// temporary file of the write is `.<marker name>.`, six letters or digits,
+/// and `.tmp`, in the cache, so that the section entry can find it after a
+/// stop.
 pub fn write_marker(
     layout: &ProvenanceLayout,
     kind: TransactionKind,
@@ -103,13 +102,7 @@ pub fn write_marker(
 ) -> anyhow::Result<()> {
     let marker = kind.marker(layout);
     let prefix = marker_temporary_prefix(&marker);
-    write_synced_file_named(
-        &marker,
-        bytes,
-        tempfile::Builder::new()
-            .prefix(&prefix)
-            .suffix(MARKER_TEMPORARY_SUFFIX),
-    )
+    write_synced_file_named(&marker, bytes, &temporary_name::builder(&prefix))
 }
 
 /// The marker of `kind`, or `None` when it does not exist. A read or a parse
@@ -133,9 +126,10 @@ fn marker_temporary_prefix(marker: &Utf8Path) -> String {
 }
 
 /// Removes the data of each write of `kind` that stopped before a marker
-/// named its transaction: `remove` removes each such transaction, as the
-/// error path of a live write does. The caller holds the section lock, and
-/// no marker of `kind` exists, so no live write owns this data.
+/// named its transaction, and the temporary file of each stopped write of
+/// one state key: `remove` removes each such transaction, as the error path
+/// of a live write does. The caller holds the section lock, and no marker of
+/// `kind` exists, so no live write owns this data.
 #[rule("rule_stopped_write_leaves_no_transaction_data")]
 pub fn remove_leftovers(
     layout: &ProvenanceLayout,
@@ -143,11 +137,12 @@ pub fn remove_leftovers(
     mut remove: impl FnMut(&Utf8Path) -> anyhow::Result<()>,
 ) -> anyhow::Result<()> {
     // Each transaction that no marker names, in name order, and then each
-    // temporary file of the marker. The first failure stops the pass.
+    // temporary file of the marker and of a write of one state key. The
+    // first failure stops the pass.
     for transaction in leftovers(layout, kind)? {
         remove(&transaction)?;
     }
-    remove_marker_temporaries(layout, kind)
+    remove_cache_temporaries(layout, kind)
 }
 
 /// Removes the transaction directory of a write that did not publish. No
@@ -176,13 +171,17 @@ fn leftovers(layout: &ProvenanceLayout, kind: TransactionKind) -> anyhow::Result
     Ok(found)
 }
 
-/// Removes each regular file in the cache that has the name of a temporary
-/// file of the marker of `kind`.
-fn remove_marker_temporaries(
+/// Removes each regular file directly in the cache that has the name of a
+/// temporary file of the marker of `kind` or of a write of one state key.
+/// The entry of the section calls this for each kind, so the first call
+/// removes the files of a write of one state key, with one list of the
+/// cache.
+fn remove_cache_temporaries(
     layout: &ProvenanceLayout,
     kind: TransactionKind,
 ) -> anyhow::Result<()> {
-    let prefix = marker_temporary_prefix(&kind.marker(layout));
+    let marker_prefix = marker_temporary_prefix(&kind.marker(layout));
+    let prefixes = [marker_prefix.as_str(), STATE_TEMPORARY_PREFIX];
     let cache = layout.cache_dir();
     let listed = |error| removal_failure(RemovalStep::List, &cache, error);
     for entry in std::fs::read_dir(&cache).map_err(listed)? {
@@ -190,15 +189,16 @@ fn remove_marker_temporaries(
         let Ok(name) = entry.file_name().into_string() else {
             continue;
         };
-        if !name.starts_with(&prefix)
-            || !name.ends_with(MARKER_TEMPORARY_SUFFIX)
+        if !prefixes
+            .iter()
+            .any(|prefix| is_temporary_name(&name, prefix))
             || !entry.file_type().map_err(listed)?.is_file()
         {
             continue;
         }
         let path = cache.join(name);
         std::fs::remove_file(&path)
-            .map_err(|error| removal_failure(RemovalStep::MarkerTemporary, &path, error))?;
+            .map_err(|error| removal_failure(RemovalStep::Temporary, &path, error))?;
     }
     Ok(())
 }

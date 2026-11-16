@@ -67,16 +67,23 @@ fn a_failed_write_of_the_reference_keeps_the_stored_reference() {
     let result = set_project_dictionary(&layout, &import(), index.as_std_path());
     drop(closed);
 
-    let error = result.expect_err("the write of the temporary file must fail");
-    assert!(
-        format!("{error:#}").starts_with(&format!(
-            "write the dictionary reference: make a temporary file for {path}: "
-        )),
-        "{error:#}"
+    let error = result.expect_err("the rename into the state directory must fail");
+    assert_eq!(
+        format!("{error:#}"),
+        format!(
+            "write the dictionary reference: failed to persist temporary file: {}",
+            std::io::Error::from_raw_os_error(13)
+        )
     );
     assert_eq!(
         std::fs::read_to_string(&path).expect("read the reference"),
         STORED
     );
     assert_eq!(entry_names(&state), ["dictionary.json"]);
+    let cache = layout.cache_dir();
+    let temporaries = entry_names(&cache)
+        .into_iter()
+        .filter(|name| name.ends_with(".tmp"))
+        .collect::<Vec<_>>();
+    assert_eq!(temporaries, Vec::<String>::new());
 }

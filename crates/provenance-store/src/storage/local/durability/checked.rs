@@ -1,6 +1,7 @@
 //! A synced write or removal of a file with a check of the file before the
 //! one step that changes it.
 
+use super::temporary_name::{self, is_temporary_name};
 use super::{
     keep, parent_of, sync_directories, sync_failure, sync_parent, write_temporary, ChangedUnsynced,
 };
@@ -10,10 +11,6 @@ use std::path::Path;
 mod tests;
 #[cfg(all(test, windows))]
 mod windows_tests;
-
-/// The length of the random part of a temporary file name.
-const RANDOM_LENGTH: usize = 6;
-const SUFFIX: &str = ".tmp";
 
 /// Replaces the file at `path` with `bytes` in one rename, after `check`.
 ///
@@ -47,11 +44,7 @@ pub fn write_synced_file_checked(
     check: impl FnOnce() -> anyhow::Result<()>,
 ) -> anyhow::Result<Result<std::fs::Permissions, (std::fs::Permissions, ChangedUnsynced)>> {
     remove_stopped_temporaries(path, temporary_prefix)?;
-    let mut builder = tempfile::Builder::new();
-    builder
-        .prefix(temporary_prefix)
-        .suffix(SUFFIX)
-        .rand_bytes(RANDOM_LENGTH);
+    let mut builder = temporary_name::builder(temporary_prefix);
     #[cfg(unix)]
     if permissions.is_none() {
         use std::os::unix::fs::PermissionsExt;
@@ -175,15 +168,6 @@ fn remove_stopped_temporaries(path: &Path, prefix: &str) -> anyhow::Result<()> {
 /// A failed list of `directory`, with the path and the I/O error.
 fn list_failure(directory: &Path, error: std::io::Error) -> anyhow::Error {
     crate::refusal::caused(error, format!("list directory {}", directory.display()))
-}
-
-/// Whether `name` is `prefix`, six letters or digits, and `.tmp`.
-fn is_temporary_name(name: &str, prefix: &str) -> bool {
-    name.strip_prefix(prefix)
-        .and_then(|rest| rest.strip_suffix(SUFFIX))
-        .is_some_and(|random| {
-            random.len() == RANDOM_LENGTH && random.bytes().all(|byte| byte.is_ascii_alphanumeric())
-        })
 }
 
 /// The flags of a Windows rename that replaces a read-only target.
