@@ -217,8 +217,9 @@ fn parse_catalog_limit(value: &str) -> Result<usize, String> {
     }
 }
 
-/// The root parser: the built-in commands and each command that the CLI shows and that
-/// its words select, in the order of [`provenance_cli::exposed::shown`]. The api and
+/// The root parser: the built-in commands and each shown command that its words select.
+///
+/// The commands keep the order of [`provenance_cli::exposed::shown`]. The api and
 /// discussions commands have their own parsers, and the root help names them after its
 /// command list.
 pub fn root_command() -> clap::Command {
