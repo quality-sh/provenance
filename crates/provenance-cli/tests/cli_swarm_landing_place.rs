@@ -6,20 +6,12 @@ use crate::support::landing_runs::{
     api_write, contribution, ideation_files, land_run, landing_repository, proposal_run, Landing,
 };
 use crate::support::merge_driver::{commit, git_ok};
+use crate::support::state_files::texts;
 use provenance_macros::verifies;
 use serde_json::Value;
-use std::collections::BTreeMap;
 
 /// The file of the contributions of the scope, in the work tree.
 const CONTRIBUTIONS: &str = ".provenance/state/scopes/default/ideation/contributions.jsonl";
-
-/// The text of each file of `files`, so that a failure shows the two texts.
-fn texts(files: BTreeMap<String, Vec<u8>>) -> BTreeMap<String, String> {
-    files
-        .into_iter()
-        .map(|(name, bytes)| (name, String::from_utf8(bytes).unwrap()))
-        .collect()
-}
 
 /// A repository with a first commit on `main`.
 fn base() -> Landing {

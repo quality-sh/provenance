@@ -91,6 +91,8 @@ mod cli_refusal_discussions_word;
 mod cli_refusal_guidance;
 #[path = "../cli_refusal_next_step.rs"]
 mod cli_refusal_next_step;
+#[path = "../cli_refused_update_state.rs"]
+mod cli_refused_update_state;
 #[path = "../cli_registration.rs"]
 mod cli_registration;
 #[path = "../cli_resolution_decision_guard.rs"]
