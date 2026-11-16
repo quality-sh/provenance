@@ -13,6 +13,7 @@ pub use checked::{remove_synced_file_checked, write_synced_file_checked};
 pub struct ReplaceFailed(#[source] std::io::Error);
 
 /// A failure after the file at the path changed: a sync of its directory.
+///
 /// [`write_synced_file`] and [`remove_synced_file`] give it in the chain of
 /// their error. [`write_synced_file_checked`] and
 /// [`remove_synced_file_checked`] give it in their inner result.
