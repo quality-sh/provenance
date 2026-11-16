@@ -83,6 +83,8 @@ mod cli_read_freshness;
 mod cli_record_format;
 #[path = "../cli_record_updates.rs"]
 mod cli_record_updates;
+#[path = "../cli_refused_update_state.rs"]
+mod cli_refused_update_state;
 #[path = "../cli_refusal_characterization.rs"]
 mod cli_refusal_characterization;
 #[path = "../cli_refusal_discussions_word.rs"]
