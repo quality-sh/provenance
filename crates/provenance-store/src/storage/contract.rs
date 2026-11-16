@@ -14,7 +14,13 @@ pub trait Harness {
     fn seed(&mut self, entries: &[(&str, &[u8])]);
     /// Runs `call` with the adapter, in the section that the adapter needs.
     fn with_storage<R>(&self, call: impl FnOnce(&dyn StateStorage) -> R) -> R;
-    /// Makes a later landing of `key` fail. Call it after the last seed.
+    /// Makes each later write of `key` fail in the storage that the adapter
+    /// writes to, whichever set makes the write. A check that the adapter
+    /// makes only for the keys of a set is not enough: the cases that break
+    /// each stored key catch an adapter that writes a key outside its set
+    /// only when that write fails. A read of the state still succeeds after
+    /// it. A case calls it for more than one key in turn, and each key stays
+    /// broken. Call it after the last seed.
     fn break_key(&mut self, key: &str);
 }
 

@@ -31,7 +31,8 @@ pub fn a_failed_one_key_set_lands_nothing<H: Harness>(mut harness: H) {
 
 /// A per-key set of one key lands, with no base and on the current base,
 /// while each other stored key in turn is broken. So the adapter writes no
-/// other key for a set of one key.
+/// other key for a set of one key. The case is only as strong as the
+/// `break_key` of its harness.
 pub fn a_one_key_set_lands_while_each_other_key_is_broken<H: Harness>(mut harness: H) {
     harness.seed(&[("manifest.json", b"{}"), (A, b"a"), (B, b"b"), (C, b"c")]);
     for (turn, broken) in ["manifest.json", A, B, C].into_iter().enumerate() {

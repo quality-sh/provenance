@@ -90,7 +90,7 @@ fn each_adapter_an_empty_set_lands_while_each_stored_key_is_broken() {
 }
 
 #[test]
-#[verifies("rule_write_sets_publish_through_the_storage_port", examples)]
+#[verifies("rule_adapter_writes_only_the_keys_of_its_set", examples)]
 #[verifies("rule_one_key_write_set_lands_whole", examples)]
 fn each_adapter_a_one_key_set_lands_while_each_other_key_is_broken() {
     a_one_key_set_lands_while_each_other_key_is_broken(local());
