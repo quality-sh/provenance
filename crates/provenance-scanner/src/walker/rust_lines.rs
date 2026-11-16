@@ -163,17 +163,14 @@ pub(super) fn rust_pieces(
 /// The state after the text at the start of `rest`, in a block comment at
 /// depth `depth`, and the length of that text.
 fn block_comment_step(rest: &[u8], depth: usize) -> (RustLexicalState, usize) {
-    if let Some(open) = RUST_COMMENTS.block_open_at(rest) {
-        (RustLexicalState::BlockComment(depth + 1), open)
-    } else if let Some(close) = RUST_COMMENTS.block_close_at(rest) {
-        let state = if depth == 1 {
-            RustLexicalState::Code
-        } else {
-            RustLexicalState::BlockComment(depth - 1)
-        };
-        (state, close)
-    } else {
-        (RustLexicalState::BlockComment(depth), 1)
+    match (
+        RUST_COMMENTS.block_open_at(rest),
+        RUST_COMMENTS.block_close_at(rest),
+    ) {
+        (Some(open), _) => (RustLexicalState::BlockComment(depth + 1), open),
+        (None, Some(close)) if depth == 1 => (RustLexicalState::Code, close),
+        (None, Some(close)) => (RustLexicalState::BlockComment(depth - 1), close),
+        (None, None) => (RustLexicalState::BlockComment(depth), 1),
     }
 }
 
