@@ -96,7 +96,7 @@ fn a_state_change_without_the_lock_during_init_refuses_the_manifest_and_restores
     );
     assert_eq!(std::fs::read(layout.manifest_path()).unwrap(), manifest);
     // Only the hand edit stays: no skill file, dictionary reference,
-    // temporary file or backup file of init.
+    // or temporary file of init.
     let mut expected = before;
     expected.insert(key(&repo, &shard), Some(std::fs::read(&shard).unwrap()));
     assert_eq!(targets(&repo), expected);
