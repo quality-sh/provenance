@@ -105,7 +105,10 @@ pub fn older_manifest(repo: &Path) -> (u64, String) {
         "{text}"
     );
     std::fs::write(&path, text + "\n").unwrap();
-    (2, format!("invalid type: string \"{actors}\", expected a sequence"))
+    (
+        2,
+        format!("invalid type: string \"{actors}\", expected a sequence"),
+    )
 }
 
 /// Removes the last character of the manifest, as a person who stopped an
