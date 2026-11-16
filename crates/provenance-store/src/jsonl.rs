@@ -16,9 +16,9 @@ use std::fs::{File, OpenOptions};
 mod line;
 mod preservation;
 
-use line::numbered_lines;
 #[cfg(feature = "host")]
-pub(crate) use line::{record_of_line, without_terminator};
+pub(crate) use line::without_terminator;
+pub(crate) use line::{ensure_no_legacy_retirement, numbered_lines, record_of_line};
 #[cfg(feature = "host")]
 pub(crate) use preservation::Carried;
 use preservation::{LoadedRecords, RawRecord};
