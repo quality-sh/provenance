@@ -1,9 +1,11 @@
-//! Record history over a committed state line that holds a member two times.
+//! Record history over a committed state line that holds a member two times,
+//! and over a committed line of another shape than the current record type.
 //!
-//! The history read skips a committed line that the line reader refuses, as
-//! it skips a committed conflict marker. These tests have no Rule binding:
-//! no active Rule states the result of a committed line that holds a member
-//! two times.
+//! The history read skips a committed line that holds a top-level member two
+//! times, as it skips a committed conflict marker. A committed line of
+//! another record shape, or with the removed `retired` member, is a version.
+//! These tests have no Rule binding: no active Rule states the result of
+//! these committed lines.
 
 use crate::discussion_support;
 use discussion_support::*;
@@ -65,7 +67,7 @@ fn commit_changed_line(
         });
     assert_ne!(changed, text, "no line of {path} holds {line}");
     std::fs::write(path, changed).unwrap();
-    let commit = commit_state(temp, "Commit a line that holds a member two times");
+    let commit = commit_state(temp, "Commit the changed line");
     std::fs::write(path, &text).unwrap();
     commit_state(temp, "Restore the line");
     commit
@@ -140,4 +142,32 @@ async fn history_skips_a_committed_discussion_line_that_holds_a_member_two_times
     assert_eq!(versions.len(), 2);
     assert_eq!(versions[1].id.as_str(), outcome);
     assert_eq!(versions[1].origin, None);
+}
+
+#[tokio::test]
+async fn history_shows_a_committed_version_of_another_record_shape() {
+    let (temp, _store) = fixture();
+    commit_state(&temp, "Create");
+    let path = requirements(&temp);
+    let changed = commit_changed_line(&temp, &path, r#""id":"req_a""#, |line| {
+        line.replace(r#""statement":"#, r#""text":"#)
+    });
+
+    let versions = history(&temp, "req_a").await;
+    let ids = versions.iter().map(|v| v.id.as_str()).collect::<Vec<_>>();
+    assert!(ids.contains(&changed.as_str()), "{ids:?}");
+}
+
+#[tokio::test]
+async fn history_shows_a_committed_version_that_holds_retired() {
+    let (temp, _store) = fixture();
+    commit_state(&temp, "Create");
+    let path = requirements(&temp);
+    let changed = commit_changed_line(&temp, &path, r#""id":"req_a""#, |line| {
+        line.replacen('{', r#"{"retired":false,"#, 1)
+    });
+
+    let versions = history(&temp, "req_a").await;
+    let ids = versions.iter().map(|v| v.id.as_str()).collect::<Vec<_>>();
+    assert!(ids.contains(&changed.as_str()), "{ids:?}");
 }
