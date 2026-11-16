@@ -9,8 +9,9 @@
 //! states. The tests of an init with no PDF are in `cli_ste_onboarding`.
 
 use super::support::{
-    dictionary_pdf, file_names, half_reference, init, init_command, provenance, reference_path,
-    reference_problem, reference_refusal, HALF_REFERENCE_MESSAGE, UNAPPROVED_WORD,
+    answer, dictionary_pdf, file_names, half_reference, init, init_command, provenance,
+    reference_path, reference_problem, reference_refusal, HALF_REFERENCE_MESSAGE,
+    UNAPPROVED_WORD,
 };
 use provenance_macros::verifies;
 use serde_json::{json, Value};
@@ -253,19 +254,4 @@ fn an_init_over_half_of_a_reference_refuses_and_keeps_the_technical_names() {
         damaged.refusal(&init),
         refused(HALF_REFERENCE_MESSAGE, &half_reference())
     );
-}
-
-/// The exit code, the JSON on standard output and the text on standard error.
-fn answer(output: &Output) -> (Option<i32>, Value, String) {
-    let stdout = serde_json::from_slice(&output.stdout).unwrap_or_else(|error| {
-        panic!(
-            "stdout must be JSON: {error}: {}",
-            String::from_utf8_lossy(&output.stdout)
-        )
-    });
-    (
-        output.status.code(),
-        stdout,
-        String::from_utf8_lossy(&output.stderr).into_owned(),
-    )
 }

@@ -284,3 +284,18 @@ pub fn file_names(directory: &Path) -> Vec<String> {
     names.sort();
     names
 }
+
+/// The exit code, the JSON on standard output and the text on standard error.
+pub fn answer(output: &Output) -> (Option<i32>, serde_json::Value, String) {
+    let stdout = serde_json::from_slice(&output.stdout).unwrap_or_else(|error| {
+        panic!(
+            "stdout must be JSON: {error}: {}",
+            String::from_utf8_lossy(&output.stdout)
+        )
+    });
+    (
+        output.status.code(),
+        stdout,
+        String::from_utf8_lossy(&output.stderr).into_owned(),
+    )
+}
