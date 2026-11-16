@@ -5,11 +5,10 @@
 //! walker gates both channels on these states so directives and attributes
 //! inside strings never bind.
 
-use super::Language;
+use crate::Language;
 use std::ops::Range;
 
 use crate::binding_lexer::{rust_character_literal_end, Piece};
-use crate::language::CommentSyntax;
 use crate::parser::annotation_marker_positions;
 use crate::string_context::marker_is_inside_quoted_region;
 
@@ -45,9 +44,6 @@ pub(super) fn rust_annotation_marker_position(
         .min()
 }
 
-/// The comments of Rust. Its block comments nest, so a state counts the depth.
-const RUST_COMMENTS: CommentSyntax = Language::Rust.comment_syntax();
-
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub(super) enum RustLexicalState {
     Code,
@@ -61,13 +57,16 @@ fn advance_rust_state(line: &str, state: &mut RustLexicalState) {
 }
 
 /// Advances `state` over `line` and gives each part of the line outside
-/// comments to `visit`, in line order. A string is one quoted part, on the
-/// line where it opens.
+/// comments, and the close of each block comment, to `visit`, in line order.
+/// A string is one quoted part, on the line where it opens. Rust block
+/// comments nest, so the state counts the depth, and the close is the one
+/// that ends the outer comment.
 pub(super) fn rust_pieces(
     line: &str,
     state: &mut RustLexicalState,
     mut visit: impl FnMut(Range<usize>, Piece),
 ) {
+    let comments = Language::Rust.comment_syntax();
     let bytes = line.as_bytes();
     let mut code_start = None;
     let mut quote_start = None;
@@ -76,10 +75,10 @@ pub(super) fn rust_pieces(
         match *state {
             RustLexicalState::Code => {
                 let rest = &bytes[index..];
-                if RUST_COMMENTS.starts_line_comment(rest) {
+                if comments.starts_line_comment(rest) {
                     break;
                 }
-                if let Some(open) = RUST_COMMENTS.block_open_at(rest) {
+                if let Some(open) = comments.block_open_at(rest) {
                     end_code(index, &mut code_start, &mut visit);
                     *state = RustLexicalState::BlockComment(1);
                     index += open;
@@ -149,6 +148,9 @@ pub(super) fn rust_pieces(
             }
             RustLexicalState::BlockComment(depth) => {
                 let (next, length) = block_comment_step(&bytes[index..], depth);
+                if next == RustLexicalState::Code {
+                    visit(index..index + length, Piece::BlockClose);
+                }
                 *state = next;
                 index += length;
             }
@@ -163,10 +165,8 @@ pub(super) fn rust_pieces(
 /// The state after the text at the start of `rest`, in a block comment at
 /// depth `depth`, and the length of that text.
 fn block_comment_step(rest: &[u8], depth: usize) -> (RustLexicalState, usize) {
-    match (
-        RUST_COMMENTS.block_open_at(rest),
-        RUST_COMMENTS.block_close_at(rest),
-    ) {
+    let comments = Language::Rust.comment_syntax();
+    match (comments.block_open_at(rest), comments.block_close_at(rest)) {
         (Some(open), _) => (RustLexicalState::BlockComment(depth + 1), open),
         (None, Some(close)) if depth == 1 => (RustLexicalState::Code, close),
         (None, Some(close)) => (RustLexicalState::BlockComment(depth - 1), close),

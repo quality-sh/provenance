@@ -1,8 +1,9 @@
 //! Lexer state carried across the source lines that a wrapped binding or an
 //! annotation comment consumed.
 
-use super::{multiline_style, Language};
+use super::multiline_style;
 use crate::binding_lexer::{block_comment_state, code_outside_multiline_string};
+use crate::Language;
 
 /// Carries the multiline-string and block-comment state across the lines
 /// that a site consumed. The Rust line states hold the state of Rust.

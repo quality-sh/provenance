@@ -13,7 +13,7 @@
 //! declaration all start its statement.
 
 use super::tokens::{is_word, Token};
-use crate::walker::Language;
+use crate::Language;
 
 /// For each line of `site_lines`, in ascending order, whether a site on that
 /// line starts a statement.

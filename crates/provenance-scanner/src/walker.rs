@@ -6,7 +6,7 @@ use crate::binding_lexer::{block_comment_state, code_outside_multiline_string, M
 use crate::parser::{parse_annotations, Verification};
 use crate::{Annotation, ParseWarning};
 
-pub use crate::language::Language;
+use crate::language::Language;
 
 use bindings::parse_binding_or_warn;
 pub use bounded::scan_path_bounded;

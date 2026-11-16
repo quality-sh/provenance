@@ -18,7 +18,7 @@ mod tokens;
 
 use provenance_macros::rule;
 
-use super::Language;
+use crate::Language;
 pub(super) use statement::statement_starts;
 use tokens::is_word;
 pub(super) use tokens::{file_tokens, Token};

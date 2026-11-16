@@ -17,7 +17,8 @@ use provenance_core::coverage::EvidenceAnchor;
 
 use super::declaration::{self, file_tokens, statement_starts, Read, Token};
 use super::rust_lines::RustLexicalState;
-use super::{script_call_name, AnnotationLocation, AttributeBinding, Language};
+use super::{script_call_name, AnnotationLocation, AttributeBinding};
+use crate::Language;
 
 /// The sites of one file.
 pub(super) struct Sites<'a> {

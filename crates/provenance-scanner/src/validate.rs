@@ -66,7 +66,8 @@ pub fn validate_bindings(
 mod tests {
     use camino::Utf8Path;
 
-    use crate::walker::{scan_file, Language};
+    use crate::walker::scan_file;
+    use crate::Language;
 
     use super::*;
 

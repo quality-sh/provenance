@@ -43,16 +43,19 @@ JavaScript, TypeScript, Java, and Go, and with `#` in Python, after leading
 whitespace. Python has no block comment. A marker after code on the same line
 does not bind. The comment binds the Rule whatever item comes below it.
 
-The comment continues on each line below it that starts with `//` (`#` in
-Python) or that starts in an open block comment, and it ends at a line where
-code follows the close of a block comment. Each other line ends the comment.
-So a JavaScript generator method `*items()`, a Rust line `*x += 1;`, a Python
-line `*args,`, and a `/*` line below a `//` comment each end the comment, and
-a ` * text` line in an open `/** ... */` block continues it. A binding below
-the end of the comment is a site of its own with its own line.
+The comment continues on each comment line below it: a line that starts with
+`//` or `/*` (`#` in Python), or that starts in an open block comment. It ends
+at a line where code follows the close of a block comment. Each other line
+ends the comment. So a JavaScript generator method `*items()`, a Rust line
+`*x += 1;`, and a Python line `*args,` each end the comment, and a `/* note */`
+line below a `//` comment, a `//` line below a `/* ... */` comment, and a
+` * text` line in an open `/** ... */` block continue it. A binding below the
+end of the comment is a site of its own with its own line.
 A block comment that code follows on the same line, such as
 `/* @provenance rule: rule_overtime */ function pays() {}`, ends at its close,
-and the declaration after the close on that line gives the item name.
+and the declaration after the close on that line gives the item name. The
+text of a block comment stops at its close, so a second comment after the
+close on the same line is not part of the Rule comment.
 
 The item name of the comment is the name of the declaration that starts
 directly below it. Comments, empty lines, attributes, decorators, and

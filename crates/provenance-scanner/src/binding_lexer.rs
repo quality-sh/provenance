@@ -45,16 +45,19 @@ pub fn block_comment_state(
     })
 }
 
-/// A part of a source line outside comments.
+/// A part of a source line that a lexer reports.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Piece {
+    /// Code outside comments and strings.
     Code,
     /// A string or a character literal, with its quotes.
     Quoted,
+    /// The close of a block comment.
+    BlockClose,
 }
 
-/// Gives each part of `line` outside comments to `visit`, in line order, and
-/// returns whether a block comment is open at the end of the line. The
+/// Gives each part of `line` outside comments, and the close of each block
+/// comment, to `visit`, in line order, and returns whether a block comment is open at the end of the line. The
 /// comments are those of `syntax`, and `'`, `"`, and `` ` `` quote a string.
 /// A quote that does not close on the line quotes the rest of the line.
 /// `visit` can stop the read; the returned state is then not known.
@@ -88,6 +91,7 @@ pub fn lex_line(
         if in_block_comment {
             if let Some(close) = syntax.block_close_at(&bytes[idx..]) {
                 in_block_comment = false;
+                emit!(idx..idx + close, Piece::BlockClose);
                 idx += close;
             } else {
                 idx += 1;

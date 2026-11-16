@@ -9,8 +9,9 @@
 use std::ops::ControlFlow;
 
 use crate::binding_lexer::{lex_line, multiline_parts, Piece};
+use crate::walker::multiline_style;
 use crate::walker::rust_lines::{rust_pieces, RustLexicalState};
-use crate::walker::{multiline_style, Language};
+use crate::Language;
 
 /// One code token and the index of its line.
 #[derive(Clone, Copy)]
@@ -66,6 +67,7 @@ pub(in crate::walker) fn file_tokens<'a>(
                     line: number,
                 }),
                 Piece::Code => push_words(language, &line[range], number, &mut tokens),
+                Piece::BlockClose => {}
             }
         }
     }

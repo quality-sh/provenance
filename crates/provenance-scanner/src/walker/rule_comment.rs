@@ -1,20 +1,20 @@
 //! Where a Rule comment starts and where it ends.
 //!
-//! A comment line starts with a comment of its language, or a block comment
-//! of its language is open at its start. A Rule comment starts on a comment
-//! line that holds a marker and continues on each line below that starts
-//! with a line comment or is inside an open block comment. It ends at a line
-//! where code follows the comment.
+//! A comment line starts with the line-comment prefix or the block-comment
+//! open of its language, or a block comment of its language is open at its
+//! start. A Rule comment starts on a comment line that holds a marker and
+//! continues on each comment line below. It ends at a line where code follows
+//! the comment. The text of a block comment stops at its close.
 
 use std::ops::{ControlFlow, Range};
 
 use provenance_macros::rule;
 
 use super::rust_lines::{rust_annotation_marker_position, rust_pieces, RustLexicalState};
-use super::Language;
-use crate::binding_lexer::lex_line;
+use crate::binding_lexer::{lex_line, Piece};
 use crate::language::CommentSyntax;
 use crate::parser::annotation_marker_position;
+use crate::Language;
 
 /// The lexical state at the start of a line.
 #[derive(Clone, Copy)]
@@ -35,14 +35,9 @@ pub(super) fn rule_comment_at(
     start: usize,
     at_start: LineStart,
 ) -> Option<RuleComment> {
-    let marker_position = annotation_marker_start(language, lines[start], at_start)?;
-    rule_comment(
-        language,
-        lines,
-        start,
-        marker_position,
-        CommentState::new(language, at_start),
-    )
+    let state = CommentState::new(language, at_start);
+    let marker_position = annotation_marker_start(language, lines[start], at_start, state)?;
+    rule_comment(lines, start, marker_position, state)
 }
 
 /// Finds the annotation marker on a line the comment-line gate admits.
@@ -52,28 +47,28 @@ pub(super) fn rule_comment_at(
 /// block comment is open at its start. A marker trailing code on the same
 /// line never binds. Past the gate, markers sitting inside string literals
 /// quoted within the comment are still skipped.
-fn annotation_marker_start(language: Language, line: &str, at_start: LineStart) -> Option<usize> {
-    let LineStart {
-        rust_state,
-        in_block_comment,
-        in_multiline_string,
-    } = at_start;
-    let starts_comment = language
-        .comment_syntax()
-        .starts_comment(line.trim_start().as_bytes());
-    if language == Language::Rust {
-        let in_string = matches!(
-            rust_state,
+fn annotation_marker_start(
+    language: Language,
+    line: &str,
+    at_start: LineStart,
+    state: CommentState,
+) -> Option<usize> {
+    let in_string = at_start.in_multiline_string
+        || matches!(
+            at_start.rust_state,
             RustLexicalState::Quoted | RustLexicalState::Raw(_)
         );
-        let in_comment = matches!(rust_state, RustLexicalState::BlockComment(_));
-        return (!in_string && (in_comment || starts_comment))
-            .then(|| rust_annotation_marker_position(line, rust_state))
-            .flatten();
+    if in_string || !state.is_comment_line(line) {
+        return None;
     }
-    (!in_multiline_string && (in_block_comment || starts_comment))
-        .then(|| annotation_marker_position(line))
-        .flatten()
+    match language {
+        Language::Rust => rust_annotation_marker_position(line, at_start.rust_state),
+        Language::Python
+        | Language::JavaScript
+        | Language::TypeScript
+        | Language::Java
+        | Language::Go => annotation_marker_position(line),
+    }
 }
 
 /// The comment state at the start of a line.
@@ -101,33 +96,49 @@ impl CommentState {
         }
     }
 
-    const fn in_block_comment(self) -> bool {
-        match self {
-            Self::Rust(state) => matches!(state, RustLexicalState::BlockComment(_)),
-            Self::Lexed { open, .. } => open,
-        }
+    /// Whether `line`, read from this state, is a comment line: it starts
+    /// with the line-comment prefix or the block-comment open of its
+    /// language, or a block comment is open at its start.
+    fn is_comment_line(self, line: &str) -> bool {
+        let syntax = match self {
+            Self::Rust(RustLexicalState::BlockComment(_)) | Self::Lexed { open: true, .. } => {
+                return true;
+            }
+            Self::Rust(_) => Language::Rust.comment_syntax(),
+            Self::Lexed { syntax, .. } => syntax,
+        };
+        syntax.starts_comment(line.trim_start().as_bytes())
     }
 
-    /// Reads `line` from this state: the offset of the first code or string
-    /// on the line. With no code on the line, the state moves to the end of
-    /// the line.
-    fn first_code(&mut self, line: &str) -> Option<usize> {
-        let mut first = None;
-        let mut find = |range: Range<usize>| {
+    /// Reads `line` from this state. With no code on the line, the state
+    /// moves to the end of the line.
+    fn read(&mut self, line: &str, from: usize) -> LineRead {
+        let mut read = LineRead {
+            code: None,
+            close: None,
+        };
+        let mut visit = |range: Range<usize>, piece: Piece| {
             let part = &line[range.clone()];
             let blank = part.len() - part.trim_start().len();
-            if first.is_none() && blank < part.len() {
-                first = Some(range.start + blank);
+            match piece {
+                Piece::BlockClose if range.start >= from => {
+                    read.close.get_or_insert(range.start);
+                }
+                Piece::BlockClose => {}
+                Piece::Code | Piece::Quoted if blank < part.len() => {
+                    read.code.get_or_insert(range.start + blank);
+                }
+                Piece::Code | Piece::Quoted => {}
             }
-            first.is_some()
+            read.code.is_some()
         };
         match self {
-            Self::Rust(state) => rust_pieces(line, state, |range, _| {
-                find(range);
+            Self::Rust(state) => rust_pieces(line, state, |range, piece| {
+                visit(range, piece);
             }),
             Self::Lexed { syntax, open } => {
-                *open = lex_line(line, *open, *syntax, |range, _| {
-                    if find(range) {
+                *open = lex_line(line, *open, *syntax, |range, piece| {
+                    if visit(range, piece) {
                         ControlFlow::Break(())
                     } else {
                         ControlFlow::Continue(())
@@ -135,14 +146,23 @@ impl CommentState {
                 });
             }
         }
-        first
+        read
     }
+}
+
+/// What a line holds, read from the comment state at its start.
+struct LineRead {
+    /// The offset of the first code or string on the line.
+    code: Option<usize>,
+    /// The offset of the first close of a block comment at or after the
+    /// offset where the read of the comment starts.
+    close: Option<usize>,
 }
 
 /// The text and the extent of one Rule comment.
 pub(super) struct RuleComment {
-    /// The comment from its marker, one line of text for each line, without
-    /// the close of a block comment.
+    /// The comment from its marker, one line of text for each line. The text
+    /// of a line stops at the close of a block comment.
     pub(super) text: String,
     /// The index of the last line of the comment.
     pub(super) end: usize,
@@ -156,38 +176,32 @@ pub(super) struct RuleComment {
 /// when code comes before the marker on its line.
 #[rule("rule_comment_ends_above_the_first_code_line")]
 fn rule_comment(
-    language: Language,
     lines: &[&str],
     start: usize,
     marker_position: usize,
     mut state: CommentState,
 ) -> Option<RuleComment> {
-    let syntax = language.comment_syntax();
     let mut text = String::new();
     let mut end = start;
     let mut from = marker_position;
     loop {
         let line = lines[end];
-        let in_block = state.in_block_comment()
-            || syntax.block_open_at(line.trim_start().as_bytes()).is_some();
-        let code = state.first_code(line);
+        let LineRead { code, close } = state.read(line, from);
         if code.is_some_and(|code| code < from) {
             return None;
         }
-        let part = &line[from..code.unwrap_or(line.len())];
-        let closes_block = code.is_some() || (in_block && !state.in_block_comment());
-        text.push_str(if closes_block {
-            without_block_close(part, syntax)
-        } else {
-            part
-        });
+        let stop = close.or(code).unwrap_or(line.len());
+        text.push_str(&line[from..stop]);
         if code.is_some() {
-            let below = if end == start { start } else { start + 1 };
-            return Some(RuleComment { text, end, below });
+            return Some(RuleComment {
+                text,
+                end,
+                below: end,
+            });
         }
-        let continues = lines.get(end + 1).is_some_and(|next| {
-            state.in_block_comment() || syntax.starts_line_comment(next.trim_start().as_bytes())
-        });
+        let continues = lines
+            .get(end + 1)
+            .is_some_and(|next| state.is_comment_line(next));
         if !continues {
             return Some(RuleComment {
                 text,
@@ -199,13 +213,4 @@ fn rule_comment(
         end += 1;
         from = 0;
     }
-}
-
-/// `part`, the comment part of a line where a block comment closes, without
-/// the close.
-fn without_block_close(part: &str, syntax: CommentSyntax) -> &str {
-    syntax
-        .block
-        .and_then(|block| part.trim_end().strip_suffix(block.close))
-        .unwrap_or(part)
 }

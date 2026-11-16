@@ -30,7 +30,7 @@ pub fn selects_source_path(root: &Utf8Path, path: &Utf8Path) -> bool {
         return false;
     };
     path.extension()
-        .and_then(super::Language::from_extension)
+        .and_then(crate::Language::from_extension)
         .is_some()
         && RepositoryFilter::admits_file(root.as_std_path(), relative.as_std_path())
 }

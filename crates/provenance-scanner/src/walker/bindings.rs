@@ -7,10 +7,10 @@
 
 use std::str::FromStr;
 
-use super::Language;
 use crate::binding_lexer::call_arguments;
 use crate::language::CommentSyntax;
 use crate::parser::Verification;
+use crate::Language;
 use crate::ParseWarning;
 
 /// A recognized binding site: the rule id, the verification method for a
@@ -277,11 +277,12 @@ fn binding_attribute_name(line: &str) -> Option<&str> {
 /// wrapped attribute; one that would pull comment text in is left unparsed.
 fn join_attribute(line: &str, following: &[&str]) -> Option<(String, usize)> {
     binding_attribute_name(line)?;
+    let comments = Language::Rust.comment_syntax();
     let mut joined = line.trim().to_string();
     let mut extra = 0;
     while paren_depth(&joined) > 0 {
         let next = following.get(extra)?.trim();
-        if (0..next.len()).any(|at| RUST_COMMENTS.starts_comment(&next.as_bytes()[at..])) {
+        if (0..next.len()).any(|at| comments.starts_comment(&next.as_bytes()[at..])) {
             return None;
         }
         joined.push(' ');
@@ -293,9 +294,6 @@ fn join_attribute(line: &str, following: &[&str]) -> Option<(String, usize)> {
     }
     Some((joined, extra))
 }
-
-/// The comments of Rust, the one language with wrapped attributes.
-const RUST_COMMENTS: CommentSyntax = Language::Rust.comment_syntax();
 
 /// A wrapped attribute never legitimately spans more than a few lines.
 const MAX_ATTRIBUTE_LINES: usize = 16;
