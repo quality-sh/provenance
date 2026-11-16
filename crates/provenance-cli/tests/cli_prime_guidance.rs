@@ -281,12 +281,14 @@ fn prime_names_each_command_that_the_cli_shows_in_its_cli_form() {
     let repo = tempfile::tempdir().unwrap();
     let text = prime(repo.path(), &[]);
     let named = line_forms(&text);
-    for form in help_forms(repo.path()) {
-        assert!(
-            named.contains(&form.as_str()),
-            "prime does not name `provenance {form}`, which the CLI help shows:\n{text}"
-        );
-    }
+    let unnamed: Vec<String> = help_forms(repo.path())
+        .into_iter()
+        .filter(|form| !named.contains(&form.as_str()))
+        .collect();
+    assert!(
+        unnamed.is_empty(),
+        "prime does not name {unnamed:?}, which the CLI help shows:\n{text}"
+    );
     let forms = code_forms(&text);
     assert!(
         forms.iter().any(|form| form.starts_with("<id> ")),
