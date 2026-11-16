@@ -3,7 +3,6 @@
 
 use provenance_macros::verifies;
 use provenance_mcp::Client;
-use provenance_porcelain::guidance::guidance_for;
 use serde_json::{json, Value};
 use std::process::Stdio;
 
@@ -96,6 +95,9 @@ fn text(result: &Value) -> &str {
     result["content"][0]["text"].as_str().unwrap()
 }
 
+/// The `provenance mcp` server of the binary gives the instructions of the library server
+/// for the same repository, and its tools give the output of the CLI commands. The text of
+/// the instructions is pinned in the tests of `provenance-mcp`.
 #[tokio::test]
 #[verifies("rule_mcp_command_uses_cli_repository", examples)]
 async fn mcp_serves_the_tools_of_the_cli_repository() {
@@ -105,12 +107,7 @@ async fn mcp_serves_the_tools_of_the_cli_repository() {
     let server = Server::start(&repo).await;
     let client = &server.client;
 
-    // prime holds the guidance of the commands that the CLI shows, and adds its own first
-    // steps.
-    let prime = cli(&["prime", "--repo", &repo]);
-    let shared = guidance_for(&provenance_cli::exposed::shown(), &[], None).guidance;
-    assert!(prime.starts_with(&shared), "{prime}");
-    // The server gives the instructions of a server on the host of the CLI repository.
+    // The library server on the host of the CLI repository is the reference.
     let context = provenance_transport::repository::RepoContext::new(&repo, "default");
     let host = provenance_cli::porcelain::local_host(&context).unwrap();
     let (local_io, server_io) = tokio::io::duplex(256 * 1024);

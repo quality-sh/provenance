@@ -84,8 +84,11 @@ pub fn form(declaration: &Declaration) -> String {
         .join(" or ")
 }
 
-/// Each command that the CLI shows, in help order, with its CLI form: the porcelain
-/// commands of [`EXPOSED`], with the server commands after the workspace commands.
+/// Each command that the CLI shows, with its CLI form.
+///
+/// The order is the order of [`EXPOSED`], with the server commands after the workspace
+/// commands and before the dogfood commands. The root help gives the commands that a name
+/// selects in this order.
 pub fn shown() -> Vec<(Shown, String)> {
     let (dogfood, porcelain): (Vec<Command>, Vec<Command>) = EXPOSED
         .iter()
