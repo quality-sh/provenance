@@ -207,20 +207,25 @@ pub fn load_project_dictionary(layout: &ProvenanceLayout) -> Option<ProjectDicti
 /// Stores the index in `index_directory` and then writes the project
 /// reference, so that the reference names only an index that is stored.
 ///
-/// A current reference that does not parse stops the call before a write.
+/// The call holds the publication section of `layout`, as each write below
+/// the state directory does, so no other write changes the reference or
+/// the state directory between the read and the write. A current reference
+/// that does not parse stops the call before a write.
 #[cfg(feature = "host")]
 pub fn set_project_dictionary(
     layout: &ProvenanceLayout,
     import: &DictionaryImport,
     index_directory: &std::path::Path,
 ) -> anyhow::Result<Utf8PathBuf> {
-    let path = dictionary_reference_path(layout);
-    let reference = current_reference(layout)?.bytes_for(&import.identity)?;
-    crate::dictionary_index::store_dictionary_index(import, index_directory)
-        .context("store the dictionary index")?;
-    crate::storage::local::durability::write_synced_file(&path, &reference)
-        .context("write the dictionary reference")?;
-    Ok(path)
+    crate::publication::with_repository_publication(layout, |_| {
+        let path = dictionary_reference_path(layout);
+        let reference = current_reference(layout)?.bytes_for(&import.identity)?;
+        crate::dictionary_index::store_dictionary_index(import, index_directory)
+            .context("store the dictionary index")?;
+        crate::storage::local::durability::write_synced_state_file(layout, &path, &reference)
+            .context("write the dictionary reference")?;
+        Ok(path)
+    })
 }
 
 /// The part of the committed reference that a write of a new dictionary

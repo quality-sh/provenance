@@ -75,7 +75,7 @@ pub fn to_stable_json<T: Serialize>(value: &T) -> anyhow::Result<String> {
 /// write permission, and inside a held section or stage body it refuses.
 #[cfg(all(feature = "host", any(test, feature = "test-fixture")))]
 pub fn write_jsonl_atomic<T: Serialize>(path: &Utf8Path, records: &[T]) -> anyhow::Result<()> {
-    with_state_publication(path, || write_jsonl_atomic_under_publication(path, records))
+    with_state_publication(path, |layout| write_records(layout, path, records))
 }
 
 /// Mutates one file of derived state, such as the verification runs, under
@@ -120,7 +120,7 @@ where
         crate::state_store::read_budget::ensure_line_within(line, line_budget)
     })?;
     guard_jsonl_lines(&files_of(path), path, &lines, &WritePermissions::none())?;
-    write_jsonl_lines_atomic_unlocked(path, &lines)
+    crate::storage::local::durability::write_synced_file(path, &jsonl_bytes(&lines))
         .map_err(crate::write_error::publication_started)?;
     Ok(result)
 }
@@ -222,8 +222,19 @@ where
 
 /// Writes one JSONL shard while the caller holds the publication lock. It
 /// carries no write permission, so it cannot change an enrolled row.
-#[cfg(all(feature = "host", any(test, feature = "test-fixture")))]
+#[cfg(all(feature = "host", test))]
 pub(crate) fn write_jsonl_atomic_under_publication<T: Serialize>(
+    path: &Utf8Path,
+    records: &[T],
+) -> anyhow::Result<()> {
+    let layout = crate::layout::ProvenanceLayout::holding_state_path(path);
+    write_records(layout.as_ref(), path, records)
+}
+
+/// Writes `records` to the file at `path` as [`write_jsonl_lines`] does.
+#[cfg(all(feature = "host", any(test, feature = "test-fixture")))]
+fn write_records<T: Serialize>(
+    layout: Option<&crate::layout::ProvenanceLayout>,
     path: &Utf8Path,
     records: &[T],
 ) -> anyhow::Result<()> {
@@ -232,7 +243,7 @@ pub(crate) fn write_jsonl_atomic_under_publication<T: Serialize>(
         .iter()
         .map(to_stable_json)
         .collect::<anyhow::Result<Vec<_>>>()?;
-    write_jsonl_lines_atomic_unlocked(path, &lines)
+    write_jsonl_lines(layout, path, &lines)
 }
 
 /// Writes merged records from the opaque rows read from the merge inputs.
@@ -250,9 +261,9 @@ pub fn write_preserved_jsonl_atomic(
     records: &[crate::merge::CanonicalRecord],
 ) -> anyhow::Result<()> {
     let lines = crate::merge::preserved_lines(ours, theirs, records)?;
-    with_state_publication(path, || {
+    with_state_publication(path, |layout| {
         guard_jsonl_lines(&files_of(path), path, &lines, &WritePermissions::none())?;
-        write_jsonl_lines_atomic_unlocked(path, &lines)
+        write_jsonl_lines(layout, path, &lines)
     })
 }
 
@@ -276,9 +287,24 @@ fn guard_jsonl_lines(
     protect_rows(store, path, &records, permissions)
 }
 
+/// Writes `lines` to the file at `path` with a temporary file and a rename.
+/// `layout` is the repository whose state directory holds `path`, if one
+/// holds it, and the caller then holds the section of that repository: the
+/// temporary file is then in its cache, so a stopped write leaves no file in
+/// the state directory. With no `layout`, the temporary file is next to
+/// `path`.
 #[cfg(feature = "host")]
-fn write_jsonl_lines_atomic_unlocked(path: &Utf8Path, lines: &[String]) -> anyhow::Result<()> {
-    crate::storage::local::durability::write_synced_file(path, &jsonl_bytes(lines))
+fn write_jsonl_lines(
+    layout: Option<&crate::layout::ProvenanceLayout>,
+    path: &Utf8Path,
+    lines: &[String],
+) -> anyhow::Result<()> {
+    use crate::storage::local::durability::{write_synced_file, write_synced_state_file};
+    let bytes = jsonl_bytes(lines);
+    layout.map_or_else(
+        || write_synced_file(path, &bytes),
+        |layout| write_synced_state_file(layout, path, &bytes),
+    )
 }
 
 /// The lines, each with a final `\n`.
@@ -291,23 +317,20 @@ fn jsonl_bytes(lines: &[String]) -> Vec<u8> {
     bytes
 }
 
-/// Runs a raw write in the publication section of the repository that holds
-/// `path`. The raw writers carry no permission and get no held store.
+/// Runs a raw write in the publication section of the repository whose state
+/// directory holds `path`, and hands it the layout of that repository. With
+/// no such repository, it runs the write with no section and no layout. The
+/// raw writers carry no permission and get no held store.
 #[cfg(feature = "host")]
 fn with_state_publication<R>(
     path: &Utf8Path,
-    run: impl FnOnce() -> anyhow::Result<R>,
+    run: impl FnOnce(Option<&crate::layout::ProvenanceLayout>) -> anyhow::Result<R>,
 ) -> anyhow::Result<R> {
-    if let Some(state) = path.ancestors().find(|p| {
-        p.file_name() == Some("state")
-            && p.parent().and_then(Utf8Path::file_name) == Some(".provenance")
-    }) {
-        let layout = crate::layout::ProvenanceLayout::new(
-            state.parent().and_then(Utf8Path::parent).unwrap(),
-        );
-        crate::publication::with_repository_publication(&layout, |_| run())
-    } else {
-        run()
+    match crate::layout::ProvenanceLayout::holding_state_path(path) {
+        Some(layout) => {
+            crate::publication::with_repository_publication(&layout, |_| run(Some(&layout)))
+        }
+        None => run(None),
     }
 }
 

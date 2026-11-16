@@ -368,23 +368,16 @@ impl StateStore {
         operation: impl FnOnce(&Self) -> anyhow::Result<R>,
     ) -> anyhow::Result<R> {
         self.ensure_section_open()?;
-        let Some(state_dir) = path.ancestors().find(|ancestor| {
-            ancestor.file_name() == Some("state")
-                && ancestor.parent().and_then(Utf8Path::file_name) == Some(".provenance")
-        }) else {
+        let Some(layout) = ProvenanceLayout::holding_state_path(path) else {
             return operation(self);
         };
         #[cfg(not(feature = "host"))]
-        let _ = state_dir;
+        let _ = layout;
         match (&self.access, &self.storage) {
             #[cfg(feature = "host")]
             (Access::Lock, Storage::Layout) => {
-                let root = state_dir
-                    .parent()
-                    .and_then(Utf8Path::parent)
-                    .ok_or_else(|| crate::refusal::fault!("state path has no repository root"))?;
                 crate::publication::with_repository_publication_checked(
-                    &ProvenanceLayout::new(root),
+                    &layout,
                     || Ok(()),
                     || operation(self),
                 )

@@ -161,3 +161,12 @@ finished. Files and containing directories are synced where the platform support
 `fsync`. Portable filesystems do not provide an atomic directory exchange, so the guarantee is
 not overstated as crash-atomic: cooperating access never sees missing live state, interruption is
 recoverable on next access, and any import command that returns failure leaves the old live state.
+
+The cache and the state directory must be on one file system. A write of one state key at a
+time writes each key to a temporary file in `.provenance/cache` and renames it onto the key. A
+write that lands all of its keys or none renames a changed copy of the state from the cache onto
+`.provenance/state`. A rename cannot move a file from one file system to another, so with a mount
+at `.provenance/cache` or at `.provenance/state` each of these writes fails, and the error of a
+write of one key names both directories. The store does not support that layout. After a stopped
+write of one key, the temporary file stays in the cache, and the next entry to the publication
+section removes it.

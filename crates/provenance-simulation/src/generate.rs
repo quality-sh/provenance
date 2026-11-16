@@ -76,8 +76,8 @@ pub enum Fault {
     /// of two keys or more: an even `at` when its transaction appears, an
     /// odd `at` when the publication marker appears while its transaction
     /// exists. For a write of one key, at each `at`: when its temporary file
-    /// appears in the state tree. The test reads after the kill whether the
-    /// stop landed before or after the rename, or the write ended first.
+    /// appears in the cache. The test reads after the kill whether the stop
+    /// landed before or after the rename, or the write answered first.
     Stop { engine: u8, at: u8 },
 }
 
