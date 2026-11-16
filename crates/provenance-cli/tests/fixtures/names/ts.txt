@@ -204,6 +204,3 @@ function* keywords() {
   // @provenance rule: rule_keyword_return
   return pays(ready);
 }
-
-/* @provenance rule: rule_same_line */ function sameLine() {}
-function lower() {}

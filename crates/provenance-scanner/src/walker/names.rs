@@ -27,7 +27,7 @@ pub(super) struct Sites<'a> {
 
 struct Unnamed {
     line: usize,
-    /// The index of the first line of the read of the site.
+    /// The index of the first line below the site.
     below: usize,
     site: Site,
 }
@@ -57,12 +57,10 @@ impl<'a> Sites<'a> {
     }
 
     /// A comment on line `line` that holds the annotations at `annotations`.
-    /// The read starts on that line, because code can follow the end of a
-    /// block comment there.
     pub(super) fn comment(&mut self, line: usize, annotations: Range<usize>) {
         self.unnamed.push(Unnamed {
             line,
-            below: line,
+            below: line + 1,
             site: Site::Comment(annotations),
         });
     }
@@ -157,9 +155,9 @@ fn set(
 }
 
 /// The range of the tokens that the read of each site covers. `sites` holds
-/// the first line of the read of each site and the line of the site, in line
-/// order. A read covers the tokens from its first line to the line of the next
-/// site, so the ranges do not overlap.
+/// the first line below each site and the line of the site, in line order. A
+/// read covers the tokens from the first line below its site to the line of
+/// the next site, so the ranges do not overlap.
 fn read_ranges(tokens: &[Token<'_>], sites: &[(usize, usize)]) -> Vec<Range<usize>> {
     let first_at = |line: usize| tokens.partition_point(|token| token.line < line);
     sites

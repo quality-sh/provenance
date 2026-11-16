@@ -130,6 +130,11 @@ tokens as a statement:
 - A Rust attribute directly below a binding comment is not scanned as a
   binding: the comment takes in the attribute line.
 
+A marker in a block comment that code follows on the same line, such as
+`/* @provenance rule: rule_overtime */ function pays() {}`, does not bind
+correctly: the scanner takes the rest of the line into the Rule id. Put the
+comment on its own line.
+
 A Rust `#[rule]` or `#[verifies]` attribute and a Python `@rule` decorator take
 their item name by the same rules. A call does not:
 
