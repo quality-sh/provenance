@@ -395,3 +395,31 @@ fn a_stop_in_the_write_of_the_source_edit_marker_leaves_no_file_after_the_next_s
     assert_eq!(prepared_files(root), Vec::<String>::new());
     assert_eq!(published(root), (BEFORE.to_vec(), BEFORE.to_vec()));
 }
+
+/// A source edit whose stage changes no state key installs its file, and
+/// leaves no transaction and no marker. No Rule: the graph has no active Rule
+/// that a source edit replaces its file; this test pins the exception to
+/// `rule_empty_write_set_writes_no_data` that its description states.
+#[test]
+fn a_source_edit_with_no_state_key_replaces_its_file() {
+    let temp = fixture();
+    let root_path = canonical_root(&temp);
+    let root = root_path.as_path();
+    let layout = ProvenanceLayout::new(root);
+    let files = RepositoryFiles::open(root).unwrap();
+    let held = files
+        .read_bounded(Utf8Path::new("source.txt"), 1024)
+        .unwrap();
+
+    with_repository_publication(&layout, |section| {
+        with_staged_state_and_source_edit(section, held, AFTER, |_| Ok(()))
+    })
+    .unwrap();
+
+    assert_eq!(published(root), (AFTER.to_vec(), BEFORE.to_vec()));
+    assert_eq!(
+        names(&layout.source_edit_transactions_dir()),
+        Vec::<String>::new()
+    );
+    assert!(!layout.source_edit_marker_path().exists());
+}
