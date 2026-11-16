@@ -244,10 +244,7 @@ fn mutation_refuses_a_changed_row_with_a_repeated_unknown_field() {
     let state = UnparsableStateFile::find(message.as_ref()).unwrap();
     assert_eq!(
         (state.line(), state.message()),
-        (
-            1,
-            "repeated top-level member `extension` cannot survive a typed record change"
-        )
+        (1, "duplicate field `extension`")
     );
     assert_eq!(std::fs::read(path).unwrap(), before);
 }
