@@ -7,6 +7,7 @@ use clap::{
 };
 use provenance_cli::cli_options::{self, flag_name, GLOBAL_OPTIONS, GROUP_DESCRIPTIONS};
 use provenance_macros::rule;
+use provenance_porcelain::guidance::Shown;
 use provenance_porcelain::registry::{
     self, Binding, Declaration, Field, FieldValue, Input, Relation,
 };
@@ -216,40 +217,21 @@ fn parse_catalog_limit(value: &str) -> Result<usize, String> {
     }
 }
 
-/// The root parser: the built-in commands and the word commands that it lists. The
-/// server commands follow the workspace commands.
+/// The root parser: the built-in commands and each command that the CLI shows and that
+/// its words select, in the order of [`provenance_cli::exposed::shown`]. The api and
+/// discussions commands have their own parsers, and the root help names them after its
+/// command list.
 pub fn root_command() -> clap::Command {
-    let shown = |command: &registry::Command| provenance_cli::exposed::shows(*command);
-    let listed = |filter: fn(&registry::Command) -> bool| {
-        registry::Command::ALL
-            .iter()
-            .filter(move |command| shown(command) && filter(command))
-            .map(|command| command.declaration())
-    };
-    let servers = provenance_cli::servers::SERVERS
-        .iter()
-        .map(|server| server.declaration());
-    [
-        registry::Command::Search,
-        registry::Command::Check,
-        registry::Command::Prime,
-    ]
-    .iter()
-    .map(|command| command.declaration())
-    .chain(listed(|command| {
-        matches!(
-            command,
-            registry::Command::Repository(_) | registry::Command::Graph(_)
-        )
-    }))
-    .chain(listed(|command| {
-        matches!(command, registry::Command::Workspace(_))
-    }))
-    .chain(servers)
-    .chain(listed(|command| {
-        matches!(command, registry::Command::Dogfood(_))
-    }))
-    .fold(crate::cli::Cli::command(), add_subcommand)
+    provenance_cli::exposed::shown()
+        .into_iter()
+        .filter(|(shown, _)| {
+            !matches!(
+                shown,
+                Shown::Registry(registry::Command::Api | registry::Command::Action(_))
+            ) && shown.declaration().grammar.takes_name()
+        })
+        .map(|(shown, _)| shown.declaration())
+        .fold(crate::cli::Cli::command(), add_subcommand)
 }
 
 /// Adds one word command to `root` under its words, as `provenance <words...>` shows it.

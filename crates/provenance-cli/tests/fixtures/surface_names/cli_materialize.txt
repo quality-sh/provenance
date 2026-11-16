@@ -1,4 +1,4 @@
-Build the local query cache again from the graph files of the repository
+Build the local query cache again from the graph files of the repository.
 
 Usage: provenance materialize [OPTIONS]
 

@@ -1,4 +1,4 @@
-Check one artifact file against its schema and its record checks
+Check one artifact file against its schema and its record checks.
 
 Usage: provenance validate [OPTIONS] --input <INPUT> <ARTIFACT>
 

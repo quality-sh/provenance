@@ -98,9 +98,9 @@ pub fn commands(input: &ActionInput) -> impl Iterator<Item = Command> + '_ {
         })
 }
 
-/// Whether this input has the notify action.
-pub fn notifies(input: &ActionInput) -> bool {
-    input.actions().any(|word| word == NOTIFY)
+/// The name of the notify action, when this input has it.
+pub fn notify(input: &ActionInput) -> Option<&'static str> {
+    input.actions().any(|word| word == NOTIFY).then_some(NOTIFY)
 }
 
 /// The change tool, when the host can run some write. Its description names only the
@@ -113,7 +113,7 @@ pub fn tool(host: &StatementHost, input: &ActionInput) -> Option<Tool> {
     let writes: Vec<(Command, String)> = commands(input)
         .map(|command| (command, crate::exposed::name(command).to_owned()))
         .collect();
-    let description = provenance_porcelain::guidance::change_description(&writes, notifies(input))?;
+    let description = provenance_porcelain::guidance::change_description(&writes, notify(input))?;
     Some(crate::surface::tool(
         crate::exposed::name(Command::Change),
         description,

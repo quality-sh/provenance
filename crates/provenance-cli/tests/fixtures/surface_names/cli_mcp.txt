@@ -1,4 +1,4 @@
-Serve the MCP tools for one repository on standard input and output
+Serve the MCP tools for one repository on standard input and output.
 
 Usage: provenance mcp [OPTIONS]
 

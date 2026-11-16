@@ -1,7 +1,7 @@
 //! Domain guidance shared by each consumer.
 
 use crate::action::Action;
-use crate::registry::Command;
+use crate::registry::{Command, Declaration};
 use provenance_macros::rule;
 use serde::Serialize;
 use std::fmt::Write;
@@ -59,19 +59,37 @@ const CHANGE: (&str, &str) = (
      their fields.",
 );
 
-/// The notify write. It is not a command: the get command runs it with its notify
-/// field.
-const NOTIFY: &str = "notify";
+/// A command that an interface shows: a registry command, or a command that the interface
+/// declares itself.
+#[derive(Clone, Copy, Debug)]
+pub enum Shown {
+    Registry(Command),
+    Declared(Declaration),
+}
+
+impl Shown {
+    /// The declaration of the command.
+    pub const fn declaration(self) -> Declaration {
+        match self {
+            Self::Registry(command) => command.declaration(),
+            Self::Declared(declaration) => declaration,
+        }
+    }
+}
 
 /// Produce the guidance of an interface: a line for each command that it shows, with its
-/// name there and its registry description, and a change line that names `writes`.
+/// name there and its description, and a change line that names `writes` and `notify`.
 #[rule("rule_guidance_names_accepted_commands")]
 pub fn guidance_for(
-    commands: &[(Command, String)],
+    commands: &[(Shown, String)],
     writes: &[(Command, String)],
-    notify: bool,
+    notify: Option<&str>,
 ) -> Guidance {
-    let shown = |command: Command| commands.iter().any(|(other, _)| *other == command);
+    let shown = |command: Command| {
+        commands
+            .iter()
+            .any(|(other, _)| matches!(other, Shown::Registry(other) if *other == command))
+    };
     let mut text = String::from(DOMAIN);
     let opening: Vec<String> = [
         (shown(Command::Search) && shown(Command::Get)).then(|| SEARCH_THEN_GET.to_owned()),
@@ -90,10 +108,14 @@ pub fn guidance_for(
     text.push_str(ACCESS);
     for (command, name) in commands {
         let declaration = command.declaration();
-        if declaration.internal || !also_named(*command).iter().all(|other| shown(*other)) {
+        let names_unshown = match command {
+            Shown::Registry(command) => !also_named(*command).iter().all(|other| shown(*other)),
+            Shown::Declared(_) => false,
+        };
+        if declaration.internal || names_unshown {
             continue;
         }
-        let description = if *command == Command::Change {
+        let description = if matches!(command, Shown::Registry(Command::Change)) {
             let Some(description) = change_description(writes, notify) else {
                 continue;
             };
@@ -120,12 +142,12 @@ fn create_sentence(shown: impl Fn(Command) -> bool) -> Option<String> {
 }
 
 /// The description of a change command that selects `writes`, each with the name that
-/// selects it, and notify when `notify` is true.
+/// selects it, and the notify write by the name in `notify`.
 ///
 /// The writes are in groups: the record actions, the other actions, which are the
 /// Discussion writes, and the repository writes. Each group keeps the order of `writes`.
 /// No write gives no description.
-pub fn change_description(writes: &[(Command, String)], notify: bool) -> Option<String> {
+pub fn change_description(writes: &[(Command, String)], notify: Option<&str>) -> Option<String> {
     let group = |selected: fn(Command) -> bool| -> Vec<&str> {
         writes
             .iter()
@@ -137,7 +159,7 @@ pub fn change_description(writes: &[(Command, String)], notify: bool) -> Option<
         (group(is_record_action), "on the target record"),
         (group(is_discussion_write), "for a Discussion"),
         (
-            if notify { vec![NOTIFY] } else { Vec::new() },
+            notify.into_iter().collect(),
             "to register a client thread for review changes",
         ),
         (

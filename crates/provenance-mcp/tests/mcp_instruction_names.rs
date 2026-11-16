@@ -8,9 +8,6 @@ use provenance_porcelain::action::Action;
 use provenance_transport::repository::RepoContext;
 use rmcp::model::Tool;
 
-/// The action value that is not a command. The change line names it.
-const NOTIFY: &str = "notify";
-
 /// Whether `text` names `name`: a space before it, and a space, a comma, or a period
 /// after it.
 fn names(text: &str, name: &str) -> bool {
@@ -40,6 +37,14 @@ fn listed_names(tools: &[Tool]) -> Vec<String> {
     names
 }
 
+/// Whether `name` is the MCP name of a command. An action value that is not, as the
+/// notify write, has no line: the change line names it.
+fn is_command(name: &str) -> bool {
+    provenance_mcp::exposed::EXPOSED
+        .iter()
+        .any(|(command, _)| provenance_mcp::exposed::name(*command) == name)
+}
+
 /// The names of the command lines of the instructions.
 fn line_names(instructions: &str) -> Vec<&str> {
     let (_, actions) = instructions.split_once("\n## Actions\n").unwrap();
@@ -50,7 +55,7 @@ fn line_names(instructions: &str) -> Vec<&str> {
         .collect()
 }
 
-/// The instructions have a line for each listed tool and action value other than notify,
+/// The instructions have a line for each listed tool and action value that is a command,
 /// and each line names a listed tool or action value. The change tool description names
 /// each of its action values, is the change line of the instructions, and names no other
 /// spelling of a command that MCP shows.
@@ -59,7 +64,7 @@ fn assert_names_listed(tools: &[Tool], instructions: &str) {
     let lines = line_names(instructions);
     for name in &listed {
         assert!(
-            name == NOTIFY || lines.contains(&name.as_str()),
+            !is_command(name) || lines.contains(&name.as_str()),
             "the instructions do not name {name}, which the server lists:\n{instructions}"
         );
     }

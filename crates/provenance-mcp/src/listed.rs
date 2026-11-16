@@ -53,11 +53,12 @@ impl Table {
             .unwrap_or_default()
     }
 
-    /// Whether the change tool is listed with the notify action.
-    pub fn shows_notify(&self) -> bool {
-        self.0.iter().any(
-            |listed| matches!(&listed.runner, Runner::Change(actions) if tools::change_notifies(&actions.listed)),
-        )
+    /// The name of the notify action, when the change tool is listed with it.
+    pub fn notify(&self) -> Option<&'static str> {
+        self.0.iter().find_map(|listed| match &listed.runner {
+            Runner::Change(actions) => tools::change_notify(&actions.listed),
+            _ => None,
+        })
     }
 }
 

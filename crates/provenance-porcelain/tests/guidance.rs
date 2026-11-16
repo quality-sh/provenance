@@ -3,8 +3,10 @@
 //! show. Its sentences name only shown commands.
 
 use provenance_porcelain::action::Action;
-use provenance_porcelain::guidance::guidance_for;
-use provenance_porcelain::registry::{Command, GraphCommand, RepositoryCommand};
+use provenance_porcelain::guidance::{guidance_for, Shown};
+use provenance_porcelain::registry::{
+    Command, Declaration, Fields, GraphCommand, RepositoryCommand,
+};
 
 /// Phrases that do not name a command, each with the start of the one line that holds
 /// it: the trace view of get, the claim of a Topic, the HTTP method of an API route, the
@@ -26,6 +28,10 @@ const REPOSITORY_WRITES: [Command; 4] = [
     Command::Repository(RepositoryCommand::DictionaryImport),
     Command::Graph(GraphCommand::SwarmBacktraceLand),
 ];
+
+/// The name that the consumer in these tests gives to the notify write. It is not the
+/// name of a command.
+const NOTIFY: &str = "watch";
 
 /// The record kind that has the name of a command. The guidance writes the record kind
 /// with a capital letter.
@@ -78,6 +84,14 @@ fn declared(shown: impl Fn(Command) -> bool) -> Vec<(Command, String)> {
         .collect()
 }
 
+/// Each registry command of `commands` as a command that the consumer shows.
+fn registry(commands: Vec<(Command, String)>) -> Vec<(Shown, String)> {
+    commands
+        .into_iter()
+        .map(|(command, name)| (Shown::Registry(command), name))
+        .collect()
+}
+
 /// Whether the change command of the consumer selects `command`: an action that is not a
 /// Discussion read, or a repository write.
 fn is_write(command: Command) -> bool {
@@ -87,11 +101,11 @@ fn is_write(command: Command) -> bool {
 }
 
 /// The guidance of a consumer that shows each command for which `shown` is true, with
-/// the shown writes on its change command, and notify when `notify` is true.
+/// the shown writes on its change command, and the notify write when `notify` is true.
 fn guidance_with(shown: impl Fn(Command) -> bool, notify: bool) -> String {
-    let commands = declared(&shown);
+    let commands = registry(declared(&shown));
     let writes = declared(|command| shown(command) && is_write(command));
-    guidance_for(&commands, &writes, notify).guidance
+    guidance_for(&commands, &writes, notify.then_some(NOTIFY)).guidance
 }
 
 /// The guidance of a consumer that shows notify and each command for which `shown` is
@@ -118,24 +132,36 @@ fn the_guidance_names_no_command_that_the_consumer_does_not_show() {
     }
     let text = guidance_with(|_| true, false);
     assert!(
-        !names(&command_text(&text), "notify"),
-        "the guidance without notify names it:\n{text}"
+        !names(&command_text(&text), NOTIFY),
+        "the guidance without the notify write names it:\n{text}"
+    );
+    let text = guidance();
+    assert!(
+        text.contains(&format!(", or {NOTIFY} to register a client thread")),
+        "the guidance does not give the notify write by the name of the consumer:\n{text}"
     );
 }
 
-/// The lines follow the order of the consumer and use its names. An internal command
+/// The lines follow the order of the consumer and use its names. A command that the
+/// consumer declares itself gets a line with its own description. An internal command
 /// gets no line.
 #[test]
 #[provenance_macros::verifies("rule_guidance_names_accepted_commands", examples)]
 fn each_shown_command_has_one_line_with_the_name_of_the_consumer() {
     let import = Command::Repository(RepositoryCommand::Import);
     let merge = Command::Repository(RepositoryCommand::MergeJsonl);
+    let serve = Declaration::named(
+        "serve",
+        "Serve the records.",
+        Fields::new(&[], serde_json::Value::default),
+    );
     let commands = [
-        (import, "loaded import".to_owned()),
-        (Command::Search, "find".to_owned()),
-        (merge, "merge".to_owned()),
+        (Shown::Registry(import), "loaded import".to_owned()),
+        (Shown::Registry(Command::Search), "find".to_owned()),
+        (Shown::Registry(merge), "merge".to_owned()),
+        (Shown::Declared(serve), "start".to_owned()),
     ];
-    let text = guidance_for(&commands, &[], false).guidance;
+    let text = guidance_for(&commands, &[], None).guidance;
     let (_, actions) = text.split_once("\n## Actions\n").unwrap();
     let lines: Vec<&str> = actions
         .lines()
@@ -146,6 +172,7 @@ fn each_shown_command_has_one_line_with_the_name_of_the_consumer() {
         [
             format!("- loaded import: {}", import.declaration().description),
             format!("- find: {}", Command::Search.declaration().description),
+            "- start: Serve the records.".to_owned(),
         ]
     );
     assert!(merge.declaration().internal);

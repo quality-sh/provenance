@@ -108,14 +108,17 @@ async fn mcp_serves_the_tools_of_the_cli_repository() {
     // prime holds the guidance of the commands that the CLI shows, and adds its own first
     // steps.
     let prime = cli(&["prime", "--repo", &repo]);
-    let shared = guidance_for(&provenance_cli::exposed::forms(), &[], false).guidance;
+    let shared = guidance_for(&provenance_cli::exposed::shown(), &[], None).guidance;
     assert!(prime.starts_with(&shared), "{prime}");
-    // The repository of the CLI gives the server its repository writes.
-    let instructions = client.instructions().unwrap();
-    assert!(
-        instructions.contains("\n- dictionary_import: "),
-        "{instructions}"
-    );
+    // The server gives the instructions of a server on the host of the CLI repository.
+    let context = provenance_transport::repository::RepoContext::new(&repo, "default");
+    let host = provenance_cli::porcelain::local_host(&context).unwrap();
+    let (local_io, server_io) = tokio::io::duplex(256 * 1024);
+    let local = tokio::spawn(async move { provenance_mcp::serve(host, server_io).await.unwrap() });
+    let local_client = Client::connect(local_io).await.unwrap();
+    assert_eq!(client.instructions(), local_client.instructions());
+    local_client.cancel().await.unwrap();
+    local.await.unwrap().cancel().await.unwrap();
     let tools = client.tools().await;
     let names: Vec<&str> = tools
         .iter()

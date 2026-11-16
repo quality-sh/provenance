@@ -15,7 +15,7 @@ const FIRST_STEPS: &str = "\n\nFor a focused start, run:\n\n\
 fn record_actions() -> Option<String> {
     let shown = |action| {
         let command = Command::Action(action);
-        exposed::shows(command).then(|| exposed::form(command))
+        exposed::shows(command).then(|| exposed::form(&command.declaration()))
     };
     let update = shown(Action::Update)?;
     let create = shown(Action::Create)?;
@@ -31,7 +31,7 @@ fn record_actions() -> Option<String> {
 /// first steps, and the CLI form of an action on a record.
 #[rule("rule_porcelain_cli_prime_teaches_domain")]
 pub(super) fn handle(format: PrimeFormat) -> anyhow::Result<()> {
-    let mut guidance = guidance::guidance_for(&exposed::forms(), &[], false);
+    let mut guidance = guidance::guidance_for(&exposed::shown(), &[], None);
     guidance.guidance.push_str(FIRST_STEPS);
     guidance.guidance.extend(record_actions());
     match format {

@@ -63,13 +63,13 @@ impl Server {
         let (name, description, fields, schema): (_, _, _, fn() -> serde_json::Value) = match self {
             Self::Review => (
                 "review",
-                "Serve local review assets and authorized repository operations",
+                "Serve local review assets and authorized repository operations.",
                 REVIEW_FIELDS,
                 review_schema,
             ),
             Self::Mcp => (
                 "mcp",
-                "Serve the MCP tools for one repository on standard input and output",
+                "Serve the MCP tools for one repository on standard input and output.",
                 MCP_FIELDS,
                 mcp_schema,
             ),
