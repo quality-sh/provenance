@@ -86,13 +86,13 @@ const DISCUSSION: &str = "- discussion: Read the addressed Discussion.";
 const DISCUSS: &str = "- discuss: Start a Discussion under the target record.";
 const REPLY: &str = "- reply: Reply to the addressed Discussion.";
 const MATERIALIZE: &str = "- materialize: Build the local query cache again from the graph \
-files of the repository";
+files of the repository.";
 const IMPORT: &str = "- import: Replace the records of one scope with a scope export file and \
-delete each record that is not in the file";
+delete each record that is not in the file.";
 const DICTIONARY_IMPORT: &str =
-    "- dictionary_import: Import the ASD-STE100 Issue 9 dictionary from one local PDF file";
+    "- dictionary_import: Import the ASD-STE100 Issue 9 dictionary from one local PDF file.";
 const SWARM_BACKTRACE_LAND: &str = "- swarm_backtrace_land: Add the results of one swarm \
-backtrace run to the graph as proposals";
+backtrace run to the graph as proposals.";
 
 /// The first steps that a server adds when it lists search and get.
 const FIRST_STEPS: &str = "\n\nFor a focused start, call search with {\"text\":\"<text>\"}, \
