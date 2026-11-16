@@ -13,10 +13,11 @@ mod children;
 mod repository;
 
 use camino::Utf8Path;
-use children::git_children;
+use children::{git_children, hold};
 use provenance_store::review::history::{FileVersions, GitFileVersions};
 use repository::repository;
 use std::fmt::Write as _;
+use std::process::Stdio;
 use std::sync::{Mutex, MutexGuard, PoisonError};
 use std::time::{Duration, Instant};
 
@@ -88,6 +89,34 @@ fn a_dropped_adapter_stops_its_process() {
         );
         Some(())
     });
+}
+
+/// A Git child that ended and that its parent waited for is not a Git child
+/// of the test, also while another process holds it. The adapter waits for
+/// its process, but on Windows the host of the console of the process can
+/// hold the process after the wait.
+#[test]
+fn an_ended_child_that_another_hold_keeps_is_not_listed() {
+    let _serial = serial();
+    let temp = tempfile::tempdir().unwrap();
+    let (root, _) = repository(&temp, &[("good.jsonl", "good\n")]);
+    let mut child = provenance_store::git_process::git()
+        .args(["cat-file", "--batch"])
+        .current_dir(root)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .unwrap();
+    let pid = child.id();
+    assert_eq!(git_children(), [pid], "the running child is not listed");
+    let _hold = hold(pid);
+    child.kill().unwrap();
+    child.wait().unwrap();
+    assert!(
+        !git_children().contains(&pid),
+        "the process {pid} ended, but it is listed"
+    );
 }
 
 #[test]

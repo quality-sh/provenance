@@ -126,3 +126,37 @@ fn processes() -> Vec<(u32, u32, String)> {
     unsafe { CloseHandle(snapshot) };
     found
 }
+
+/// A second hold on the process `id` while the value lives, as another
+/// process can have, for example the host of the console of the process. On
+/// Unix a process has no such hold, so the value holds nothing.
+#[cfg(unix)]
+pub struct Hold;
+
+#[cfg(unix)]
+pub const fn hold(_: u32) -> Hold {
+    Hold
+}
+
+/// A second hold on the process `id` while the value lives, as another
+/// process can have, for example the host of the console of the process.
+/// Windows keeps the process in the process list until each hold closes.
+#[cfg(windows)]
+pub struct Hold(windows_sys::Win32::Foundation::HANDLE);
+
+#[cfg(windows)]
+pub fn hold(id: u32) -> Hold {
+    use windows_sys::Win32::System::Threading::{OpenProcess, PROCESS_QUERY_LIMITED_INFORMATION};
+    // SAFETY: the call takes no pointer, and a zero handle is a failure.
+    let process = unsafe { OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, id) };
+    assert_ne!(process, 0, "the process {id} cannot be opened");
+    Hold(process)
+}
+
+#[cfg(windows)]
+impl Drop for Hold {
+    fn drop(&mut self) {
+        // SAFETY: the handle is open, and it is closed once, here.
+        unsafe { windows_sys::Win32::Foundation::CloseHandle(self.0) };
+    }
+}
