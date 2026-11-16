@@ -222,7 +222,7 @@ where
 
 /// Writes one JSONL shard while the caller holds the publication lock. It
 /// carries no write permission, so it cannot change an enrolled row.
-#[cfg(all(feature = "host", any(test, feature = "test-fixture")))]
+#[cfg(all(feature = "host", test))]
 pub(crate) fn write_jsonl_atomic_under_publication<T: Serialize>(
     path: &Utf8Path,
     records: &[T],
@@ -301,10 +301,10 @@ fn write_jsonl_lines(
 ) -> anyhow::Result<()> {
     use crate::storage::local::durability::{write_synced_file, write_synced_state_file};
     let bytes = jsonl_bytes(lines);
-    match layout {
-        Some(layout) => write_synced_state_file(layout, path, &bytes),
-        None => write_synced_file(path, &bytes),
-    }
+    layout.map_or_else(
+        || write_synced_file(path, &bytes),
+        |layout| write_synced_state_file(layout, path, &bytes),
+    )
 }
 
 /// The lines, each with a final `\n`.
