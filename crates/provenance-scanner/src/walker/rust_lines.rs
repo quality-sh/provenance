@@ -148,26 +148,32 @@ pub(super) fn rust_pieces(
                 }
             }
             RustLexicalState::BlockComment(depth) => {
-                let rest = &bytes[index..];
-                if let Some(open) = RUST_COMMENTS.block_open_at(rest) {
-                    *state = RustLexicalState::BlockComment(depth + 1);
-                    index += open;
-                } else if let Some(close) = RUST_COMMENTS.block_close_at(rest) {
-                    *state = if depth == 1 {
-                        RustLexicalState::Code
-                    } else {
-                        RustLexicalState::BlockComment(depth - 1)
-                    };
-                    index += close;
-                } else {
-                    index += 1;
-                }
+                let (next, length) = block_comment_step(&bytes[index..], depth);
+                *state = next;
+                index += length;
             }
         }
     }
     end_code(index.min(bytes.len()), &mut code_start, &mut visit);
     if let Some(start) = quote_start {
         visit(start..bytes.len(), Piece::Quoted);
+    }
+}
+
+/// The state after the text at the start of `rest`, in a block comment at
+/// depth `depth`, and the length of that text.
+fn block_comment_step(rest: &[u8], depth: usize) -> (RustLexicalState, usize) {
+    if let Some(open) = RUST_COMMENTS.block_open_at(rest) {
+        (RustLexicalState::BlockComment(depth + 1), open)
+    } else if let Some(close) = RUST_COMMENTS.block_close_at(rest) {
+        let state = if depth == 1 {
+            RustLexicalState::Code
+        } else {
+            RustLexicalState::BlockComment(depth - 1)
+        };
+        (state, close)
+    } else {
+        (RustLexicalState::BlockComment(depth), 1)
     }
 }
 

@@ -13,7 +13,7 @@ pub use bounded::scan_path_bounded;
 use consumed::consume_lines;
 pub use ignore::selects_source_path;
 use names::Sites;
-use rule_comment::{annotation_marker_start, rule_comment, CommentState};
+use rule_comment::{rule_comment_at, LineStart};
 use rust_lines::{rust_line_states, RustLexicalState};
 
 mod bindings;
@@ -229,18 +229,12 @@ fn scan_file_contents(
             idx = end_idx + 1;
             continue;
         }
-        let Some(marker_position) = annotation_marker_start(
-            language,
-            lines[idx],
-            rust_states[idx],
-            started_in_block_comment,
-            started_in_multiline_string,
-        ) else {
-            idx += 1;
-            continue;
+        let start = LineStart {
+            rust_state: rust_states[idx],
+            in_block_comment: started_in_block_comment,
+            in_multiline_string: started_in_multiline_string,
         };
-        let state = CommentState::new(language, rust_states[idx], started_in_block_comment);
-        let Some(comment) = rule_comment(language, &lines, idx, marker_position, state) else {
+        let Some(comment) = rule_comment_at(language, &lines, idx, start) else {
             idx += 1;
             continue;
         };

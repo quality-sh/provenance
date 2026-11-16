@@ -16,6 +16,36 @@ use crate::binding_lexer::lex_line;
 use crate::language::CommentSyntax;
 use crate::parser::annotation_marker_position;
 
+/// The lexical state at the start of a line.
+#[derive(Clone, Copy)]
+pub(super) struct LineStart {
+    /// The state of the Rust lexer; `Code` in the other languages.
+    pub(super) rust_state: RustLexicalState,
+    /// Whether a block comment is open, in a language other than Rust.
+    pub(super) in_block_comment: bool,
+    /// Whether a multiline string is open, in a language other than Rust.
+    pub(super) in_multiline_string: bool,
+}
+
+/// The Rule comment that starts on line `start`, when the line holds a
+/// marker that the comment-line gate admits.
+pub(super) fn rule_comment_at(
+    language: Language,
+    lines: &[&str],
+    start: usize,
+    at_start: LineStart,
+) -> Option<RuleComment> {
+    let marker_position = annotation_marker_start(
+        language,
+        lines[start],
+        at_start.rust_state,
+        at_start.in_block_comment,
+        at_start.in_multiline_string,
+    )?;
+    let state = CommentState::new(language, at_start.rust_state, at_start.in_block_comment);
+    rule_comment(language, lines, start, marker_position, state)
+}
+
 /// Finds the annotation marker on a line the comment-line gate admits.
 ///
 /// The gate is `rule_prov_annot_014`: a directive binds only when, after
@@ -23,7 +53,7 @@ use crate::parser::annotation_marker_position;
 /// block comment is open at its start. A marker trailing code on the same
 /// line never binds. Past the gate, markers sitting inside string literals
 /// quoted within the comment are still skipped.
-pub(super) fn annotation_marker_start(
+fn annotation_marker_start(
     language: Language,
     line: &str,
     rust_state: RustLexicalState,
@@ -50,7 +80,7 @@ pub(super) fn annotation_marker_start(
 
 /// The comment state at the start of a line.
 #[derive(Clone, Copy)]
-pub(super) enum CommentState {
+enum CommentState {
     /// The state of the Rust lexer.
     Rust(RustLexicalState),
     /// Whether a block comment of `syntax` is open.
@@ -59,11 +89,7 @@ pub(super) enum CommentState {
 
 impl CommentState {
     /// The comment state at the start of a line of `language`.
-    pub(super) const fn new(
-        language: Language,
-        rust_state: RustLexicalState,
-        in_block_comment: bool,
-    ) -> Self {
+    const fn new(language: Language, rust_state: RustLexicalState, in_block_comment: bool) -> Self {
         match language {
             Language::Rust => Self::Rust(rust_state),
             Language::Python
@@ -131,7 +157,7 @@ pub(super) struct RuleComment {
 /// read from the comment state `state` at the start of that line. `None`
 /// when code comes before the marker on its line.
 #[rule("rule_comment_ends_above_the_first_code_line")]
-pub(super) fn rule_comment(
+fn rule_comment(
     language: Language,
     lines: &[&str],
     start: usize,
