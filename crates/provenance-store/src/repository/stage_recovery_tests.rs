@@ -16,13 +16,13 @@ use provenance_core::{ScopeId, Stamp};
 use provenance_macros::verifies;
 use std::collections::BTreeMap;
 
-const STAGED_RULE: &str = "rule_staged_publication";
+pub(super) const STAGED_RULE: &str = "rule_staged_publication";
 
-fn scope() -> ScopeId {
+pub(super) fn scope() -> ScopeId {
     ScopeId::new("default").unwrap()
 }
 
-fn stamp() -> Stamp {
+pub(super) fn stamp() -> Stamp {
     serde_json::from_value(serde_json::json!({
         "commit": "a".repeat(40),
         "at": "2026-10-28T00:00:00Z"
@@ -47,7 +47,7 @@ fn write_rule(staged: &StateStore) -> anyhow::Result<()> {
 }
 
 /// Adds one Rule to the staged Rule shard: a stage of one key.
-fn write_one_rule(staged: &StateStore) -> anyhow::Result<()> {
+pub(super) fn write_one_rule(staged: &StateStore) -> anyhow::Result<()> {
     let path = crate::shards::rules_path(&staged.layout, &scope());
     let mut rules = staged.list_rules(&scope())?;
     let mut rule = rules[0].clone();
@@ -64,7 +64,7 @@ fn stage_rule(repository: &Repository) -> anyhow::Result<()> {
     repository.stage(false, Some(stamp()), write_rule)
 }
 
-fn serial(repository: &Repository) -> i64 {
+pub(super) fn serial(repository: &Repository) -> i64 {
     tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()
@@ -169,58 +169,6 @@ fn crash_child() {
     run_as_child(&phases, |root| {
         stage_rule(&open(&ProvenanceLayout::new(root.to_owned()))).unwrap();
     });
-}
-
-#[test]
-fn one_key_child() {
-    run_as_child(&["synced_file_before_rename"], |root| {
-        let repository = open(&ProvenanceLayout::new(root.to_owned()));
-        repository
-            .stage(false, Some(stamp()), write_one_rule)
-            .unwrap();
-    });
-}
-
-/// A stop between the synced temporary file of the key and its rename keeps
-/// the old bytes of the key. The temporary file stays, and no read sees it.
-#[test]
-#[verifies("rule_one_key_write_set_lands_whole", examples)]
-fn a_one_key_stage_stopped_before_its_rename_keeps_the_key_and_one_temporary_file() {
-    let (_dir, layout, _scope) = seeded_layout();
-    let root = layout.root().to_owned();
-    let before = serial(&open(&layout));
-    let old = state_tree(&root);
-    let key = crate::shards::rules_path(&layout, &scope());
-    let key_dir = key.parent().unwrap().to_owned();
-    crate::stopped_child::stop_in_child(
-        "repository::stage_recovery_tests::one_key_child",
-        &root,
-        "synced_file_before_rename",
-    );
-
-    let temporaries = crate::stopped_child::files_named(&key_dir, ".tmp", "");
-    assert_eq!(temporaries.len(), 1, "{:?}", names(&key_dir));
-    let mut tree = state_tree(&root);
-    tree.retain(|path, _| {
-        !path
-            .file_name()
-            .is_some_and(|name| name.starts_with(".tmp"))
-    });
-    assert!(tree == old, "the stop kept the old bytes of each key");
-    let repository = open(&layout);
-    assert!(!layout.publication_marker_path().exists());
-    assert_eq!(transactions(&root), Vec::<Utf8PathBuf>::new());
-    assert_eq!(serial(&repository), before, "serial");
-    let has_rule = |repository: &Repository| {
-        let rules = repository.store().list_rules(&scope()).unwrap();
-        rules.iter().any(|rule| rule.id.as_str() == STAGED_RULE)
-    };
-    assert!(!has_rule(&repository));
-
-    repository
-        .stage(false, Some(stamp()), write_one_rule)
-        .unwrap();
-    assert!(has_rule(&repository), "a later write of the key lands");
 }
 
 #[test]
