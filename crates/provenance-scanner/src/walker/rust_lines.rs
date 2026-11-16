@@ -79,101 +79,14 @@ pub(super) fn rust_pieces(
                 if RUST_COMMENTS.starts_line_comment(rest) {
                     break;
                 }
-                if let Some(open) = RUST_COMMENTS.block_open_at(rest) {
-                    end_code(index, &mut code_start, &mut visit);
-                    *state = RustLexicalState::BlockComment(1);
-                    index += open;
-                    continue;
-                }
-                match bytes[index] {
-                    b'\'' => {
-                        if let Some(end) = rust_character_literal_end(line, index + 1) {
-                            end_code(index, &mut code_start, &mut visit);
-                            visit(index..end + 1, Piece::Quoted);
-                            index = end + 1;
-                        } else {
-                            code_start.get_or_insert(index);
-                            index += 1;
-                        }
-                    }
-                    b'"' => {
-                        end_code(index, &mut code_start, &mut visit);
-                        quote_start = Some(index);
-                        *state = RustLexicalState::Quoted;
-                        index += 1;
-                    }
-                    b'r' => {
-                        if let Some(hashes) = raw_string_hashes(&bytes[index + 1..]) {
-                            end_code(index, &mut code_start, &mut visit);
-                            quote_start = Some(index);
-                            *state = RustLexicalState::Raw(hashes);
-                            index += hashes + 2;
-                        } else {
-                            code_start.get_or_insert(index);
-                            index += 1;
-                        }
-                    }
-                    _ => {
-                        code_start.get_or_insert(index);
-                        index += 1;
-                    }
-                }
-            }
-            RustLexicalState::Quoted => match bytes[index] {
-                b'\\' => index = (index + 2).min(bytes.len()),
-                b'"' => {
-                    *state = RustLexicalState::Code;
-                    index += 1;
-                    if let Some(start) = quote_start.take() {
-                        visit(start..index, Piece::Quoted);
-                    }
-                }
-                _ => index += 1,
-            },
-            RustLexicalState::Raw(hashes) => {
-                let closes = bytes[index] == b'"'
-                    && bytes[index + 1..]
-                        .iter()
-                        .take(hashes)
-                        .all(|byte| *byte == b'#')
-                    && bytes.len().saturating_sub(index + 1) >= hashes;
-                if closes {
-                    *state = RustLexicalState::Code;
-                    index += hashes + 1;
-                    if let Some(start) = quote_start.take() {
-                        visit(start..index, Piece::Quoted);
-                    }
-                } else {
-                    index += 1;
-                }
-            }
-            RustLexicalState::BlockComment(depth) => {
-                let (next, length) = block_comment_step(&bytes[index..], depth);
-                *state = next;
-                index += length;
-            }
-        }
-    }
-    end_code(index.min(bytes.len()), &mut code_start, &mut visit);
-    if let Some(start) = quote_start {
-        visit(start..bytes.len(), Piece::Quoted);
-    }
-}
-
-/// The state after the text at the start of `rest`, in a block comment at
-/// depth `depth`, and the length of that text.
-fn block_comment_step(rest: &[u8], depth: usize) -> (RustLexicalState, usize) {
-    if let Some(open) = RUST_COMMENTS.block_open_at(rest) {
-        (RustLexicalState::BlockComment(depth + 1), open)
-    } else if let Some(close) = RUST_COMMENTS.block_close_at(rest) {
-        let state = if depth == 1 {
-            RustLexicalState::Code
-        } else {
-            RustLexicalState::BlockComment(depth - 1)
-        };
-        (state, close)
-    } else {
-        (RustLexicalState::BlockComment(depth), 1)
+                match (
+        RUST_COMMENTS.block_open_at(rest),
+        RUST_COMMENTS.block_close_at(rest),
+    ) {
+        (Some(open), _) => (RustLexicalState::BlockComment(depth + 1), open),
+        (None, Some(close)) if depth == 1 => (RustLexicalState::Code, close),
+        (None, Some(close)) => (RustLexicalState::BlockComment(depth - 1), close),
+        (None, None) => (RustLexicalState::BlockComment(depth), 1),
     }
 }
 
