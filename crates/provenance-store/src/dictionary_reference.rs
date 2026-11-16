@@ -58,6 +58,9 @@ pub enum DictionaryResolution {
     /// The reference does not parse, so it names no index. The refusal gives
     /// the file, the line, the parse message and the repair.
     Unparsable(UnparsableStateFile),
+    /// The reference file is there and its read fails. The text names the
+    /// file below the repository root and gives the system error.
+    Unreadable(String),
     /// The reference names an index that this machine cannot load.
     Unavailable {
         identity: DictionaryImportIdentity,
@@ -90,12 +93,17 @@ fn parse_reference(
 }
 
 /// Separates a missing reference from a reference that cannot load, so a strict
-/// gate can fail on the second and stay silent on the first.
+/// gate can fail on the second and stay silent on the first. Only a reference
+/// file that is not there is a missing reference.
 #[cfg(feature = "host")]
 pub fn resolve_project_dictionary(layout: &ProvenanceLayout) -> DictionaryResolution {
     let path = dictionary_reference_path(layout);
-    let Ok(bytes) = std::fs::read(path.as_std_path()) else {
-        return DictionaryResolution::NoReference;
+    let bytes = match std::fs::read(path.as_std_path()) {
+        Ok(bytes) => bytes,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            return DictionaryResolution::NoReference;
+        }
+        Err(error) => return DictionaryResolution::Unreadable(unreadable(layout, &path, &error)),
     };
     let reference = match parse_reference(&path, &bytes) {
         Ok(reference) => reference,
@@ -121,6 +129,20 @@ pub fn resolve_project_dictionary(layout: &ProvenanceLayout) -> DictionaryResolu
     }
 }
 
+/// The problem of a reference file at `path` whose read fails with `error`.
+/// The path is relative to the repository root, with `/` between its parts.
+#[cfg(feature = "host")]
+fn unreadable(
+    layout: &ProvenanceLayout,
+    path: &camino::Utf8Path,
+    error: &std::io::Error,
+) -> String {
+    let file = path
+        .strip_prefix(layout.root())
+        .map_or_else(|_| path.to_string(), |below| below.iter().collect::<Vec<_>>().join("/"));
+    format!("Provenance cannot read the dictionary reference {file}: {error}")
+}
+
 /// Loads the referenced dictionary, or nothing when it cannot load.
 #[rule("rule_ste_dictionary_reference_resolution")]
 #[cfg(feature = "host")]
@@ -129,6 +151,7 @@ pub fn load_project_dictionary(layout: &ProvenanceLayout) -> Option<ProjectDicti
         DictionaryResolution::Loaded(dictionary) => Some(dictionary),
         DictionaryResolution::NoReference
         | DictionaryResolution::Unparsable(_)
+        | DictionaryResolution::Unreadable(_)
         | DictionaryResolution::Unavailable { .. } => None,
     }
 }
@@ -213,6 +236,9 @@ pub fn missing_index_warning(layout: &ProvenanceLayout) -> Option<String> {
         DictionaryResolution::NoReference | DictionaryResolution::Loaded(_) => None,
         DictionaryResolution::Unparsable(refusal) => {
             Some(format!("ASD-STE100 Rule 1.1 did not run: {refusal}"))
+        }
+        DictionaryResolution::Unreadable(problem) => {
+            Some(format!("ASD-STE100 Rule 1.1 did not run: {problem}"))
         }
         DictionaryResolution::Unavailable {
             directory, reason, ..
