@@ -3,11 +3,10 @@
 //! A permission belongs to one staged store. A review writer gets a store
 //! with the added permission from `StateStore::permitting`, and a write
 //! through any other store carries none.
-use crate::jsonl::{numbered_lines, record_line_value};
+use crate::jsonl::{numbered_lines, untyped_line_value};
 use crate::merge::ShardFamily;
 use crate::state_store::StateStore;
 use camino::{Utf8Path, Utf8PathBuf};
-use provenance_core::ProposalCard;
 use provenance_macros::rule;
 use serde::Serialize;
 use serde_json::Value;
@@ -157,7 +156,9 @@ fn submitted_ids(
         if line.trim_ascii().is_empty() {
             continue;
         }
-        let (_, proposal) = record_line_value::<ProposalCard>(&cards, number, line)?;
+        // The file also holds frozen legacy proposals that are not of the
+        // proposal card type, so its lines have no known record type.
+        let (_, proposal) = untyped_line_value(&cards, number, line)?;
         let target = &proposal["traceability"]["target"];
         if proposal["proposal_type"] == "record_revision"
             && target["artifact_type"] == kind.as_str()
