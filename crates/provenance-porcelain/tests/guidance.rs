@@ -137,7 +137,7 @@ fn the_guidance_names_no_command_that_the_consumer_does_not_show() {
     );
     let text = guidance();
     assert!(
-        text.contains(&format!(", or {NOTIFY} to register a client thread")),
+        text.contains(&format!("; {NOTIFY} to register a client thread")),
         "the guidance does not give the notify write by the name of the consumer:\n{text}"
     );
 }
