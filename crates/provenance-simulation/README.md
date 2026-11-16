@@ -38,8 +38,9 @@ Each law apart from L0 has a planted test: `tests/engine_planted.rs`,
 plants the smallest fault that its law must see. Most faults are in the
 simulated storage, the identity or the repository on disk. Three use a
 stand-in: the CLI L4 test changes the etag that the run recorded, the CLI L7
-test gives the engine a stand-in that refuses a claim, and the O3 test adds
-a second stage to a decision. If the law does not see its fault, the test
+test gives the engine a stand-in that refuses a claim, and the O3 tests add
+a second stage to a decision or post a message in the stage of a decision.
+If the law does not see its fault, the test
 fails with "simulation check broken", and the issue says that a check is
 broken, not a law. `tests/storage_contract.rs` runs the storage contract
 suite of `provenance-store` on the simulated storage. `tests/refused_post.rs`
@@ -119,7 +120,12 @@ the live state tell where the stop landed. Each stop that a case draws adds
 
 The row "stops that left no live state" counts the stops that killed a
 write before its answer and left no live state. The next read recovers
-the live state from the transaction.
+the live state from the transaction. For `stop-after-marker`, this count
+depends on where the stop lands: before or after the rename of the live
+state to its backup. The two places count as one stop, "stops after the
+marker and before the install", so a count of 0 on a system in one run is
+not a fault. The crash tests of the store stop at the backup of the live
+state with no race.
 
 Four probes of the CLI layer stop a write on each run. The job summary of
 each system counts the stops of each probe in rows of their own: the name
