@@ -99,7 +99,7 @@ async fn a_linked_record_file_gives_its_path_below_the_repository_on_each_read()
         ("get", &operation),
         ("trace", &operation),
         ("change", &operation),
-        ("discussions", &operation),
+        ("discussions", &read_failed),
         ("search", &read_failed),
     ]
     .map(|(tool, structured)| {

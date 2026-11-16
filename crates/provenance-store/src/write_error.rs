@@ -311,6 +311,14 @@ impl WriteError {
         (self.common().is_none() && matches!(self.safe(), WriteFailure::WriteFailed { .. }))
             .then(|| format!("{:#}", native(&self.0)))
     }
+    /// The cause of the wire answer for an error of no known kind, with each
+    /// path relative to the repository.
+    pub(crate) fn unclassified_message(&self) -> Option<String> {
+        match (self.common(), self.safe()) {
+            (None, WriteFailure::WriteFailed { cause }) => Some(cause),
+            _ => None,
+        }
+    }
     /// A common refusal that a write raised, such as an unknown scope; it
     /// keeps its own kind and status, as a read does.
     #[provenance_macros::rule("rule_caller_refusal_has_declared_kind")]

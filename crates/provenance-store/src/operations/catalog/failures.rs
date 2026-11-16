@@ -35,6 +35,12 @@ impl super::HandlerFailure for ReadError {
     fn log_cause(&self) -> Option<String> {
         self.unclassified_cause()
     }
+    fn message(&self) -> String {
+        match (self.common(), self.safe()) {
+            (None, ReadFailure::ReadFailed { cause }) => cause,
+            _ => self.to_string(),
+        }
+    }
 }
 impl super::HandlerFailure for WriteError {
     fn failure_status(&self) -> u16 {
@@ -42,6 +48,9 @@ impl super::HandlerFailure for WriteError {
     }
     fn log_cause(&self) -> Option<String> {
         self.unclassified_cause()
+    }
+    fn message(&self) -> String {
+        self.unclassified_message().unwrap_or_else(|| self.to_string())
     }
 }
 impl ReadError {
