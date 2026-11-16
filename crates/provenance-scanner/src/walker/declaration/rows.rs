@@ -2,12 +2,13 @@
 //! keyword starts each form that gives a name, so a statement that starts
 //! with a different token gives no name.
 
-use super::{named, skip_group, Tokens};
+use super::Follower::{Token, Word};
+use super::{skip_group, Grammar, Row, Tokens};
 
 /// The Rust forms. Modifiers, in any order: `pub` with its optional group,
 /// `default`, `async`, `unsafe`, `extern` with its optional ABI string, and
-/// `const` before `fn`, `async`, `unsafe`, or `extern`. Then a keyword of
-/// `RUST_KEYWORDS`, and the name.
+/// `const` before `fn`, `async`, `unsafe`, or `extern`. Then a row of
+/// `RUST`.
 pub(super) fn rust(tokens: Tokens<'_, '_>) -> Option<String> {
     let mut index = 0;
     loop {
@@ -18,49 +19,140 @@ pub(super) fn rust(tokens: Tokens<'_, '_>) -> Option<String> {
             "default" | "async" | "unsafe" => index += 1,
             "extern" => index += 1 + usize::from(next.is_some_and(|abi| abi.starts_with('"'))),
             "const" if matches!(next, Some("fn" | "async" | "unsafe" | "extern")) => index += 1,
-            _ if RUST_KEYWORDS.contains(&token) => return named(tokens, index + 1),
+            _ if RUST.has_row(token) => return RUST.row_name(tokens, index, index + 1),
             _ => return None,
         }
     }
 }
 
-const RUST_KEYWORDS: [&str; 6] = ["fn", "struct", "enum", "union", "trait", "type"];
+const RUST: Grammar = Grammar {
+    rows: &[
+        Row {
+            keyword: "fn",
+            followers: &[Token("("), Token("<")],
+        },
+        Row {
+            keyword: "struct",
+            followers: &[
+                Token("{"),
+                Token("("),
+                Token("<"),
+                Token(";"),
+                Token("where"),
+            ],
+        },
+        Row {
+            keyword: "enum",
+            followers: &[Token("{"), Token("<"), Token("where")],
+        },
+        Row {
+            keyword: "union",
+            followers: &[Token("{"), Token("<"), Token("where")],
+        },
+        Row {
+            keyword: "trait",
+            followers: &[Token("{"), Token("<"), Token(":"), Token("where")],
+        },
+        Row {
+            keyword: "type",
+            followers: &[
+                Token("="),
+                Token("<"),
+                Token(";"),
+                Token(":"),
+                Token("where"),
+            ],
+        },
+    ],
+    reserved: &[
+        "as", "async", "await", "break", "const", "continue", "crate", "dyn", "else", "enum",
+        "extern", "false", "fn", "for", "if", "impl", "in", "let", "loop", "match", "mod", "move",
+        "mut", "pub", "ref", "return", "self", "Self", "static", "struct", "super", "trait", "true",
+        "type", "unsafe", "use", "where", "while", "abstract", "become", "box", "do", "final",
+        "macro", "override", "priv", "try", "typeof", "unsized", "virtual", "yield",
+    ],
+};
 
-/// The Python forms: `def` after an optional `async`, and `class`. Then the
-/// name.
+/// The Python forms: an optional `async`, and a row of `PYTHON`.
 pub(super) fn python(tokens: Tokens<'_, '_>) -> Option<String> {
     let index = usize::from(tokens.get(0)? == "async");
-    match tokens.get(index)? {
-        "def" | "class" => named(tokens, index + 1),
-        _ => None,
-    }
+    PYTHON.row_name(tokens, index, index + 1)
 }
 
-/// The Go forms: `type` and the name; `func`, the name, and `(` or `[`; and
-/// `func`, a receiver in parentheses, the name, and `(`. A function literal
-/// has no name after `func` or after its parameters, so it gives no name.
+const PYTHON: Grammar = Grammar {
+    rows: &[
+        Row {
+            keyword: "def",
+            followers: &[Token("("), Token("[")],
+        },
+        Row {
+            keyword: "class",
+            followers: &[Token(":"), Token("("), Token("[")],
+        },
+    ],
+    reserved: &[
+        "False", "None", "True", "and", "as", "assert", "async", "await", "break", "class",
+        "continue", "def", "del", "elif", "else", "except", "finally", "for", "from", "global",
+        "if", "import", "in", "is", "lambda", "nonlocal", "not", "or", "pass", "raise", "return",
+        "try", "while", "with", "yield",
+    ],
+};
+
+/// The Go forms: a row of `GO`, or `func`, a receiver in parentheses, the
+/// name, and `(`. A function literal has no name after `func` or after its
+/// parameters, so it gives no name.
 pub(super) fn go(tokens: Tokens<'_, '_>) -> Option<String> {
-    match tokens.get(0)? {
-        "type" => named(tokens, 1),
-        "func" if tokens.get(1)? == "(" => {
-            let name = skip_group(tokens, 1, "(", ")");
-            go_function(tokens, name, &["("])
-        }
-        "func" => go_function(tokens, 1, &["(", "["]),
-        _ => None,
-    }
-}
-
-fn go_function(tokens: Tokens<'_, '_>, name: usize, after: &[&str]) -> Option<String> {
-    let follows = tokens.get(name + 1)?;
-    let keyword = GO_KEYWORDS.contains(&tokens.get(name)?);
-    if after.contains(&follows) && !keyword {
-        named(tokens, name)
+    if tokens.get(0)? == "func" && tokens.get(1)? == "(" {
+        let name = skip_group(tokens, 1, "(", ")");
+        GO.name(tokens, name, &[Token("(")])
     } else {
-        None
+        GO.row_name(tokens, 0, 1)
     }
 }
 
-/// The Go keywords that can follow the parameters of a function literal as
-/// the start of its result type.
-const GO_KEYWORDS: [&str; 4] = ["func", "map", "chan", "interface"];
+const GO: Grammar = Grammar {
+    rows: &[
+        Row {
+            keyword: "func",
+            followers: &[Token("("), Token("[")],
+        },
+        Row {
+            keyword: "type",
+            followers: &[
+                Word,
+                Token("["),
+                Token("*"),
+                Token("("),
+                Token("<"),
+                Token("="),
+            ],
+        },
+    ],
+    reserved: &[
+        "break",
+        "case",
+        "chan",
+        "const",
+        "continue",
+        "default",
+        "defer",
+        "else",
+        "fallthrough",
+        "for",
+        "func",
+        "go",
+        "goto",
+        "if",
+        "import",
+        "interface",
+        "map",
+        "package",
+        "range",
+        "return",
+        "select",
+        "struct",
+        "switch",
+        "type",
+        "var",
+    ],
+};

@@ -59,44 +59,76 @@ the comment and the attribute both get `pays_overtime`.
 
 A binding gets a name only when it is at the start of a statement: at the
 start of the file, or after `;`, `{`, or `}`. In Rust, the bracket that opens
-the body of a macro call, as in `name!(`, also starts a statement. In Go,
-JavaScript, and TypeScript, the end of a line also ends a statement when the
-line ends with a word, a string, `)`, or `]`, outside parentheses and square
-brackets. In Python, a statement starts at the start of a logical line. A binding inside a
-statement has no name: for example a binding inside the arguments of a call,
-after an operator, or between the parts of a conditional expression
-`ready ? start(a) : stop`.
+the body of a macro call, as in `name!(`, also starts a statement. In Python, a
+statement starts at the start of a logical line. In Go, JavaScript, and
+TypeScript, a line break outside parentheses and square brackets also starts a
+statement when the two lines fit:
+
+- The line above does not end with a token that needs a right side: an
+  operator, `,`, `.`, `=>`, `?`, `:`, or a word such as `extends`,
+  `implements`, `typeof`, `new`, `in`, `of`, `instanceof`, `else`, `const`, or
+  `func`. A line that ends with `return`, `break`, `continue`, `throw`, or
+  `yield` ends its statement.
+- The line below does not start with a token that continues an expression: a
+  binary operator, `.`, `?`, `:`, `,`, `)`, `]`, `(`, `[`, a template literal,
+  `in`, `instanceof`, `as`, or `satisfies`.
+- A line that ends with `>`, as a JSX element or a type argument list does,
+  starts a statement only when a declaration keyword such as `function`,
+  `class`, `const`, or `export` starts the line below.
+
+A binding inside a statement has no name: for example a binding inside the
+arguments of a call or of a decorator, after an operator, or between the parts
+of a conditional expression `ready ? start(a) : stop`.
 
 The scanner does not parse a syntax tree. The scanner removes each comment
 span, from `/*` to `*/` or from `//` (or `#` in Python) to the end of the line,
 and reads the text that is left as code tokens. The first tokens of the
 statement below the binding must make one of the declaration forms below, or
-the binding has no name:
+the binding has no name. A form with a keyword gives a name only when the
+complete head fits: the keyword, a name that is not a reserved word of the
+language, and a token that can follow the name in that form (the follower).
 
-- Rust: `fn`, `struct`, `enum`, `union`, `trait`, or `type` and the name, after
-  `pub` or `pub(...)`, `default`, `async`, `unsafe`, `extern` with its ABI
-  string, and `const` before `fn`. A raw identifier `r#match` gives `match`.
-- Python: `def` or `class` and the name, after `async`.
-- Go: `type` and the name; `func`, the name, and `(` or `[`; or `func`, a
-  receiver, the name, and `(`. A function literal such as
+- Rust: after `pub` or `pub(...)`, `default`, `async`, `unsafe`, `extern` with
+  its ABI string, and `const` before `fn`:
+  - `fn` and the name, then `(` or `<`;
+  - `struct` and the name, then `{`, `(`, `<`, `;`, or `where`;
+  - `enum` or `union` and the name, then `{`, `<`, or `where`;
+  - `trait` and the name, then `{`, `<`, `:`, or `where`;
+  - `type` and the name, then `=`, `<`, `;`, `:`, or `where`.
+
+  A raw identifier `r#match` gives `match`. A `$name` metavariable of a
+  `macro_rules!` body is not a name.
+- Python: after `async`, `def` and the name, then `(` or `[`; or `class` and
+  the name, then `:`, `(`, or `[`.
+- Go: `type` and the name, then a type; `func`, the name, and `(` or `[`; or
+  `func`, a receiver, the name, and `(`. A function literal such as
   `func() error { ... }()` has no name.
 - JavaScript, TypeScript: after decorators and the modifiers `export`,
   `default`, `declare`, `abstract`, `async`, `public`, `private`, `protected`,
   `static`, `readonly`, `override`, and `accessor`:
-  - `function` or `function*`, `class`, `interface`, `type`, `enum`,
-    `const enum`, `namespace`, `const`, `let`, or `var`, and the name. `let
-    first, second` gives `first`.
+  - `function` or `function*` and the name, then `(` or `<`;
+  - `class` and the name, then `{`, `<`, `extends`, or `implements`;
+  - `interface` and the name, then `{`, `<`, or `extends`;
+  - `type` and the name, then `=` or `<`;
+  - `enum` or `const enum` and the name, then `{`;
+  - `namespace` and the name, then `{` or `.`;
+  - `const`, `let`, or `var` and the name, then `=`, `:`, `!`, `,`, or `;`.
+    `let first, second` gives `first`.
   - A method: an optional `*`, `get`, or `set`, the name, type parameters, and
     a parameter list that a return type or a `{` on the line of its `)`
-    follows. So `public async total(): Promise<number> {` gives `total`.
+    follows. So `public async total(): Promise<number> {` gives `total`, and
+    `delete(id: string): void {}` gives `delete`.
   - A property after a class modifier such as `private` or `readonly`: the
     name, and a type, a value, or `;`. So `private count = 0;` gives `count`.
   - These words in the place of a method name or a property name give no
-    name: `if`, `for`, `while`, `switch`, `catch`, `return`, `throw`, `new`,
-    `await`, `yield`, `typeof`, `delete`, `void`, `do`, `else`, `try`,
-    `finally`, `with`, `super`, `this`, `import`, `case`, and `async`.
+    name, because a statement that starts with them has the tokens of a
+    method: `if`, `for`, `while`, `switch`, `catch`, `with`, `case`, and
+    `async`.
 - Java: after annotations and modifiers:
-  - `class`, `interface`, `enum`, `record`, or `@interface`, and the name.
+  - `class` and the name, then `{`, `<`, `extends`, `implements`, or `permits`;
+    `interface` and the name, then `{`, `<`, `extends`, or `permits`; `enum`
+    and the name, then `{` or `implements`; `record` and the name, then `(` or
+    `<`; `@interface` and the name, then `{`.
   - A method: type parameters, a return type, the name, and `(`. A return type
     can be a qualified name with type arguments, so
     `public java.util.List<String> names() {` gives `names`.
@@ -114,20 +146,33 @@ tokens as a statement:
 - Rust: an `impl` block, a `const`, a `static`, a `mod`, a `macro_rules!`, a
   struct field, and an enum variant.
 - Python: an assignment.
-- Go: a `type (` group, a `var`, a `const`, and a function literal.
+- Go: a `type (` group, a `var`, a `const`, a function literal, a struct
+  field, and a method of an interface.
 - JavaScript, TypeScript: an arrow function, also in a `const` with the name of
-  the `const`, `export default function () {}`, an optional method
-  `pays?(hours: number): boolean;`, a property with no class modifier such as
-  `total = () => {`, a method named `async` or a statement keyword above, and
-  a method whose `{` is on a line below its `)`: the tokens are the same as a
-  call statement that a block follows. A test call such as
-  `test("hours above 38", () => {` and a `describe(...)` call give no name.
+  the `const`, `export default function () {}`, an anonymous
+  `export default class extends Base {`, an import or export specifier such as
+  `type Foo,` in `import { ... }`, an optional method
+  `pays?(hours: number): boolean;`, an enum member, an interface property, a
+  property with no class modifier such as `total = () => {`, a class member
+  whose name is the keyword of a form above, such as `type()`, a method named
+  with a word of the list above, and a method whose `{` is on a line below its
+  `)`: the tokens are the same as a call statement that a block follows. A
+  test call such as `test("hours above 38", () => {` and a `describe(...)` call
+  give no name.
 - Java: a field with no modifier or with only `final`, because a local
   variable has the same tokens; an enum constant with no body, such as
   `TWO(2),`, because a call statement has the same tokens; a statement such as
   a call, a qualified call `Collections.<String>emptyList();`, or
   `synchronized (lock) {`.
-- A binding inside a statement, as above.
+- A binding inside a statement, as above. A binding inside an expression of
+  more than one line has no name.
+- A binding above a decorator or an attribute whose arguments hold another
+  binding, such as a TypeScript `@Injectable({` or a Python `@decorator(`
+  whose arguments span lines with a binding comment in them: the binding
+  inside the arguments starts no statement, so both bindings have no name.
+- In JavaScript and TypeScript, a regular expression literal that holds an
+  unclosed bracket, on a line with no `;`, can hide the start of the next
+  statement.
 - A Rust attribute directly below a binding comment is not scanned as a
   binding: the comment takes in the attribute line.
 

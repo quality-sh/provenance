@@ -76,12 +76,14 @@ fn push_words<'a>(language: Language, code: &'a str, line: usize, tokens: &mut V
             continue;
         }
         let mut end = start + character.len_utf8();
-        if is_word(character) {
+        if is_word(language, character) {
             let raw = language == Language::Rust && character == 'r';
             if raw && is_raw_prefix(&code[end..]) {
                 characters.next();
             }
-            while let Some((index, next)) = characters.next_if(|(_, next)| is_word(*next)) {
+            while let Some((index, next)) =
+                characters.next_if(|(_, next)| is_word(language, *next))
+            {
                 end = index + next.len_utf8();
             }
         }
@@ -101,12 +103,24 @@ fn comment_syntax(language: Language) -> CommentSyntax {
     }
 }
 
-pub(in crate::walker) fn is_word(character: char) -> bool {
-    character.is_alphanumeric() || character == '_' || character == '$'
+/// Whether `character` can be in a word of `language`. Only JavaScript,
+/// TypeScript, and Java permit `$` in an identifier, so in the other
+/// languages `$` is a punctuation token, as in a Rust `$name` metavariable.
+pub(in crate::walker) fn is_word(language: Language, character: char) -> bool {
+    character.is_alphanumeric()
+        || character == '_'
+        || (character == '$'
+            && matches!(
+                language,
+                Language::JavaScript | Language::TypeScript | Language::Java
+            ))
 }
 
 /// Whether `rest`, the text after an `r`, continues a Rust raw identifier.
 fn is_raw_prefix(rest: &str) -> bool {
     let mut characters = rest.chars();
-    characters.next() == Some('#') && characters.next().is_some_and(is_word)
+    characters.next() == Some('#')
+        && characters
+            .next()
+            .is_some_and(|character| is_word(Language::Rust, character))
 }

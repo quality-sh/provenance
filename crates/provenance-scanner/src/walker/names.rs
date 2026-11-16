@@ -3,11 +3,13 @@
 //!
 //! The scanner lexes the file one time. The read of a comment, attribute, or
 //! decorator site covers the code tokens below the site, up to the next such
-//! site. When those tokens hold only attributes, decorators, or
-//! annotations, the declaration is below the next site, and the site takes
-//! the name of the next site. So each site above one declaration gets the
-//! name of that declaration. The reads do not overlap, so the sites of a file
-//! read each token at most one time.
+//! site. When those tokens hold only attributes, decorators, or annotations,
+//! the declaration is below the next site, and the site takes the name that
+//! the next site gets. A site that does not start a statement gets no name.
+//! So each site above one declaration gets the name of that declaration, and
+//! a site above an attribute whose arguments hold a site gets no name. The
+//! reads do not overlap, so the sites of a file read each token at most one
+//! time.
 
 use std::ops::Range;
 
@@ -116,8 +118,8 @@ impl<'a> Sites<'a> {
                 Read::Declaration(name) => name,
                 Read::NextSite => next_name.take(),
             };
-            next_name.clone_from(&name);
             names[index] = name.filter(|_| starts[index]);
+            next_name.clone_from(&names[index]);
         }
         for (unnamed, name) in declared.into_iter().zip(names) {
             set(original_lines, &unnamed.site, name, annotations, bindings);

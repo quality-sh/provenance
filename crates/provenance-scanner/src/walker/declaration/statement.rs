@@ -4,9 +4,10 @@
 //! In the languages with braces, a statement starts at the start of the file
 //! and after `;`, `{`, or `}`. In Rust, the bracket that opens the body of a
 //! macro call, as in `name!(`, also starts a statement, because the body can
-//! hold items. In Go, JavaScript, and TypeScript, the end of a
-//! line also ends a statement when the last token of the line can end one,
-//! outside parentheses and square brackets. In Python, a statement starts at
+//! hold items. In Go, JavaScript, and TypeScript, a line break outside
+//! parentheses and square brackets also ends a statement when the two lines
+//! fit, by the rule of `line_break_ends_statement`. In Python, a statement
+//! starts at
 //! the start of a logical line. Attributes, decorators, and annotations do not
 //! change where a statement starts, so the sites and the attributes above one
 //! declaration all start its statement.
@@ -30,7 +31,7 @@ pub(in crate::walker) fn statement_starts(
                 above.push(token.text);
                 next += 1;
             }
-            above.starts_statement()
+            above.starts_statement(tokens.get(next).map(|token| token.text))
         })
         .collect()
 }
@@ -93,7 +94,9 @@ impl<'a> Above<'a> {
             }
             (Attribute::Hash, Some('!')) => Attribute::Hash,
             (Attribute::Hash, Some('[')) => group('[', ']'),
-            (Attribute::Name, Some(character)) if is_word(character) => Attribute::AfterName,
+            (Attribute::Name, Some(character)) if is_word(self.language, character) => {
+                Attribute::AfterName
+            }
             (Attribute::AfterName, Some('.')) => Attribute::Name,
             (Attribute::AfterName, Some('(')) => group('(', ')'),
             (Attribute::Group { open, close, depth }, Some(character)) => {
@@ -128,7 +131,7 @@ impl<'a> Above<'a> {
             && self.last == Some("!")
             && self
                 .before_last
-                .is_some_and(|word| word.starts_with(is_word));
+                .is_some_and(|word| word.starts_with(|first| is_word(Language::Rust, first)));
         self.before_last = self.last;
         match token {
             "(" | "[" | "{" => self.open.extend(token.chars()),
@@ -140,7 +143,9 @@ impl<'a> Above<'a> {
         self.last = Some(token);
     }
 
-    fn starts_statement(&self) -> bool {
+    /// Whether a site starts a statement, when `below` is the first code
+    /// token below the site.
+    fn starts_statement(&self, below: Option<&str>) -> bool {
         if !matches!(self.attribute, Attribute::Outside | Attribute::AfterName) {
             return false;
         }
@@ -153,7 +158,8 @@ impl<'a> Above<'a> {
             Language::Rust => self.macro_body || matches!(last, ";" | "{" | "}"),
             Language::Java => matches!(last, ";" | "{" | "}"),
             Language::Go | Language::JavaScript | Language::TypeScript => {
-                matches!(last, ";" | "{" | "}") || (in_block && ends_line_statement(last))
+                matches!(last, ";" | "{" | "}")
+                    || (in_block && line_break_ends_statement(self.before_last, last, below))
             }
         }
     }
@@ -167,11 +173,141 @@ const fn group(open: char, close: char) -> Attribute {
     }
 }
 
-/// Whether a line that ends with `token` ends its statement: a word, a
-/// string, or a closing bracket.
-fn ends_line_statement(token: &str) -> bool {
-    token
-        .chars()
-        .next()
-        .is_some_and(|first| is_word(first) || matches!(first, '"' | '\'' | '`' | ')' | ']'))
+/// Whether the line break between a line that ends with `before_last` and
+/// `last`, and a line that starts with `below`, ends a statement in Go,
+/// JavaScript, or TypeScript: the line above does not end with a token of
+/// `NEEDS_RIGHT_SIDE`, and the line below does not start with a token of
+/// `CONTINUES_EXPRESSION` or a template literal. `++` and `--` end an
+/// expression. A `>` that is not the end of `=>` can end a JSX element or a
+/// type argument list, or be an operator, so after it a statement starts
+/// only when a word of `DECLARATION_KEYWORDS` starts the line below.
+fn line_break_ends_statement(before_last: Option<&str>, last: &str, below: Option<&str>) -> bool {
+    let continues = below.is_some_and(|below| {
+        CONTINUES_EXPRESSION.contains(&below) || below.starts_with('`')
+    });
+    match last {
+        ">" if before_last != Some("=") => {
+            below.is_some_and(|below| DECLARATION_KEYWORDS.contains(&below))
+        }
+        "+" | "-" if before_last == Some(last) => !continues,
+        _ => !NEEDS_RIGHT_SIDE.contains(&last) && !continues,
+    }
 }
+
+/// The tokens that need a right side, so a line that ends with one continues
+/// on the next line: an operator, `,`, `.`, `?`, `:`, the `>` of `=>`, and
+/// the words that an operand, a name, or a body follows. A line that ends with
+/// `return`, `break`, `continue`, `throw`, or `yield` ends its statement in
+/// these languages, so these words are not in the list.
+const NEEDS_RIGHT_SIDE: [&str; 64] = [
+    "=",
+    "+",
+    "-",
+    "*",
+    "/",
+    "%",
+    "<",
+    ">",
+    "&",
+    "|",
+    "^",
+    "!",
+    "~",
+    "?",
+    ":",
+    ",",
+    ".",
+    "extends",
+    "implements",
+    "typeof",
+    "new",
+    "in",
+    "of",
+    "instanceof",
+    "await",
+    "as",
+    "satisfies",
+    "keyof",
+    "void",
+    "delete",
+    "else",
+    "do",
+    "case",
+    "default",
+    "export",
+    "import",
+    "from",
+    "declare",
+    "abstract",
+    "function",
+    "class",
+    "interface",
+    "type",
+    "enum",
+    "namespace",
+    "const",
+    "let",
+    "var",
+    "if",
+    "for",
+    "while",
+    "switch",
+    "catch",
+    "with",
+    "func",
+    "struct",
+    "map",
+    "chan",
+    "go",
+    "defer",
+    "range",
+    "select",
+    "package",
+    "goto",
+];
+
+/// The tokens that continue the expression of the line above when they start
+/// a line: a binary operator, `.`, `?`, `:`, `,`, a closing bracket, an
+/// operator word, and a `(` or `[` that calls or indexes the line above.
+const CONTINUES_EXPRESSION: [&str; 23] = [
+    "=",
+    "+",
+    "-",
+    "*",
+    "/",
+    "%",
+    "<",
+    ">",
+    "&",
+    "|",
+    "^",
+    "?",
+    ":",
+    ",",
+    ".",
+    ")",
+    "]",
+    "(",
+    "[",
+    "in",
+    "instanceof",
+    "as",
+    "satisfies",
+];
+
+/// The words that start a declaration below a line that ends with `>`.
+const DECLARATION_KEYWORDS: [&str; 13] = [
+    "export",
+    "function",
+    "class",
+    "interface",
+    "type",
+    "enum",
+    "namespace",
+    "declare",
+    "abstract",
+    "const",
+    "let",
+    "var",
+    "func",
+];
