@@ -156,7 +156,7 @@ fn registration_whose_catch_up_fails_refuses_with_the_text_of_the_refusal() {
     let first = text.lines().next().unwrap();
     let mut line: serde_json::Value = serde_json::from_str(first).unwrap();
     line["id"] = json!("req_after_failure");
-    std::fs::write(&shard, format!("{text}{line}\n")).unwrap();
+    review_host_support::replace_file(&shard, format!("{text}{line}\n"));
 
     let output = notify(
         &setup.host,
@@ -438,11 +438,10 @@ fn a_manifest_that_does_not_parse_gives_its_fault_as_the_read_error_reason() {
     let setup = Setup::start();
     setup.register();
 
-    std::fs::write(
-        setup.path().join(".provenance/state/manifest.json"),
+    review_host_support::replace_file(
+        &setup.path().join(".provenance/state/manifest.json"),
         "{\"scopes\":\"default\"}\n",
-    )
-    .unwrap();
+    );
 
     let queued = setup.codex.wait_for(&setup.thread, 2);
     let (status, frame) = parts(&queued[1]);

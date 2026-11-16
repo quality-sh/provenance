@@ -114,6 +114,15 @@ impl Host {
     }
 }
 
+/// Replaces the file at `path` with `bytes` by one rename. A running host that
+/// watches the file then reads the old bytes or the new bytes, and never a file
+/// that is only partly written.
+pub fn replace_file(path: &Path, bytes: impl AsRef<[u8]>) {
+    let replacement = path.with_extension("replacement");
+    std::fs::write(&replacement, bytes).unwrap();
+    std::fs::rename(replacement, path).unwrap();
+}
+
 pub fn repository() -> tempfile::TempDir {
     repository_with_actors(&[])
 }

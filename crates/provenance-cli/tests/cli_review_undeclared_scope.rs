@@ -15,7 +15,7 @@ fn declare_only_another_scope(root: &Path) {
     let path = root.join(".provenance/state/manifest.json");
     let mut manifest: Value = serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
     manifest["scopes"] = json!([{"id": "other", "path_prefix": "."}]);
-    std::fs::write(&path, format!("{manifest}\n")).unwrap();
+    review_host_support::replace_file(&path, format!("{manifest}\n"));
 }
 
 #[tokio::test(flavor = "multi_thread")]
