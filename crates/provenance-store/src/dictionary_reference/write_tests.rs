@@ -104,12 +104,23 @@ fn a_cache_that_refuses_the_temporary_file_is_named_in_the_error() {
     drop(closed);
 
     let error = result.expect_err("the temporary file in the cache must fail");
-    assert_eq!(
-        format!("{error:#}"),
-        format!(
-            "write the dictionary reference: make a temporary file in {cache}: {}",
-            std::io::Error::from_raw_os_error(13)
-        )
+    // The I/O error of `tempfile` ends with the path of the file it tried.
+    let text = format!("{error:#}");
+    let start = format!(
+        "write the dictionary reference: make a temporary file in {cache}: {} at path \"",
+        std::io::Error::from_raw_os_error(13)
+    );
+    let tried = text
+        .strip_prefix(&start)
+        .and_then(|rest| rest.strip_suffix('"'))
+        .map(Utf8Path::new)
+        .unwrap_or_else(|| panic!("{text}"));
+    assert_eq!(tried.parent(), Some(cache.as_path()), "{text}");
+    assert!(
+        tried
+            .file_name()
+            .is_some_and(crate::storage::local::is_state_temporary_name),
+        "{text}"
     );
     assert_eq!(std::fs::read(&path).expect("read the reference"), stored);
     assert_eq!(entry_names(&state), ["dictionary.json"]);
