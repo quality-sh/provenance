@@ -1,6 +1,6 @@
 //! The atomicity of a set: a per-key set lands its keys in key order up to
-//! a failure, a whole set lands every key or none, and a set that puts and
-//! deletes one key is refused.
+//! a failure or lands no key, a whole set lands every key or none, and a set
+//! that puts and deletes one key is refused.
 
 use super::{
     expected, key, publish, read, Atomicity, Harness, PublishFailure, WriteSet, A, B, C, X,
@@ -47,22 +47,33 @@ pub fn a_per_key_set_that_fails_at_its_first_key_is_refused<H: Harness>(mut harn
     assert_eq!(read(&harness), before);
 }
 
-/// A per-key set that fails partway leaves the keys before the failure
-/// landed and reports that landing started.
+/// A per-key set that fails at a later key leaves landed the keys before
+/// the failure, or no key. It is refused when no key landed and reports
+/// that landing started otherwise.
 pub fn a_failed_per_key_set_leaves_a_landed_prefix<H: Harness>(mut harness: H) {
     harness.seed(&[("manifest.json", b"{}")]);
     harness.break_key(B);
-    let mut prefix = read(&harness).into_entries();
+    let before = read(&harness).into_entries();
     let writes = WriteSet::new(Atomicity::PerKey)
         .put(key(A), b"a".to_vec())
         .put(key(B), b"b".to_vec())
         .put(key(C), b"c".to_vec());
-    assert!(matches!(
-        publish(&harness, writes),
-        Err(PublishFailure::Started(_))
-    ));
-    prefix.insert(key(A), b"a".to_vec());
-    assert_eq!(read(&harness).entries(), &prefix);
+    let failure = publish(&harness, writes).unwrap_err();
+    let after = read(&harness).into_entries();
+    match failure {
+        PublishFailure::Refused(_) => assert_eq!(after, before, "a refused set lands no key"),
+        PublishFailure::Started(_) => {
+            let mut prefix = before;
+            prefix.insert(key(A), b"a".to_vec());
+            assert_eq!(
+                after, prefix,
+                "a started set lands the keys before the failure"
+            );
+        }
+        PublishFailure::BaseMoved { .. } => {
+            panic!("a set with no base is not refused for its base")
+        }
+    }
 }
 
 /// A whole set of two keys lands both keys.

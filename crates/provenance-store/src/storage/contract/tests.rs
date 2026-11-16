@@ -157,6 +157,7 @@ fn each_adapter_a_per_key_set_that_fails_at_its_first_key_is_refused() {
 #[test]
 #[verifies("rule_write_sets_publish_through_the_storage_port", examples)]
 #[verifies("rule_failure_after_landing_starts_is_an_unknown_outcome", examples)]
+#[verifies("rule_failure_before_a_key_changes_is_refused", examples)]
 fn each_adapter_a_failed_per_key_set_leaves_a_landed_prefix() {
     a_failed_per_key_set_leaves_a_landed_prefix(local());
     a_failed_per_key_set_leaves_a_landed_prefix(Memory::default());
