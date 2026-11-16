@@ -33,7 +33,7 @@ fn names(warning: &str, file: &str) -> bool {
 }
 
 /// The exit code, the standard output and the standard error of one CLI command.
-pub(crate) fn run(repo: &str, args: &[&str]) -> (Option<i32>, String, String) {
+pub fn run(repo: &str, args: &[&str]) -> (Option<i32>, String, String) {
     let output = assert_cmd::Command::new(assert_cmd::cargo::cargo_bin!("provenance"))
         .args(args)
         .args(["--repo", repo])
@@ -63,7 +63,7 @@ async fn mcp_refusal(server: &Server, tool: &str, arguments: Value) -> Value {
 
 /// An update of the Rule with the guard `etag` refuses with `by_cli` on the CLI and with
 /// `by_mcp` on MCP.
-pub(crate) async fn assert_update_refused(
+pub async fn assert_update_refused(
     server: &Server,
     repo: &str,
     etag: &str,
@@ -87,7 +87,7 @@ pub(crate) async fn assert_update_refused(
 /// The get of the Rule over damaged state, on each interface: the record at the stored
 /// serial with the freshness warning `warning`, and otherwise the answer of `clean`, the
 /// JSON and text of the get before the damage.
-pub(crate) async fn assert_stored_record(
+pub async fn assert_stored_record(
     server: &Server,
     repo: &str,
     clean: &(Value, String),
@@ -128,7 +128,7 @@ pub(crate) async fn assert_stored_record(
 }
 
 /// The JSON and the text of the get of the Rule.
-pub(crate) fn clean_get(repo: &str) -> (Value, String) {
+pub fn clean_get(repo: &str) -> (Value, String) {
     let text = cli(&[RULE, "get", "--repo", repo]);
     (cli_json(repo, &[RULE, "get"]), text)
 }
