@@ -3,15 +3,18 @@ use camino::{Utf8Path, Utf8PathBuf};
 use provenance_core::coverage::EvidenceAnchor;
 
 use crate::binding_lexer::{block_comment_state, code_outside_multiline_string, MultilineStyle};
-use crate::parser::{annotation_marker_position, parse_annotations, Verification};
+use crate::parser::{parse_annotations, Verification};
 use crate::{Annotation, ParseWarning};
+
+use crate::language::Language;
 
 use bindings::parse_binding_or_warn;
 pub use bounded::scan_path_bounded;
-use consumed::{consume_binding_lines, consume_comment_lines};
+use consumed::consume_lines;
 pub use ignore::selects_source_path;
 use names::Sites;
-use rust_lines::{rust_annotation_marker_position, rust_line_states, RustLexicalState};
+use rule_comment::{rule_comment_at, LineStart};
+use rust_lines::{rust_line_states, RustLexicalState};
 
 mod bindings;
 mod bounded;
@@ -21,32 +24,9 @@ mod consumed;
 mod declaration;
 mod ignore;
 mod names;
+mod rule_comment;
 mod rust_lines;
 mod script_literals;
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
-pub enum Language {
-    Rust,
-    Python,
-    JavaScript,
-    TypeScript,
-    Java,
-    Go,
-}
-
-impl Language {
-    pub fn from_extension(ext: &str) -> Option<Self> {
-        match ext {
-            "rs" => Some(Self::Rust),
-            "py" => Some(Self::Python),
-            "js" | "jsx" => Some(Self::JavaScript),
-            "ts" | "tsx" => Some(Self::TypeScript),
-            "java" => Some(Self::Java),
-            "go" => Some(Self::Go),
-            _ => None,
-        }
-    }
-}
 
 #[derive(Debug, Clone, PartialEq, serde::Serialize)]
 pub struct AnnotationLocation {
@@ -172,7 +152,8 @@ fn is_ignored_directory_name(name: Option<&str>) -> bool {
 /// channels.
 pub fn scan_file(file_path: &Utf8Path, language: Language, content: &str) -> FileScan {
     if matches!(language, Language::JavaScript | Language::TypeScript) {
-        let (lexical_content, warnings) = script_literals::mask_regex_literals(content);
+        let (lexical_content, warnings) =
+            script_literals::mask_regex_literals(content, language.comment_syntax());
         let mut scan = scan_file_contents(file_path, language, content, &lexical_content);
         scan.warnings.splice(0..0, warnings);
         scan
@@ -201,18 +182,18 @@ fn scan_file_contents(
         let line = match multiline_style(language) {
             None => lines[idx],
             Some(style) => {
+                let syntax = language.comment_syntax();
                 let Some(code) = code_outside_multiline_string(
                     lines[idx],
                     style,
+                    syntax,
                     &mut multiline_delimiter,
                     in_block_comment,
                 ) else {
                     idx += 1;
                     continue;
                 };
-                if language != Language::Python {
-                    in_block_comment = block_comment_state(code, in_block_comment);
-                }
+                in_block_comment = block_comment_state(code, syntax, in_block_comment);
                 code
             }
         };
@@ -230,7 +211,7 @@ fn scan_file_contents(
             .flatten();
         if let Some(binding) = binding {
             let end_idx = idx + binding.extra_lines;
-            consume_binding_lines(
+            consume_lines(
                 language,
                 &lines[idx + 1..=end_idx],
                 &mut multiline_delimiter,
@@ -248,18 +229,16 @@ fn scan_file_contents(
             idx = end_idx + 1;
             continue;
         }
-        let Some(marker_position) = annotation_marker_start(
-            language,
-            lines[idx],
-            rust_states[idx],
-            started_in_block_comment,
-            started_in_multiline_string,
-        ) else {
+        let start = LineStart {
+            rust_state: rust_states[idx],
+            in_block_comment: started_in_block_comment,
+            in_multiline_string: started_in_multiline_string,
+        };
+        let Some(comment) = rule_comment_at(language, &lines, idx, start) else {
             idx += 1;
             continue;
         };
-        let (comment, end_idx) = collect_annotation_comment(&lines, idx, marker_position);
-        let parsed = parse_annotations(&comment);
+        let parsed = parse_annotations(&comment.text);
         warnings.extend(parsed.warnings);
         let first = annotations.len();
         for annotation in parsed.annotations {
@@ -271,9 +250,14 @@ fn scan_file_contents(
                 annotation,
             });
         }
-        sites.comment(idx, first..annotations.len());
-        consume_comment_lines(language, &lines[idx + 1..=end_idx], &mut in_block_comment);
-        idx = end_idx + 1;
+        sites.comment(idx, comment.below, first..annotations.len());
+        consume_lines(
+            language,
+            &lines[idx + 1..=comment.end],
+            &mut multiline_delimiter,
+            &mut in_block_comment,
+        );
+        idx = comment.end + 1;
     }
     sites.name(&rust_states, &mut annotations, &mut bindings);
     FileScan {
@@ -296,51 +280,6 @@ const fn multiline_style(language: Language) -> Option<MultilineStyle> {
         Language::Java => Some(MultilineStyle::TripleDouble),
         Language::Rust => None,
     }
-}
-
-/// Finds the annotation marker on a line the comment-line gate admits.
-///
-/// The gate is ratified behavior (`rule_prov_annot_014`): a directive binds
-/// only when, after leading whitespace, the line starts with `//`, `/*`, or
-/// `*` (or `#` in Python), or continues an open block comment. A marker
-/// trailing code on the same line never binds. Past the gate, markers sitting
-/// inside string literals quoted within the comment are still skipped.
-fn annotation_marker_start(
-    language: Language,
-    line: &str,
-    rust_state: RustLexicalState,
-    started_in_block_comment: bool,
-    started_in_multiline_string: bool,
-) -> Option<usize> {
-    if language == Language::Rust {
-        let in_string = matches!(
-            rust_state,
-            RustLexicalState::Quoted | RustLexicalState::Raw(_)
-        );
-        let in_comment = matches!(rust_state, RustLexicalState::BlockComment(_));
-        return (!in_string && is_annotation_comment_line(language, line, in_comment))
-            .then(|| rust_annotation_marker_position(line, rust_state))
-            .flatten();
-    }
-    (!started_in_multiline_string
-        && is_annotation_comment_line(language, line, started_in_block_comment))
-    .then(|| annotation_marker_position(line))
-    .flatten()
-}
-
-fn is_annotation_comment_line(
-    language: Language,
-    line: &str,
-    started_in_block_comment: bool,
-) -> bool {
-    if started_in_block_comment {
-        return true;
-    }
-    let trimmed = line.trim_start();
-    trimmed.starts_with("//")
-        || trimmed.starts_with("/*")
-        || trimmed.starts_with('*')
-        || (language == Language::Python && trimmed.starts_with('#'))
 }
 
 /// The item name of a JavaScript or TypeScript call site whose last line is
@@ -403,32 +342,6 @@ fn enclosing_script_function(lines: &[&str], idx: usize) -> Option<String> {
         depth = depth.saturating_sub(openings);
     }
     None
-}
-
-fn collect_annotation_comment(
-    lines: &[&str],
-    start: usize,
-    marker_position: usize,
-) -> (String, usize) {
-    let mut end = start;
-    while end + 1 < lines.len() && is_comment_continuation(lines[end + 1]) {
-        end += 1;
-    }
-    let mut comment = lines[start][marker_position..].to_string();
-    for continuation in lines.iter().take(end + 1).skip(start + 1) {
-        comment.push('\n');
-        comment.push_str(continuation);
-    }
-    (comment, end)
-}
-
-fn is_comment_continuation(line: &str) -> bool {
-    let trimmed = line.trim_start();
-    trimmed.starts_with("//")
-        || trimmed.starts_with('#')
-        || trimmed.starts_with('*')
-        || trimmed.starts_with("/*")
-        || trimmed.starts_with("*/")
 }
 
 fn token_after(line: &str, marker: &str) -> Option<String> {

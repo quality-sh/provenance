@@ -7,9 +7,10 @@
 
 use std::str::FromStr;
 
-use super::Language;
 use crate::binding_lexer::call_arguments;
+use crate::language::CommentSyntax;
 use crate::parser::Verification;
+use crate::Language;
 use crate::ParseWarning;
 
 /// A recognized binding site: the rule id, the verification method for a
@@ -51,8 +52,14 @@ pub(super) fn parse_binding_line(
                 }),
             )
         }
-        Language::JavaScript | Language::TypeScript => parse_script_call(line, in_block_comment),
-        Language::Go | Language::Java => Ok(parse_rule_call(line, in_block_comment)),
+        Language::JavaScript | Language::TypeScript => {
+            parse_script_call(line, language.comment_syntax(), in_block_comment)
+        }
+        Language::Go | Language::Java => Ok(parse_rule_call(
+            line,
+            language.comment_syntax(),
+            in_block_comment,
+        )),
     }
 }
 
@@ -89,9 +96,10 @@ fn parse_python_decorator(line: &str) -> Option<(String, Option<Verification>)> 
 
 fn parse_script_call(
     line: &str,
+    syntax: CommentSyntax,
     in_block_comment: bool,
 ) -> Result<Option<ParsedBinding>, MalformedBinding> {
-    if let Some(rest) = call_arguments(line, in_block_comment, "verifies") {
+    if let Some(rest) = call_arguments(line, in_block_comment, syntax, "verifies") {
         // A function or method declared with the name `verifies`, such as the
         // helper's own `function verifies(ruleId, method)`, is not a binding
         // site. A member call (`provenance.verifies(...)`) binds when it reads
@@ -117,7 +125,7 @@ fn parse_script_call(
     // test graph and never binds production code. A project's own binding
     // helper — free or through a namespace import — passes an implementation
     // function or value, so any other payload binds.
-    let Some(rest) = call_arguments(line, in_block_comment, "rule") else {
+    let Some(rest) = call_arguments(line, in_block_comment, syntax, "rule") else {
         return Ok(None);
     };
     let Some((rule_id, after_id)) = quoted_literal(rest) else {
@@ -185,8 +193,12 @@ fn after_closing_parenthesis(arguments: &str) -> Option<&str> {
     None
 }
 
-fn parse_rule_call(line: &str, in_block_comment: bool) -> Option<ParsedBinding> {
-    let rest = call_arguments(line, in_block_comment, "rule")?;
+fn parse_rule_call(
+    line: &str,
+    syntax: CommentSyntax,
+    in_block_comment: bool,
+) -> Option<ParsedBinding> {
+    let rest = call_arguments(line, in_block_comment, syntax, "rule")?;
     let (rule_id, after_id) = quoted_literal(rest)?;
     after_id
         .trim_start()
@@ -265,11 +277,12 @@ fn binding_attribute_name(line: &str) -> Option<&str> {
 /// wrapped attribute; one that would pull comment text in is left unparsed.
 fn join_attribute(line: &str, following: &[&str]) -> Option<(String, usize)> {
     binding_attribute_name(line)?;
+    let comments = Language::Rust.comment_syntax();
     let mut joined = line.trim().to_string();
     let mut extra = 0;
     while paren_depth(&joined) > 0 {
         let next = following.get(extra)?.trim();
-        if next.contains("//") || next.contains("/*") {
+        if (0..next.len()).any(|at| comments.starts_comment(&next.as_bytes()[at..])) {
             return None;
         }
         joined.push(' ');
