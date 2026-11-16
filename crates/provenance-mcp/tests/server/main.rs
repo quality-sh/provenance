@@ -106,5 +106,7 @@ mod review_write_transports;
 mod surface_names;
 #[path = "../typed_plan_refusals.rs"]
 mod typed_plan_refusals;
+#[path = "../verification_run_budget.rs"]
+mod verification_run_budget;
 #[path = "../wire.rs"]
 mod wire;

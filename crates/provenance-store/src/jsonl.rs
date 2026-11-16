@@ -19,6 +19,8 @@ mod preservation;
 use line::numbered_lines;
 #[cfg(feature = "host")]
 pub(crate) use line::{record_of_line, without_terminator};
+#[cfg(feature = "host")]
+pub(crate) use preservation::Carried;
 use preservation::{LoadedRecords, RawRecord};
 
 /// An exclusive lock on the lock file at a path. Released on drop.
@@ -79,19 +81,44 @@ pub fn write_jsonl_atomic<T: Serialize>(path: &Utf8Path, records: &[T]) -> anyho
 /// Mutates one file of derived state, such as the verification runs, under
 /// its advisory lock, and writes the file in place. The caller holds the
 /// section. Canonical state publishes through the storage port instead.
+///
+/// Each line that the mutation changes or adds is measured as it is stored,
+/// with the members of the stored line that the record type does not know,
+/// and a line over `line_budget` bytes refuses the write before the file
+/// changes.
 #[cfg(feature = "host")]
 pub(crate) fn mutate_jsonl_locked<T, R>(
     path: &Utf8Path,
     lock_path: &Utf8Path,
+    line_budget: usize,
     mutate: impl FnOnce(&mut Vec<T>) -> anyhow::Result<R>,
+) -> anyhow::Result<R>
+where
+    T: DeserializeOwned + Serialize,
+{
+    mutate_carried_jsonl_locked(path, lock_path, line_budget, |records, _| mutate(records))
+}
+
+/// Like [`mutate_jsonl_locked`], but the mutation also gets the bytes that the
+/// stored line of each record carries, so that it can fit a record to the
+/// budget of its stored line.
+#[cfg(feature = "host")]
+pub(crate) fn mutate_carried_jsonl_locked<T, R>(
+    path: &Utf8Path,
+    lock_path: &Utf8Path,
+    line_budget: usize,
+    mutate: impl FnOnce(&mut Vec<T>, &Carried<'_>) -> anyhow::Result<R>,
 ) -> anyhow::Result<R>
 where
     T: DeserializeOwned + Serialize,
 {
     let _lock = AdvisoryLock::acquire(lock_path)?;
     let mut loaded = load_jsonl_file(path)?;
-    let result = mutate(loaded.records_mut())?;
-    let lines = loaded.into_lines(path)?;
+    let (records, carried) = loaded.records_and_carried();
+    let result = mutate(records, &carried)?;
+    let lines = loaded.into_checked_lines(path, |line| {
+        crate::state_store::read_budget::ensure_line_within(line, line_budget)
+    })?;
     guard_jsonl_lines(&files_of(path), path, &lines, &WritePermissions::none())?;
     write_jsonl_lines_atomic_unlocked(path, &lines)
         .map_err(crate::write_error::publication_started)?;
