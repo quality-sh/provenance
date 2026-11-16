@@ -17,11 +17,6 @@ const TRACE_DESCRIPTION: &str =
 const SEARCH_DESCRIPTION: &str = "Find records across the permitted kinds in the bound scope, or the Rules bound to a source file and symbol.";
 const CHECK_DESCRIPTION: &str = "Check graph validity, statement quality, and binding \
      coverage. Give a statement to check that text with the project dictionary before a write.";
-const CHANGE_DESCRIPTION: &str = "Write to the graph. The action argument selects the \
-     write: create, update, answer, claim, release, or submit on the target record; discuss or \
-     reply for a Discussion; notify to register a client thread for review changes; or \
-     materialize, import, dictionary import, or swarm-backtrace land on the repository files. A \
-     call that lacks a field that the action and record kind need gets the schema of their fields.";
 const PRIME_DESCRIPTION: &str = "Introduce Provenance domain concepts and actions.";
 
 /// The format of the prime guidance.
@@ -89,7 +84,7 @@ pub(super) fn declaration(command: Command) -> Declaration {
         },
         Command::Change => Declaration {
             name: "change",
-            description: CHANGE_DESCRIPTION,
+            description: "Write to the graph.",
             grammar: Grammar::Name,
             input: Input::None,
             internal: false,

@@ -1,18 +1,37 @@
-//! The shared guidance of a consumer names only the commands that the consumer shows.
-//! These tests have no Rule binding: the Rule that states which commands the guidance
-//! names waits for the approval of the owner.
+//! The shared guidance of a consumer has one line for each command that the consumer
+//! shows, with the name of the consumer, and names no command that the consumer does not
+//! show. Its sentences name only shown commands.
 
 use provenance_porcelain::action::Action;
-use provenance_porcelain::guidance::{change_description, guidance, guidance_for};
-use provenance_porcelain::registry::Command;
+use provenance_porcelain::guidance::{guidance_for, Shown};
+use provenance_porcelain::registry::{
+    Command, Declaration, Fields, GraphCommand, RepositoryCommand,
+};
 
 /// Phrases that do not name a command, each with the start of the one line that holds
-/// it: the trace view of get, the claim of a Topic, and the HTTP method of an API route.
-const NOT_COMMANDS: [(&str, &str); 3] = [
+/// it: the trace view of get, the claim of a Topic, the HTTP method of an API route, the
+/// file that import reads, the checks of validate, and the verb of dictionary import.
+const NOT_COMMANDS: [(&str, &str); 6] = [
     ("- get: ", "trace view"),
     ("- release: ", "Topic claim"),
     ("- api: ", "GET /rules"),
+    ("- import: ", "export file"),
+    ("- validate: ", "Check one"),
+    ("- dictionary import: ", "Import the"),
 ];
+
+/// The writes of the change command of the consumer in these tests, other than the
+/// record actions and the Discussion writes.
+const REPOSITORY_WRITES: [Command; 4] = [
+    Command::Repository(RepositoryCommand::Materialize),
+    Command::Repository(RepositoryCommand::Import),
+    Command::Repository(RepositoryCommand::DictionaryImport),
+    Command::Graph(GraphCommand::SwarmBacktraceLand),
+];
+
+/// The name that the consumer in these tests gives to the notify write. It is not the
+/// name of a command.
+const NOTIFY: &str = "watch";
 
 /// The record kind that has the name of a command. The guidance writes the record kind
 /// with a capital letter.
@@ -55,37 +74,108 @@ fn names(text: &str, name: &str) -> bool {
     })
 }
 
+/// Each command for which `shown` is true, in registry order, with its declaration name.
+fn declared(shown: impl Fn(Command) -> bool) -> Vec<(Command, String)> {
+    Command::ALL
+        .iter()
+        .copied()
+        .filter(|command| shown(*command))
+        .map(|command| (command, command.declaration().name.to_owned()))
+        .collect()
+}
+
+/// Each registry command of `commands` as a command that the consumer shows.
+fn registry(commands: Vec<(Command, String)>) -> Vec<(Shown, String)> {
+    commands
+        .into_iter()
+        .map(|(command, name)| (Shown::Registry(command), name))
+        .collect()
+}
+
+/// Whether the change command of the consumer selects `command`: an action that is not a
+/// Discussion read, or a repository write.
+fn is_write(command: Command) -> bool {
+    let reads = [Action::Discussions, Action::Discussion].map(Command::Action);
+    (matches!(command, Command::Action(_)) && !reads.contains(&command))
+        || REPOSITORY_WRITES.contains(&command)
+}
+
+/// The guidance of a consumer that shows each command for which `shown` is true, with
+/// the shown writes on its change command, and the notify write when `notify` is true.
+fn guidance_with(shown: impl Fn(Command) -> bool, notify: bool) -> String {
+    let commands = registry(declared(&shown));
+    let writes = declared(|command| shown(command) && is_write(command));
+    guidance_for(&commands, &writes, notify.then_some(NOTIFY)).guidance
+}
+
+/// The guidance of a consumer that shows notify and each command for which `shown` is
+/// true.
+fn guidance_of(shown: impl Fn(Command) -> bool) -> String {
+    guidance_with(shown, true)
+}
+
+/// The guidance of a consumer that shows each command and notify.
+fn guidance() -> String {
+    guidance_of(|_| true)
+}
+
 #[test]
+#[provenance_macros::verifies("rule_guidance_names_accepted_commands", examples)]
 fn the_guidance_names_no_command_that_the_consumer_does_not_show() {
     for hidden in Command::ALL.iter().copied() {
-        let text = guidance_for(|command| command != hidden, true).guidance;
+        let text = guidance_of(|command| command != hidden);
         let name = hidden.declaration().name;
         assert!(
             !names(&command_text(&text), name),
             "the guidance without {name} names it:\n{text}"
         );
     }
-    let text = guidance_for(|_| true, false).guidance;
+    let text = guidance_with(|_| true, false);
     assert!(
-        !names(&command_text(&text), "notify"),
-        "the guidance without notify names it:\n{text}"
+        !names(&command_text(&text), NOTIFY),
+        "the guidance without the notify write names it:\n{text}"
+    );
+    let text = guidance();
+    assert!(
+        text.contains(&format!("; {NOTIFY} to register a client thread")),
+        "the guidance does not give the notify write by the name of the consumer:\n{text}"
     );
 }
 
+/// The lines follow the order of the consumer and use its names. A command that the
+/// consumer declares itself gets a line with its own description. An internal command
+/// gets no line.
 #[test]
-fn the_change_line_with_each_write_is_the_change_declaration_description() {
-    let description = Command::Change.declaration().description;
-    assert_eq!(
-        change_description(|_| true, true).as_deref(),
-        Some(description)
+#[provenance_macros::verifies("rule_guidance_names_accepted_commands", examples)]
+fn each_shown_command_has_one_line_with_the_name_of_the_consumer() {
+    let import = Command::Repository(RepositoryCommand::Import);
+    let merge = Command::Repository(RepositoryCommand::MergeJsonl);
+    let serve = Declaration::named(
+        "serve",
+        "Serve the records.",
+        Fields::new(&[], serde_json::Value::default),
     );
-    assert!(guidance()
-        .guidance
-        .contains(&format!("\n- change: {description}\n")));
+    let commands = [
+        (Shown::Registry(import), "loaded import".to_owned()),
+        (Shown::Registry(Command::Search), "find".to_owned()),
+        (Shown::Registry(merge), "merge".to_owned()),
+        (Shown::Declared(serve), "start".to_owned()),
+    ];
+    let text = guidance_for(&commands, &[], None).guidance;
+    let (_, actions) = text.split_once("\n## Actions\n").unwrap();
+    let lines: Vec<&str> = actions
+        .lines()
+        .filter(|line| line.starts_with("- "))
+        .collect();
     assert_eq!(
-        change_description(|command| command == Command::Change, false),
-        None
+        lines,
+        [
+            format!("- loaded import: {}", import.declaration().description),
+            format!("- find: {}", Command::Search.declaration().description),
+            "- start: Serve the records.".to_owned(),
+        ]
     );
+    assert!(merge.declaration().internal);
 }
 
 #[test]
@@ -94,7 +184,7 @@ fn the_create_sentence_names_existing_record_actions_only_when_one_is_shown() {
         matches!(command, Command::Action(action)
             if Action::RECORD.contains(&action) && action != Action::Create)
     };
-    let text = guidance_for(|command| !existing(command), true).guidance;
+    let text = guidance_of(|command| !existing(command));
     assert!(
         text.contains(" Create names an explicit record type.\n"),
         "{text}"
@@ -103,7 +193,7 @@ fn the_create_sentence_names_existing_record_actions_only_when_one_is_shown() {
         !text.contains("actions on an existing record infer its type"),
         "{text}"
     );
-    assert!(guidance().guidance.contains(
+    assert!(guidance().contains(
         "\nUse search to find IDs, then get to read the selected record and its related views. \
          Create names an explicit record type; actions on an existing record infer its type.\n"
     ));
@@ -114,14 +204,11 @@ fn the_create_sentence_names_existing_record_actions_only_when_one_is_shown() {
 /// evidence: the trace line names get and goes with it.
 #[test]
 fn guidance_with_trace_and_without_get_gives_no_trace_line() {
-    let without_get = guidance_for(|command| command != Command::Get, true).guidance;
-    let without_get_and_trace = guidance_for(
-        |command| !matches!(command, Command::Get | Command::Trace),
-        true,
-    )
-    .guidance;
+    let without_get = guidance_of(|command| command != Command::Get);
+    let without_get_and_trace =
+        guidance_of(|command| !matches!(command, Command::Get | Command::Trace));
     assert_eq!(without_get, without_get_and_trace);
-    assert!(guidance().guidance.contains("\n- trace: "));
+    assert!(guidance().contains("\n- trace: "));
 }
 
 /// The `edit.etag` sentence names get and update, so a consumer gets it only when it shows
@@ -131,12 +218,11 @@ fn the_etag_sentence_needs_get_and_update() {
     let sentence = "Before an update, read the record with get. Give its `edit.etag` unchanged \
                     to the update as the if-match value.\n";
     let update = Command::Action(Action::Update);
-    let without_update = guidance_for(|command| command != update, true).guidance;
+    let without_update = guidance_of(|command| command != update);
     assert!(!without_update.contains(sentence), "{without_update}");
-    let without_get = guidance_for(|command| command != Command::Get, true).guidance;
+    let without_get = guidance_of(|command| command != Command::Get);
     assert!(!without_get.contains(sentence), "{without_get}");
-    let get_and_update =
-        guidance_for(|command| command == Command::Get || command == update, true).guidance;
+    let get_and_update = guidance_of(|command| command == Command::Get || command == update);
     assert_eq!(
         get_and_update.matches(sentence).count(),
         1,
