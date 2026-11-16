@@ -257,6 +257,7 @@ pub(super) fn top_level_members(line: &str) -> Result<Scan, serde_json::Error> {
 #[cfg(test)]
 mod tests {
     use super::{record_of_line, top_level_members};
+    use provenance_core::protocol::read_failure::UnparsableStateFile;
 
     #[derive(Debug, serde::Deserialize)]
     struct Record {
@@ -309,11 +310,24 @@ mod tests {
     // The tests below are implementation aids with no Rule: no Rule states the
     // order of the faults of one stored line.
 
-    /// The refusal text of the line `line` as a [`Record`].
-    fn refusal(line: &str) -> String {
-        record_of_line::<Record>(path(), 3, line.as_bytes())
-            .unwrap_err()
-            .to_string()
+    /// The line and the message of the refusal of the line `line` as a `T`.
+    fn refusal<T: serde::de::DeserializeOwned>(line: &str) -> (u64, String) {
+        let error = record_of_line::<T>(path(), 3, line.as_bytes())
+            .err()
+            .expect("the line is refused");
+        let state = UnparsableStateFile::find(error.as_ref()).unwrap();
+        (state.line(), state.message().to_owned())
+    }
+
+    /// The message of the `retired` refusal of the record `name`.
+    fn retired(name: &str) -> (u64, String) {
+        (
+            3,
+            format!(
+                "{name} contains legacy field `retired`; canonical JSONL requires \
+                 record-deletion migration 026 before this build can read it"
+            ),
+        )
     }
 
     #[test]
@@ -324,41 +338,53 @@ mod tests {
     }
 
     #[test]
-    fn a_field_of_the_record_two_times_refuses_the_line() {
-        let message = refusal(r#"{"id":"rule_a","id":"rule_b"}"#);
-        assert!(
-            message.contains("line 3: duplicate field `id`"),
-            "{message}"
+    fn a_syntax_fault_wins_over_a_repeated_field() {
+        assert_eq!(
+            refusal::<Record>(r#"{"id":"rule_a","id":"rule_b","#),
+            (3, "EOF while parsing an object".to_owned())
         );
     }
 
     #[test]
-    fn a_syntax_fault_wins_over_a_repeated_field() {
-        let message = refusal(r#"{"id":"rule_a","id":"rule_b","#);
-        assert!(message.contains("line 3: EOF while parsing"), "{message}");
-    }
-
-    #[test]
     fn the_retired_member_wins_over_a_repeated_field() {
-        let message = refusal(r#"{"id":"rule_a","id":"rule_b","retired":true}"#);
-        assert!(
-            message.contains("line 3: record rule_b contains legacy field `retired`"),
-            "{message}"
+        assert_eq!(
+            refusal::<Record>(r#"{"id":"rule_a","id":"rule_b","retired":true}"#),
+            retired("record rule_b")
         );
     }
 
     #[test]
     fn the_retired_member_refuses_a_record_that_parses() {
-        let message = refusal(r#"{"id":"rule_a","retired":true}"#);
-        assert!(
-            message.contains("line 3: record rule_a contains legacy field `retired`"),
-            "{message}"
+        assert_eq!(
+            refusal::<Record>(r#"{"id":"rule_a","retired":true}"#),
+            retired("record rule_a")
+        );
+    }
+
+    // No public surface reads a stored line as a JSON value through this
+    // reader, so only these tests pin that the `retired` check does not
+    // depend on the type that the line is read as.
+
+    #[test]
+    fn the_retired_member_refuses_a_line_read_as_a_json_value() {
+        assert_eq!(
+            refusal::<serde_json::Value>(r#"{"id":"rule_a","retired":true}"#),
+            retired("record rule_a")
         );
     }
 
     #[test]
+    fn the_retired_member_written_with_an_escape_refuses_each_type() {
+        let line = r#"{"id":"rule_a","retir\u0065d":true}"#;
+        assert_eq!(refusal::<serde_json::Value>(line), retired("record rule_a"));
+        assert_eq!(refusal::<Record>(line), retired("record rule_a"));
+    }
+
+    #[test]
     fn data_after_the_record_refuses_the_line() {
-        let message = refusal(r#"{"id":"rule_a"} {}"#);
-        assert!(message.contains("line 3: trailing characters"), "{message}");
+        assert_eq!(
+            refusal::<Record>(r#"{"id":"rule_a"} {}"#),
+            (3, "trailing characters".to_owned())
+        );
     }
 }
