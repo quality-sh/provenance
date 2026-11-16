@@ -2,8 +2,8 @@
 //! line of each site is known.
 //!
 //! The scanner lexes the file one time. The read of a comment, attribute, or
-//! decorator site covers the code tokens from the line below the site to the
-//! next such site. When those tokens hold only attributes, decorators, or
+//! decorator site covers the code tokens below the site, up to the next such
+//! site. When those tokens hold only attributes, decorators, or
 //! annotations, the declaration is below the next site, and the site takes
 //! the name of the next site. So each site above one declaration gets the
 //! name of that declaration. The reads do not overlap, so the sites of a file
@@ -22,12 +22,12 @@ pub(super) struct Sites<'a> {
     language: Language,
     lines: &'a [&'a str],
     original_lines: &'a [&'a str],
-    sites: Vec<Unnamed>,
+    unnamed: Vec<Unnamed>,
 }
 
 struct Unnamed {
     line: usize,
-    /// The index of the first line below the site.
+    /// The index of the first line of the read of the site.
     below: usize,
     site: Site,
 }
@@ -52,15 +52,17 @@ impl<'a> Sites<'a> {
             language,
             lines,
             original_lines,
-            sites: Vec::new(),
+            unnamed: Vec::new(),
         }
     }
 
     /// A comment on line `line` that holds the annotations at `annotations`.
+    /// The read starts on that line, because code can follow the end of a
+    /// block comment there.
     pub(super) fn comment(&mut self, line: usize, annotations: Range<usize>) {
-        self.sites.push(Unnamed {
+        self.unnamed.push(Unnamed {
             line,
-            below: line + 1,
+            below: line,
             site: Site::Comment(annotations),
         });
     }
@@ -73,7 +75,7 @@ impl<'a> Sites<'a> {
         } else {
             Site::Call(binding)
         };
-        self.sites.push(Unnamed {
+        self.unnamed.push(Unnamed {
             line,
             below: last + 1,
             site,
@@ -92,7 +94,7 @@ impl<'a> Sites<'a> {
             language,
             lines,
             original_lines,
-            sites,
+            unnamed: sites,
         } = self;
         let tokens = file_tokens(language, lines, rust_states);
         let (calls, declared): (Vec<_>, Vec<_>) = sites
@@ -113,7 +115,7 @@ impl<'a> Sites<'a> {
                 Read::Declaration(name) => name,
                 Read::NextSite => next_name.take(),
             };
-            next_name = name.clone();
+            next_name.clone_from(&name);
             names[index] = name.filter(|_| starts[index]);
         }
         for (unnamed, name) in declared.into_iter().zip(names) {
@@ -127,7 +129,6 @@ impl<'a> Sites<'a> {
             }
         }
     }
-
 }
 
 /// Gives the site `site` the item name `name` and the anchor of that name.
@@ -156,9 +157,9 @@ fn set(
 }
 
 /// The range of the tokens that the read of each site covers. `sites` holds
-/// the first line below each site and the line of the site, in line order. A
-/// read covers the tokens from the first line below its site to the line of
-/// the next site, so the ranges do not overlap.
+/// the first line of the read of each site and the line of the site, in line
+/// order. A read covers the tokens from its first line to the line of the next
+/// site, so the ranges do not overlap.
 fn read_ranges(tokens: &[Token<'_>], sites: &[(usize, usize)]) -> Vec<Range<usize>> {
     let first_at = |line: usize| tokens.partition_point(|token| token.line < line);
     sites

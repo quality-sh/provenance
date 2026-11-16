@@ -20,9 +20,8 @@ pub(super) fn consume_binding_lines(
         ) else {
             break;
         };
-        if language != Language::Python {
-            *in_block_comment =
-                block_comment_state(code, *in_block_comment, language == Language::Rust);
+        if !matches!(language, Language::Python | Language::Rust) {
+            *in_block_comment = block_comment_state(code, *in_block_comment);
         }
     }
 }
@@ -34,11 +33,10 @@ pub(super) fn consume_comment_lines(
     consumed: &[&str],
     in_block_comment: &mut bool,
 ) {
-    if language == Language::Python {
+    if matches!(language, Language::Python | Language::Rust) {
         return;
     }
     for line in consumed {
-        *in_block_comment =
-            block_comment_state(line, *in_block_comment, language == Language::Rust);
+        *in_block_comment = block_comment_state(line, *in_block_comment);
     }
 }

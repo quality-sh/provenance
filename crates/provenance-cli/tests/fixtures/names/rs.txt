@@ -186,4 +186,8 @@ fn calls() {
     );
 }
 
+const OPENS: &str = r#"a"/*"#;
+#[rule("rule_after_raw_string")]
+fn after_raw_string() {}
+
 // @provenance rule: rule_end

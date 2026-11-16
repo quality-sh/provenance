@@ -55,3 +55,4 @@ rule_keyword_this -
 rule_keyword_import -
 rule_keyword_async -
 rule_keyword_return -
+rule_same_line sameLine

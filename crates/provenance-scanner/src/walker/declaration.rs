@@ -58,7 +58,7 @@ impl<'a> Tokens<'_, 'a> {
         self.0.get(index).map(|token| token.text)
     }
 
-    fn on_one_line(self, left: usize, right: usize) -> bool {
+    const fn on_one_line(self, left: usize, right: usize) -> bool {
         self.0[left].line == self.0[right].line
     }
 }

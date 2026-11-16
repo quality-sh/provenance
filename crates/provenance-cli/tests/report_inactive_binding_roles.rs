@@ -272,18 +272,26 @@ fn check_bindings_gives_the_inactive_rule_warnings_of_a_file_in_line_order() {
         .map(|warning| warning["line"].as_u64().unwrap())
         .collect::<Vec<_>>();
     assert_eq!(lines, [1, 4, 7, 10], "{json}");
-    let rules = [
-        "rule_deprecated",
-        "rule_deprecated",
-        "rule_archived",
-        "rule_archived",
+    let cited = [
+        (1, "rule_deprecated", "deprecated"),
+        (4, "rule_deprecated", "deprecated"),
+        (7, "rule_archived", "archived"),
+        (10, "rule_archived", "archived"),
     ];
-    for output in [&text, &markdown] {
-        let citations = inactive_citations(output);
-        let cited = citations
-            .iter()
-            .map(|line| rules.iter().find(|rule| line.contains(*rule)).copied())
-            .collect::<Vec<_>>();
-        assert_eq!(cited, rules.map(Some), "{output}");
-    }
+    let warning = |rule: &str, status: &str| {
+        format!("marker cites rule `{rule}` with status `{status}`")
+    };
+    let text_lines = cited
+        .iter()
+        .map(|(_, rule, status)| format!("  - {}", warning(rule, status)))
+        .collect::<Vec<_>>();
+    assert_eq!(inactive_citations(&text), text_lines, "{text}");
+    let markdown_lines = cited
+        .iter()
+        .map(|(line, rule, status)| {
+            let warning = warning(rule, status);
+            format!("- Warning `{rule}` in `src/lib.rs`:{line}: {warning}")
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(inactive_citations(&markdown), markdown_lines, "{markdown}");
 }

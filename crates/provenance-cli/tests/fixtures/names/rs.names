@@ -41,4 +41,5 @@ rule_group_const_first -
 rule_group_const_second after_const
 rule_after_operator -
 rule_call_argument -
+rule_after_raw_string after_raw_string
 rule_end -

@@ -89,13 +89,12 @@ fn push_words<'a>(language: Language, code: &'a str, line: usize, tokens: &mut V
     }
 }
 
-const fn comment_syntax(language: Language) -> CommentSyntax {
-    match language {
-        Language::Python => CommentSyntax::Hash,
-        Language::Rust => CommentSyntax::Rust,
-        Language::JavaScript | Language::TypeScript | Language::Java | Language::Go => {
-            CommentSyntax::CStyle
-        }
+/// The comment syntax of a language other than Rust.
+fn comment_syntax(language: Language) -> CommentSyntax {
+    if language == Language::Python {
+        CommentSyntax::Hash
+    } else {
+        CommentSyntax::CStyle
     }
 }
 

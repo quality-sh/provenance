@@ -37,17 +37,8 @@ fn is_name_start(bytes: &[u8], start: usize) -> bool {
 }
 
 /// Carries C-style block-comment state between source lines.
-pub fn block_comment_state(
-    line: &str,
-    starts_in_block_comment: bool,
-    rust_char_literals: bool,
-) -> bool {
-    let syntax = if rust_char_literals {
-        CommentSyntax::Rust
-    } else {
-        CommentSyntax::CStyle
-    };
-    lex_line(line, starts_in_block_comment, syntax, |_, _| {
+pub fn block_comment_state(line: &str, starts_in_block_comment: bool) -> bool {
+    lex_line(line, starts_in_block_comment, CommentSyntax::CStyle, |_, _| {
         ControlFlow::Continue(())
     })
 }
@@ -57,8 +48,6 @@ pub fn block_comment_state(
 pub enum CommentSyntax {
     /// `//` and `/* */` comments; `'`, `"`, and `` ` `` quote a string.
     CStyle,
-    /// As `CStyle`, but `'` starts a Rust character literal or a lifetime.
-    Rust,
     /// `#` comments; `'`, `"`, and `` ` `` quote a string.
     Hash,
 }
@@ -138,14 +127,7 @@ pub fn lex_line(
             idx += 2;
             continue;
         }
-        if bytes[idx] == b'\'' && syntax == CommentSyntax::Rust {
-            if let Some(end) = rust_character_literal_end(line, idx + 1) {
-                end_code!();
-                emit!(idx..end + 1, Piece::Quoted);
-                idx = end + 1;
-                continue;
-            }
-        } else if matches!(bytes[idx], b'\'' | b'"' | b'`') {
+        if matches!(bytes[idx], b'\'' | b'"' | b'`') {
             end_code!();
             quote = Some((bytes[idx], idx));
             idx += 1;

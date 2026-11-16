@@ -207,9 +207,8 @@ fn scan_file_contents(
             continue;
         };
         let started_in_block_comment = in_block_comment;
-        if language != Language::Python {
-            in_block_comment =
-                block_comment_state(line, in_block_comment, language == Language::Rust);
+        if !matches!(language, Language::Python | Language::Rust) {
+            in_block_comment = block_comment_state(line, in_block_comment);
         }
         let binding = (language != Language::Rust || rust_states[idx] == RustLexicalState::Code)
             .then(|| {
