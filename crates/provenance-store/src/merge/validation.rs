@@ -22,7 +22,7 @@ use provenance_core::{Question, Requirement, RequirementReview, Resolution, Rule
 use serde_json::Value;
 
 use super::CanonicalRecord;
-use crate::jsonl::checked_value;
+use crate::jsonl::{record_line_value, untyped_line_value};
 use crate::statement_analysis::{analyze_changed_statements, StatementDiagnostic};
 
 /// The record type a shard holds, read off the repository path of the file
@@ -112,18 +112,19 @@ pub(crate) type LineReader =
 
 impl ShardFamily {
     /// The line checks of the reads of this family: those of its record type,
-    /// or those of a JSON value for a file of no known type.
+    /// or those of a line of no known record type for a file that no family
+    /// holds.
     pub(crate) fn line_reader(self) -> LineReader {
         match self {
-            Self::Discussions => checked_value::<Discussion>,
-            Self::Sources => checked_value::<Source>,
-            Self::RequirementReviews => checked_value::<RequirementReview>,
-            Self::Requirements => checked_value::<Requirement>,
-            Self::Resolutions => checked_value::<Resolution>,
-            Self::Rules => checked_value::<Rule>,
-            Self::Topics => checked_value::<Topic>,
-            Self::Questions => checked_value::<Question>,
-            Self::Unrecognized => checked_value::<Value>,
+            Self::Discussions => record_line_value::<Discussion>,
+            Self::Sources => record_line_value::<Source>,
+            Self::RequirementReviews => record_line_value::<RequirementReview>,
+            Self::Requirements => record_line_value::<Requirement>,
+            Self::Resolutions => record_line_value::<Resolution>,
+            Self::Rules => record_line_value::<Rule>,
+            Self::Topics => record_line_value::<Topic>,
+            Self::Questions => record_line_value::<Question>,
+            Self::Unrecognized => untyped_line_value,
         }
     }
 }

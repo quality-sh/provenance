@@ -91,9 +91,9 @@ impl StoredRow {
 /// An input is a version of the state file `shard_path`, so each line that is
 /// not blank goes through the line checks that a read of that file makes:
 /// those of its record type when [`ShardFamily::for_shard_path`] knows it,
-/// else those of a JSON value. A refusal is `invalid_state_file` at
-/// `shard_path` and the line of the input, and its message starts with the
-/// side, as the refusal of [`ensure_unique_ids`] does.
+/// else those of a line of no known record type. A refusal is
+/// `invalid_state_file` at `shard_path` and the line of the input, and its
+/// message starts with the side, as the refusal of [`ensure_unique_ids`] does.
 pub fn read_jsonl_rows_for_shard(
     path: &camino::Utf8Path,
     shard_path: &camino::Utf8Path,

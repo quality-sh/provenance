@@ -105,18 +105,18 @@ fn a_line_of_base_that_does_not_read_wins_over_a_duplicate_id_of_ours() {
     );
 }
 
-/// The standard error of `merge-jsonl` with no `--path`, run in
-/// `working_directory`, when the input `ours.jsonl` in `directory` holds a row
-/// that does not parse as a record.
-fn merge_with_a_retired_row_in(
+/// The exit code and the standard error of `merge-jsonl` with no `--path`,
+/// run in `working_directory`, when the input `ours.jsonl` in `directory`
+/// holds the one line `ours`.
+fn merge_with_no_path(
     directory: &std::path::Path,
     working_directory: &std::path::Path,
+    ours: &str,
 ) -> (Option<i32>, String) {
     std::fs::create_dir_all(directory).unwrap();
-    let retired = rule("rule_a").replacen('{', "{\"retired\":true,", 1);
     let sides = [
         ("base.jsonl", ""),
-        ("ours.jsonl", retired.as_str()),
+        ("ours.jsonl", ours),
         ("theirs.jsonl", ""),
     ]
     .map(|(name, contents)| {
@@ -134,6 +134,15 @@ fn merge_with_a_retired_row_in(
         output.status.code(),
         String::from_utf8(output.stderr).unwrap(),
     )
+}
+
+/// `merge_with_no_path` when the line of ours holds a member `retired`.
+fn merge_with_a_retired_row_in(
+    directory: &std::path::Path,
+    working_directory: &std::path::Path,
+) -> (Option<i32>, String) {
+    let retired = rule("rule_a").replacen('{', "{\"retired\":true,", 1);
+    merge_with_no_path(directory, working_directory, &retired)
 }
 
 /// The refusal of `ours.jsonl` line 1 at `file`.
@@ -279,5 +288,28 @@ fn a_syntax_fault_gives_the_file_the_line_and_the_parse_message() {
     assert_eq!(
         merge("", &ours, theirs),
         refusal(1, "theirs: EOF while parsing an object", ours)
+    );
+}
+
+/// With no `--path`, an input is a file of no known record type. A line of
+/// that file that holds a top-level member two times is refused, as each line
+/// of a state file is, although a JSON value keeps the last one.
+#[test]
+fn a_member_two_times_in_a_file_of_no_known_type_refuses_and_names_ours() {
+    let (directory, _repo) = support::review_paths::init();
+    let root = dunce::canonicalize(directory.path()).unwrap();
+    let ours = rule_with("rule_a", r#""zz":1,"zz":2"#);
+
+    let answer = merge_with_no_path(&root.join("fixtures/merge"), &root, &ours);
+
+    assert_eq!(
+        answer,
+        (
+            Some(1),
+            format!(
+                "Error: fixtures/merge/ours.jsonl line 1: ours: duplicate field `zz`; \
+                 {STATE_CORRECTIONS}\n"
+            )
+        )
     );
 }
