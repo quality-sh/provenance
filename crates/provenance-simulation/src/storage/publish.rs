@@ -99,33 +99,31 @@ impl World {
                 }
                 None => {
                     let mut entries = state.entries.clone();
-                    match land(&mut entries, &state.broken, writes, atomicity, usize::MAX) {
-                        Err(Broken { landed, key }) => {
-                            let error = anyhow::anyhow!(
-                                "the simulated storage failed to land {}",
-                                key.as_str()
-                            );
-                            if atomicity == Atomicity::PerKey && landed == 0 {
-                                // No key changed, so the set is refused.
-                                (Err(PublishFailure::Refused(error)), Outcome::Refused)
-                            } else {
-                                state.entries = entries;
-                                (Err(PublishFailure::Started(error)), Outcome::Unknown)
-                            }
+                    let landing = land(&mut entries, &state.broken, writes, atomicity, usize::MAX);
+                    if let Err(Broken { landed, key }) = landing {
+                        let error = anyhow::anyhow!(
+                            "the simulated storage failed to land {}",
+                            key.as_str()
+                        );
+                        if atomicity == Atomicity::PerKey && landed == 0 {
+                            // No key changed, so the set is refused.
+                            (Err(PublishFailure::Refused(error)), Outcome::Refused)
+                        } else {
+                            state.entries = entries;
+                            (Err(PublishFailure::Started(error)), Outcome::Unknown)
                         }
-                        Ok(()) => {
-                            let lose = self.plant == Some(Plant::LoseWrite)
-                                && engine.is_some()
-                                && !std::mem::replace(&mut state.planted, true);
-                            if !lose {
-                                state.entries = entries;
-                            }
-                            if self.plant == Some(Plant::BackdateMessage) {
-                                backdate_newest_message(&mut state.entries, writes);
-                            }
-                            let revision = StateView::new(state.entries.clone()).revision().clone();
-                            (Ok(revision), Outcome::Landed)
+                    } else {
+                        let lose = self.plant == Some(Plant::LoseWrite)
+                            && engine.is_some()
+                            && !std::mem::replace(&mut state.planted, true);
+                        if !lose {
+                            state.entries = entries;
                         }
+                        if self.plant == Some(Plant::BackdateMessage) {
+                            backdate_newest_message(&mut state.entries, writes);
+                        }
+                        let revision = StateView::new(state.entries.clone()).revision().clone();
+                        (Ok(revision), Outcome::Landed)
                     }
                 }
             }
