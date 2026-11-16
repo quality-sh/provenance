@@ -331,7 +331,7 @@ fn ensure_strict_dictionary_index(
     match resolve_project_dictionary(layout) {
         DictionaryResolution::NoReference | DictionaryResolution::Loaded(_) => Ok(()),
         DictionaryResolution::Unparsable(refusal) => Err(refusal.into()),
-        DictionaryResolution::Unreadable(problem) => Err(anyhow::Error::msg(problem)),
+        DictionaryResolution::Unreadable(problem) => Err(problem.into()),
         DictionaryResolution::Unavailable {
             directory, reason, ..
         } => {

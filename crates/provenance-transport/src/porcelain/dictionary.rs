@@ -77,7 +77,9 @@ fn status(repo: &Utf8Path) -> DictionaryStatusOutput {
             DictionaryResolution::Unparsable(refusal) => {
                 (true, None, false, Some(refusal.to_string()))
             }
-            DictionaryResolution::Unreadable(problem) => (true, None, false, Some(problem)),
+            DictionaryResolution::Unreadable(problem) => {
+                (true, None, false, Some(problem.to_string()))
+            }
             DictionaryResolution::Unavailable {
                 identity, reason, ..
             } => (true, Some(identity), false, Some(reason)),
