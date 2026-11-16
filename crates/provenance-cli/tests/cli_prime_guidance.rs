@@ -294,7 +294,11 @@ fn prime_names_each_command_that_the_cli_shows_in_its_cli_form() {
         forms.iter().any(|form| form.starts_with("<id> ")),
         "prime gives no CLI form of an action on a record:\n{text}"
     );
-    for form in named.iter().copied().chain(forms.iter().map(String::as_str)) {
+    for form in named
+        .iter()
+        .copied()
+        .chain(forms.iter().map(String::as_str))
+    {
         assert!(
             accepts(repo.path(), form),
             "the CLI refuses `provenance {form}`, which prime names:\n{text}"

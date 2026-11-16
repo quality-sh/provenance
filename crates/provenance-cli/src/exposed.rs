@@ -77,7 +77,11 @@ pub fn form(declaration: &Declaration) -> String {
         .grammar
         .takes_target()
         .then(|| format!("<id> {}", declaration.name));
-    named.into_iter().chain(on_record).collect::<Vec<_>>().join(" or ")
+    named
+        .into_iter()
+        .chain(on_record)
+        .collect::<Vec<_>>()
+        .join(" or ")
 }
 
 /// Each command that the CLI shows, in help order, with its CLI form: the porcelain
