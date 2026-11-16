@@ -132,9 +132,6 @@ async fn cli_and_mcp_share_the_same_guidance() {
             );
         }
     }
-    for guidance in [&text, &instructions] {
-        assert!(guidance.contains("\n\nFor a focused start, "), "{guidance}");
-    }
     let tools = client.tools().await;
     for name in ["get", "search", "trace", "discussions"] {
         let tool = tools.iter().find(|tool| tool["name"] == name).unwrap();

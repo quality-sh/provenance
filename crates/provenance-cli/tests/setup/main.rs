@@ -10,6 +10,7 @@
 mod support {
     pub mod help_text;
     pub mod review_paths;
+    pub mod search_repository;
     pub mod state_files;
     pub mod surface;
 }

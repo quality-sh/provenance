@@ -4,6 +4,7 @@
 //! and the tests in `mcp_instruction_names.rs` are the evidence for the names.
 #![cfg(feature = "test-fixture")]
 
+use crate::support::first_calls::{without_first_calls, BEFORE_FIRST_CALLS};
 use crate::support::{fixture_host, mcp::Session, records::Repository};
 use provenance_porcelain::action::Action;
 use provenance_store::operations::catalog::{self, Operation as _};
@@ -94,17 +95,10 @@ const DICTIONARY_IMPORT: &str =
 const SWARM_BACKTRACE_LAND: &str = "- swarm_backtrace_land: Add the results of one swarm \
 backtrace run to the graph as proposals.";
 
-/// The words before the first calls that a server adds when it lists search and get. The
-/// calls themselves are checked as calls in `mcp_first_steps.rs`.
-const FIRST_STEPS: &str = "\n\nFor a focused start, ";
-
-/// The instructions up to the words before the first calls, without the calls.
-fn without_first_calls(instructions: String) -> String {
-    match instructions.split_once(FIRST_STEPS) {
-        Some((guidance, _)) => format!("{guidance}{FIRST_STEPS}"),
-        None => instructions,
-    }
-}
+/// The first calls that a server gives after the words before them when it lists search
+/// and get.
+const FIRST_CALLS: &str = "call search with {\"text\":\"<text>\"}, then get with \
+{\"target\":\"<id>\",\"view\":\"children\",\"depth\":<N>}.";
 
 /// The expected instructions: the domain text, the opening sentences on one line, the
 /// `edit.etag` sentence when the lines hold get and update, the access sentence, the command
@@ -119,7 +113,7 @@ fn expected(opening: &[&str], lines: &[&str], first_steps: bool) -> String {
     }
     text = text + ACCESS + &lines.join("\n");
     if first_steps {
-        text += FIRST_STEPS;
+        text += BEFORE_FIRST_CALLS;
     }
     text
 }
@@ -140,7 +134,7 @@ pub async fn served_tools(host: StatementHost) -> (Vec<Tool>, String) {
 /// The tool names and the instructions of one served host.
 async fn served(host: StatementHost) -> (Vec<String>, String) {
     let (tools, instructions) = served_tools(host).await;
-    let instructions = without_first_calls(instructions);
+    let instructions = without_first_calls(&instructions);
     let names = tools
         .into_iter()
         .map(|tool| tool.name.into_owned())
@@ -171,7 +165,14 @@ pub fn operations_of(actions: &[Action]) -> Vec<&'static str> {
 async fn a_host_with_every_tool_names_its_writes_and_gives_first_steps() {
     let repository = Repository::new("The shared graph is readable.");
     let (tools, instructions) = served_tools(fixture_host::full(&repository)).await;
-    let instructions = without_first_calls(instructions);
+    assert_eq!(
+        instructions
+            .split_once(BEFORE_FIRST_CALLS)
+            .map(|(_, calls)| calls),
+        Some(FIRST_CALLS),
+        "{instructions}"
+    );
+    let instructions = without_first_calls(&instructions);
     let names: Vec<&str> = tools.iter().map(|tool| tool.name.as_ref()).collect();
     assert_eq!(
         names,
@@ -361,7 +362,7 @@ async fn a_change_tool_with_create_and_reply_names_only_those_actions() {
     ]);
     denied.push(catalog::WriteDiscussion::NAME);
     let (tools, instructions) = served_tools(host_without(&repository, &denied)).await;
-    let instructions = without_first_calls(instructions);
+    let instructions = without_first_calls(&instructions);
     let change = tools.iter().find(|tool| tool.name == "change").unwrap();
     let actions: Vec<&str> = change.input_schema["properties"]["action"]["enum"]
         .as_array()

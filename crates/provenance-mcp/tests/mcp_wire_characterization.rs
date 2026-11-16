@@ -14,7 +14,7 @@ use provenance_transport::{
 };
 use serde_json::{json, Value};
 use std::sync::Arc;
-use support::{check_port::FixtureCheckPort, records::Repository};
+use support::{check_port::FixtureCheckPort, first_calls, records::Repository};
 use tokio::io::{AsyncBufReadExt as _, AsyncWriteExt as _, BufReader, DuplexStream, Lines};
 
 const TOOL_LIST_FNV1A: u64 = 7_664_500_741_809_655_526;
@@ -209,13 +209,11 @@ for review.\n\
 - discussion: Read the addressed Discussion.\n\n\
 For a focused start, ";
 
-/// `result` with its instructions up to the words before the first calls. The first calls
-/// are checked as calls in `mcp_first_steps.rs`.
+/// `result` with its instructions up to the end of the words before the first calls. The
+/// first calls are pinned in `mcp_instructions.rs`.
 fn without_first_calls(mut result: Value) -> Value {
     let instructions = result["instructions"].as_str().unwrap_or_default();
-    if let Some((guidance, _)) = instructions.split_once("For a focused start, ") {
-        result["instructions"] = Value::String(format!("{guidance}For a focused start, "));
-    }
+    result["instructions"] = Value::String(first_calls::without_first_calls(instructions));
     result
 }
 

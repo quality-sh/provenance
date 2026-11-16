@@ -1,11 +1,9 @@
 //! The first steps of the server instructions are calls that the listed tools accept.
 #![cfg(feature = "test-fixture")]
 
+use crate::support::first_calls::BEFORE_FIRST_CALLS;
 use crate::support::{fixture_host, mcp::Session, records::Repository};
 use serde_json::{Map, Value};
-
-/// The words before the first calls of the instructions.
-const FIRST_STEPS: &str = "For a focused start, ";
 
 /// The record that the fixture repository holds.
 const RECORD: &str = "req_shared";
@@ -14,7 +12,7 @@ const RECORD: &str = "req_shared";
 /// and the input object after it.
 fn first_step_calls(instructions: &str) -> Vec<(String, String)> {
     let (_, steps) = instructions
-        .split_once(FIRST_STEPS)
+        .split_once(BEFORE_FIRST_CALLS)
         .expect("the instructions give first steps");
     let mut calls = Vec::new();
     let mut rest = steps;

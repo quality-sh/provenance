@@ -3,6 +3,8 @@
 //! A field has one name in `snake_case`. Each consumer shows the field under that name,
 //! spelled as its own standard asks.
 
+use std::borrow::Cow;
+
 /// The value type of a field, so a consumer refuses a bad value before the command runs.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum FieldValue {

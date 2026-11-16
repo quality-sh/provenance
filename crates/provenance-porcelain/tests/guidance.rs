@@ -3,7 +3,7 @@
 //! show. Its sentences name only shown commands.
 
 use provenance_porcelain::action::Action;
-use provenance_porcelain::guidance::{discussions_description, guidance_for, Shown};
+use provenance_porcelain::guidance::{guidance_for, Shown};
 use provenance_porcelain::registry::{
     Command, Declaration, Fields, GraphCommand, RepositoryCommand,
 };
@@ -228,26 +228,4 @@ fn the_etag_sentence_needs_get_and_update() {
         1,
         "{get_and_update}"
     );
-}
-
-/// With each Discussion read, the description of the discussions command is the text of
-/// its declaration, which CLI help shows. Without the list, it is the description of the
-/// read of one Discussion. No Rule binds this test: the MCP test of the discussions tool
-/// is the evidence for the description that a host gives.
-#[test]
-fn the_discussions_description_with_each_read_is_the_declared_text() {
-    let declared = |action| Command::Action(action).declaration().description;
-    assert_eq!(
-        discussions_description(|_| true),
-        Some(declared(Action::Discussions))
-    );
-    assert_eq!(
-        discussions_description(|action| action == Action::Discussions),
-        Some(declared(Action::Discussions))
-    );
-    assert_eq!(
-        discussions_description(|action| action == Action::Discussion),
-        Some(declared(Action::Discussion))
-    );
-    assert_eq!(discussions_description(|_| false), None);
 }

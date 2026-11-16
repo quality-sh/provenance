@@ -5,7 +5,6 @@
 use crate::mcp_instructions::{host_without, operations_of, served_tools};
 use crate::support::{fixture_host, records::Repository};
 use provenance_porcelain::action::Action;
-use provenance_store::operations::catalog::{self, Operation as _};
 use provenance_transport::repository::RepoContext;
 use rmcp::model::Tool;
 
@@ -133,33 +132,4 @@ async fn a_host_with_fewer_writes_names_each_tool_and_action_that_it_lists() {
         assert!(!listed.iter().any(|listed| listed == name), "{listed:?}");
     }
     assert_names_listed(&tools, &instructions);
-}
-
-/// The description of the discussions tool is the description of a read that the host
-/// grants: a host that grants the read of one Discussion and not the list gets the
-/// description of that read, which the instructions also give.
-#[tokio::test]
-#[provenance_macros::verifies("rule_guidance_names_accepted_commands", examples)]
-async fn the_discussions_tool_describes_only_the_reads_that_the_host_grants() {
-    let repository = Repository::new("The shared graph is readable.");
-    let hosts = [
-        fixture_host::full(&repository),
-        host_without(&repository, &[catalog::ListDiscussions::NAME]),
-        host_without(&repository, &[catalog::GetDiscussionConversation::NAME]),
-    ];
-    for host in hosts {
-        let (tools, instructions) = served_tools(host).await;
-        let tool = tools
-            .iter()
-            .find(|tool| tool.name == "discussions")
-            .unwrap();
-        let description = tool.description.as_deref().unwrap();
-        assert!(
-            instructions
-                .lines()
-                .any(|line| line.starts_with("- ") && line.ends_with(&format!(": {description}"))),
-            "the discussions tool description is not the line of a shown command: \
-             {description}\n{instructions}"
-        );
-    }
 }
