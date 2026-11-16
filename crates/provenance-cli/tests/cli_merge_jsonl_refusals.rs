@@ -90,22 +90,18 @@ fn merge_jsonl_names_the_side_and_the_lines_of_a_duplicate_id() {
     );
 }
 
-/// The sides are checked in the order base, ours, theirs, and the rows of
-/// each side in their order. A row with no string id on base comes before
-/// an id on two rows of ours, so its refusal wins.
+/// The sides are read in the order base, ours, theirs, and the lines of each
+/// side in their order, before any id is compared. A line of base that a read
+/// of the Rule file refuses comes before an id on two rows of ours, so its
+/// refusal wins.
 ///
 /// No Rule states which refusal wins; this test pins the order.
 #[test]
-fn a_row_with_no_string_id_before_a_duplicate_id_gives_its_own_refusal() {
+fn a_line_of_base_that_does_not_read_wins_over_a_duplicate_id_of_ours() {
     let ours = format!("{}\n{}\n", rule("rule_a"), rule("rule_a"));
     assert_eq!(
         merge("{\"x\":1}\n", &ours, ""),
-        Answer {
-            code: Some(1),
-            stdout: String::new(),
-            stderr: vec!["Error: record is missing string id".to_owned()],
-            ours,
-        }
+        refusal(1, "base: missing field `scope_id`", ours)
     );
 }
 

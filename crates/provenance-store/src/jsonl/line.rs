@@ -456,8 +456,7 @@ mod tests {
             r#"{"id":"rule_a","id":"rule_b","retired":true}"#,
         ] {
             let error = checked_value::<Record>(path(), 3, line.as_bytes())
-                .err()
-                .expect("the line is refused");
+                .expect_err("the line is refused");
             let state = UnparsableStateFile::find(error.as_ref()).unwrap();
             assert_eq!(
                 (state.line(), state.message().to_owned()),
