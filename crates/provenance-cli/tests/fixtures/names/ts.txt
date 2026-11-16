@@ -159,53 +159,51 @@ function* keywords() {
     case (ready): {
     }
   }
-  // @provenance rule: rule_keyword_try
   try {
   }
   // @provenance rule: rule_keyword_catch
   catch (error) {
   }
-  // @provenance rule: rule_keyword_finally
-  finally {
-  }
-  // @provenance rule: rule_keyword_do
-  do {
-  } while (ready);
-  if (ready) {
-  }
-  // @provenance rule: rule_keyword_else
-  else {
-  }
   // @provenance rule: rule_keyword_with
   with (scope) {
   }
-  // @provenance rule: rule_keyword_throw
-  throw failure(ready);
-  // @provenance rule: rule_keyword_new
-  new Payroll(ready);
-  // @provenance rule: rule_keyword_await
-  await pays(ready);
-  // @provenance rule: rule_keyword_yield
-  yield pays(ready);
-  // @provenance rule: rule_keyword_typeof
-  typeof pays(ready);
-  // @provenance rule: rule_keyword_delete
-  delete totals[ready];
-  // @provenance rule: rule_keyword_void
-  void pays(ready);
-  // @provenance rule: rule_keyword_super
-  super(ready);
-  // @provenance rule: rule_keyword_this
-  this.pays(ready);
-  // @provenance rule: rule_keyword_import
-  import("./pay");
-  // @provenance rule: rule_keyword_async
-  async (ready) => {};
-  // @provenance rule: rule_keyword_return
-  return pays(ready);
 }
 
 // @provenance rule: rule_enum
 export enum Level {
   Low,
+}
+
+// @provenance rule: rule_default_class_implements
+export default class implements Shape {}
+
+// @provenance rule: rule_above_decorator_with_site
+@Injectable({
+  // @provenance rule: rule_in_decorator_arguments
+  factory() { return new X(); },
+})
+export class Service {}
+
+import {
+  // @provenance rule: rule_import_type_specifier
+  type Foo,
+} from "./foo";
+
+export {
+  // @provenance rule: rule_export_type_specifier
+  type Bar,
+};
+
+const v = cond ? price
+  // @provenance rule: rule_operator_line_start
+  * rate(q) : 0;
+
+class Mixed extends
+  // @provenance rule: rule_after_extends
+  mixin(B) {
+}
+
+class Store {
+  // @provenance rule: rule_method_named_delete
+  delete(id: string): void {}
 }

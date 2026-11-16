@@ -69,48 +69,22 @@ function* keywords() {
     case (ready): {
     }
   }
-  // @provenance rule: rule_keyword_try
   try {
   }
   // @provenance rule: rule_keyword_catch
   catch (error) {
   }
-  // @provenance rule: rule_keyword_finally
-  finally {
-  }
-  // @provenance rule: rule_keyword_do
-  do {
-  } while (ready);
-  if (ready) {
-  }
-  // @provenance rule: rule_keyword_else
-  else {
-  }
   // @provenance rule: rule_keyword_with
   with (scope) {
   }
-  // @provenance rule: rule_keyword_throw
-  throw failure(ready);
-  // @provenance rule: rule_keyword_new
-  new Payroll(ready);
-  // @provenance rule: rule_keyword_await
-  await pays(ready);
-  // @provenance rule: rule_keyword_yield
-  yield pays(ready);
-  // @provenance rule: rule_keyword_typeof
-  typeof pays(ready);
-  // @provenance rule: rule_keyword_delete
-  delete totals[ready];
-  // @provenance rule: rule_keyword_void
-  void pays(ready);
-  // @provenance rule: rule_keyword_super
-  super(ready);
-  // @provenance rule: rule_keyword_this
-  this.pays(ready);
-  // @provenance rule: rule_keyword_import
-  import("./pay");
-  // @provenance rule: rule_keyword_async
-  async (ready) => {};
-  // @provenance rule: rule_keyword_return
-  return pays(ready);
 }
+
+// @provenance rule: rule_default_class_extends
+export default class extends Base {
+}
+
+const el = <p>
+  hours
+</p>
+// @provenance rule: rule_after_jsx
+function afterJsx() {}

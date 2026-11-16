@@ -197,4 +197,11 @@ declare_input!(
     }
 );
 
+macro_rules! make {
+    ($name:ident) => {
+        // @provenance rule: rule_macro_metavariable
+        fn $name() {}
+    };
+}
+
 // @provenance rule: rule_end

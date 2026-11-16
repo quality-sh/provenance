@@ -43,4 +43,5 @@ rule_after_operator -
 rule_call_argument -
 rule_after_raw_string after_raw_string
 rule_in_macro_body MacroInput
+rule_macro_metavariable -
 rule_end -
