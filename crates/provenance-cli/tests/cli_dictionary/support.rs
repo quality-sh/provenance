@@ -318,8 +318,11 @@ impl ReferenceProject {
         std::fs::create_dir_all(&repo).unwrap();
         std::fs::create_dir_all(&index_directory).unwrap();
         std::fs::write(&pdf, dictionary_pdf()).unwrap();
-        init(&repo);
-        std::fs::remove_file(reference_path(&repo)).unwrap();
+        init_command(&repo, &[])
+            .env("PROVENANCE_STE100_INDEX_DIR", &index_directory)
+            .assert()
+            .success();
+        assert!(std::fs::symlink_metadata(reference_path(&repo)).is_err());
         Self {
             _scratch: scratch,
             repo,
