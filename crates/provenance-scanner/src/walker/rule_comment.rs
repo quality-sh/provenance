@@ -124,11 +124,10 @@ impl CommentState {
                 Piece::BlockClose if range.start >= from => {
                     read.close.get_or_insert(range.start);
                 }
-                Piece::BlockClose => {}
                 Piece::Code | Piece::Quoted if blank < part.len() => {
                     read.code.get_or_insert(range.start + blank);
                 }
-                Piece::Code | Piece::Quoted => {}
+                Piece::BlockClose | Piece::Code | Piece::Quoted => {}
             }
             read.code.is_some()
         };
