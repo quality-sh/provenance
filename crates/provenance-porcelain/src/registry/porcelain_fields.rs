@@ -70,7 +70,7 @@ pub(super) const SEARCH_FIELDS: &[Field] = &[
         .doc("Put the Rules bound at this line first. Needs file."),
 ];
 
-pub const SEARCH_TEXT: Field = Field::text("text")
+pub const SEARCH_TEXT: Field = Field::text("query")
     .leading_hyphen()
     .doc("Text to find in record ids and text.");
 
