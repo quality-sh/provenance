@@ -69,7 +69,7 @@ pub enum Shown {
 
 impl Shown {
     /// The declaration of the command.
-    pub const fn declaration(self) -> Declaration {
+    pub fn declaration(self) -> Declaration {
         match self {
             Self::Registry(command) => command.declaration(),
             Self::Declared(declaration) => declaration,
