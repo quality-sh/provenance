@@ -285,11 +285,15 @@ fn check_bindings_gives_the_inactive_rule_warnings_of_a_file_in_line_order() {
         .map(|(_, rule, status)| format!("  - {}", warning(rule, status)))
         .collect::<Vec<_>>();
     assert_eq!(inactive_citations(&text), text_lines, "{text}");
+    // The check walks the `--path` directory, so the report gives the path of
+    // each site with the separator of the platform.
+    let file = Path::new("src").join("lib.rs");
+    let file = file.display();
     let markdown_lines = cited
         .iter()
         .map(|(line, rule, status)| {
             let warning = warning(rule, status);
-            format!("- Warning `{rule}` in `src/lib.rs`:{line}: {warning}")
+            format!("- Warning `{rule}` in `{file}`:{line}: {warning}")
         })
         .collect::<Vec<_>>();
     assert_eq!(inactive_citations(&markdown), markdown_lines, "{markdown}");
