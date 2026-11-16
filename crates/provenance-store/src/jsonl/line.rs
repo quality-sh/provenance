@@ -66,8 +66,7 @@ pub(super) fn checked_line<'a, T: DeserializeOwned>(
     number: usize,
     bytes: &'a [u8],
 ) -> anyhow::Result<CheckedLine<'a, T>> {
-    let text = std::str::from_utf8(bytes)
-        .map_err(|error| state_fault(&ShardLine::new(path, number), error.to_string()))?;
+    let text = utf8_text(path, number, bytes)?;
     let at = |error: serde_json::Error| located(path, number, &error);
     let mut unknown = Vec::new();
     let mut nested_unknown = None;
@@ -86,10 +85,7 @@ pub(super) fn checked_line<'a, T: DeserializeOwned>(
     } else {
         let scan = top_level_members(text).map_err(at)?;
         if let Some(name) = &scan.repeated {
-            return Err(state_fault(
-                &ShardLine::new(path, number),
-                format!("duplicate field `{name}`"),
-            ));
+            return Err(repeated_member(path, number, name));
         }
         let missing = unknown
             .iter()
@@ -144,16 +140,51 @@ fn can_hold_retired(text: &str) -> bool {
     text.contains(RETIRED) || text.contains("\\u")
 }
 
+/// The stored line `bytes`, line `number` of `path`, as a JSON value, after the
+/// checks of [`checked_line`] that do not need a record type, in the same
+/// order: the line is UTF-8, it is one JSON value, it holds no `retired`
+/// member, and it holds each top-level member one time. This is the reader of
+/// a line whose record type the caller does not know.
+pub fn checked_value<'a>(
+    path: &Utf8Path,
+    number: usize,
+    bytes: &'a [u8],
+) -> anyhow::Result<(&'a str, serde_json::Value)> {
+    let text = utf8_text(path, number, bytes)?;
+    let value = value_checks(path, number, text)?;
+    let scan = top_level_members(text).map_err(|error| located(path, number, &error))?;
+    if let Some(name) = &scan.repeated {
+        return Err(repeated_member(path, number, name));
+    }
+    Ok((text, value))
+}
+
+/// The line `bytes` as text, or `invalid_state_file` at the line when it is
+/// not UTF-8.
+fn utf8_text<'a>(path: &Utf8Path, number: usize, bytes: &'a [u8]) -> anyhow::Result<&'a str> {
+    std::str::from_utf8(bytes)
+        .map_err(|error| state_fault(&ShardLine::new(path, number), error.to_string()))
+}
+
+/// The refusal of a line that holds the top-level member `name` two times.
+fn repeated_member(path: &Utf8Path, number: usize, name: &str) -> anyhow::Error {
+    state_fault(
+        &ShardLine::new(path, number),
+        format!("duplicate field `{name}`"),
+    )
+}
+
 /// The checks of `text` as one JSON value: it parses, and it holds no
-/// `retired` member.
-fn value_checks(path: &Utf8Path, number: usize, text: &str) -> anyhow::Result<()> {
+/// `retired` member. Gives the value.
+fn value_checks(path: &Utf8Path, number: usize, text: &str) -> anyhow::Result<serde_json::Value> {
     let value = serde_json::from_str(text).map_err(|error| located(path, number, &error))?;
-    ensure_no_legacy_retirement(path, number, &value)
+    ensure_no_legacy_retirement(path, number, &value)?;
+    Ok(value)
 }
 
 /// Refuses a stored record that still holds the removed `retired` field, as
 /// `invalid_state_file` at its line.
-pub fn ensure_no_legacy_retirement(
+fn ensure_no_legacy_retirement(
     path: &Utf8Path,
     line_number: usize,
     value: &serde_json::Value,

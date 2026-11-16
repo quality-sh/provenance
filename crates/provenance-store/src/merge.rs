@@ -1,4 +1,4 @@
-use crate::jsonl::ensure_no_legacy_retirement;
+use crate::jsonl::{checked_value, numbered_lines};
 use provenance_macros::rule;
 use serde_json::Value;
 use std::collections::{BTreeMap, BTreeSet};
@@ -86,6 +86,11 @@ impl StoredRow {
 }
 
 /// Reads one JSONL merge input, keeping each stored row beside its record.
+///
+/// An input is a version of a state file, so each line that is not blank goes
+/// through the line checks of a state file that do not need a record type. A
+/// refusal names the logical shard `shard_path` with the line number of the
+/// input file.
 pub fn read_jsonl_rows_for_shard(
     path: &camino::Utf8Path,
     shard_path: &camino::Utf8Path,
@@ -93,19 +98,17 @@ pub fn read_jsonl_rows_for_shard(
     if !path.exists() {
         return Ok(Vec::new());
     }
-    let contents = std::fs::read_to_string(path)?;
+    let contents = std::fs::read(path)?;
     let mut rows = Vec::new();
-    for (index, line) in contents.lines().enumerate() {
-        if line.trim().is_empty() {
+    for (line_number, bytes) in numbered_lines(&contents) {
+        if std::str::from_utf8(bytes).is_ok_and(|line| line.trim().is_empty()) {
             continue;
         }
-        let record = serde_json::from_str(line)?;
-        // Errors name the logical shard, but line numbers come from Git's temporary input file.
-        ensure_no_legacy_retirement(shard_path, index + 1, &record)?;
+        let (line, record) = checked_value(shard_path, line_number, bytes)?;
         rows.push(StoredRow {
             line: line.to_owned(),
             record,
-            line_number: index + 1,
+            line_number,
         });
     }
     Ok(rows)
