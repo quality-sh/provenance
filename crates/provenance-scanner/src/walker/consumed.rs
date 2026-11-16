@@ -11,16 +11,16 @@ pub(super) fn consume_binding_lines(
     multiline_delimiter: &mut Option<String>,
     in_block_comment: &mut bool,
 ) {
+    let Some(style) = multiline_style(language) else {
+        return;
+    };
     for line in consumed {
-        let Some(code) = code_outside_multiline_string(
-            line,
-            multiline_style(language),
-            multiline_delimiter,
-            *in_block_comment,
-        ) else {
+        let Some(code) =
+            code_outside_multiline_string(line, style, multiline_delimiter, *in_block_comment)
+        else {
             break;
         };
-        if !matches!(language, Language::Python | Language::Rust) {
+        if language != Language::Python {
             *in_block_comment = block_comment_state(code, *in_block_comment);
         }
     }

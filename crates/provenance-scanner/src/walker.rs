@@ -197,19 +197,25 @@ fn scan_file_contents(
     let mut multiline_delimiter = None;
     while idx < lines.len() {
         let started_in_multiline_string = multiline_delimiter.is_some();
-        let Some(line) = code_outside_multiline_string(
-            lines[idx],
-            multiline_style(language),
-            &mut multiline_delimiter,
-            in_block_comment,
-        ) else {
-            idx += 1;
-            continue;
-        };
         let started_in_block_comment = in_block_comment;
-        if !matches!(language, Language::Python | Language::Rust) {
-            in_block_comment = block_comment_state(line, in_block_comment);
-        }
+        let line = match multiline_style(language) {
+            None => lines[idx],
+            Some(style) => {
+                let Some(code) = code_outside_multiline_string(
+                    lines[idx],
+                    style,
+                    &mut multiline_delimiter,
+                    in_block_comment,
+                ) else {
+                    idx += 1;
+                    continue;
+                };
+                if language != Language::Python {
+                    in_block_comment = block_comment_state(code, in_block_comment);
+                }
+                code
+            }
+        };
         let binding = (language != Language::Rust || rust_states[idx] == RustLexicalState::Code)
             .then(|| {
                 parse_binding_or_warn(
@@ -279,12 +285,16 @@ fn scan_file_contents(
     }
 }
 
-const fn multiline_style(language: Language) -> MultilineStyle {
+/// The multiline strings of `language`. Rust has none here: the Rust line
+/// states hold its strings and comments.
+const fn multiline_style(language: Language) -> Option<MultilineStyle> {
     match language {
-        Language::JavaScript | Language::TypeScript | Language::Go => MultilineStyle::Backtick,
-        Language::Python => MultilineStyle::TripleBoth,
-        Language::Java => MultilineStyle::TripleDouble,
-        Language::Rust => MultilineStyle::RustRaw,
+        Language::JavaScript | Language::TypeScript | Language::Go => {
+            Some(MultilineStyle::Backtick)
+        }
+        Language::Python => Some(MultilineStyle::TripleBoth),
+        Language::Java => Some(MultilineStyle::TripleDouble),
+        Language::Rust => None,
     }
 }
 

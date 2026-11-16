@@ -3,8 +3,8 @@
 A binding puts a Rule id next to code. An Implementation binding marks the
 primary production code of a Rule, and a Verification binding marks a test.
 The binding does not define the Rule; a Rule may exist before any code is bound
-to it. The scanner reads source files line by line and does not parse a syntax
-tree.
+to it. The scanner reads source files as lines and code tokens, and does not
+parse a syntax tree.
 
 Production code never needs Provenance as a dependency. A test dependency is a
 development dependency, so test code can import the helpers below.
@@ -58,10 +58,11 @@ pub fn pays_overtime(hours: u32) -> bool {
 the comment and the attribute both get `pays_overtime`.
 
 A binding gets a name only when it is at the start of a statement: at the
-start of the file, or after `;`, `{`, or `}`. In Go, JavaScript, and
-TypeScript, the end of a line also ends a statement when the line ends with a
-word, a string, `)`, or `]`, outside parentheses and square brackets. In
-Python, a statement starts at the start of a logical line. A binding inside a
+start of the file, or after `;`, `{`, or `}`. In Rust, the bracket that opens
+the body of a macro call, as in `name!(`, also starts a statement. In Go,
+JavaScript, and TypeScript, the end of a line also ends a statement when the
+line ends with a word, a string, `)`, or `]`, outside parentheses and square
+brackets. In Python, a statement starts at the start of a logical line. A binding inside a
 statement has no name: for example a binding inside the arguments of a call,
 after an operator, or between the parts of a conditional expression
 `ready ? start(a) : stop`.

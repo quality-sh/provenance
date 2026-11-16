@@ -31,24 +31,26 @@ pub(in crate::walker) fn file_tokens<'a>(
     let mut multiline_delimiter = None;
     for (number, line) in lines.iter().copied().enumerate() {
         let mut pieces = Vec::new();
-        if language == Language::Rust {
-            let mut state = rust_states[number];
-            rust_pieces(line, &mut state, |range, piece| pieces.push((range, piece)));
-        } else {
-            let style = multiline_style(language);
-            let parts = multiline_parts(line, style, &mut multiline_delimiter, in_block_comment);
-            if let Some(parts) = parts {
-                let offset = parts.code.start;
-                in_block_comment = lex_line(
-                    &line[parts.code],
-                    in_block_comment,
-                    comment_syntax(language),
-                    |range, piece| {
-                        pieces.push((range.start + offset..range.end + offset, piece));
-                        ControlFlow::Continue(())
-                    },
-                );
-                pieces.extend(parts.opened.map(|opened| (opened, Piece::Quoted)));
+        match multiline_style(language) {
+            None => {
+                let mut state = rust_states[number];
+                rust_pieces(line, &mut state, |range, piece| pieces.push((range, piece)));
+            }
+            Some(style) => {
+                let parts = multiline_parts(line, style, &mut multiline_delimiter, in_block_comment);
+                if let Some(parts) = parts {
+                    let offset = parts.code.start;
+                    in_block_comment = lex_line(
+                        &line[parts.code],
+                        in_block_comment,
+                        comment_syntax(language),
+                        |range, piece| {
+                            pieces.push((range.start + offset..range.end + offset, piece));
+                            ControlFlow::Continue(())
+                        },
+                    );
+                    pieces.extend(parts.opened.map(|opened| (opened, Piece::Quoted)));
+                }
             }
         }
         for (range, piece) in pieces {

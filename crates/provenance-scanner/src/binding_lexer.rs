@@ -148,18 +148,13 @@ pub enum MultilineStyle {
     Backtick,
     TripleBoth,
     TripleDouble,
-    RustRaw,
 }
 
 pub fn unclosed_multiline_delimiter(line: &str, style: MultilineStyle) -> Option<(String, usize)> {
-    if matches!(style, MultilineStyle::RustRaw) {
-        return unclosed_rust_raw_delimiter(line);
-    }
     let delimiters = match style {
         MultilineStyle::Backtick => &["`"][..],
         MultilineStyle::TripleBoth => &["'''", "\"\"\""][..],
         MultilineStyle::TripleDouble => &["\"\"\""][..],
-        MultilineStyle::RustRaw => unreachable!(),
     };
     delimiters
         .iter()
@@ -215,56 +210,6 @@ pub fn multiline_parts(
         code.end = opened.start;
     }
     Some(MultilineParts { code, opened })
-}
-
-fn unclosed_rust_raw_delimiter(line: &str) -> Option<(String, usize)> {
-    let bytes = line.as_bytes();
-    let mut idx = 0;
-    while idx < bytes.len() {
-        if bytes[idx..].starts_with(b"//") {
-            return None;
-        }
-        if bytes[idx..].starts_with(b"/*") {
-            idx = idx + 2 + line[idx + 2..].find("*/")? + 2;
-            continue;
-        }
-        if bytes[idx] == b'"' {
-            idx = closing_plain_quote(bytes, idx + 1)? + 1;
-            continue;
-        }
-        if bytes[idx] == b'r' && at_identifier_start(bytes, idx) {
-            let after_r = &line[idx + 1..];
-            let hashes = after_r.bytes().take_while(|byte| *byte == b'#').count();
-            if after_r[hashes..].starts_with('"') {
-                let closing = format!("\"{}", "#".repeat(hashes));
-                match after_r[hashes + 1..].find(&closing) {
-                    Some(end) => idx += 1 + hashes + 1 + end + closing.len(),
-                    None => return Some((closing, idx)),
-                }
-                continue;
-            }
-        }
-        idx += 1;
-    }
-    None
-}
-
-/// The byte at `idx` starts an identifier: a raw-string `r` inside a word
-/// (as in `"reviewer"`) is string content, not a raw-string opener.
-fn at_identifier_start(bytes: &[u8], idx: usize) -> bool {
-    !idx.checked_sub(1)
-        .is_some_and(|previous| bytes[previous].is_ascii_alphanumeric() || bytes[previous] == b'_')
-}
-
-const fn closing_plain_quote(bytes: &[u8], mut idx: usize) -> Option<usize> {
-    while idx < bytes.len() {
-        match bytes[idx] {
-            b'\\' => idx += 2,
-            b'"' => return Some(idx),
-            _ => idx += 1,
-        }
-    }
-    None
 }
 
 /// Everything between a delimiter pair is string content: quotes, comment
