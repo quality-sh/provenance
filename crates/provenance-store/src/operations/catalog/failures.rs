@@ -50,7 +50,8 @@ impl super::HandlerFailure for WriteError {
         self.unclassified_cause()
     }
     fn message(&self) -> String {
-        self.unclassified_message().unwrap_or_else(|| self.to_string())
+        self.unclassified_message()
+            .unwrap_or_else(|| self.to_string())
     }
 }
 impl ReadError {

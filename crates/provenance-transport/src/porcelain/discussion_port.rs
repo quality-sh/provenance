@@ -197,9 +197,7 @@ impl DiscussionPort for HostDiscussionPort {
     }
 }
 
-fn operation_error<E: HandlerFailure>(
-    error: &OperationError<E>,
-) -> ActionError {
+fn operation_error<E: HandlerFailure>(error: &OperationError<E>) -> ActionError {
     let detail =
         serde_json::to_value(error).unwrap_or_else(|_| serde_json::json!({"kind":"internal"}));
     ActionError::OperationDetail {

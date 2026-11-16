@@ -35,7 +35,14 @@ fn read_once(repo: &str) {
     init(repo);
     let created = run(
         repo,
-        &["req_alpha", "create", "--type", "requirement", "--statement", "The host starts."],
+        &[
+            "req_alpha",
+            "create",
+            "--type",
+            "requirement",
+            "--statement",
+            "The host starts.",
+        ],
     );
     assert_eq!(created.0, Some(0), "{created:?}");
     let read = run(repo, &["req_alpha", "get"]);
@@ -108,7 +115,10 @@ async fn a_linked_record_file_gives_its_path_below_the_repository_on_each_read()
     });
     assert_eq!(
         (&cli, &answers),
-        (&vec![refused.clone(), refused.clone(), refused], &expected.to_vec())
+        (
+            &vec![refused.clone(), refused.clone(), refused],
+            &expected.to_vec()
+        )
     );
 
     let canonical = dunce::canonicalize(directory.path()).unwrap();
