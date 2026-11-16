@@ -194,11 +194,26 @@ impl StateStore {
         expected_etag: Option<&str>,
         mutate: impl FnOnce(&Self, &mut Vec<T>) -> anyhow::Result<T>,
     ) -> anyhow::Result<T> {
+        self.mutate_graph_record_checked(path, expected_etag, mutate, |_, _| Ok(()))
+    }
+
+    /// Like `mutate_graph_record_with_store`, then runs `check` on the written
+    /// record against the store that holds the write. On the native path that
+    /// store is the staged copy, so a refusal of `check` publishes nothing; on
+    /// the guarded path the store is `self`.
+    pub(crate) fn mutate_graph_record_checked<T: GraphRecord>(
+        &self,
+        path: &Utf8Path,
+        expected_etag: Option<&str>,
+        mutate: impl FnOnce(&Self, &mut Vec<T>) -> anyhow::Result<T>,
+        check: impl FnOnce(&Self, &T) -> anyhow::Result<()>,
+    ) -> anyhow::Result<T> {
         if T::KIND != NodeType::Requirement && !self.permits_path(path) {
-            return self.save_native_record(path, expected_etag, mutate);
+            return self.save_native_record(path, expected_etag, mutate, check);
         }
-        self.mutate_graph_record_guarded(path, mutate)
-            .map(|(_, record)| record)
+        let (_, record) = self.mutate_graph_record_guarded(path, mutate)?;
+        check(self, &record)?;
+        Ok(record)
     }
 
     pub(crate) fn mutate_graph_record_guarded<T: GraphRecord>(

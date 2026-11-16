@@ -56,10 +56,7 @@ fn missing() -> anyhow::Error {
     crate::refusal::refuse!(MissingReference, "record does not exist")
 }
 
-/// Refuses an edited record that names a record that does not exist. The
-/// edit calls it before it returns the record, so a refused update writes no
-/// file. `store` is the store that the edit runs against.
-fn ensure_references_exist<T: RelationOwner>(
+fn validate_final_relations<T: RelationOwner>(
     store: &crate::state_store::StateStore,
     scope: &ScopeId,
     record: &T,
@@ -71,5 +68,5 @@ fn ensure_references_exist<T: RelationOwner>(
             .expect("a record reference has a relation declaration");
         store.ensure_node_exists(scope, declaration.target, target, name)?;
     }
-    Ok(())
+    store.validate_graph_scope(scope)
 }

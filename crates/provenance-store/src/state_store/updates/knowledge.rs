@@ -1,7 +1,6 @@
 use super::{
-    ensure_references_exist,
     inputs::{RuleClearField, SourceClearField, UpdateRuleInput, UpdateSourceInput},
-    missing, optional, owner_matches, required_text, set,
+    missing, optional, owner_matches, required_text, set, validate_final_relations,
 };
 use crate::{review, shards, state_store::StateStore};
 use provenance_core::{validate_optional_commit_pin, Rule, Source};
@@ -15,7 +14,7 @@ impl StateStore {
         let scope = input.scope_id.clone();
         let path = shards::sources_path(&self.layout, &input.scope_id);
         let expected_etag = input.expected_etag.clone();
-        let record = self.mutate_graph_record_with_store(
+        self.mutate_graph_record_checked(
             &path,
             expected_etag.as_deref(),
             |store, records: &mut Vec<Source>| {
@@ -63,12 +62,10 @@ impl StateStore {
                 )?;
                 record.commit_pin = validate_optional_commit_pin(record.commit_pin.take())
                     .map_err(|error| crate::refusal::refuse!(InvalidCommitPin, "{error:#}"))?;
-                ensure_references_exist(store, &scope, &*record)?;
                 Ok(record.clone())
             },
-        )?;
-        self.validate_graph_scope(&scope)?;
-        Ok(record)
+            |store, record| validate_final_relations(store, &scope, record),
+        )
     }
 
     /// Writes a Rule update directly. [`StateStore::update_rule`] calls it
@@ -77,7 +74,7 @@ impl StateStore {
         let scope = input.scope_id.clone();
         let path = shards::rules_path(&self.layout, &input.scope_id);
         let expected_etag = input.expected_etag.clone();
-        let record = self.mutate_graph_record_with_store(
+        self.mutate_graph_record_checked(
             &path,
             expected_etag.as_deref(),
             |store, records: &mut Vec<Rule>| {
@@ -143,11 +140,9 @@ impl StateStore {
                     input.source_section,
                     input.clear_fields.contains(&RuleClearField::SourceSection),
                 )?;
-                ensure_references_exist(store, &scope, &*record)?;
                 Ok(record.clone())
             },
-        )?;
-        self.validate_graph_scope(&scope)?;
-        Ok(record)
+            |store, record| validate_final_relations(store, &scope, record),
+        )
     }
 }

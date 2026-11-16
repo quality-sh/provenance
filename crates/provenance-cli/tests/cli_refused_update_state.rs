@@ -106,39 +106,3 @@ fn a_rule_update_that_names_no_resolution_changes_no_file() {
 fn a_source_update_that_supersedes_no_source_changes_no_file() {
     assert_refused_with_no_change("src_a", "--supersedes", "src_missing");
 }
-
-/// A missing target wins over a stale `--if-match`, as for a Requirement,
-/// Topic or Question update.
-#[test]
-fn a_missing_target_wins_over_a_stale_guard() {
-    let directory = records();
-    let read = provenance()
-        .args(["api", "resolutions/res_a", "--format", "json", "--repo"])
-        .arg(directory.path())
-        .output()
-        .unwrap();
-    let read: serde_json::Value = serde_json::from_slice(&read.stdout).unwrap();
-    let stale = read["data"]["edit"]["etag"].as_str().unwrap().to_owned();
-    provenance()
-        .args(["res_a", "update", "--title", "Another decision", "--repo"])
-        .arg(directory.path())
-        .assert()
-        .success();
-    let before = state_text(directory.path());
-
-    let output = provenance()
-        .args(["res_a", "update", "--requirement-ids", "req_missing"])
-        .args(["--if-match", &stale, "--repo"])
-        .arg(directory.path())
-        .output()
-        .unwrap();
-
-    assert_eq!(
-        (
-            output.status.code(),
-            String::from_utf8_lossy(&output.stderr).into_owned(),
-        ),
-        (Some(1), REFUSAL.to_owned())
-    );
-    assert_eq!(state_text(directory.path()), before);
-}

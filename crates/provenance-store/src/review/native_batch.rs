@@ -25,16 +25,21 @@ impl StateStore {
         })
     }
 
+    /// Writes one record in a staged copy, runs `check` on the written record
+    /// against that copy, and publishes the copy only when `check` passes.
     pub(crate) fn save_native_record<T: GraphRecord>(
         &self,
         path: &Utf8Path,
         expected_etag: Option<&str>,
         mutate: impl FnOnce(&Self, &mut Vec<T>) -> anyhow::Result<T>,
+        check: impl FnOnce(&Self, &T) -> anyhow::Result<()>,
     ) -> anyhow::Result<T> {
         let relative = path.strip_prefix(self.layout.root())?.to_owned();
         self.with_native_record_batch(|batch| {
             let staged_path = batch.store.layout.root().join(relative);
-            batch.mutate_one_with_store(&staged_path, expected_etag, mutate)
+            let record = batch.mutate_one_with_store(&staged_path, expected_etag, mutate)?;
+            check(batch.store, &record)?;
+            Ok(record)
         })
     }
 }

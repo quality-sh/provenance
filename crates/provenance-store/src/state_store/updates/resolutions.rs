@@ -1,7 +1,6 @@
 use super::{
-    ensure_references_exist,
     inputs::{ResolutionClearField, UpdateResolutionInput},
-    invalid, missing, optional, required_text, set,
+    invalid, missing, optional, required_text, set, validate_final_relations,
 };
 use crate::{review, shards, state_store::StateStore};
 use provenance_core::{validate_resolution_input_content, Resolution, ResolutionInput};
@@ -29,7 +28,7 @@ impl StateStore {
         let path = shards::resolutions_path(&self.layout, &input.scope_id);
         let expected_etag = input.expected_etag.clone();
         let inputs = validate_inputs(input.inputs)?;
-        let record = self.mutate_graph_record_with_store(
+        self.mutate_graph_record_checked(
             &path,
             expected_etag.as_deref(),
             |store, records: &mut Vec<Resolution>| {
@@ -97,12 +96,10 @@ impl StateStore {
                         .clear_fields
                         .contains(&ResolutionClearField::ApprovedAt),
                 )?;
-                ensure_references_exist(store, &scope, &*record)?;
                 Ok(record.clone())
             },
-        )?;
-        self.validate_graph_scope(&scope)?;
-        Ok(record)
+            |store, record| validate_final_relations(store, &scope, record),
+        )
     }
 }
 
