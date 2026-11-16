@@ -74,7 +74,7 @@ pub async fn follow(
                         Ok(frames) => frames,
                         Err(error) => {
                             let (epoch, sequence) = follower.position();
-                            read_failure = Some(OutputFrame::read_error(epoch, sequence, error.to_string()));
+                            read_failure = Some(OutputFrame::read_error(epoch, sequence, &error));
                             return Err(error);
                         }
                     };
