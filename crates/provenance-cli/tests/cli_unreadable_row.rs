@@ -52,6 +52,7 @@ fn state_file_refusal(message: &str) -> Value {
             "file": "scopes/default/requirements/req.jsonl",
             "line": 1,
             "message": message,
+            "hint": provenance_core::protocol::read_failure::STATE_CORRECTIONS,
         },
         "meta": {},
     })

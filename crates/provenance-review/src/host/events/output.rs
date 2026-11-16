@@ -1,4 +1,5 @@
 //! Typed follow output. The adapters validate the same contract before delivery.
+use provenance_store::repository::OpenFailure;
 use serde::Serialize;
 use serde_json::Value;
 use std::sync::LazyLock;
@@ -56,7 +57,13 @@ impl OutputFrame {
             },
         }
     }
-    pub const fn read_error(epoch: String, sequence: u64, reason: String) -> Self {
+    /// The frame of a read that failed with `error`. The reason of a repository
+    /// open that did not complete holds each cause of its error.
+    pub fn read_error(epoch: String, sequence: u64, error: &anyhow::Error) -> Self {
+        let reason = match error.downcast_ref::<OpenFailure>() {
+            Some(OpenFailure::Io(_)) => format!("{error:#}"),
+            _ => error.to_string(),
+        };
         Self::ReadError {
             epoch,
             sequence,

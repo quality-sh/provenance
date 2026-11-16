@@ -209,7 +209,10 @@ fn a_committed_time_past_the_range_fails_as_a_malformed_field_fails() {
         ),
     ] {
         let mut expected = get;
-        let warning = format!("scopes/default/resolutions/res.jsonl line 1: {fault}");
+        let warning = format!(
+            "scopes/default/resolutions/res.jsonl line 1: {fault}; {}",
+            provenance_core::protocol::read_failure::STATE_CORRECTIONS
+        );
         expected["record_metadata"]["freshness_error"] = json!(warning);
         expected["record_metadata"]["stamp"]["policy"] = json!("catch_up_failed");
         let (code, out, err) = run(repo, &["resolution_a", "get", "--format", "json"]);

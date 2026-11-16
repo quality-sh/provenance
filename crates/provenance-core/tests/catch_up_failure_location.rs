@@ -1,6 +1,7 @@
 //! A `document_catch_up_failed` failure reads its `file` and `line` together
 //! or not at all: a body with one of the two keys is refused, and a body with
-//! both keys or none reads and writes again unchanged.
+//! both keys or none, with or without a hint, reads and writes again
+//! unchanged.
 
 use provenance_core::protocol::read_failure::ReadFailure;
 use provenance_macros::verifies;
@@ -29,8 +30,10 @@ fn a_failure_with_the_file_and_the_line_or_neither_reads_unchanged() {
         "kind": "document_catch_up_failed",
         "message": "depends_on forms a cycle: req_c -> req_d -> req_c"
     });
+    let mut hinted = located.clone();
+    hinted["hint"] = json!("Correct the line.");
 
-    for body in [located, unlocated] {
+    for body in [located, unlocated, hinted] {
         assert_eq!(read(&body), Ok(body.clone()));
     }
 }

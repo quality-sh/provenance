@@ -58,7 +58,9 @@ pub async fn follow(
                 },
                 frame = socket.next() => frame,
             };
-            let Some(incoming) = incoming else { anyhow::bail!("review host disconnected"); };
+            let Some(incoming) = incoming else {
+                anyhow::bail!("review host disconnected");
+            };
             let frame = match incoming? {
                 Message::Text(text) => serde_json::from_str::<Frame>(&text)?,
                 Message::Close(_) => anyhow::bail!("review host disconnected"),
@@ -74,7 +76,7 @@ pub async fn follow(
                         Ok(frames) => frames,
                         Err(error) => {
                             let (epoch, sequence) = follower.position();
-                            read_failure = Some(OutputFrame::read_error(epoch, sequence, error.to_string()));
+                            read_failure = Some(OutputFrame::read_error(epoch, sequence, &error));
                             return Err(error);
                         }
                     };
@@ -83,7 +85,8 @@ pub async fn follow(
                 } => result?,
             }
         }
-    }.await;
+    }
+    .await;
     let emitted = if result.is_err() {
         let (epoch, sequence) = follower.position();
         emit(

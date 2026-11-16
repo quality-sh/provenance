@@ -14,7 +14,7 @@ use provenance_porcelain::{
     },
 };
 use provenance_store::{
-    operations::catalog::{self, Operation as _},
+    operations::catalog::{self, CallFailure as _, HandlerFailure, Operation as _},
     review::DiscussionAction,
 };
 
@@ -197,13 +197,11 @@ impl DiscussionPort for HostDiscussionPort {
     }
 }
 
-fn operation_error<E: std::error::Error + serde::Serialize>(
-    error: &OperationError<E>,
-) -> ActionError {
+fn operation_error<E: HandlerFailure>(error: &OperationError<E>) -> ActionError {
     let detail =
         serde_json::to_value(error).unwrap_or_else(|_| serde_json::json!({"kind":"internal"}));
     ActionError::OperationDetail {
-        message: error.to_string(),
+        message: error.message(),
         detail,
     }
 }

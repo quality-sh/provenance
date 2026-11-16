@@ -1,0 +1,207 @@
+// @provenance rule: rule_struct
+pub struct Payroll {
+    hours: u32,
+}
+
+// @provenance rule: rule_impl_block
+impl Payroll {
+    pub fn pays(&self) -> bool {
+        self.hours > 38
+    }
+}
+
+// @provenance rule: rule_enum
+#[derive(Debug, Clone)]
+pub(crate) enum Shift {
+    Day,
+}
+
+/// A ledger of entries.
+// @provenance rule: rule_generic_struct
+#[derive(
+    Debug,
+    Default,
+)]
+pub struct Ledger<T> {
+    entries: Vec<T>,
+}
+
+// @provenance rule: rule_const_fn
+pub const fn limit() -> u32 {
+    38
+}
+
+// @provenance rule: rule_async_fn
+pub(crate) async unsafe fn pays_overtime(
+    hours: u32,
+) -> bool {
+    hours > 38
+}
+
+// @provenance rule: rule_trait
+pub trait Rates {
+    fn rate(&self) -> u32;
+}
+
+// @provenance rule: rule_alias
+pub type Hours = u32;
+
+#[rule("rule_attribute_enum")]
+#[derive(Debug)]
+pub enum Kind {
+    Day,
+}
+
+#[rule("rule_attribute_struct")]
+pub struct Entry;
+
+#[rule("rule_attribute_impl")]
+impl Payroll {
+    fn other(&self) {}
+}
+
+// @provenance rule: rule_const_then_doc
+pub const LIMIT: u32 = 38;
+
+/// The pay rule.
+///
+/// It reads the hours.
+pub fn unrelated() {}
+
+// @provenance rule: rule_static
+pub static NAME: &str = "payroll";
+
+// @provenance rule: rule_mod
+mod tests {
+    fn helper() {}
+}
+
+// @provenance rule: rule_long_derive
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+)]
+pub struct Wide;
+
+#[rule("rule_attribute_long_derive")]
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+)]
+pub struct WideEntry;
+
+// @provenance rule: rule_raw_identifier
+pub fn r#match() {}
+
+// @provenance rule: rule_block_comment
+/* block
+ */ pub fn hidden_after_block() {}
+pub fn below_block() {}
+
+// @provenance rule: rule_inline_comment
+/* note */ pub fn inline_after_comment() {}
+pub fn next_after_inline() {}
+
+pub fn counts() {
+    // @provenance rule: rule_deref_statement
+    *counter() += 1;
+    fn nested_helper() {}
+}
+
+// @provenance rule: rule_nested_comment
+/* outer /* inner */ fn commented() {} */
+pub fn after_nested() {}
+
+#[rule("rule_stacked_first")]
+#[rule("rule_stacked_second")]
+pub fn stacked() {}
+
+// @provenance rule: rule_union
+pub union Bits {
+    whole: u32,
+}
+
+// @provenance rule: rule_unsafe_fn
+pub unsafe fn raw_hours() {}
+
+// @provenance rule: rule_extern_fn
+pub extern "C" fn exported_hours() {}
+
+impl Ledger {
+    // @provenance rule: rule_default_fn
+    default fn total() {}
+}
+
+// @provenance rule: rule_group_comment_first
+
+// @provenance rule: rule_group_comment_second
+fn grouped_comments() {}
+
+#[rule("rule_group_blank_first")]
+
+#[rule("rule_group_blank_second")]
+fn grouped_blank() {}
+
+#[verifies("rule_group_test_first", examples)]
+#[test]
+#[verifies("rule_group_test_second", examples)]
+fn grouped_test() {}
+
+#[rule("rule_group_inline_first")]
+#[inline]
+#[rule("rule_group_inline_second")]
+fn grouped_inline() {}
+
+#[rule("rule_group_doc_first")]
+/// The hours of a shift.
+#[rule("rule_group_doc_second")]
+fn grouped_doc() {}
+
+#[rule("rule_group_plain_first")]
+// A plain comment.
+#[rule("rule_group_plain_second")]
+fn grouped_plain() {}
+
+#[rule("rule_group_const_first")]
+const LIMIT: u32 = 38;
+#[rule("rule_group_const_second")]
+fn after_const() {}
+
+fn sums(hours: u32) -> u32 {
+    hours
+        // @provenance rule: rule_after_operator
+        + extra(hours)
+}
+
+fn calls() {
+    pays(
+        // @provenance rule: rule_call_argument
+        fn_hours,
+    );
+}
+
+const OPENS: &str = r#"a"/*"#;
+#[rule("rule_after_raw_string")]
+fn after_raw_string() {}
+
+declare_input!(
+    #[rule("rule_in_macro_body")]
+    struct MacroInput {
+        hours: u32,
+    }
+);
+
+macro_rules! make {
+    ($name:ident) => {
+        // @provenance rule: rule_macro_metavariable
+        fn $name() {}
+    };
+}
+
+// @provenance rule: rule_end

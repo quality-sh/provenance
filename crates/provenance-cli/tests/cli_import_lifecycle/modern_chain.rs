@@ -1,5 +1,6 @@
 use super::modern_lifecycle::add_modern_lifecycle;
 use super::support::{create_system_source, export_scope, import_scope, init_repo, write_json};
+use provenance_core::protocol::read_failure::STATE_CORRECTIONS;
 use provenance_macros::verifies;
 use std::path::PathBuf;
 
@@ -207,7 +208,7 @@ fn check_names_the_two_lines_of_a_proposal_id() {
         .output()
         .unwrap();
     let (code, stdout, stderr) = answer(&check);
-    let finding = format!("  - {DUPLICATE_PROPOSAL}");
+    let finding = format!("  - {DUPLICATE_PROPOSAL}; {STATE_CORRECTIONS}");
     assert_eq!(
         (code, stdout.lines().any(|line| line == finding)),
         (Some(1), true),
@@ -230,7 +231,7 @@ fn export_names_the_two_lines_of_a_proposal_id() {
         .output()
         .unwrap();
     let (code, stdout, stderr) = answer(&export);
-    let refusal = format!("Error: {DUPLICATE_PROPOSAL}");
+    let refusal = format!("Error: {DUPLICATE_PROPOSAL}; {STATE_CORRECTIONS}");
     assert_eq!(
         (
             code,

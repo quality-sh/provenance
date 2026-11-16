@@ -78,10 +78,10 @@ fn check_reports_two_submissions_with_one_cycle_at_the_second_line() {
         findings(directory.path()),
         [format!(
             "scopes/default/ideation/proposal_cards.jsonl line {line}: requirement req_a has 2 \
-             review submissions with review cycle 1. To repair, keep one submission and remove \
-             the lines of each other submission, then commit. The lines of {id}: \
+             review submissions with review cycle 1. The lines of {id}: \
              ideation/proposal_cards.jsonl line {first}. The lines of submission_by_hand: \
-             ideation/proposal_cards.jsonl line {line}."
+             ideation/proposal_cards.jsonl line {line}; To repair, keep one submission and \
+             remove the lines of each other submission, then commit."
         )]
     );
 }
@@ -112,10 +112,10 @@ fn check_reports_each_withdrawal_that_a_read_refuses() {
         findings(directory.path()),
         [
             "scopes/default/ideation/withdrawals.jsonl line 1: withdrawal withdrawal_lost names \
-             no review submission: proposal_missing. To repair, remove ideation/withdrawals.jsonl \
+             no review submission: proposal_missing; To repair, remove ideation/withdrawals.jsonl \
              line 1, then commit.",
             "scopes/default/ideation/withdrawals.jsonl line 3: withdrawal withdrawal_a is on lines \
-             2 and 3 of ideation/withdrawals.jsonl with different contents. To repair, keep one \
+             2 and 3 of ideation/withdrawals.jsonl with different contents; To repair, keep one \
              of these lines and remove the others, then commit.",
         ]
     );
@@ -220,21 +220,21 @@ fn check_reports_each_fault_of_one_record_in_one_run() {
         [
             format!(
                 "{file}/proposal_cards.jsonl line {changed}: review submission {id} is on lines \
-                 {first} and {changed} of ideation/proposal_cards.jsonl with different contents. \
+                 {first} and {changed} of ideation/proposal_cards.jsonl with different contents; \
                  To repair, keep one of these lines and remove the others, then commit."
             ),
             format!(
                 "{file}/proposal_cards.jsonl line {copy}: requirement req_a has 2 review \
-                 submissions with review cycle 1. To repair, keep one submission and remove the \
-                 lines of each other submission, then commit. The lines of {id}: \
+                 submissions with review cycle 1. The lines of {id}: \
                  ideation/proposal_cards.jsonl lines {first} and {changed}; \
                  ideation/dispositions.jsonl lines 1 and 2. The lines of submission_copy: \
-                 ideation/proposal_cards.jsonl line {copy}."
+                 ideation/proposal_cards.jsonl line {copy}; To repair, keep one submission and \
+                 remove the lines of each other submission, then commit."
             ),
             format!(
                 "{file}/dispositions.jsonl line 2: review submission {id} of requirement req_a \
                  has decisions with different results in ideation/dispositions.jsonl: accepted \
-                 decision_a at line 1 and rejected decision_b at line 2. To repair, remove each \
+                 decision_a at line 1 and rejected decision_b at line 2; To repair, remove each \
                  of these lines that has a result that you do not keep, then commit."
             ),
         ]
@@ -260,7 +260,7 @@ fn the_repair_of_a_withdrawal_that_names_no_submission_passes() {
     assert_eq!(
         findings(repo),
         ["scopes/default/ideation/withdrawals.jsonl line 1: withdrawal withdrawal_lost names no \
-          review submission: proposal_missing. To repair, remove ideation/withdrawals.jsonl line \
+          review submission: proposal_missing; To repair, remove ideation/withdrawals.jsonl line \
           1, then commit."]
     );
     remove(repo, WITHDRAWALS, &[1]);
@@ -287,7 +287,7 @@ fn the_repair_of_a_withdrawal_id_on_two_lines_passes() {
     assert_eq!(
         findings(repo),
         ["scopes/default/ideation/withdrawals.jsonl line 2: withdrawal withdrawal_a is on lines 1 \
-          and 2 of ideation/withdrawals.jsonl with different contents. To repair, keep one of \
+          and 2 of ideation/withdrawals.jsonl with different contents; To repair, keep one of \
           these lines and remove the others, then commit."]
     );
     remove(repo, WITHDRAWALS, &[2]);
@@ -313,11 +313,11 @@ fn the_repair_of_three_submissions_with_one_cycle_passes() {
         findings(repo),
         [format!(
             "scopes/default/ideation/proposal_cards.jsonl line {}: requirement req_a has 3 review \
-             submissions with review cycle 1. To repair, keep one submission and remove the lines \
-             of each other submission, then commit. The lines of {}: \
+             submissions with review cycle 1. The lines of {}: \
              ideation/proposal_cards.jsonl line {}. The lines of submission_b: \
              ideation/proposal_cards.jsonl line {}. The lines of submission_c: \
-             ideation/proposal_cards.jsonl line {count}.",
+             ideation/proposal_cards.jsonl line {count}; To repair, keep one submission and \
+             remove the lines of each other submission, then commit.",
             count - 1,
             submission["id"].as_str().unwrap(),
             count - 2,
