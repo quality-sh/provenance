@@ -141,6 +141,8 @@ mod cli_typed_deletion_month_shards;
 mod cli_typed_deletion_origins;
 #[path = "../cli_typed_spec_review_plan.rs"]
 mod cli_typed_spec_review_plan;
+#[path = "../cli_unchanged_update.rs"]
+mod cli_unchanged_update;
 #[path = "../cli_unclassified_cause.rs"]
 mod cli_unclassified_cause;
 #[path = "../cli_unparsable_state.rs"]
