@@ -220,6 +220,8 @@ impl StateStore {
                 mutate,
                 |staged, record, graph_checked| {
                     ensure_references(staged, scope, record)?;
+                    // A staged write that changes a record checks the graph
+                    // of the scope after the change.
                     if graph_checked {
                         return Ok(());
                     }
