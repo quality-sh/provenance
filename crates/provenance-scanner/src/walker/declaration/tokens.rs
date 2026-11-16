@@ -37,7 +37,8 @@ pub(in crate::walker) fn file_tokens<'a>(
                 rust_pieces(line, &mut state, |range, piece| pieces.push((range, piece)));
             }
             Some(style) => {
-                let parts = multiline_parts(line, style, &mut multiline_delimiter, in_block_comment);
+                let parts =
+                    multiline_parts(line, style, &mut multiline_delimiter, in_block_comment);
                 if let Some(parts) = parts {
                     let offset = parts.code.start;
                     in_block_comment = lex_line(

@@ -278,9 +278,8 @@ fn check_bindings_gives_the_inactive_rule_warnings_of_a_file_in_line_order() {
         (7, "rule_archived", "archived"),
         (10, "rule_archived", "archived"),
     ];
-    let warning = |rule: &str, status: &str| {
-        format!("marker cites rule `{rule}` with status `{status}`")
-    };
+    let warning =
+        |rule: &str, status: &str| format!("marker cites rule `{rule}` with status `{status}`");
     let text_lines = cited
         .iter()
         .map(|(_, rule, status)| format!("  - {}", warning(rule, status)))

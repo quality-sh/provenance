@@ -112,7 +112,9 @@ fn method(tokens: Tokens<'_, '_>, name: usize) -> Option<String> {
         ":" => true,
         _ => false,
     };
-    declared.then(|| tokens.get(name).map(str::to_owned)).flatten()
+    declared
+        .then(|| tokens.get(name).map(str::to_owned))
+        .flatten()
 }
 
 /// A property after a modifier of a class member: the name, an optional `?`

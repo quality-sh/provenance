@@ -98,7 +98,10 @@ impl<'a> Sites<'a> {
         let (calls, declared): (Vec<_>, Vec<_>) = sites
             .into_iter()
             .partition(|unnamed| matches!(unnamed.site, Site::Call(_)));
-        let site_lines = declared.iter().map(|unnamed| unnamed.line).collect::<Vec<_>>();
+        let site_lines = declared
+            .iter()
+            .map(|unnamed| unnamed.line)
+            .collect::<Vec<_>>();
         let starts = statement_starts(language, &tokens, &site_lines);
         let bounds = declared
             .iter()
@@ -164,7 +167,9 @@ fn read_ranges(tokens: &[Token<'_>], sites: &[(usize, usize)]) -> Vec<Range<usiz
         .iter()
         .enumerate()
         .map(|(index, (below, _))| {
-            let end = sites.get(index + 1).map_or(tokens.len(), |(_, next)| first_at(*next));
+            let end = sites
+                .get(index + 1)
+                .map_or(tokens.len(), |(_, next)| first_at(*next));
             first_at(*below).min(end)..end
         })
         .collect()

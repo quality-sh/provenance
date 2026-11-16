@@ -126,7 +126,9 @@ impl<'a> Above<'a> {
         self.macro_body = self.language == Language::Rust
             && matches!(token, "(" | "[" | "{")
             && self.last == Some("!")
-            && self.before_last.is_some_and(|word| word.starts_with(is_word));
+            && self
+                .before_last
+                .is_some_and(|word| word.starts_with(is_word));
         self.before_last = self.last;
         match token {
             "(" | "[" | "{" => self.open.extend(token.chars()),

@@ -38,9 +38,12 @@ fn is_name_start(bytes: &[u8], start: usize) -> bool {
 
 /// Carries C-style block-comment state between source lines.
 pub fn block_comment_state(line: &str, starts_in_block_comment: bool) -> bool {
-    lex_line(line, starts_in_block_comment, CommentSyntax::CStyle, |_, _| {
-        ControlFlow::Continue(())
-    })
+    lex_line(
+        line,
+        starts_in_block_comment,
+        CommentSyntax::CStyle,
+        |_, _| ControlFlow::Continue(()),
+    )
 }
 
 /// The comments and quotes of a language for the line lexer.
