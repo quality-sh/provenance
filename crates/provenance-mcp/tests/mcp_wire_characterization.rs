@@ -140,8 +140,8 @@ fn check_host() -> StatementHost {
     StatementHost::default().with_check_port(Arc::new(FixtureCheckPort))
 }
 
-/// The instructions of the full host: it shows each command and each record and
-/// Discussion write, and it has no notify port and no repository files.
+/// The instructions of the full host up to its first calls: it shows each command and each
+/// record and Discussion write, and it has no notify port and no repository files.
 const INSTRUCTIONS: &str = "# Provenance\n\n\
 Provenance records requirements, decisions, and the rules that connect them to code.\n\n\
 ## Records\n\n\
@@ -207,8 +207,17 @@ for review.\n\
 - reply: Reply to the addressed Discussion.\n\
 - discussions: List addressed Discussions in a scope or under a record.\n\
 - discussion: Read the addressed Discussion.\n\n\
-For a focused start, call search with {\"text\":\"<text>\"}, then get with \
-{\"target\":\"<id>\",\"view\":\"children\",\"depth\":<N>}.";
+For a focused start, ";
+
+/// `result` with its instructions up to the words before the first calls. The first calls
+/// are checked as calls in `mcp_first_steps.rs`.
+fn without_first_calls(mut result: Value) -> Value {
+    let instructions = result["instructions"].as_str().unwrap_or_default();
+    if let Some((guidance, _)) = instructions.split_once("For a focused start, ") {
+        result["instructions"] = Value::String(format!("{guidance}For a focused start, "));
+    }
+    result
+}
 
 fn server_info() -> Value {
     json!({"name":"provenance","version":env!("CARGO_PKG_VERSION")})
@@ -220,7 +229,7 @@ async fn discover_response_keeps_its_fields() {
     let mut wire = Wire::start(full_host(&repository));
     let response = wire.request("server/discover", json!({})).await;
     assert_eq!(
-        response["result"],
+        without_first_calls(response["result"].clone()),
         json!({
             "_meta":{"io.modelcontextprotocol/serverInfo":server_info()},
             "cacheScope":"private",
@@ -248,7 +257,7 @@ async fn initialize_negotiates_the_older_protocols() {
         let mut wire = Wire::bare(full_host(&repository));
         let result = wire.initialize(requested).await;
         assert_eq!(
-            result,
+            without_first_calls(result),
             json!({
                 "protocolVersion":agreed,
                 "capabilities":{"tools":{}},

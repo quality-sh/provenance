@@ -9,16 +9,14 @@ use rmcp::model::{CallToolResult, ContentBlock, Tool};
 use serde_json::{Map, Value};
 
 /// The discussions tool: the list and one conversation, selected by the action argument.
+/// Its description describes the reads that the host grants.
 #[provenance_macros::rule("rule_mcp_one_tool_for_discussions")]
 pub fn tool(host: &StatementHost) -> Option<Tool> {
-    let readable = [Action::Discussions, Action::Discussion]
-        .into_iter()
-        .any(|action| host.porcelain().discussion_is_available(action));
-    let declaration = Command::Action(Action::Discussions).declaration();
-    readable.then(|| {
+    let granted = |action| host.porcelain().discussion_is_available(action);
+    provenance_porcelain::guidance::discussions_description(granted).map(|description| {
         crate::surface::tool(
             crate::exposed::name(Command::Action(Action::Discussions)),
-            declaration.description,
+            description,
             Effect::Reads,
             provenance_porcelain::discussion::action_input_schema(),
             provenance_porcelain::discussion::output_schema(),

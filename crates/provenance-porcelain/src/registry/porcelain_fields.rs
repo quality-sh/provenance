@@ -4,11 +4,14 @@
 
 use super::{Field, FieldValue, Relation};
 
-pub(super) const VIEWS: &[&str] = &["record", "children", "trace", "impact", "review"];
+pub(super) const VIEWS: &[&str] = &["record", CHILDREN, "trace", "impact", "review"];
+
+/// The view of the records below a record.
+pub(crate) const CHILDREN: &str = "children";
 
 /// The get fields after the target, in order.
 pub(super) const GET_FIELDS: &[Field] = &[
-    Field::text("view").values(VIEWS),
+    VIEW,
     DEPTH,
     KIND,
     LIMIT,
@@ -22,7 +25,8 @@ pub(super) const GET_FIELDS: &[Field] = &[
         .doc("The Codex thread UUID for notify."),
 ];
 
-const DEPTH: Field = Field::text("depth")
+pub(crate) const VIEW: Field = Field::text("view").values(VIEWS);
+pub(crate) const DEPTH: Field = Field::text("depth")
     .of(FieldValue::Count)
     .doc("The number of levels to walk. The default is 1.");
 const KIND: Field = Field::repeated("kind")
@@ -46,9 +50,7 @@ pub(super) const GET_RELATIONS: &[Relation] = &[
 pub(super) const TRACE_FIELDS: &[Field] = &[DEPTH, KIND, LIMIT];
 
 pub(super) const SEARCH_FIELDS: &[Field] = &[
-    Field::text("text")
-        .leading_hyphen()
-        .doc("Text to find in record ids and text."),
+    SEARCH_TEXT,
     Field::text("cursor")
         .leading_hyphen()
         .doc("The continuation from an earlier page of the same search."),
@@ -67,6 +69,10 @@ pub(super) const SEARCH_FIELDS: &[Field] = &[
         .of(FieldValue::Count)
         .doc("Put the Rules bound at this line first. Needs file."),
 ];
+
+pub(crate) const SEARCH_TEXT: Field = Field::text("text")
+    .leading_hyphen()
+    .doc("Text to find in record ids and text.");
 
 pub(super) const API_FIELDS: &[Field] = &[
     Field::text("path").doc("The public API path. Without a path, the catalog routes show."),

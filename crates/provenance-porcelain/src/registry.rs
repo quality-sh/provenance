@@ -29,9 +29,10 @@ pub use crate::skills::{SkillsInstallInput, SkillsListInput, SkillsShowInput};
 pub use crate::swarm_backtrace::SwarmBacktraceLandInput;
 pub use crate::validate::ValidateInput;
 pub use dogfood::DogfoodCommand;
-pub use fields::{json_format, Field, FieldValue, Fields, Relation, REPO, SCOPE};
+pub use fields::{json_format, Field, FieldValue, Fields, Relation, REPO, SCOPE, TARGET};
 pub use graph::GraphCommand;
 pub use porcelain::{PrimeFormat, PrimeInput};
+pub(crate) use porcelain_fields::{CHILDREN, DEPTH, SEARCH_TEXT, VIEW};
 pub use repository::RepositoryCommand;
 pub use workspace::WorkspaceCommand;
 
@@ -280,7 +281,7 @@ mod tests {
                 .declaration()
                 .grammar
                 .takes_target()
-                .then_some("target");
+                .then_some(TARGET.name);
             let mut names = fields
                 .fields
                 .iter()

@@ -1,7 +1,7 @@
 //! Domain guidance shared by each consumer.
 
 use crate::action::Action;
-use crate::registry::{Command, Declaration};
+use crate::registry::{Command, Declaration, Field, CHILDREN, DEPTH, SEARCH_TEXT, VIEW};
 use provenance_macros::rule;
 use serde::Serialize;
 use std::fmt::Write;
@@ -59,6 +59,12 @@ const CHANGE: (&str, &str) = (
      their fields.",
 );
 
+/// The first steps, as [`first_steps`] gives them.
+const FIRST_STEPS: [(Command, &[(Field, Option<&str>)]); 2] = [
+    (Command::Search, &[(SEARCH_TEXT, None)]),
+    (Command::Get, &[(VIEW, Some(CHILDREN)), (DEPTH, None)]),
+];
+
 /// A command that an interface shows: a registry command, or a command that the interface
 /// declares itself.
 #[derive(Clone, Copy, Debug)]
@@ -92,7 +98,9 @@ pub fn guidance_for(
     };
     let mut text = String::from(DOMAIN);
     let opening: Vec<String> = [
-        (shown(Command::Search) && shown(Command::Get)).then(|| SEARCH_THEN_GET.to_owned()),
+        first_steps(shown)
+            .next()
+            .map(|_| SEARCH_THEN_GET.to_owned()),
         create_sentence(shown),
     ]
     .into_iter()
@@ -127,6 +135,28 @@ pub fn guidance_for(
     }
     text.truncate(text.trim_end().len());
     Guidance { guidance: text }
+}
+
+/// The first steps of an interface that shows each command for which `shown` is true:
+/// search on a text, then get of the records below one record. Each step is a command and
+/// the fields that it gives after its target, each with the value that the step selects,
+/// when it selects one. An interface that does not show search and get has no first steps.
+pub fn first_steps(
+    shown: impl Fn(Command) -> bool,
+) -> impl Iterator<Item = (Command, &'static [(Field, Option<&'static str>)])> {
+    let all = FIRST_STEPS.iter().all(|(command, _)| shown(*command));
+    FIRST_STEPS.into_iter().filter(move |_| all)
+}
+
+/// The description of the command that lists Discussions and reads one, on an interface
+/// that grants each of these reads for which `granted` is true. With the list, it is the
+/// description of the list; with only the read of one Discussion, it is the description of
+/// that read. No read gives no description.
+pub fn discussions_description(granted: impl Fn(Action) -> bool) -> Option<&'static str> {
+    [Action::Discussions, Action::Discussion]
+        .into_iter()
+        .find(|action| granted(*action))
+        .map(|action| Command::Action(action).declaration().description)
 }
 
 /// The create sentence, when create is shown. Its second clause stays only when an

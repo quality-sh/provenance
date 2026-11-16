@@ -245,6 +245,9 @@ impl Fields {
     }
 }
 
+/// The field of a typed input that names the target record, when the grammar of its
+/// command takes a target.
+pub const TARGET: Field = Field::text("target");
 /// The repository root that a command opens.
 pub const REPO: Field = Field::text("repo").default(".");
 /// The scope that a command opens.
