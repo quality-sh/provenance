@@ -1,13 +1,16 @@
-//! The reader of one stored line of a JSONL file. A write that loads a JSONL
-//! file and each read of the verification runs cache give the bytes of one
-//! line and its number here, so that a fault of a line gets the same refusal
-//! from each of them.
+//! The reader of one stored line of a JSONL file. Each read of a state shard,
+//! each write that loads a JSONL file and each read of the verification runs
+//! cache give the bytes of one line and its number here, so that a fault of a
+//! line gets the same refusal from each of them.
 
 use crate::refusal::state_fault;
 use crate::state_store::message_ids::ShardLine;
-use crate::state_store::readers::{ensure_no_legacy_retirement, located, parse_line};
+use crate::state_store::readers::located;
 use camino::Utf8Path;
 use serde::de::DeserializeOwned;
+
+/// The removed member that a stored record must not hold.
+const RETIRED: &str = "retired";
 
 /// A stored line that passed the line checks, with its record.
 pub(super) struct CheckedLine<'a, T> {
@@ -31,7 +34,7 @@ pub fn without_terminator(line: &[u8]) -> &[u8] {
 
 /// The lines of the file `contents`, each with its number from 1 and without
 /// its terminator, in the split of [`without_terminator`].
-pub(super) fn numbered_lines(contents: &[u8]) -> impl Iterator<Item = (usize, &[u8])> {
+pub fn numbered_lines(contents: &[u8]) -> impl Iterator<Item = (usize, &[u8])> {
     contents
         .split_inclusive(|byte| *byte == b'\n')
         .enumerate()
@@ -40,7 +43,6 @@ pub(super) fn numbered_lines(contents: &[u8]) -> impl Iterator<Item = (usize, &[
 
 /// The record of the stored line `bytes`, line `number` of `path`, after
 /// the checks of [`checked_line`].
-#[cfg(feature = "host")]
 pub fn record_of_line<T: DeserializeOwned>(
     path: &Utf8Path,
     number: usize,
@@ -49,12 +51,16 @@ pub fn record_of_line<T: DeserializeOwned>(
     checked_line(path, number, bytes).map(|line| line.record)
 }
 
-/// The line checks of a stored line of a JSONL file: the line is UTF-8, it
-/// is one JSON value that [`ensure_no_legacy_retirement`] accepts, and it is
-/// one record of `T` whose member names can be read back. A refusal is
-/// `invalid_state_file` at the line. Each write that loads a JSONL file and
-/// each read of the verification runs cache make these checks. The reads of
-/// the state shards do not use them.
+/// The line checks of a stored line of a JSONL file, in this order: the line
+/// is UTF-8, it is one JSON value, it holds no `retired` member, it is one
+/// record of `T` that holds each field of `T` one time, it holds each member
+/// that `T` does not own one time, and the names of those members can be read
+/// back. A refusal is `invalid_state_file` at the line.
+///
+/// The line is parsed one time, as `T`. Only a line that fails that parse or
+/// can hold a member `retired` is parsed again, as a JSON value, so that a
+/// syntax fault and then the `retired` member win over a fault of the record
+/// for each `T`.
 pub(super) fn checked_line<'a, T: DeserializeOwned>(
     path: &Utf8Path,
     number: usize,
@@ -62,31 +68,29 @@ pub(super) fn checked_line<'a, T: DeserializeOwned>(
 ) -> anyhow::Result<CheckedLine<'a, T>> {
     let text = std::str::from_utf8(bytes)
         .map_err(|error| state_fault(&ShardLine::new(path, number), error.to_string()))?;
-    // The JSON value gives a syntax fault before a fault of the record, and
-    // the `retired` check reads it. The typed parse then reads the text again,
-    // because a JSON value keeps only the last of two members with one name.
-    let value = parse_line(path, number, text)?;
-    ensure_no_legacy_retirement(path, number, &value)?;
     let at = |error: serde_json::Error| located(path, number, &error);
     let mut unknown = Vec::new();
     let mut nested_unknown = None;
-    let mut deserializer = serde_json::Deserializer::from_str(text);
-    let record = serde_ignored::deserialize(&mut deserializer, |ignored| match ignored {
-        serde_ignored::Path::Map {
-            parent: serde_ignored::Path::Root,
-            key,
-        } => unknown.push(key),
-        other => {
-            if nested_unknown.is_none() {
-                nested_unknown = Some(other.to_string());
-            }
+    let record = match typed_record(text, &mut unknown, &mut nested_unknown) {
+        Ok(record) => record,
+        Err(error) => {
+            value_checks(path, number, text)?;
+            return Err(at(error));
         }
-    })
-    .map_err(at)?;
+    };
+    if can_hold_retired(text) {
+        value_checks(path, number, text)?;
+    }
     let members = if unknown.is_empty() {
         None
     } else {
         let scan = top_level_members(text).map_err(at)?;
+        if let Some(name) = &scan.repeated {
+            return Err(state_fault(
+                &ShardLine::new(path, number),
+                format!("duplicate field `{name}`"),
+            ));
+        }
         let missing = unknown
             .iter()
             .filter(|name| !scan.members.iter().any(|member| &member.name == *name))
@@ -107,6 +111,70 @@ pub(super) fn checked_line<'a, T: DeserializeOwned>(
         nested_unknown,
         members,
     })
+}
+
+/// The record of `text` with no trailing data. Each top-level member that the
+/// record does not own goes to `unknown`, and the first nested one goes to
+/// `nested_unknown`.
+fn typed_record<T: DeserializeOwned>(
+    text: &str,
+    unknown: &mut Vec<String>,
+    nested_unknown: &mut Option<String>,
+) -> Result<T, serde_json::Error> {
+    let mut deserializer = serde_json::Deserializer::from_str(text);
+    let record = serde_ignored::deserialize(&mut deserializer, |ignored| match ignored {
+        serde_ignored::Path::Map {
+            parent: serde_ignored::Path::Root,
+            key,
+        } => unknown.push(key),
+        other => {
+            if nested_unknown.is_none() {
+                *nested_unknown = Some(other.to_string());
+            }
+        }
+    })?;
+    deserializer.end()?;
+    Ok(record)
+}
+
+/// Whether `text` can hold a member named `retired`. A JSON string gives the
+/// name `retired` only with those bytes or with a `\u` escape, because no other
+/// escape gives a letter.
+fn can_hold_retired(text: &str) -> bool {
+    text.contains(RETIRED) || text.contains("\\u")
+}
+
+/// The checks of `text` as one JSON value: it parses, and it holds no
+/// `retired` member.
+fn value_checks(path: &Utf8Path, number: usize, text: &str) -> anyhow::Result<()> {
+    let value = serde_json::from_str(text).map_err(|error| located(path, number, &error))?;
+    ensure_no_legacy_retirement(path, number, &value)
+}
+
+/// Refuses a stored record that still holds the removed `retired` field, as
+/// `invalid_state_file` at its line.
+pub fn ensure_no_legacy_retirement(
+    path: &Utf8Path,
+    line_number: usize,
+    value: &serde_json::Value,
+) -> anyhow::Result<()> {
+    let Some(record) = value.as_object() else {
+        return Ok(());
+    };
+    if !record.contains_key(RETIRED) {
+        return Ok(());
+    }
+    let name = record
+        .get("id")
+        .and_then(serde_json::Value::as_str)
+        .map_or_else(|| "record".to_string(), |id| format!("record {id}"));
+    Err(state_fault(
+        &ShardLine::new(path, line_number),
+        format!(
+            "{name} contains legacy field `retired`; canonical JSONL requires \
+             record-deletion migration 026 before this build can read it"
+        ),
+    ))
 }
 
 pub(super) struct Member {
@@ -200,7 +268,18 @@ pub(super) fn top_level_members(line: &str) -> Result<Scan, serde_json::Error> {
 
 #[cfg(test)]
 mod tests {
-    use super::top_level_members;
+    use super::{record_of_line, top_level_members};
+    use provenance_core::protocol::read_failure::UnparsableStateFile;
+
+    #[derive(Debug, serde::Deserialize)]
+    struct Record {
+        id: String,
+    }
+
+    /// The path of the stored lines of these tests.
+    fn path() -> &'static camino::Utf8Path {
+        camino::Utf8Path::new(".provenance/state/scopes/default/rules/rule.jsonl")
+    }
 
     #[test]
     fn collects_members_in_written_order_with_raw_bytes() {
@@ -238,5 +317,86 @@ mod tests {
         let scan = top_level_members(r#"[{"a":1},{"a":2}]"#).unwrap();
         assert!(scan.members.is_empty());
         assert!(scan.repeated.is_none());
+    }
+
+    // The tests below are implementation aids with no Rule: no Rule states the
+    // order of the faults of one stored line.
+
+    /// The line and the message of the refusal of the line `line` as a `T`.
+    fn refusal<T: serde::de::DeserializeOwned>(line: &str) -> (u64, String) {
+        let error = record_of_line::<T>(path(), 3, line.as_bytes())
+            .err()
+            .expect("the line is refused");
+        let state = UnparsableStateFile::find(error.as_ref()).unwrap();
+        (state.line(), state.message().to_owned())
+    }
+
+    /// The message of the `retired` refusal of the record `name`.
+    fn retired(name: &str) -> (u64, String) {
+        (
+            3,
+            format!(
+                "{name} contains legacy field `retired`; canonical JSONL requires \
+                 record-deletion migration 026 before this build can read it"
+            ),
+        )
+    }
+
+    #[test]
+    fn a_member_that_the_record_does_not_own_reads() {
+        let line = r#"{"id":"rule_a","note":{"kept":1}}"#;
+        let record = record_of_line::<Record>(path(), 3, line.as_bytes()).unwrap();
+        assert_eq!(record.id, "rule_a");
+    }
+
+    #[test]
+    fn a_syntax_fault_wins_over_a_repeated_field() {
+        assert_eq!(
+            refusal::<Record>(r#"{"id":"rule_a","id":"rule_b","#),
+            (3, "EOF while parsing a value".to_owned())
+        );
+    }
+
+    #[test]
+    fn the_retired_member_wins_over_a_repeated_field() {
+        assert_eq!(
+            refusal::<Record>(r#"{"id":"rule_a","id":"rule_b","retired":true}"#),
+            retired("record rule_b")
+        );
+    }
+
+    #[test]
+    fn the_retired_member_refuses_a_record_that_parses() {
+        assert_eq!(
+            refusal::<Record>(r#"{"id":"rule_a","retired":true}"#),
+            retired("record rule_a")
+        );
+    }
+
+    // No public surface reads a stored line as a JSON value through this
+    // reader, so only these tests pin that the `retired` check does not
+    // depend on the type that the line is read as.
+
+    #[test]
+    fn the_retired_member_refuses_a_line_read_as_a_json_value() {
+        assert_eq!(
+            refusal::<serde_json::Value>(r#"{"id":"rule_a","retired":true}"#),
+            retired("record rule_a")
+        );
+    }
+
+    #[test]
+    fn the_retired_member_written_with_an_escape_refuses_each_type() {
+        let line = r#"{"id":"rule_a","retir\u0065d":true}"#;
+        assert_eq!(refusal::<serde_json::Value>(line), retired("record rule_a"));
+        assert_eq!(refusal::<Record>(line), retired("record rule_a"));
+    }
+
+    #[test]
+    fn data_after_the_record_refuses_the_line() {
+        assert_eq!(
+            refusal::<Record>(r#"{"id":"rule_a"} {}"#),
+            (3, "trailing characters".to_owned())
+        );
     }
 }

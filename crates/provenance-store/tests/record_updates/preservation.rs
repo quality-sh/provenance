@@ -112,7 +112,7 @@ async fn create_keeps_every_unrelated_source_row_byte_for_byte() {
 }
 
 #[tokio::test]
-async fn create_keeps_a_row_with_repeated_unknown_members_exactly() {
+async fn create_refuses_a_row_with_repeated_unknown_members_without_publication() {
     let fixture = Fixture::new();
     fixture.source().await;
     let mut record = parsed_rows(&fixture, "sources", "source.jsonl").remove(0);
@@ -121,27 +121,32 @@ async fn create_keeps_a_row_with_repeated_unknown_members_exactly() {
     let mut raw = serde_json::to_string(&record).unwrap();
     raw.pop();
     raw.push_str(",\"extension\":{\"tool\":\"older\"},\"extension\":{\"tool\":\"newer\"}}");
-    let expected = format!("  {raw}  ");
+    let row = format!("  {raw}  ");
     write_rows(
         &fixture,
         "sources",
         "source.jsonl",
-        std::slice::from_ref(&expected),
+        std::slice::from_ref(&row),
     );
+    let before = state_snapshot(&fixture);
 
-    let created = fixture
+    let error = fixture
         .call(
             "create-source",
             json!({"scope_id":"default","id":"source_two","name":"Second","source_type":"policy","url":null,"supersedes":[]}),
         )
         .await
-        .unwrap();
+        .unwrap_err();
 
-    assert_rows_preserved(
-        &raw_rows(&fixture, "sources", "source.jsonl"),
-        &[expected],
-        &created,
+    assert_eq!(
+        error,
+        json!({"kind":"invalid_state_file", "file":"scopes/default/sources/source.jsonl",
+            "line":1,
+            "message":"duplicate field `extension`",
+            "hint":provenance_core::protocol::read_failure::STATE_CORRECTIONS})
     );
+    assert_eq!(raw_rows(&fixture, "sources", "source.jsonl"), vec![row]);
+    assert_eq!(state_snapshot(&fixture), before);
 }
 
 #[tokio::test]
@@ -378,7 +383,7 @@ async fn updating_a_row_with_repeated_unknown_members_is_refused_without_publica
         error,
         json!({"kind":"invalid_state_file", "file":"scopes/default/sources/source.jsonl",
             "line":1,
-            "message":"repeated top-level member `extension` cannot survive a typed record change",
+            "message":"duplicate field `extension`",
             "hint":provenance_core::protocol::read_failure::STATE_CORRECTIONS})
     );
     assert_eq!(raw_rows(&fixture, "sources", "source.jsonl"), vec![row]);

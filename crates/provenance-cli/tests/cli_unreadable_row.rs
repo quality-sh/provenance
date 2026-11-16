@@ -4,8 +4,8 @@
 //!
 //! Each read of a row with the `retired` field refuses, so that row does not
 //! parse as a record, and `rule_state_parse_refusal_names_the_line` states
-//! its refusal. A row with a repeated member parses, and only a typed change
-//! of it refuses.
+//! its refusal. A row that holds a member two times is a fault of the row
+//! on each read and each write.
 
 use provenance_macros::verifies;
 use serde_json::{json, Value};
@@ -78,8 +78,8 @@ fn update(repo: &str) -> std::process::Output {
         .unwrap()
 }
 
-/// No Rule states the refusal of a row that parses but that a typed change
-/// cannot keep. The `get` in `update` reads the row with no refusal.
+/// No active Rule states the refusal of a row that holds a member two times.
+/// The `get` in `update` answers at the stored serial with a warning.
 #[test]
 fn a_typed_change_of_a_row_with_a_repeated_member_refuses_at_the_row() {
     let (_directory, repo) = repository(|row| {
@@ -90,9 +90,7 @@ fn a_typed_change_of_a_row_with_a_repeated_member_refuses_at_the_row() {
     });
     assert_eq!(
         refusal(&update(&repo)),
-        state_file_refusal(
-            "repeated top-level member `extension` cannot survive a typed record change"
-        )
+        state_file_refusal("duplicate field `extension`")
     );
 }
 

@@ -1,4 +1,4 @@
-use crate::state_store::readers::ensure_no_legacy_retirement;
+use crate::jsonl::ensure_no_legacy_retirement;
 use provenance_macros::rule;
 use serde_json::Value;
 use std::collections::{BTreeMap, BTreeSet};
