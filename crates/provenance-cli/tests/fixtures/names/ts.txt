@@ -204,3 +204,8 @@ function* keywords() {
   // @provenance rule: rule_keyword_return
   return pays(ready);
 }
+
+// @provenance rule: rule_enum
+export enum Level {
+  Low,
+}

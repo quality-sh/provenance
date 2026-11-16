@@ -8,3 +8,4 @@ rule_literal_result -
 rule_literal_parameter -
 rule_literal_func_result -
 rule_call_argument -
+rule_function Pays

@@ -44,3 +44,8 @@ func body() {
 		func() {},
 	)
 }
+
+// @provenance rule: rule_function
+func Pays(hours int) bool {
+	return hours > 38
+}
