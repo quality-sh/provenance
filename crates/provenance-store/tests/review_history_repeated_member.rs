@@ -30,13 +30,14 @@ async fn history(temp: &tempfile::TempDir, record: &str) -> Vec<RecordVersion> {
         .entries
 }
 
-/// The path of the state file of `kind` in the fixture at `temp`.
-fn state_file(temp: &tempfile::TempDir, kind: Option<NodeType>) -> camino::Utf8PathBuf {
-    let layout = ProvenanceLayout::new(camino::Utf8Path::from_path(temp.path()).unwrap());
-    match kind {
-        Some(kind) => provenance_store::shards::path_for(&layout, &scope(), kind),
-        None => provenance_store::shards::discussions_path(&layout, &scope()),
-    }
+/// The layout of the fixture at `temp`.
+fn layout(temp: &tempfile::TempDir) -> ProvenanceLayout {
+    ProvenanceLayout::new(camino::Utf8Path::from_path(temp.path()).unwrap())
+}
+
+/// The Requirement file of the fixture at `temp`.
+fn requirements(temp: &tempfile::TempDir) -> camino::Utf8PathBuf {
+    provenance_store::shards::path_for(&layout(temp), &scope(), NodeType::Requirement)
 }
 
 /// Commits the file at `path` with `line` changed by `change`, then commits
@@ -57,8 +58,11 @@ fn commit_changed_line(
                 each.to_owned()
             }
         })
-        .map(|each| format!("{each}\n"))
-        .collect::<String>();
+        .fold(String::new(), |mut changed, each| {
+            changed.push_str(&each);
+            changed.push('\n');
+            changed
+        });
     assert_ne!(changed, text, "no line of {path} holds {line}");
     std::fs::write(path, changed).unwrap();
     let commit = commit_state(temp, "Commit a line that holds a member two times");
@@ -71,7 +75,7 @@ fn commit_changed_line(
 async fn history_skips_a_committed_line_whose_last_id_names_the_record() {
     let (temp, _store) = fixture();
     let created = commit_state(&temp, "Create");
-    let path = state_file(&temp, Some(NodeType::Requirement));
+    let path = requirements(&temp);
     commit_changed_line(&temp, &path, r#""id":"req_a""#, |line| {
         line.replacen('{', r#"{"id":"req_shadow","#, 1).replace(
             "The system stores records.",
@@ -88,7 +92,7 @@ async fn history_skips_a_committed_line_whose_last_id_names_the_record() {
 async fn history_skips_a_committed_line_whose_first_id_names_the_record() {
     let (temp, _store) = fixture();
     commit_state(&temp, "Create");
-    let path = state_file(&temp, Some(NodeType::Requirement));
+    let path = requirements(&temp);
     commit_changed_line(&temp, &path, r#""id":"req_a""#, |line| {
         line.replace(r#""id":"req_a""#, r#""id":"req_a","id":"req_shadow""#)
     });
@@ -115,7 +119,7 @@ async fn outcome_history(repeat: bool) -> (Vec<RecordVersion>, String) {
         )
         .unwrap();
     let outcome = if repeat {
-        let path = state_file(&temp, None);
+        let path = provenance_store::shards::discussions_path(&layout(&temp), &scope());
         let line = format!(r#""discussion_id":"{}""#, discussion.discussion_id.as_str());
         commit_changed_line(&temp, &path, &line, |line| {
             line.replacen('{', r#"{"actor":"ben","#, 1)
