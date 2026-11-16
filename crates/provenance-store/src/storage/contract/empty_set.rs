@@ -15,10 +15,11 @@ pub fn an_empty_set_changes_nothing<H: Harness>(mut harness: H) -> H {
     harness
 }
 
-/// A set with no key lands, with no base and on the current base, while each
-/// stored key in turn is broken. So the adapter writes no stored key again
-/// for a set with no key. The case is only as strong as the `break_key` of
-/// its harness.
+/// A set with no key lands while each stored key in turn is broken.
+///
+/// The set lands with no base and on the current base, so the adapter writes
+/// no stored key again for a set with no key. The case is only as strong as
+/// the `break_key` of its harness.
 pub fn an_empty_set_lands_while_each_stored_key_is_broken<H: Harness>(mut harness: H) {
     harness.seed(&[("manifest.json", b"{}"), (A, b"a"), (B, b"b"), (X, b"x")]);
     for broken in ["manifest.json", A, B, X] {

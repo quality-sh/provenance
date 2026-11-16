@@ -190,10 +190,11 @@ impl World {
         });
     }
 
-    /// Makes each later write of `key` fail, whichever set makes it: a
-    /// per-key set lands the keys before it, a whole set lands no key, and
-    /// the outcome is unknown. A per-key set that fails at its first key is
-    /// refused.
+    /// Makes each later write of `key` fail, whichever set makes it.
+    ///
+    /// A per-key set lands the keys before it, and its outcome is unknown;
+    /// a per-key set that fails at its first key is refused. A whole set
+    /// lands no key, and its outcome is unknown.
     pub fn break_key(&self, key: StateKey) {
         self.lock().broken.insert(key);
     }
