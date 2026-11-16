@@ -48,6 +48,8 @@ mod mcp_change_results;
 mod mcp_document_catch_up_cause;
 #[path = "../mcp_error_envelopes.rs"]
 mod mcp_error_envelopes;
+#[path = "../mcp_first_steps.rs"]
+mod mcp_first_steps;
 #[path = "../mcp_guidance.rs"]
 mod mcp_guidance;
 #[path = "../mcp_instruction_names.rs"]

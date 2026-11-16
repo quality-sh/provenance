@@ -68,6 +68,8 @@ mod cli_init_typescript_missing_package;
 #[allow(dead_code)]
 #[path = "../cli_init_typescript/support.rs"]
 mod cli_init_typescript_support;
+#[path = "../cli_prime_first_steps.rs"]
+mod cli_prime_first_steps;
 #[path = "../cli_prime_guidance.rs"]
 mod cli_prime_guidance;
 #[path = "../cli_removed_commands.rs"]
