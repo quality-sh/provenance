@@ -281,6 +281,10 @@ them as read-only and closed-world:
 - `discuss` starts a Discussion, and `reply` replies to one.
 - `notify` registers a client thread for the review changes of one record, as
   `--notify` does on the CLI.
+- `materialize`, `import`, `dictionary_import`, and `swarm_backtrace_land`
+  write the repository files, as `provenance materialize`, `provenance import`,
+  `provenance dictionary import`, and `provenance swarm-backtrace land` do. The
+  server lists them when it serves a repository, as `provenance mcp` does.
 
 The annotations of `change` mark it as destructive, not idempotent, and
 open-world: an update can replace field values, remove list entries, and archive
@@ -453,8 +457,10 @@ After the repair step of each fault, the reads of the record and
 `provenance prime` introduces the Provenance domain. It explains Requirements,
 Rules, Resolutions, Sources, and code bindings. It does not read project records,
 inspect installed skills, scan code, or update a cache. Its list of actions has one
-line for each command that `provenance --help` lists, in the form that selects the
-command, for example `<id> update` for an action on a record.
+line for each command that `provenance --help` lists, including `review` and `mcp`.
+The line gives each form that selects the command, for example `<id> update` for an
+action on a record, and `discussions or <id> discussions` for a command that also
+acts on a record.
 
 The default output is Markdown. `provenance prime --format json` returns an
 object with a `guidance` string that contains the same text. This replaces the
@@ -466,7 +472,8 @@ The old `--repo`, `--scope`, and `--include-threads` options remain accepted for
 compatibility but have no effect on guidance. MCP supplies the same domain
 content in server instructions and shared tool descriptions. The instructions
 have one line for each tool and each action that the server lists, with its MCP
-name, for example `dictionary_import`. MCP has no prime tool. Each MCP client
+name, for example `dictionary_import`. The `notify` action is not a command: it has
+no line of its own, and the `change` line names it. MCP has no prime tool. Each MCP client
 controls how it presents server instructions.
 
 ## Dictionary setup
