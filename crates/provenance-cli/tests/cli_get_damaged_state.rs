@@ -33,7 +33,7 @@ fn names(warning: &str, file: &str) -> bool {
 }
 
 /// The exit code, the standard output and the standard error of one CLI command.
-fn run(repo: &str, args: &[&str]) -> (Option<i32>, String, String) {
+pub(crate) fn run(repo: &str, args: &[&str]) -> (Option<i32>, String, String) {
     let output = assert_cmd::Command::new(assert_cmd::cargo::cargo_bin!("provenance"))
         .args(args)
         .args(["--repo", repo])

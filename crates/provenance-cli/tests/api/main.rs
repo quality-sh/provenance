@@ -28,6 +28,8 @@ mod cli_document_catch_up_cause;
 mod cli_get_damaged_state;
 #[path = "../cli_get_edit_etag.rs"]
 mod cli_get_edit_etag;
+#[path = "../cli_get_review_row_fault.rs"]
+mod cli_get_review_row_fault;
 #[path = "../cli_get_trace.rs"]
 mod cli_get_trace;
 #[path = "../cli_linked_state_entry.rs"]
