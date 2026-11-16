@@ -1,6 +1,7 @@
 use super::{
+    ensure_references_exist,
     inputs::{ResolutionClearField, UpdateResolutionInput},
-    invalid, missing, optional, required_text, set, validate_final_relations,
+    invalid, missing, optional, required_text, set,
 };
 use crate::{review, shards, state_store::StateStore};
 use provenance_core::{validate_resolution_input_content, Resolution, ResolutionInput};
@@ -96,10 +97,11 @@ impl StateStore {
                         .clear_fields
                         .contains(&ResolutionClearField::ApprovedAt),
                 )?;
+                ensure_references_exist(store, &scope, &*record)?;
                 Ok(record.clone())
             },
         )?;
-        validate_final_relations(self, &scope, &record)?;
+        self.validate_graph_scope(&scope)?;
         Ok(record)
     }
 }

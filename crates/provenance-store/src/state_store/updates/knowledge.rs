@@ -1,6 +1,7 @@
 use super::{
+    ensure_references_exist,
     inputs::{RuleClearField, SourceClearField, UpdateRuleInput, UpdateSourceInput},
-    missing, optional, owner_matches, required_text, set, validate_final_relations,
+    missing, optional, owner_matches, required_text, set,
 };
 use crate::{review, shards, state_store::StateStore};
 use provenance_core::{validate_optional_commit_pin, Rule, Source};
@@ -62,10 +63,11 @@ impl StateStore {
                 )?;
                 record.commit_pin = validate_optional_commit_pin(record.commit_pin.take())
                     .map_err(|error| crate::refusal::refuse!(InvalidCommitPin, "{error:#}"))?;
+                ensure_references_exist(store, &scope, &*record)?;
                 Ok(record.clone())
             },
         )?;
-        validate_final_relations(self, &scope, &record)?;
+        self.validate_graph_scope(&scope)?;
         Ok(record)
     }
 
@@ -141,10 +143,11 @@ impl StateStore {
                     input.source_section,
                     input.clear_fields.contains(&RuleClearField::SourceSection),
                 )?;
+                ensure_references_exist(store, &scope, &*record)?;
                 Ok(record.clone())
             },
         )?;
-        validate_final_relations(self, &scope, &record)?;
+        self.validate_graph_scope(&scope)?;
         Ok(record)
     }
 }
