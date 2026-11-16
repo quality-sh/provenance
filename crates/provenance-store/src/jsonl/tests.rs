@@ -33,7 +33,7 @@ fn a_merged_record_without_a_stored_row_cannot_replace_the_target() {
     let original = b"{\"id\":\"original\"}\n";
     std::fs::write(&path, original).unwrap();
     std::fs::write(&side, "{\"id\":\"stored\"}\n").unwrap();
-    let rows = crate::merge::read_jsonl_rows(&side).unwrap();
+    let rows = crate::merge::read_jsonl_rows(&side, crate::merge::MergeSide::Ours).unwrap();
     let records = [serde_json::json!({
         "id": "not-stored"
     })];

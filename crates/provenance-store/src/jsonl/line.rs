@@ -55,7 +55,9 @@ pub fn record_of_line<T: DeserializeOwned>(
 /// is UTF-8, it is one JSON value, it holds no `retired` member, it is one
 /// record of `T` that holds each field of `T` one time, it holds each member
 /// that `T` does not own one time, and the names of those members can be read
-/// back. A refusal is `invalid_state_file` at the line.
+/// back. When `T` takes a member of each name, as a JSON value does, the line
+/// holds each top-level member one time. A refusal is `invalid_state_file` at
+/// the line.
 ///
 /// The line is parsed one time, as `T`. Only a line that fails that parse or
 /// can hold a member `retired` is parsed again, as a JSON value, so that a
@@ -80,7 +82,7 @@ pub(super) fn checked_line<'a, T: DeserializeOwned>(
     if can_hold_retired(text) {
         value_checks(path, number, text)?;
     }
-    let members = if unknown.is_empty() {
+    let members = if unknown.is_empty() && !takes_each_member::<T>() {
         None
     } else {
         let scan = top_level_members(text).map_err(at)?;
@@ -140,23 +142,29 @@ fn can_hold_retired(text: &str) -> bool {
     text.contains(RETIRED) || text.contains("\\u")
 }
 
-/// The stored line `bytes`, line `number` of `path`, as a JSON value, after the
-/// checks of [`checked_line`] that do not need a record type, in the same
-/// order: the line is UTF-8, it is one JSON value, it holds no `retired`
-/// member, and it holds each top-level member one time. This is the reader of
-/// a line whose record type the caller does not know.
-pub fn checked_value<'a>(
+/// The stored line `bytes`, line `number` of `path`, as its text and as a
+/// JSON value, after the line checks of [`checked_line`] for a record of `T`.
+/// A caller that does not know the record type of the line gives
+/// `serde_json::Value`.
+pub fn checked_value<'a, T: DeserializeOwned>(
     path: &Utf8Path,
     number: usize,
     bytes: &'a [u8],
 ) -> anyhow::Result<(&'a str, serde_json::Value)> {
-    let text = utf8_text(path, number, bytes)?;
-    let value = value_checks(path, number, text)?;
-    let scan = top_level_members(text).map_err(|error| located(path, number, &error))?;
-    if let Some(name) = &scan.repeated {
-        return Err(repeated_member(path, number, name));
-    }
+    let text = checked_line::<T>(path, number, bytes)?.text;
+    let value = serde_json::from_str(text).map_err(|error| located(path, number, &error))?;
     Ok((text, value))
+}
+
+/// A line with one member, of a name that no record type owns.
+const PROBE: &str = r#"{"\u0000":0}"#;
+
+/// Whether `T` takes a member of each name, as a JSON value or a map does.
+/// Such a type keeps the last of two equal members and gives no member as one
+/// that it does not own, so only a scan of the line finds a repeated member.
+fn takes_each_member<T: DeserializeOwned>() -> bool {
+    let mut unknown = Vec::new();
+    typed_record::<T>(PROBE, &mut unknown, &mut None).is_ok() && unknown.is_empty()
 }
 
 /// The line `bytes` as text, or `invalid_state_file` at the line when it is
@@ -175,11 +183,10 @@ fn repeated_member(path: &Utf8Path, number: usize, name: &str) -> anyhow::Error 
 }
 
 /// The checks of `text` as one JSON value: it parses, and it holds no
-/// `retired` member. Gives the value.
-fn value_checks(path: &Utf8Path, number: usize, text: &str) -> anyhow::Result<serde_json::Value> {
+/// `retired` member.
+fn value_checks(path: &Utf8Path, number: usize, text: &str) -> anyhow::Result<()> {
     let value = serde_json::from_str(text).map_err(|error| located(path, number, &error))?;
-    ensure_no_legacy_retirement(path, number, &value)?;
-    Ok(value)
+    ensure_no_legacy_retirement(path, number, &value)
 }
 
 /// Refuses a stored record that still holds the removed `retired` field, as
@@ -299,7 +306,7 @@ pub(super) fn top_level_members(line: &str) -> Result<Scan, serde_json::Error> {
 
 #[cfg(test)]
 mod tests {
-    use super::{record_of_line, top_level_members};
+    use super::{checked_value, record_of_line, top_level_members};
     use provenance_core::protocol::read_failure::UnparsableStateFile;
 
     #[derive(Debug, serde::Deserialize)]
@@ -404,9 +411,9 @@ mod tests {
         );
     }
 
-    // No public surface reads a stored line as a JSON value through this
-    // reader, so only these tests pin that the `retired` check does not
-    // depend on the type that the line is read as.
+    // The merge driver reads a line of a file of no known record type as a
+    // JSON value through this reader. The tests below pin that a JSON value
+    // gets the checks and the order of a record type.
 
     #[test]
     fn the_retired_member_refuses_a_line_read_as_a_json_value() {
@@ -421,6 +428,50 @@ mod tests {
         let line = r#"{"id":"rule_a","retir\u0065d":true}"#;
         assert_eq!(refusal::<serde_json::Value>(line), retired("record rule_a"));
         assert_eq!(refusal::<Record>(line), retired("record rule_a"));
+    }
+
+    #[test]
+    fn a_line_read_as_a_json_value_refuses_a_repeated_member() {
+        assert_eq!(
+            refusal::<serde_json::Value>(r#"{"id":"rule_a","id":"rule_b"}"#),
+            (3, "duplicate field `id`".to_owned())
+        );
+    }
+
+    #[test]
+    fn a_json_value_gets_the_order_of_a_record() {
+        for line in [
+            r#"{"id":"rule_a","id":"rule_b","#,
+            r#"{"id":"rule_a","id":"rule_b","retired":true}"#,
+        ] {
+            assert_eq!(refusal::<serde_json::Value>(line), refusal::<Record>(line));
+        }
+    }
+
+    #[test]
+    fn checked_value_gives_the_refusal_of_the_line_reader() {
+        for line in [
+            r#"{"id":"rule_a","id":"rule_b"}"#,
+            r#"{"id":"rule_a","note":1,"note":2}"#,
+            r#"{"id":"rule_a","id":"rule_b","retired":true}"#,
+        ] {
+            let error = checked_value::<Record>(path(), 3, line.as_bytes())
+                .err()
+                .expect("the line is refused");
+            let state = UnparsableStateFile::find(error.as_ref()).unwrap();
+            assert_eq!(
+                (state.line(), state.message().to_owned()),
+                refusal::<Record>(line)
+            );
+        }
+    }
+
+    #[test]
+    fn checked_value_gives_the_text_and_the_value_of_a_line() {
+        let line = r#"{"id":"rule_a","note":{"kept":1}}"#;
+        let (text, value) = checked_value::<Record>(path(), 3, line.as_bytes()).unwrap();
+        assert_eq!(text, line);
+        assert_eq!(value, serde_json::json!({"id":"rule_a","note":{"kept":1}}));
     }
 
     #[test]
