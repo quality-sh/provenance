@@ -24,6 +24,8 @@ mod review_history_characterization;
 mod review_history_committed_text_errors;
 #[path = "../review_history_git.rs"]
 mod review_history_git;
+#[path = "../review_history_repeated_member.rs"]
+mod review_history_repeated_member;
 #[path = "../review_markers.rs"]
 mod review_markers;
 #[path = "../review_paths.rs"]
