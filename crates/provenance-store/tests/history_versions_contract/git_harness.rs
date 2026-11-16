@@ -1,12 +1,16 @@
 //! The git adapter over a Git history that holds the commits of a case.
 
 use camino::Utf8PathBuf;
-use provenance_store::review::history::contract::{Adapter, Commit, Harness};
+use provenance_store::review::history::contract::{Adapter, Commit, Entry, Harness};
 use provenance_store::review::history::GitFileVersions;
 use std::collections::BTreeMap;
 use std::io::Write;
 use std::process::Stdio;
 use std::sync::Arc;
+
+/// The text of `inner`, the one file that the harness writes in a directory
+/// entry, because Git does not keep an empty directory.
+pub const INNER_TEXT: &str = "inner\n";
 
 /// A Git repository that holds the commits, made with Git's plumbing so
 /// that each commit has exactly the parents and files of the graph. The
@@ -56,14 +60,24 @@ impl Harness for Git {
             git(root, &[], &["read-tree", base], None);
             for (path, entry) in &commit.changes {
                 let path = format!("{}{path}", self.prefix);
+                let inner = format!("{path}/inner");
+                let remove = ["update-index", "--force-remove", &path, &inner];
+                git(root, &[], &remove, None);
                 let Some(entry) = entry else {
-                    git(root, &[], &["update-index", "--force-remove", &path], None);
                     continue;
                 };
-                let input = Some(entry.bytes.as_slice());
-                let blob = git(root, &[], &["hash-object", "-w", "--stdin"], input);
-                let mode = if entry.executable { "100755" } else { "100644" };
-                let entry = format!("{mode},{blob},{path}");
+                let blob =
+                    |bytes: &[u8]| git(root, &[], &["hash-object", "-w", "--stdin"], Some(bytes));
+                let entry = match entry {
+                    Entry::File { bytes, executable } => {
+                        let mode = if *executable { "100755" } else { "100644" };
+                        format!("{mode},{},{path}", blob(bytes))
+                    }
+                    Entry::Submodule(commit) => {
+                        format!("160000,{},{path}", ids.get(commit).unwrap_or(commit))
+                    }
+                    Entry::Directory => format!("100644,{},{inner}", blob(INNER_TEXT.as_bytes())),
+                };
                 git(
                     root,
                     &[],

@@ -104,3 +104,45 @@ fn history_and_evidence_read_commits_and_the_working_copy() {
         "\"Second description.\""
     );
 }
+
+/// Flow: create and commit, put a directory at the path of the record file
+/// and commit, then put the file back with a new description and commit. The
+/// version with the directory has no record, so the history lists only the
+/// two versions with a file.
+#[test]
+#[verifies("rule_record_history_text_only_from_file", examples)]
+fn a_version_with_a_directory_at_the_path_of_the_record_file_has_no_record() {
+    let (_directory, repo) = init();
+    git(&repo, &["init", "-q"]);
+    success(&[
+        "req_history",
+        "create",
+        "--type",
+        "requirement",
+        "--repo",
+        &repo,
+        "--statement",
+        "The history statement applies.",
+    ]);
+    let created = commit(&repo);
+    let file =
+        std::path::Path::new(&repo).join(".provenance/state/scopes/default/requirements/req.jsonl");
+    let bytes = std::fs::read(&file).unwrap();
+    std::fs::remove_file(&file).unwrap();
+    std::fs::create_dir(&file).unwrap();
+    std::fs::write(file.join("inner"), "inner\n").unwrap();
+    commit(&repo);
+    std::fs::remove_dir_all(&file).unwrap();
+    std::fs::write(&file, bytes).unwrap();
+    describe(&repo, "After the directory.");
+    let described = commit(&repo);
+
+    let history = json(&["api", "requirements/req_history/history", "--repo", &repo]);
+    let ids = history["data"]["items"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|item| item["id"].as_str().unwrap().to_owned())
+        .collect::<Vec<_>>();
+    assert_eq!(ids, [created, described]);
+}

@@ -12,6 +12,8 @@ use crate::memory;
 mod edges;
 #[path = "history_versions_contract/git_harness.rs"]
 mod git_harness;
+#[path = "history_versions_contract/not_a_file.rs"]
+mod not_a_file;
 #[path = "history_versions_contract/subdirectory.rs"]
 mod subdirectory;
 #[path = "history_versions_contract/wrong.rs"]
