@@ -2,48 +2,9 @@
 //! `check --bindings`, and a second comment for the same Rule is a finding that
 //! names the Rule in a form that is true for each binding form. The comment
 //! ends above the first line that is not a comment line of its language.
-use assert_cmd::Command;
 use provenance_macros::verifies;
-use serde_json::Value;
 
-fn scan(path: &str, source: &str) -> Value {
-    let repo = tempfile::tempdir().unwrap();
-    let root = repo.path().to_str().unwrap();
-    Command::cargo_bin("provenance")
-        .unwrap()
-        .args([
-            "init",
-            "--path",
-            root,
-            "--scope",
-            "demo",
-            "--path-prefix",
-            ".",
-        ])
-        .assert()
-        .success();
-    let file = repo.path().join(path);
-    std::fs::create_dir_all(file.parent().unwrap()).unwrap();
-    std::fs::write(file, source).unwrap();
-    let output = repo.path().join("report.json");
-    Command::cargo_bin("provenance")
-        .unwrap()
-        .args([
-            "check",
-            "--bindings",
-            "--repo",
-            root,
-            "--path",
-            root,
-            "--scope",
-            "demo",
-            "--output",
-            output.to_str().unwrap(),
-        ])
-        .assert()
-        .success();
-    serde_json::from_slice(&std::fs::read(output).unwrap()).unwrap()
-}
+use crate::support::comment_sites::{item_names, named, place, places, scan};
 
 #[test]
 #[verifies("rule_prov_annot_012", examples)]
@@ -96,54 +57,6 @@ fn a_second_comment_for_one_rule_names_the_rule_in_the_finding() {
         )],
         "{report}"
     );
-}
-
-/// A site of a scan report: its line, its Rule id, its verification method
-/// and its item name. No method is an implementation site.
-type Site = (u64, String, Option<String>, Option<String>);
-
-/// The sites of a scan report, in line order.
-fn sites(report: &Value) -> Vec<Site> {
-    let text = |site: &Value, key: &str| site[key].as_str().map(str::to_owned);
-    let mut sites = ["annotations", "bindings"]
-        .iter()
-        .flat_map(|key| report[key].as_array().unwrap())
-        .map(|site| {
-            (
-                site["line"].as_u64().unwrap(),
-                text(site, "rule_id").unwrap(),
-                text(site, "verification"),
-                text(site, "function_name").or_else(|| text(site, "item_name")),
-            )
-        })
-        .collect::<Vec<_>>();
-    sites.sort();
-    sites
-}
-
-/// The Rule id and the item name of each site in a scan report, in line order.
-fn item_names(report: &Value) -> Vec<(String, Option<String>)> {
-    sites(report)
-        .into_iter()
-        .map(|(_, rule, _, name)| (rule, name))
-        .collect()
-}
-
-/// The line, the Rule id and the verification method of each site in a scan
-/// report, in line order.
-fn places(report: &Value) -> Vec<(u64, String, Option<String>)> {
-    sites(report)
-        .into_iter()
-        .map(|(line, rule, method, _)| (line, rule, method))
-        .collect()
-}
-
-fn place(line: u64, rule: &str, method: Option<&str>) -> (u64, String, Option<String>) {
-    (line, rule.to_owned(), method.map(str::to_owned))
-}
-
-fn named(rule: &str, name: &str) -> (String, Option<String>) {
-    (rule.to_owned(), Some(name.to_owned()))
 }
 
 /// The Rule id and the item name of each site in the names file `names`, in

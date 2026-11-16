@@ -7,6 +7,7 @@
 
 #[path = "../support"]
 mod support {
+    pub mod comment_sites;
     pub mod record_review;
     pub mod review_paths;
     pub mod review_row_findings;
@@ -29,6 +30,8 @@ mod cli_check_porcelain;
 mod cli_check_threads;
 #[path = "../cli_comment_binding.rs"]
 mod cli_comment_binding;
+#[path = "../cli_comment_extent.rs"]
+mod cli_comment_extent;
 #[path = "../cli_coverage.rs"]
 mod cli_coverage;
 #[path = "../cli_coverage_anchors.rs"]
