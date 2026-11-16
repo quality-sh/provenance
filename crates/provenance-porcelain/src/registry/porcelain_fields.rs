@@ -7,7 +7,7 @@ use super::{Field, FieldValue, Relation};
 pub(super) const VIEWS: &[&str] = &["record", CHILDREN, "trace", "impact", "review"];
 
 /// The view of the records below a record.
-pub(crate) const CHILDREN: &str = "children";
+pub const CHILDREN: &str = "children";
 
 /// The get fields after the target, in order.
 pub(super) const GET_FIELDS: &[Field] = &[
@@ -25,8 +25,8 @@ pub(super) const GET_FIELDS: &[Field] = &[
         .doc("The Codex thread UUID for notify."),
 ];
 
-pub(crate) const VIEW: Field = Field::text("view").values(VIEWS);
-pub(crate) const DEPTH: Field = Field::text("depth")
+pub const VIEW: Field = Field::text("view").values(VIEWS);
+pub const DEPTH: Field = Field::text("depth")
     .of(FieldValue::Count)
     .doc("The number of levels to walk. The default is 1.");
 const KIND: Field = Field::repeated("kind")
@@ -70,7 +70,7 @@ pub(super) const SEARCH_FIELDS: &[Field] = &[
         .doc("Put the Rules bound at this line first. Needs file."),
 ];
 
-pub(crate) const SEARCH_TEXT: Field = Field::text("text")
+pub const SEARCH_TEXT: Field = Field::text("text")
     .leading_hyphen()
     .doc("Text to find in record ids and text.");
 
