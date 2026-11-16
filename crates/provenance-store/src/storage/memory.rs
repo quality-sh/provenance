@@ -11,9 +11,12 @@ use super::{
     Atomicity, PublishFailure, SectionLock, StateKey, StatePersistence, StateStorage, StateView,
     StorageError, WriteSet,
 };
+use entries::Entries;
 use provenance_macros::rule;
 use std::collections::BTreeMap;
 use std::sync::{Arc, Condvar, Mutex, PoisonError};
+
+mod entries;
 
 /// Canonical state in memory. One mutex serializes every call. A set with no
 /// failing key lands whole, which satisfies a per-key set too.
@@ -25,18 +28,14 @@ pub struct MemoryStateStorage {
 
 #[derive(Debug, Default)]
 struct State {
-    entries: BTreeMap<StateKey, Vec<u8>>,
-    /// A key that fails to land, so the contract suite can see a failure
-    /// partway through a set.
-    failing: Option<StateKey>,
+    entries: Entries,
 }
 
 impl MemoryStateStorage {
     pub const fn new(entries: BTreeMap<StateKey, Vec<u8>>) -> Self {
         Self {
             state: Mutex::new(State {
-                entries,
-                failing: None,
+                entries: Entries::new(entries),
             }),
             persistence: None,
         }
@@ -51,11 +50,12 @@ impl MemoryStateStorage {
         }
     }
 
-    /// Makes every later landing of `key` fail. The failure comes before the
-    /// persistence sees the set.
+    /// Makes each later write of `key` fail in the stored keys, whichever
+    /// set makes the write. The failure comes before the persistence sees
+    /// the set.
     #[cfg(test)]
     pub(crate) fn fail_on(&self, key: StateKey) {
-        self.state().failing = Some(key);
+        self.state().entries.break_key(key);
     }
 
     /// Gives `writes` to the persistence, if there is one.
@@ -73,40 +73,37 @@ impl MemoryStateStorage {
 
 impl StateStorage for MemoryStateStorage {
     fn read_view(&self) -> Result<StateView, StorageError> {
-        Ok(StateView::new(self.state().entries.clone()))
+        Ok(StateView::new(self.state().entries.map().clone()))
     }
 
     /// A per-key set lands its keys in key order up to a failing key; a
     /// whole set lands on a copy that replaces the state only when every key
     /// landed. The persistence keeps the keys that land before any of them
     /// lands: the whole set, or the prefix of a per-key set up to a failing
-    /// key. When it refuses them, no key changes.
+    /// key. When it refuses them, no key changes. A set with no key, or a
+    /// per-key set that fails at its first key, goes to no persistence.
     #[rule("rule_memory_storage_persists_each_publish")]
     fn publish(&self, writes: WriteSet) -> Result<(), PublishFailure> {
         writes.ensure_disjoint()?;
         let mut state = self.state();
-        writes.ensure_base(&state.entries)?;
-        let failing = state.failing.clone();
+        writes.ensure_base(state.entries.map())?;
+        if writes.key_count() == 0 {
+            return Ok(());
+        }
         let mut landed = state.entries.clone();
         let mut changes: BTreeMap<&StateKey, Option<&Vec<u8>>> = BTreeMap::new();
         changes.extend(writes.deletes().iter().map(|key| (key, None)));
         changes.extend(writes.puts().iter().map(|(key, bytes)| (key, Some(bytes))));
         for (key, bytes) in changes {
-            if failing.as_ref() == Some(key) {
-                let error = crate::refusal::fault!("the key `{}` failed to land", key.as_str());
-                return Err(match writes.atomicity() {
-                    Atomicity::WholeSet => PublishFailure::Refused(error),
-                    Atomicity::PerKey => {
-                        self.persist(&prefix_before(&writes, key))?;
-                        state.entries = landed;
-                        PublishFailure::Started(error)
-                    }
-                });
+            if let Err(error) = landed.write(key, bytes) {
+                let prefix = prefix_before(&writes, key);
+                if writes.atomicity() == Atomicity::WholeSet || prefix.key_count() == 0 {
+                    return Err(PublishFailure::Refused(error));
+                }
+                self.persist(&prefix)?;
+                state.entries = landed;
+                return Err(PublishFailure::Started(error));
             }
-            match bytes {
-                Some(bytes) => landed.insert(key.clone(), bytes.clone()),
-                None => landed.remove(key),
-            };
         }
         self.persist(&writes)?;
         state.entries = landed;

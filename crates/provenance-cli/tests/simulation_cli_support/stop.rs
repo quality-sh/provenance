@@ -1,14 +1,18 @@
 //! The stop of a CLI write at a point of its publish that the test sees from
 //! outside the write process.
 //!
-//! A write publishes through a transaction directory and a publication
-//! marker. The order of these steps and the phases of the marker are in
-//! `provenance_store::storage::local::whole_set::land`. The test lists the
-//! directory of the transactions and the directory of the marker, and kills
-//! the write process when it sees the point of the stop. A kill does not let
-//! the process remove its transaction or its marker. So after the kill, the
-//! transaction, the marker, its phase and the live state tell where the stop
-//! landed.
+//! A write of two keys or more publishes through a transaction directory and
+//! a publication marker. The order of these steps and the phases of the
+//! marker are in `provenance_store::storage::local::whole_set::land`. A write
+//! of one key writes a temporary file next to the key in the state tree,
+//! syncs it, and renames it to the key (`durability::write_synced_file`). The
+//! test lists the directory of the transactions, the directory of the marker
+//! and the state tree, and kills the write process when it sees the point of
+//! the stop. A one-key write has one point: its temporary file appears. The
+//! rename comes one file sync later, so the kill can land before or after
+//! it. A kill does not let the process remove its transaction, its marker or
+//! its temporary file. So after the kill, these entries, the phase of the
+//! marker and the live state tell where the stop landed.
 
 use super::{answer, done, effect, layer, panicked, parse, refusal_kind, request, Running};
 use crate::fixture::state_entries;
@@ -31,23 +35,33 @@ pub type Entries = Result<BTreeMap<StateKey, Vec<u8>>, String>;
 /// A point of the publish where a stop kills the write process.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Point {
-    /// The transaction of the write appears.
-    Transaction,
+    /// The transaction of the write appears, or the temporary file of a
+    /// one-key write appears in the state tree.
+    First,
     /// The publication marker appears while the transaction of the write
-    /// exists.
-    Marker,
+    /// exists. A one-key write has no second point: the stop kills it at
+    /// its first point.
+    Second,
 }
 
 impl Point {
-    /// The point of a stop at `at`: an even `at` gives the transaction, an
-    /// odd `at` the marker.
+    /// The point of a stop at `at`: an even `at` gives the first point, an
+    /// odd `at` the second point.
     pub const fn of(at: u8) -> Self {
         if at.is_multiple_of(2) {
-            Self::Transaction
+            Self::First
         } else {
-            Self::Marker
+            Self::Second
         }
     }
+}
+
+/// The entry that the write made and that the test saw.
+enum Made {
+    /// The transaction of a write of two keys or more.
+    Transaction(PathBuf),
+    /// The temporary file of a one-key write, in the state tree.
+    Temporary(PathBuf),
 }
 
 /// Where a stop landed in the publish of its write.
@@ -62,13 +76,18 @@ pub enum Landing {
     /// The new state is installed: the marker says so, or the write removed
     /// its transaction and its marker.
     AfterInstall,
+    /// The temporary file of the key is there; the key did not change.
+    BeforeRename,
+    /// The key has its new bytes; the write did not answer.
+    AfterRename,
 }
 
 /// A stop that killed its write before the write gave its answer.
 pub struct Landed {
     pub landing: Landing,
-    /// The transaction of the write.
-    pub transaction: PathBuf,
+    /// The transaction of the write, or the temporary file of a one-key
+    /// write.
+    pub made: PathBuf,
     /// The state before the write started.
     pub before: Entries,
     /// A live state is there after the kill.
@@ -84,12 +103,11 @@ pub enum Stop {
     NotSent,
     /// The stop killed the write before its answer.
     Landed(Landed),
-    /// The write gave its answer before the kill.
-    Answered,
-    /// The write ended before its stop point and changed no state.
-    EndedBeforePoint,
-    /// The write changed the state, and the test did not see its stop point.
-    PointNotSeen,
+    /// The write gave its answer before the kill. `before` is the state
+    /// before the write started.
+    Answered { before: Entries },
+    /// The write ended before the test saw a point.
+    Ended { before: Entries },
     /// The write did not end in the process limit, so its case breaks L0.
     Limit,
 }
@@ -97,23 +115,25 @@ pub enum Stop {
 const BEFORE_MARKER: &str = "stops before the marker";
 const BEFORE_INSTALL: &str = "stops after the marker and before the install";
 const AFTER_INSTALL: &str = "stops after the install and before the answer";
+const BEFORE_RENAME: &str = "stops before the rename of the key";
+const AFTER_RENAME: &str = "stops after the rename of the key and before the answer";
 const NO_LIVE_STATE: &str = "stops that left no live state";
 const ANSWERED: &str = "stops after the answer";
-const ENDED: &str = "stops of a write that ended before its stop point";
-const NOT_SEEN: &str = "stops whose point the test did not see";
+const ENDED: &str = "stops of a write that ended before the test saw a point";
 const UNSENT: &str = "stops of a write that the simulation did not send";
 const NO_WRITE: &str = "stops with no waiting write of the engine";
 const LIMIT: &str = "stops of a write that did not end in its limit";
 
 /// Each row of the job summary that counts stops.
-const ROWS: [&str; 10] = [
+const ROWS: [&str; 11] = [
     BEFORE_MARKER,
     BEFORE_INSTALL,
     AFTER_INSTALL,
+    BEFORE_RENAME,
+    AFTER_RENAME,
     NO_LIVE_STATE,
     ANSWERED,
     ENDED,
-    NOT_SEEN,
     UNSENT,
     NO_WRITE,
     LIMIT,
@@ -130,10 +150,11 @@ impl Stop {
                 Landing::BeforeMarker => BEFORE_MARKER,
                 Landing::BeforeInstall => BEFORE_INSTALL,
                 Landing::AfterInstall => AFTER_INSTALL,
+                Landing::BeforeRename => BEFORE_RENAME,
+                Landing::AfterRename => AFTER_RENAME,
             },
-            Self::Answered => ANSWERED,
-            Self::EndedBeforePoint => ENDED,
-            Self::PointNotSeen => NOT_SEEN,
+            Self::Answered { .. } => ANSWERED,
+            Self::Ended { .. } => ENDED,
             Self::Limit => LIMIT,
         }
     }
@@ -173,18 +194,13 @@ pub fn run_stopped(
     let before = state_entries(root);
     let watch = Watch::new(layout);
     let mut running = Running::start(request.spawn(root));
-    let Some(transaction) = watch.reach(&mut running, Point::of(at)) else {
+    let Some(made) = watch.reach(&mut running, Point::of(at)) else {
         let output = match running.wait(&what) {
             Ok(output) => output,
             Err(text) => return (Some(done(task, Err(text), false)), Stop::Limit),
         };
         let result = answer(&output).and_then(|data| effect(task, &request, &data));
-        let stop = if state_entries(root) == before {
-            Stop::EndedBeforePoint
-        } else {
-            Stop::PointNotSeen
-        };
-        return (Some(done(task, result, false)), stop);
+        return (Some(done(task, result, false)), Stop::Ended { before });
     };
     let output = running.kill(&what);
     // A process gives its answer at its end: the data of a success on
@@ -198,11 +214,18 @@ pub fn run_stopped(
             Ok(parse(&output.stdout)["data"].clone())
         };
         let result = result.and_then(|data| effect(task, &request, &data));
-        return (Some(done(task, result, false)), Stop::Answered);
+        return (Some(done(task, result, false)), Stop::Answered { before });
     }
+    let landing = match &made {
+        Made::Transaction(transaction) => landing(layout, transaction),
+        Made::Temporary(temporary) if temporary.exists() => Landing::BeforeRename,
+        Made::Temporary(_) => Landing::AfterRename,
+    };
     let landed = Landed {
-        landing: landing(layout, &transaction),
-        transaction,
+        landing,
+        made: match made {
+            Made::Transaction(path) | Made::Temporary(path) => path,
+        },
         before,
         live_state: layout.state_dir().exists(),
     };
@@ -212,19 +235,36 @@ pub fn run_stopped(
     )
 }
 
-/// The transactions and the marker of one repository, as the test sees them
-/// while its stopped write runs. The write runs alone, so a transaction that
-/// was not there before the write started is a transaction of the write.
+/// The transactions, the marker and the temporary files of one repository,
+/// as the test sees them while its stopped write runs. The write runs alone,
+/// so a transaction or a temporary file that was not there before the write
+/// started is one of the write.
 struct Watch<'a> {
     layout: &'a ProvenanceLayout,
     /// The transactions before the write started.
     before: BTreeSet<OsString>,
+    /// The temporary files in the state tree before the write started: an
+    /// earlier stop before a rename leaves its temporary file.
+    temporary_before: BTreeSet<PathBuf>,
 }
 
 impl<'a> Watch<'a> {
     fn new(layout: &'a ProvenanceLayout) -> Self {
         let before = names(layout.import_transactions_dir().as_std_path());
-        Self { layout, before }
+        let temporary_before = temporary_files(layout.state_dir().as_std_path());
+        Self {
+            layout,
+            before,
+            temporary_before,
+        }
+    }
+
+    /// A temporary file in the state tree that was not there before the
+    /// write started.
+    fn new_temporary(&self) -> Option<PathBuf> {
+        temporary_files(self.layout.state_dir().as_std_path())
+            .into_iter()
+            .find(|path| !self.temporary_before.contains(path))
     }
 
     /// The name of a transaction that was not there before the write started.
@@ -243,25 +283,32 @@ impl<'a> Watch<'a> {
         names(directory.as_std_path()).contains(&OsString::from(name))
     }
 
-    /// Waits until the write `running` reaches `point`, and gives the path
-    /// of its transaction. Gives `None` when the write ends first or its
-    /// deadline is past. A marker counts only after the transaction of the
-    /// write appeared: each entry to the publication section recovers a
-    /// marker that an earlier stop left, before the write makes its
-    /// transaction (`LocalSectionLock::acquire_checked`).
-    fn reach(&self, running: &mut Running, point: Point) -> Option<PathBuf> {
-        let mut transaction = None;
+    /// Waits until the write `running` reaches `point`, and gives the entry
+    /// that it made. Gives `None` when the write ends first or its deadline
+    /// is past. A marker counts only after the transaction of the write
+    /// appeared: each entry to the publication section recovers a marker
+    /// that an earlier stop left, before the write makes its transaction
+    /// (`LocalSectionLock::acquire_checked`). A write that made a
+    /// transaction makes no temporary file in the state tree. A one-key
+    /// write is reached when its temporary file appears, at each point.
+    fn reach(&self, running: &mut Running, point: Point) -> Option<Made> {
+        let mut made = None;
         while running.runs() {
-            transaction = transaction.or_else(|| self.new_transaction());
-            if let Some(name) = &transaction {
-                if point == Point::Transaction || self.marker() {
-                    return Some(
-                        self.layout
-                            .import_transactions_dir()
-                            .as_std_path()
-                            .join(name),
-                    );
-                }
+            made = made.or_else(|| {
+                self.new_transaction()
+                    .map(|name| {
+                        let directory = self.layout.import_transactions_dir();
+                        Made::Transaction(directory.as_std_path().join(name))
+                    })
+                    .or_else(|| self.new_temporary().map(Made::Temporary))
+            });
+            let reached = match &made {
+                None => false,
+                Some(Made::Transaction(_)) if point == Point::Second => self.marker(),
+                Some(_) => true,
+            };
+            if reached {
+                return made;
             }
             std::thread::sleep(LOOK_INTERVAL);
         }
@@ -301,6 +348,24 @@ fn landing(layout: &ProvenanceLayout, transaction: &Path) -> Landing {
         Some("backup_created" | "published") => Landing::AfterInstall,
         _ => panic!("the marker {marker} has no phase that the test knows"),
     }
+}
+
+/// The paths of the temporary files of one-key writes below `directory`:
+/// each file whose name starts with `.tmp`, the prefix of `tempfile`.
+fn temporary_files(directory: &Path) -> BTreeSet<PathBuf> {
+    let mut found = BTreeSet::new();
+    let Ok(entries) = std::fs::read_dir(directory) else {
+        return found;
+    };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if entry.file_type().is_ok_and(|kind| kind.is_dir()) {
+            found.extend(temporary_files(&path));
+        } else if entry.file_name().to_string_lossy().starts_with(".tmp") {
+            found.insert(path);
+        }
+    }
+    found
 }
 
 /// The names in `directory`, or none when it does not exist.

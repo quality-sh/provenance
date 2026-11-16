@@ -22,7 +22,8 @@ impl LocalStateStorage {
                 "a file install lands only with a whole set"
             )));
         }
+        self.ensure_publishable(writes)?;
         let FileInstall(hook) = file;
-        self.publish_with(writes, hook)
+        self.land_whole_set(writes, hook)
     }
 }
