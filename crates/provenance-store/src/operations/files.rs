@@ -239,12 +239,13 @@ pub(crate) struct RenameInfo<'root> {
     root: std::marker::PhantomData<std::os::windows::io::BorrowedHandle<'root>>,
 }
 
-// The buffer is a vector of `usize`, so its alignment is that of `usize`.
+// The buffer is a vector of `usize`, so its alignment is that of `usize`,
+// which is the alignment of `FILE_RENAME_INFO`: the structure holds a handle.
 #[cfg(windows)]
 const _: () = {
     use std::mem::align_of;
     use windows_sys::Win32::Storage::FileSystem::FILE_RENAME_INFO;
-    assert!(align_of::<FILE_RENAME_INFO>() <= align_of::<usize>());
+    assert!(align_of::<FILE_RENAME_INFO>() == align_of::<usize>());
 };
 
 #[cfg(windows)]
@@ -269,36 +270,45 @@ impl<'root> RenameInfo<'root> {
             .len()
             .checked_mul(size_of::<u16>())
             .ok_or(std::io::ErrorKind::InvalidInput)?;
-        let buffer_size = offset_of!(FILE_RENAME_INFO, FileName)
+        // The fields before `FileName`, the name, and a `u16` of zero.
+        let with_name = offset_of!(FILE_RENAME_INFO, FileName)
             .checked_add(name_bytes)
             .and_then(|size| size.checked_add(size_of::<u16>()))
             .ok_or(std::io::ErrorKind::InvalidInput)?;
+        // A short name ends before the end of the structure as Rust declares
+        // it, and the buffer holds the whole structure also then.
+        let buffer_size = with_name.max(size_of::<FILE_RENAME_INFO>());
         let name_length =
             u32::try_from(name_bytes).map_err(|_| std::io::ErrorKind::InvalidInput)?;
         let size = u32::try_from(buffer_size).map_err(|_| std::io::ErrorKind::InvalidInput)?;
         let mut storage = vec![0_usize; buffer_size.div_ceil(size_of::<usize>())];
         let info = storage.as_mut_ptr().cast::<FILE_RENAME_INFO>();
         let root_directory = root.map_or(0, |handle| handle.as_raw_handle() as HANDLE);
-        // SAFETY: Size: `storage` has at least `buffer_size` bytes, the offset
-        // of `FileName`, the name, and one `u16` more. Alignment: `storage`
-        // has the alignment of `usize`, and the assert above this impl shows
-        // that it is enough for `FILE_RENAME_INFO`. Terminator: `vec!` fills
-        // `storage` with zeros, and the copy writes only `name.len()` units
-        // from the offset of `FileName`, so the last `u16` stays zero.
-        // Handle: `root` borrows the handle for `'root`, and `Self` keeps
-        // that borrow, so the handle stays open while the buffer exists.
+        // SAFETY: `info` points to the start of `storage`, which has at least
+        // `buffer_size` bytes and the alignment of `FILE_RENAME_INFO` (the
+        // assert above this impl). The line above each write shows that the
+        // write stays in `storage` and is aligned. `root` borrows the handle
+        // for `'root`, and `Self` keeps that borrow, so the handle in the
+        // structure stays open while the buffer exists.
         unsafe {
+            // The structure has `size_of::<FILE_RENAME_INFO>()` bytes, which
+            // is at most `buffer_size`, at the start of `storage`.
             info.write(FILE_RENAME_INFO {
                 Anonymous: FILE_RENAME_INFO_0 { Flags: flags },
                 RootDirectory: root_directory,
                 FileNameLength: name_length,
                 FileName: [0],
             });
-            std::ptr::copy_nonoverlapping(
-                name.as_ptr(),
-                std::ptr::addr_of_mut!((*info).FileName).cast::<u16>(),
-                name.len(),
-            );
+            // `FileName` is a field of the structure, so its offset is in
+            // `storage` and a multiple of the alignment of `u16`. The name has
+            // `name.len()` units from that offset, which end one unit before
+            // `with_name`, which is at most `buffer_size`. The name is in a
+            // different allocation, so the two do not overlap.
+            let file_name = std::ptr::addr_of_mut!((*info).FileName).cast::<u16>();
+            std::ptr::copy_nonoverlapping(name.as_ptr(), file_name, name.len());
+            // The unit after the name ends at `with_name`, which is at most
+            // `buffer_size`.
+            file_name.add(name.len()).write(0);
         }
         Ok(Self {
             storage,

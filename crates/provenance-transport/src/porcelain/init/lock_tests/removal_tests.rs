@@ -185,6 +185,48 @@ fn an_edit_after_the_compare_of_the_removal_is_removed() {
     assert_eq!(temporary_files(&repo), Vec::<String>::new());
 }
 
+/// The folder sync fails after the remove of the legacy skill file: init
+/// says that the file was removed and that its folder was not synced, and
+/// the rollback restores the file. A probe takes the read permission from
+/// the folder after the compare, so that the remove works and the open of
+/// the folder for its sync fails, and gives the permission back after the
+/// remove.
+#[cfg(unix)]
+#[test]
+#[verifies("rule_init_apply_rolls_back_owned_changes", examples)]
+fn a_failed_folder_sync_after_the_remove_restores_the_file() {
+    use std::os::unix::fs::PermissionsExt;
+    let (_directory, repo) = repository_with_legacy_skill();
+    let legacy = legacy_path(&repo);
+    let folder = legacy_folder_path(&repo);
+
+    let (closed, opened) = (folder.clone(), folder.clone());
+    let error = init_through_the_port(init_input(&repo, &["reviewer"]), move || {
+        let closed = closed.clone();
+        crate::test_probes::arm("project_file_removal_compared", move || {
+            std::fs::set_permissions(&closed, std::fs::Permissions::from_mode(0o300)).unwrap();
+        });
+        let opened = opened.clone();
+        crate::test_probes::arm("project_file_removed", move || {
+            std::fs::set_permissions(&opened, std::fs::Permissions::from_mode(0o755)).unwrap();
+        });
+    })
+    .unwrap_err();
+
+    assert_eq!(
+        format!("{error:#}"),
+        format!(
+            "{} was removed, but its folder was not synced: sync {}: {}",
+            legacy.as_std_path().display(),
+            folder.as_std_path().display(),
+            std::io::Error::from_raw_os_error(13)
+        )
+    );
+    assert_eq!(std::fs::read_to_string(&legacy).unwrap(), legacy_skill());
+    assert_eq!(legacy_folder(&repo), ["SKILL.md", "notes.md"]);
+    assert_eq!(temporary_files(&repo), Vec::<String>::new());
+}
+
 /// On Windows, init removes a read-only legacy skill file.
 /// This test has no Rule binding: it checks a platform behaviour of the
 /// removal.

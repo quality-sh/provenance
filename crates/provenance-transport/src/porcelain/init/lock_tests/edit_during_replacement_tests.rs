@@ -48,7 +48,7 @@ fn an_edit_before_the_compare_is_refused_and_kept() {
         )
     );
     assert_eq!(std::fs::read_to_string(&agents).unwrap(), EDIT);
-    assert_eq!(reviewers(&repo), ["reviewer"]);
+    assert_eq!(reviewers(&repo).unwrap(), ["reviewer"]);
     assert_eq!(temporary_files(&repo), Vec::<String>::new());
 }
 
@@ -69,7 +69,7 @@ fn an_edit_after_the_compare_is_replaced() {
     assert!(agents.starts_with(PERSON_AGENTS), "{agents}");
     assert!(!agents.contains("An edit while init runs"), "{agents}");
     assert!(agents.contains("## Provenance"), "{agents}");
-    assert_eq!(reviewers(&repo), ["new-reviewer"]);
+    assert_eq!(reviewers(&repo).unwrap(), ["new-reviewer"]);
     assert_eq!(temporary_files(&repo), Vec::<String>::new());
 }
 
@@ -92,7 +92,7 @@ fn an_edit_before_the_write_starts_is_refused_and_kept() {
         )
     );
     assert_eq!(std::fs::read_to_string(&agents).unwrap(), EDIT);
-    assert_eq!(reviewers(&repo), ["reviewer"]);
+    assert_eq!(reviewers(&repo).unwrap(), ["reviewer"]);
     assert_eq!(temporary_files(&repo), Vec::<String>::new());
 }
 
@@ -120,7 +120,7 @@ fn a_read_only_agents_file_is_replaced_and_stays_read_only() {
     let text = std::fs::read_to_string(&agents).unwrap();
     assert!(text.starts_with(PERSON_AGENTS), "{text}");
     assert!(text.contains("## Provenance"), "{text}");
-    assert_eq!(reviewers(&repo), ["new-reviewer"]);
+    assert_eq!(reviewers(&repo).unwrap(), ["new-reviewer"]);
     assert_eq!(temporary_files(&repo), Vec::<String>::new());
 }
 
@@ -172,6 +172,6 @@ fn a_handle_that_refuses_delete_sharing_refuses_the_replacement() {
     );
     assert!(report.contains("os error"), "{report}");
     assert_eq!(std::fs::read_to_string(&agents).unwrap(), PERSON_AGENTS);
-    assert_eq!(reviewers(&repo), ["reviewer"]);
+    assert_eq!(reviewers(&repo).unwrap(), ["reviewer"]);
     assert_eq!(temporary_files(&repo), Vec::<String>::new());
 }

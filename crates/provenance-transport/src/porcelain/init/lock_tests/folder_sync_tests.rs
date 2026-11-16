@@ -54,7 +54,7 @@ fn assert_restored(repo: &Utf8Path) {
         std::fs::read_to_string(repo.join("AGENTS.md")).unwrap(),
         PERSON_AGENTS
     );
-    assert_eq!(reviewers(repo), ["reviewer"]);
+    assert_eq!(reviewers(repo).unwrap(), ["reviewer"]);
     assert_eq!(temporary_files(repo), Vec::<String>::new());
 }
 

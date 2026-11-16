@@ -13,6 +13,9 @@ pub use checked::{remove_synced_file_checked, write_synced_file_checked};
 pub struct ReplaceFailed(#[source] std::io::Error);
 
 /// A failure after the file at the path changed: a sync of its directory.
+/// [`write_synced_file`] and [`remove_synced_file`] give it in the chain of
+/// their error. [`write_synced_file_checked`] and
+/// [`remove_synced_file_checked`] give it in their inner result.
 #[derive(Debug, thiserror::Error)]
 #[error(transparent)]
 pub struct ChangedUnsynced(pub anyhow::Error);
@@ -82,26 +85,19 @@ fn sync_directories(parent: &Path, first_made: Option<&Path>) -> anyhow::Result<
     Ok(())
 }
 
-/// Removes the file at `path` and then syncs its directory.
+/// Removes the file at `path` and then syncs its directory, as
+/// [`remove_synced_file_checked`] does with no check.
 ///
-/// On Unix, after the call returns, a power loss cannot bring the file back. On Windows, a
-/// power loss can bring the file back. A file that does not exist is a
-/// success with no sync. A failed remove gives `remove <path>` and the I/O
-/// error, and a failed sync gives `sync <path>` and the I/O error. If the
-/// sync fails, the file is removed, but a power loss can bring it back: the
-/// error is a [`ChangedUnsynced`].
+/// On Unix, after the call returns, a power loss cannot bring the file back.
+/// On Windows, a power loss can bring the file back. A file that does not
+/// exist is a success with no sync. A failed remove gives `remove <path>` and
+/// the I/O error, and a failed sync gives `sync <path>` and the I/O error. If
+/// the sync fails, the file is removed, but a power loss can bring it back:
+/// the error is a [`ChangedUnsynced`].
 ///
 /// True when it removed a file.
 pub fn remove_synced_file(path: &Utf8Path) -> anyhow::Result<bool> {
-    let parent = parent_of(path.as_std_path())?;
-    match std::fs::remove_file(crate::long_path::extended(path)?) {
-        Ok(()) => {
-            sync_parent(parent).map_err(ChangedUnsynced)?;
-            Ok(true)
-        }
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(false),
-        Err(error) => Err(crate::refusal::caused(error, format!("remove {path}"))),
-    }
+    remove_synced_file_checked(path.as_std_path(), || Ok(()))?.map_err(anyhow::Error::from)
 }
 
 /// Writes `bytes` to the file at `path` in a staged tree, with a temporary

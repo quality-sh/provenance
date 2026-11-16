@@ -4,10 +4,9 @@
 //! The probes of the store are active only in the unit tests of the store, so
 //! no stop comes in the manifest publish. The stops come at the replacements
 //! of the project files only.
-use super::{init_input, init_through_the_port};
+use super::{init_input, init_through_the_port, reviewers};
 use camino::{Utf8Path, Utf8PathBuf};
 use provenance_store::layout::ProvenanceLayout;
-use provenance_store::repository::Repository;
 
 const ROOT: &str = "PROVENANCE_STOPPED_INIT_ROOT";
 const STOP_AT: &str = "PROVENANCE_STOPPED_INIT_REPLACEMENT";
@@ -74,11 +73,6 @@ fn stop_second_init(repo: &Utf8Path, stop_at: usize) -> bool {
     }
 }
 
-fn reviewers(repo: &Utf8Path) -> anyhow::Result<Vec<String>> {
-    let manifest = Repository::open(repo, "default")?.manifest()?;
-    Ok(manifest.disposition_actor_ids)
-}
-
 /// A second init changes the reviewer list from "reviewer" to
 /// "new-reviewer". The process stops at each replacement of a project file of
 /// that init in turn. Each replacement comes before the manifest publish, so
@@ -130,8 +124,9 @@ fn a_stop_at_each_file_replacement_of_a_second_init_leaves_the_old_manifest() {
 /// A first init in a new directory writes the manifest last, so a stop after
 /// the project files and before the manifest leaves the project files and no
 /// `.provenance` folder. The test makes that state: it removes `.provenance`
-/// after a first init with no dictionary import. The next command says that the graph is not initialized, and the
-/// next init writes the manifest and keeps the project files.
+/// after a first init with no dictionary import. The next command says that
+/// the graph is not initialized, and the next init writes the manifest and
+/// keeps the project files.
 #[test]
 fn a_first_init_that_stops_before_the_manifest_leaves_a_repository_that_init_completes() {
     let directory = tempfile::tempdir().unwrap();

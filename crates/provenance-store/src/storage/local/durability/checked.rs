@@ -31,14 +31,14 @@ const SUFFIX: &str = ".tmp";
 /// file gets the permissions that `std::fs::File::create` gives. On Windows,
 /// the rename also replaces a read-only file.
 ///
-/// An error tells that `path` keeps its old bytes. When `check` fails, the
-/// temporary file is deleted and the call gives the error of `check`. After
-/// `check` returns, the call does no step on `path` before the rename. A
-/// failed rename gives the I/O error and deletes the temporary file. After
-/// the rename, the call gives the permissions of the new file. If a
-/// directory sync fails, the inner error gives them with the
-/// [`ChangedUnsynced`]: `path` has the new bytes, but a power loss can lose
-/// them.
+/// An error tells that `path` keeps its old bytes, and a step text names
+/// each file in the form of `path`. When `check` fails, the temporary file
+/// is deleted and the call gives the error of `check`. After `check`
+/// returns, the call does no step on `path` before the rename. A failed
+/// rename gives the I/O error and deletes the temporary file. After the
+/// rename, the call gives the permissions of the new file. If a directory
+/// sync fails, the inner error gives them with the [`ChangedUnsynced`]:
+/// `path` has the new bytes, but a power loss can lose them.
 pub fn write_synced_file_checked(
     path: &Path,
     bytes: &[u8],
@@ -60,19 +60,18 @@ pub fn write_synced_file_checked(
     let (temporary, parent, first_made) = write_temporary(path, bytes, &builder)?;
     let target = crate::long_path::extended(path)?;
     let (file, temporary) = keep(temporary)?;
+    let shown = parent.join(temporary.file_name().unwrap_or_default());
     let prepared = (|| -> anyhow::Result<std::fs::Permissions> {
         if let Some(permissions) = permissions {
             file.set_permissions(permissions.clone()).map_err(|error| {
-                let step = format!("set the permissions of {}", temporary.display());
+                let step = format!("set the permissions of {}", shown.display());
                 crate::refusal::caused(error, step)
             })?;
         }
         file.sync_all().map_err(sync_failure(path))?;
         let permissions = file
             .metadata()
-            .map_err(|error| {
-                crate::refusal::caused(error, format!("read {}", temporary.display()))
-            })?
+            .map_err(|error| crate::refusal::caused(error, format!("read {}", shown.display())))?
             .permissions();
         check()?;
         Ok(permissions)
@@ -102,19 +101,20 @@ pub fn write_synced_file_checked(
 /// A file that does not exist is a success with no sync. An error tells
 /// that `path` is as it was before the call: the error of `check`, or
 /// `remove <path>` and the I/O error. After the remove, the call gives
-/// `Ok`. If the directory sync fails, the inner error is the
-/// [`ChangedUnsynced`]: the file is removed, but a power loss can bring it
-/// back. On Windows, a power loss can bring the file back.
+/// `Ok(true)`, and for a file that does not exist `Ok(false)`. If the
+/// directory sync fails, the inner error is the [`ChangedUnsynced`]: the
+/// file is removed, but a power loss can bring it back. On Windows, a power
+/// loss can bring the file back.
 pub fn remove_synced_file_checked(
     path: &Path,
     check: impl FnOnce() -> anyhow::Result<()>,
-) -> anyhow::Result<Result<(), ChangedUnsynced>> {
+) -> anyhow::Result<Result<bool, ChangedUnsynced>> {
     let parent = parent_of(path)?;
     let target = crate::long_path::extended(path)?;
     check()?;
     match std::fs::remove_file(target) {
-        Ok(()) => Ok(unsynced(sync_parent(parent))),
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(Ok(())),
+        Ok(()) => Ok(unsynced(sync_parent(parent)).map(|()| true)),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(Ok(false)),
         Err(error) => Err(crate::refusal::caused(
             error,
             format!("remove {}", path.display()),
@@ -161,7 +161,7 @@ fn remove_stopped_temporaries(path: &Path, prefix: &str) -> anyhow::Result<()> {
             Ok(()) => {}
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
             Err(error) => {
-                let file = entry.path();
+                let file = directory.join(entry.file_name());
                 return Err(crate::refusal::caused(
                     error,
                     format!("remove {}", file.display()),

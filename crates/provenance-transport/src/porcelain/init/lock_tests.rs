@@ -276,12 +276,9 @@ fn repository_with_changed_agents() -> (tempfile::TempDir, Utf8PathBuf) {
 }
 
 /// The reviewers in the manifest of the scope `default` of `repo`.
-fn reviewers(repo: &Utf8Path) -> Vec<String> {
-    Repository::open(repo, "default")
-        .unwrap()
-        .manifest()
-        .unwrap()
-        .disposition_actor_ids
+fn reviewers(repo: &Utf8Path) -> anyhow::Result<Vec<String>> {
+    let manifest = Repository::open(repo, "default")?.manifest()?;
+    Ok(manifest.disposition_actor_ids)
 }
 
 /// The paths of `repo` with `.provenance-` in the name: the temporary files

@@ -165,7 +165,7 @@ fn remove_if_owned(
         Ok(())
     })?;
     crate::test_probes::at("project_file_removed");
-    Ok(removed)
+    Ok(removed.map(|_removed| ()))
 }
 
 /// Replaces the file at `path`, which init planned from `expected`, with
