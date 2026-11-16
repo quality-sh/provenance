@@ -37,10 +37,22 @@ dependencies, such as `npm ci --omit=dev`, loads the application. The comment
 does not move with its function the way a compiled symbol does, so keep the two
 together when you move code.
 
-The scanner reads the marker only on a comment line: after leading whitespace,
-the line starts with `//`, `/*`, or `*` (or `#` in Python), or the line is
-inside an open block comment. A marker after code on the same line does not
-bind. The comment binds the Rule whatever item comes below it.
+The scanner reads the marker only on a line that starts a comment or that
+starts in an open block comment. A comment starts with `//` or `/*` in Rust,
+JavaScript, TypeScript, Java, and Go, and with `#` in Python, after leading
+whitespace. Python has no block comment. A marker after code on the same line
+does not bind. The comment binds the Rule whatever item comes below it.
+
+The comment continues on each line below it that starts with `//` (`#` in
+Python) or that starts in an open block comment, and it ends at a line where
+code follows the close of a block comment. Each other line ends the comment.
+So a JavaScript generator method `*items()`, a Rust line `*x += 1;`, a Python
+line `*args,`, and a `/*` line below a `//` comment each end the comment, and
+a ` * text` line in an open `/** ... */` block continues it. A binding below
+the end of the comment is a site of its own with its own line.
+A block comment that code follows on the same line, such as
+`/* @provenance rule: rule_overtime */ function pays() {}`, ends at its close,
+and the declaration after the close on that line gives the item name.
 
 The item name of the comment is the name of the declaration that starts
 directly below it. Comments, empty lines, attributes, decorators, and
@@ -170,11 +182,6 @@ tokens as a statement:
   binding, such as a TypeScript `@Injectable({` or a Python `@decorator(`
   whose arguments span lines with a binding comment in them: the binding
   inside the arguments starts no statement, so both bindings have no name.
-
-A marker in a block comment that code follows on the same line, such as
-`/* @provenance rule: rule_overtime */ function pays() {}`, does not bind
-correctly: the scanner takes the rest of the line into the Rule id. Put the
-comment on its own line.
 
 A Rust `#[rule]` or `#[verifies]` attribute and a Python `@rule` decorator take
 their item name by the same rules. A call does not:
