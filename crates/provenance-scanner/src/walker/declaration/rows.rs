@@ -67,9 +67,9 @@ const RUST: Grammar = Grammar {
     reserved: &[
         "as", "async", "await", "break", "const", "continue", "crate", "dyn", "else", "enum",
         "extern", "false", "fn", "for", "if", "impl", "in", "let", "loop", "match", "mod", "move",
-        "mut", "pub", "ref", "return", "self", "Self", "static", "struct", "super", "trait", "true",
-        "type", "unsafe", "use", "where", "while", "abstract", "become", "box", "do", "final",
-        "macro", "override", "priv", "try", "typeof", "unsized", "virtual", "yield",
+        "mut", "pub", "ref", "return", "self", "Self", "static", "struct", "super", "trait",
+        "true", "type", "unsafe", "use", "where", "while", "abstract", "become", "box", "do",
+        "final", "macro", "override", "priv", "try", "typeof", "unsized", "virtual", "yield",
     ],
 };
 

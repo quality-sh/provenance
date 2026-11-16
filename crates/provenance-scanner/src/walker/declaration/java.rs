@@ -106,7 +106,9 @@ fn member(tokens: Tokens<'_, '_>, start: usize, field: bool) -> Option<String> {
         "(" => {
             let after = skip_group(tokens, first + 1, "(", ")");
             let body = matches!(tokens.get(after)?, "{" | "throws");
-            return body.then(|| JAVA.name(tokens, first, &[Token("(")])).flatten();
+            return body
+                .then(|| JAVA.name(tokens, first, &[Token("(")]))
+                .flatten();
         }
         "{" => return JAVA.name(tokens, first, &[Token("{")]),
         _ => {}

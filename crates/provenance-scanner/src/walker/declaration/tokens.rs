@@ -81,8 +81,7 @@ fn push_words<'a>(language: Language, code: &'a str, line: usize, tokens: &mut V
             if raw && is_raw_prefix(&code[end..]) {
                 characters.next();
             }
-            while let Some((index, next)) =
-                characters.next_if(|(_, next)| is_word(language, *next))
+            while let Some((index, next)) = characters.next_if(|(_, next)| is_word(language, *next))
             {
                 end = index + next.len_utf8();
             }

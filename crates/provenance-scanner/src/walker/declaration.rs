@@ -78,7 +78,9 @@ impl<'a> Tokens<'_, 'a> {
     /// that does not start with a digit. A Rust raw identifier `r#match` is
     /// one word.
     fn is_word(self, token: &str) -> bool {
-        let raw = token.strip_prefix("r#").filter(|_| self.language == Language::Rust);
+        let raw = token
+            .strip_prefix("r#")
+            .filter(|_| self.language == Language::Rust);
         raw.unwrap_or(token)
             .chars()
             .next()
@@ -129,7 +131,9 @@ impl Grammar {
             Follower::Token(text) => *text == after,
             Follower::Word => tokens.is_word(after),
         });
-        let raw = token.strip_prefix("r#").filter(|_| tokens.language == Language::Rust);
+        let raw = token
+            .strip_prefix("r#")
+            .filter(|_| tokens.language == Language::Rust);
         let reserved = raw.is_none() && self.reserved.contains(&token);
         (follows && tokens.is_word(token) && !reserved).then(|| raw.unwrap_or(token).to_owned())
     }

@@ -182,9 +182,8 @@ const fn group(open: char, close: char) -> Attribute {
 /// type argument list, or be an operator, so after it a statement starts
 /// only when a word of `DECLARATION_KEYWORDS` starts the line below.
 fn line_break_ends_statement(before_last: Option<&str>, last: &str, below: Option<&str>) -> bool {
-    let continues = below.is_some_and(|below| {
-        CONTINUES_EXPRESSION.contains(&below) || below.starts_with('`')
-    });
+    let continues =
+        below.is_some_and(|below| CONTINUES_EXPRESSION.contains(&below) || below.starts_with('`'));
     match last {
         ">" if before_last != Some("=") => {
             below.is_some_and(|below| DECLARATION_KEYWORDS.contains(&below))

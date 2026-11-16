@@ -150,13 +150,7 @@ const SCRIPT: Grammar = Grammar {
 
 /// The followers of the name of a variable: a value, a type, `!` before a
 /// type, `,` before the next variable, or `;`.
-const VARIABLE: &[Follower] = &[
-    Token("="),
-    Token(":"),
-    Token("!"),
-    Token(","),
-    Token(";"),
-];
+const VARIABLE: &[Follower] = &[Token("="), Token(":"), Token("!"), Token(","), Token(";")];
 
 pub(super) fn script(tokens: Tokens<'_, '_>) -> Option<String> {
     let mut index = 0;
