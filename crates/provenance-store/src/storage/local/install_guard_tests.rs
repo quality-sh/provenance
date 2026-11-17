@@ -95,7 +95,7 @@ fn link_directory(target: &std::path::Path, link: &camino::Utf8Path) {
 fn the_recovery_writes_nothing_through_a_linked_state_directory() {
     let (_temp, layout) = live();
     let outside = tempfile::tempdir().unwrap();
-    let rules = layout.state_dir().join("scopes/default/rules");
+    let rules = key_path(&layout.state_dir(), "scopes/default/rules");
     std::fs::remove_dir_all(&rules).unwrap();
     link_directory(outside.path(), &rules);
     stopped_write(&layout, &[RULES], &[RULES], &[]);
@@ -115,7 +115,7 @@ fn the_recovery_writes_nothing_through_a_linked_state_directory() {
 fn a_whole_set_below_a_linked_state_directory_is_refused_before_its_marker() {
     let (_temp, layout) = live();
     let outside = tempfile::tempdir().unwrap();
-    let rules = layout.state_dir().join("scopes/default/rules");
+    let rules = key_path(&layout.state_dir(), "scopes/default/rules");
     std::fs::remove_dir_all(&rules).unwrap();
     link_directory(outside.path(), &rules);
     let writes = WriteSet::new(Atomicity::WholeSet)
@@ -147,7 +147,7 @@ fn a_whole_set_below_a_linked_state_directory_is_refused_before_its_marker() {
 fn a_whole_set_refuses_a_link_elsewhere_in_the_state_directory() {
     let (_temp, layout) = live();
     let outside = tempfile::tempdir().unwrap();
-    let notes = layout.state_dir().join("scopes/default/notes");
+    let notes = key_path(&layout.state_dir(), "scopes/default/notes");
     link_directory(outside.path(), &notes);
     let writes =
         WriteSet::new(Atomicity::WholeSet).put(StateKey::new(QUESTIONS).unwrap(), b"new".to_vec());
