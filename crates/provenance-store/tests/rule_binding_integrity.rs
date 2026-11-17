@@ -1,12 +1,12 @@
-//! Workspace-wide rule-binding integrity after the store relocation (V10).
+//! Workspace-wide Rule binding integrity.
 //!
-//! The CLI SDK operations moved into provenance-store; every #[rule] id
-//! that moved must still have a binding site the scanner discovers.
+//! Each listed Rule id has an implementation binding site that the scanner
+//! finds in the workspace.
 
 use provenance_scanner::{source_sites, SourceSiteRole};
 
 #[test]
-fn moved_rule_ids_keep_discovered_binding_sites() {
+fn listed_rule_ids_have_discovered_binding_sites() {
     let workspace = camino::Utf8PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("../..")
         .canonicalize_utf8()
