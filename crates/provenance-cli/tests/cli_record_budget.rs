@@ -95,7 +95,10 @@ fn a_rule_at_the_budget_lands_and_reads_back_and_one_byte_more_is_refused() {
     assert_eq!(over, too_large("rule_edge", BUDGET + 1));
     assert_eq!(unchanged, before);
     assert_eq!(get["record"]["value"]["description"], description.as_str());
-    assert_eq!(trace["record"]["value"]["description"], description.as_str());
+    assert_eq!(
+        trace["record"]["value"]["description"],
+        description.as_str()
+    );
     let found: Vec<&Value> = search["nodes"]
         .as_array()
         .unwrap()
