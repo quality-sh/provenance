@@ -64,7 +64,7 @@ fn thread(id: &str, source: &str) -> String {
 fn sequential_message(created_at: u64, thread_id: &str) -> String {
     json!({
         "scope_id":"default", "id":format!("msg_{created_at:06}"),
-        "thread_id":thread_id, "role":"user", "body":"An earlier note.",
+        "thread_id":thread_id, "role":"user", "actor":"agent", "body":"An earlier note.",
         "created_at":created_at
     })
     .to_string()

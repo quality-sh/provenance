@@ -132,8 +132,8 @@ async fn seed(store: &TestStore) {
         .await
         .unwrap();
         sqlx::query(
-            "INSERT INTO messages (scope_id, id, thread_id, role, body, created_at, payload) \
-             VALUES ('default', ?, ?, 'user', ?, ?, '{}')",
+            "INSERT INTO messages (scope_id, id, thread_id, role, actor, body, created_at, payload) \
+             VALUES ('default', ?, ?, 'user', 'agent', ?, ?, '{}')",
         )
         .bind(&message)
         .bind(&thread)

@@ -90,6 +90,7 @@ fn post(scope: &ScopeId, parent: &ThreadParent) -> PostMessageInput {
         scope_id: scope.clone(),
         parent: parent.clone(),
         role: MessageRole::User,
+        actor: "agent".into(),
         body: "small".into(),
     }
 }

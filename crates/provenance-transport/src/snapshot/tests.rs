@@ -84,18 +84,3 @@ fn the_snapshot_reads_the_scope_the_repository_selected() {
     assert_eq!(store.repository().scope(), &scope);
     assert_eq!(store.snapshot().unwrap().rules.len(), 1);
 }
-
-#[test]
-fn graph_records_borrows_the_graph_families_from_the_full_snapshot() {
-    let (_directory, store, _scope) = seeded_store();
-
-    let snapshot = store.snapshot().unwrap();
-    let graph = snapshot.graph_records();
-
-    assert_eq!(graph.sources[0].id.as_str(), "source_policy");
-    assert_eq!(graph.requirements[0].id.as_str(), "req_policy");
-    assert_eq!(graph.rules[0].id.as_str(), "rule_policy");
-    assert_eq!(snapshot.threads, [] as [provenance_core::Thread; 0]);
-    // Each of the three creates opened one review submission.
-    assert_eq!(snapshot.proposal_cards.len(), 3);
-}

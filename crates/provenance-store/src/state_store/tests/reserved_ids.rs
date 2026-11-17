@@ -102,6 +102,7 @@ fn a_keyword_id_from_another_record_kind_is_not_preserved() {
         id: StableId::new("search").unwrap(),
         thread_id: StableId::new("thread_old").unwrap(),
         role: MessageRole::User,
+        actor: "agent".into(),
         body: "Existing message".into(),
         created_at: 1,
     };
@@ -136,6 +137,7 @@ fn an_existing_keyword_message_id_survives_a_scope_import() {
         id: StableId::new("search").unwrap(),
         thread_id: StableId::new("thread_old").unwrap(),
         role: MessageRole::User,
+        actor: "agent".into(),
         body: "Existing message".into(),
         created_at: 1,
     };

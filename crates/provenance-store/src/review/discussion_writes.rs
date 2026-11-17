@@ -1,4 +1,5 @@
 use super::{DiscussionAction, WriteDiscussion};
+use crate::state_store::MessageWrite;
 use crate::{
     canonical_digest,
     review::publication::with_record_state,
@@ -141,6 +142,7 @@ impl StateStore {
                     scope_id: scope.clone(),
                     parent: input.parent.clone(),
                     role,
+                    actor: input.actor.clone(),
                     body,
                 })?;
                 (
@@ -158,8 +160,12 @@ impl StateStore {
                     .unwrap();
                 match action {
                     DiscussionAction::Reply { role, body, .. } => {
-                        let message =
-                            self.append_discussion_message(scope, &thread.id, role, body)?;
+                        let write = MessageWrite {
+                            role,
+                            actor: input.actor.clone(),
+                            body,
+                        };
+                        let message = self.append_discussion_message(scope, &thread.id, write)?;
                         (thread, Some(message), DiscussionStatus::Active)
                     }
                     DiscussionAction::SetStatus { status, .. } => (thread, None, status),

@@ -75,6 +75,44 @@ fn replies_and_new_discussions_on_two_branches_merge_and_load() {
 }
 
 #[test]
+#[verifies("rule_message_records_its_actor", examples)]
+fn a_merge_of_two_branches_that_each_add_a_reply_keeps_each_actor() {
+    let dir = repository();
+    let repo = dir.path();
+    let x = discuss(repo, "first");
+    let y = discuss(repo, "second");
+    commit(repo, "base");
+    git_ok(repo, &["checkout", "-b", "theirs"]);
+    let theirs = &[y.as_str(), "reply", "--expected-version", "1"];
+    json(
+        repo,
+        &[theirs.as_slice(), &["--actor", "agent-b", "--body", "b"]].concat(),
+    );
+    commit(repo, "theirs");
+    git_ok(repo, &["checkout", "main"]);
+    let ours = &[x.as_str(), "reply", "--expected-version", "1"];
+    json(
+        repo,
+        &[ours.as_slice(), &["--actor", "agent-a", "--body", "a"]].concat(),
+    );
+    commit(repo, "ours");
+    git_ok(repo, &["merge", "theirs", "-m", "merge"]);
+    for (id, actor) in [(&x, "agent-a"), (&y, "agent-b")] {
+        let read = json(repo, &[id, "discussion"]);
+        let actors = read["result"]["messages"]["entries"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|message| message["actor"].clone())
+            .collect::<Vec<_>>();
+        assert_eq!(
+            actors,
+            [serde_json::json!("authoring"), serde_json::json!(actor)]
+        );
+    }
+}
+
+#[test]
 #[verifies("rule_message_id_is_random", examples)]
 #[verifies("rule_discussion_merge_keys_discussion_id", examples)]
 fn two_first_discussions_share_the_identical_thread_after_merge() {

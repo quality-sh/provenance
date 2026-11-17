@@ -1,13 +1,13 @@
 //! The work bound of a page. A statement past it stops with the page
-//! budget refusal, at the same count as before the bound went through the
-//! port, on the file and on another transaction type over the file. The
-//! page mapping also gives the page budget refusal for an `OverBudget`
-//! whose cause is not an error of the file.
+//! budget refusal, at the same count on the file and on another transaction
+//! type over the file. The page mapping also gives the page budget refusal
+//! for an `OverBudget` whose cause is not an error of the file. A search page
+//! that reads past the work bound gives the page budget refusal.
 //!
-//! No Rule: this is an implementation aid. The count is a characterization
-//! of the bundled `SQLite` engine, recorded before the bound moved onto the
-//! port, and the test reads private surfaces. The Rule's examples are the
-//! page operation tests in `page_interrupt.rs`.
+//! The count test and the mapping test have no Rule: they are
+//! implementation aids. The count is a characterization of the bundled
+//! `SQLite` engine, and the tests read private surfaces. The Rule's other
+//! examples are the page operation tests in `page_interrupt.rs`.
 
 use super::comparison::test_stores::TestStore;
 use crate::cache::{catch_up_state, open_cache};
@@ -19,10 +19,11 @@ use crate::read_database::{
 };
 use provenance_core::protocol::read_failure::ReadFailure;
 use provenance_core::Requirement;
+use provenance_macros::verifies;
 use sqlx::SqlitePool;
 
-/// The smallest count that the bound of one page stops, found by the
-/// recorded run before the bound went through the port.
+/// The smallest count that the bound of one page stops on the bundled
+/// `SQLite` engine.
 const FIRST_STOPPED_COUNT: i64 = 588_280;
 
 /// Whether the bound of one page stops the count to `n`. Any other error
@@ -161,6 +162,63 @@ async fn the_page_mapping_refuses_any_over_budget_error() {
         .unwrap_err();
     drop(snapshot);
     cache.close().await.unwrap();
+    assert_eq!(
+        refused.downcast_ref::<ReadFailure>(),
+        Some(&ReadFailure::PageBudgetExceeded),
+        "{refused:#}"
+    );
+}
+
+/// The work bound of the search test: many times the work of a search for one
+/// record, and less than half the work of a page that reads
+/// [`SEPARATOR_CANDIDATES`].
+const SEARCH_WORK_STEPS: u64 = 150_000;
+
+/// The candidates that hold the separator search text only across two pieces.
+const SEPARATOR_CANDIDATES: usize = 3_000;
+
+#[tokio::test]
+#[verifies("rule_query_pages_bound_shared_reads", examples)]
+async fn a_separator_search_stops_at_the_work_bound() {
+    use super::{
+        append_separator_requirements, repository_at, root_of, seeded_store, SEPARATOR_TEXT,
+    };
+    use crate::operations::{queries, read_policy::ReadPolicy};
+    use crate::test_probes::set_page_work_steps;
+    use serde_json::json;
+    let (dir, store, scope) = seeded_store();
+    append_separator_requirements(&store, &scope, SEPARATOR_CANDIDATES, |_| false);
+    let root = root_of(&dir);
+    let search = |text: &'static str, steps| {
+        let root = root.clone();
+        async move {
+            set_page_work_steps(steps);
+            let result = queries::search(
+                &repository_at(&root),
+                ReadPolicy::default(),
+                serde_json::from_value(json!({"text":text,"node_types":["requirement"]})).unwrap(),
+            )
+            .await;
+            set_page_work_steps(None);
+            result
+        }
+    };
+    // An unbounded search first brings the read cache up to the state, so
+    // the bounded searches below read a current cache.
+    search("req_overtime", None).await.unwrap();
+    let plain = search("req_overtime", Some(SEARCH_WORK_STEPS))
+        .await
+        .unwrap();
+    let ids: Vec<_> = plain
+        .result
+        .nodes
+        .iter()
+        .map(|node| node.id().as_str())
+        .collect();
+    assert_eq!(ids, ["req_overtime"]);
+    let Err(refused) = search(SEPARATOR_TEXT, Some(SEARCH_WORK_STEPS)).await else {
+        panic!("the separator search answered within the work bound");
+    };
     assert_eq!(
         refused.downcast_ref::<ReadFailure>(),
         Some(&ReadFailure::PageBudgetExceeded),
