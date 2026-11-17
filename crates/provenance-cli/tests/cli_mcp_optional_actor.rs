@@ -16,7 +16,7 @@ const ACTOR_DESCRIPTION: &str = "The actor is optional for a Requirement creatio
 
 /// The stored rows of the Discussion files of the scope `default`: the Discussion rows and
 /// the message rows.
-pub(crate) fn discussion_rows(repo: &Path) -> (Vec<Value>, Vec<Value>) {
+pub fn discussion_rows(repo: &Path) -> (Vec<Value>, Vec<Value>) {
     let threads = repo.join(".provenance/state/scopes/default/threads");
     let rows = |name: &str| {
         std::fs::read_to_string(threads.join(name))
