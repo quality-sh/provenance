@@ -16,6 +16,10 @@ use support::resource_http::{call, call_with_headers, host};
 /// `read_budget::resource_record_bytes`.
 const BUDGET: usize = 1_048_576 - 16_384;
 
+/// The bytes of one stored row of a record or a binding. The store owns the
+/// number in `read_budget::RECORD_BYTES`.
+const RECORD_BUDGET: usize = 65_536;
+
 /// The byte budget of one page of a resource read.
 const PAGE_BYTES: usize = 1_048_576;
 
@@ -153,25 +157,33 @@ async fn review_required(host: &StatementHost) -> Value {
     evidence["data"]["review_required"].clone()
 }
 
-/// The evidence read of `rule_shared` is not part of this test: it also
-/// reads the binding of the start, which holds the same symbol, and the
-/// query reads give a binding inside a smaller record budget.
+/// A start stores a binding that holds its symbol, so the symbol of a start
+/// is limited by the record budget, and each read gives a binding at that
+/// budget, the evidence read of `rule_shared` included.
 #[tokio::test]
-#[verifies("rule_accepted_writes_stay_readable", examples)]
-async fn a_start_with_a_row_at_the_budget_is_given_by_the_page_read_and_the_member_read() {
+#[verifies("rule_writer_refuses_a_row_over_the_record_budget", examples)]
+async fn a_start_with_a_binding_row_at_the_record_budget_is_given_by_each_read() {
     let repo = repository();
     let host = host(&repo, true);
-    let (_, probe) = begin(&host, "probe", "s").await;
+    let probe = 70_000;
+    let (_, refused) = begin(&host, "check", &"s".repeat(probe)).await;
+    let base = usize::try_from(refused["error"]["bytes"].as_u64().unwrap()).unwrap() - probe;
 
-    let (status, run) = begin(&host, "check", &symbol_for_row(&probe, BUDGET)).await;
+    let (status, run) = begin(&host, "check", &"s".repeat(RECORD_BUDGET - base)).await;
     let id = run["data"]["id"].as_str().unwrap();
     let (_, page) = call(&host, "GET", "/verification-runs", None).await;
     let (_, member) = call(&host, "GET", &format!("/verification-runs/{id}"), None).await;
+    let (_, evidence) = call(&host, "GET", "/rules/rule_shared/evidence", None).await;
 
     assert_eq!(status, 200, "{}", run["error"]);
-    assert_eq!(serde_json::to_vec(&run["data"]).unwrap().len(), BUDGET);
-    assert_eq!(page["data"]["items"], json!([probe["data"], run["data"]]));
+    assert_eq!(page["data"]["items"], json!([run["data"]]));
     assert_eq!(member["data"], run["data"]);
+    let bindings = &evidence["data"]["verification_bindings"];
+    assert_eq!(bindings[0]["key"], "check", "{evidence}");
+    assert_eq!(
+        bindings[0]["symbol"].as_str().map(str::len),
+        Some(RECORD_BUDGET - base)
+    );
 }
 
 #[tokio::test]
