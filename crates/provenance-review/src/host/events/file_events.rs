@@ -99,15 +99,20 @@ impl FileEvents {
     #[rule("rule_review_host_reads_settled_state")]
     pub async fn settle(&mut self, stopped: &mut watch::Receiver<bool>) -> Notice {
         let limit = Instant::now() + SETTLE_LIMIT;
-        let notice = Notice::default();
+        let mut notice = Notice::default();
         loop {
             let quiet = (Instant::now() + QUIET).min(limit);
             tokio::select! {
-                event = self.receiver.recv() => if event.is_none() { break },
+                event = self.receiver.recv() => match event {
+                    Some(event) => notice.merge(self.classify(event)),
+                    None => break,
+                },
+                () = self.wake.notified() => notice.lost = true,
                 () = tokio::time::sleep_until(quiet) => break,
                 _ = stopped.changed() => break,
             }
         }
+        notice.lost |= self.lost.swap(false, Ordering::AcqRel);
         notice
     }
 
