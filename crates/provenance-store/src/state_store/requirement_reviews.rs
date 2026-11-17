@@ -131,7 +131,9 @@ impl StateStore {
             })
             .map(|review| review.into_record(scope))
             .collect::<anyhow::Result<Vec<_>>>()?;
-        super::read_budget::ensure_slice_within_read_budget(&desired)?;
+        for review in &desired {
+            super::read_budget::ensure_review_within(review)?;
+        }
         Ok(desired)
     }
 

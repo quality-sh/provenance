@@ -91,13 +91,17 @@ pub enum WriteFailure {
     FileUnavailable,
     /// The write would store a row larger than the budget of its kind, or
     /// the request is larger than the operation budget, so the write saved
-    /// nothing. `bytes` is the size and `limit` the budget; `record_id` names
-    /// the record when the size is the size of a stored row.
+    /// nothing. `bytes` is the size and `limit` the budget. `record_id` names
+    /// the record and `field` its longest field when the size is the size of
+    /// a stored row. `message` gives the next step.
     RecordTooLarge {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         record_id: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        field: Option<String>,
         bytes: u64,
         limit: u64,
+        message: String,
     },
     // `InvalidStateFile` has the same wire shape as the read failure of the
     // same name, so it carries no doc comment either.
@@ -127,13 +131,22 @@ impl WriteFailure {
     }
 
     /// A `record_too_large` refusal of `bytes` over `limit`, for the record
-    /// `record_id` when the bytes are the bytes of its stored row.
-    pub(crate) fn record_too_large(record_id: Option<&str>, bytes: usize, limit: usize) -> Self {
+    /// `record_id` and its longest field `field` when the bytes are the bytes
+    /// of its stored row. `message` gives the next step.
+    pub(crate) fn record_too_large(
+        record_id: Option<&str>,
+        field: Option<&str>,
+        bytes: usize,
+        limit: usize,
+        message: String,
+    ) -> Self {
         let wide = |size: usize| u64::try_from(size).unwrap_or(u64::MAX);
         Self::RecordTooLarge {
             record_id: record_id.map(str::to_owned),
+            field: field.map(str::to_owned),
             bytes: wide(bytes),
             limit: wide(limit),
+            message,
         }
     }
 
@@ -409,9 +422,13 @@ const REQUEST_BYTES: usize = 1_048_576;
 /// operation budget. `request` names the request in the native text.
 pub(crate) fn ensure_request_size(bytes: usize, request: &str) -> anyhow::Result<()> {
     if bytes > REQUEST_BYTES {
+        let message = format!(
+            "the {request} request uses {bytes} bytes and the limit is {REQUEST_BYTES} bytes; \
+             send a shorter request"
+        );
         return Err(crate::refusal::refuse!(
-            (WriteFailure::record_too_large(None, bytes, REQUEST_BYTES)),
-            "{request} request exceeds the operation byte budget"
+            (WriteFailure::record_too_large(None, None, bytes, REQUEST_BYTES, message.clone())),
+            "{message}"
         ));
     }
     Ok(())

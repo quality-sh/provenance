@@ -44,7 +44,14 @@ impl Replacement {
         for rule in &self.rules {
             rule.validate_archive()?;
         }
-        crate::state_store::read_budget::ensure_slice_within_read_budget(&self.implementations)?;
+        let stored = crate::state_store::readers::read_jsonl::<ImplementationBinding>(
+            store,
+            &shards::implementation_bindings_path(&store.layout, scope),
+        )?;
+        crate::state_store::read_budget::ensure_changed_within_read_budget(
+            &stored,
+            &self.implementations,
+        )?;
         if let Some(refused) = self.refused {
             return Err(refused.refuse());
         }

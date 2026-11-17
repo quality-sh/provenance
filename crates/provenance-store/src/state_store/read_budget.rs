@@ -40,6 +40,19 @@ pub trait ReadBudget: Serialize {
     fn read_budget() -> usize {
         record_bytes()
     }
+
+    /// The name of the field that uses the most bytes of the row, which a
+    /// refusal names as the field to make shorter.
+    fn longest_field(&self) -> anyhow::Result<Option<String>> {
+        let serde_json::Value::Object(fields) = serde_json::to_value(self)? else {
+            return Ok(None);
+        };
+        Ok(fields
+            .iter()
+            .map(|(name, value)| (value.to_string().len(), name))
+            .max()
+            .map(|(_, name)| name.clone()))
+    }
 }
 
 /// The byte count `length(CAST(column AS BLOB))` reports for one column
@@ -118,24 +131,74 @@ fn sqlite_real_bytes(real: f64) -> anyhow::Result<usize> {
 }
 
 /// Refuses the mutation before publication when any supported read would
-/// refuse the key, row, or serialized page item.
+/// refuse the key or the row.
 #[rule("rule_accepted_writes_stay_readable")]
 pub fn ensure_within_read_budget<T: ReadBudget>(record: &T) -> anyhow::Result<()> {
     let id = record.read_id();
-    ensure_within(id, id.len(), ID_BYTES)?;
-    ensure_row_within(id, record.read_bytes()?, T::read_budget())?;
-    ensure_within(
-        id,
-        serde_json::to_vec(record)?.len(),
-        resource_record_bytes(),
-    )
+    if id.len() > ID_BYTES {
+        return Err(too_large(id, Some("id"), id.len(), ID_BYTES));
+    }
+    ensure_row_within(record)
 }
 
-/// Refuses a stored row over the budget of its kind, with the record, the
-/// size of its row and the budget.
+/// Refuses a stored row over the budget of its kind, with the record, its
+/// longest field, the size of its row and the budget.
 #[rule("rule_writer_refuses_a_row_over_the_record_budget")]
-fn ensure_row_within(id: &str, size: usize, budget: usize) -> anyhow::Result<()> {
-    ensure_within(id, size, budget)
+fn ensure_row_within<T: ReadBudget>(record: &T) -> anyhow::Result<()> {
+    let (size, budget) = (record.read_bytes()?, T::read_budget());
+    if size > budget {
+        let field = record.longest_field()?;
+        return Err(too_large(record.read_id(), field.as_deref(), size, budget));
+    }
+    Ok(())
+}
+
+/// Refuses the review of a restated Requirement whose row passes the record
+/// budget. The row holds the text before and after the change, so the refusal
+/// names the Requirement and the field that the person changed.
+pub fn ensure_review_within(review: &provenance_core::RequirementReview) -> anyhow::Result<()> {
+    let size = review.read_bytes()?;
+    if size > RECORD_BYTES {
+        let id = review.requirement_id.as_str();
+        return Err(refusal(
+            &format!("the review of the restated Requirement `{id}`"),
+            id,
+            Some(&review.field),
+            size,
+            RECORD_BYTES,
+        ));
+    }
+    Ok(())
+}
+
+fn too_large(id: &str, field: Option<&str>, size: usize, budget: usize) -> anyhow::Error {
+    refusal(&format!("record `{id}`"), id, field, size, budget)
+}
+
+/// A `record_too_large` refusal whose message names `subject` and the field
+/// to make shorter.
+fn refusal(
+    subject: &str,
+    id: &str,
+    field: Option<&str>,
+    size: usize,
+    budget: usize,
+) -> anyhow::Error {
+    let step = field.map_or_else(
+        || "make the record shorter".to_owned(),
+        |field| format!("make the field `{field}` shorter"),
+    );
+    let message = format!("{subject} uses {size} bytes and the limit is {budget} bytes; {step}");
+    crate::refusal::refuse!(
+        (crate::write_error::WriteFailure::record_too_large(
+            Some(id),
+            field,
+            size,
+            budget,
+            message.clone()
+        )),
+        "{message}"
+    )
 }
 
 /// Refuses a stored line of more than `budget` bytes before it is written, for
@@ -143,30 +206,48 @@ fn ensure_row_within(id: &str, size: usize, budget: usize) -> anyhow::Result<()>
 #[cfg(feature = "host")]
 pub fn ensure_line_within(line: &str, budget: usize) -> anyhow::Result<()> {
     if line.len() > budget {
-        return Err(crate::refusal::refuse!(
-            (crate::write_error::WriteFailure::record_too_large(None, line.len(), budget)),
-            "a stored line uses {} bytes; the line may use at most {budget} bytes",
+        let message = format!(
+            "a stored line uses {} bytes and the limit is {budget} bytes; make the line shorter",
             line.len()
-        ));
-    }
-    Ok(())
-}
-
-fn ensure_within(id: &str, size: usize, budget: usize) -> anyhow::Result<()> {
-    if size > budget {
+        );
         return Err(crate::refusal::refuse!(
-            (crate::write_error::WriteFailure::record_too_large(Some(id), size, budget)),
-            "record `{id}` uses {size} bytes; the supported read allows at most {budget} bytes"
+            (crate::write_error::WriteFailure::record_too_large(
+                None,
+                None,
+                line.len(),
+                budget,
+                message.clone()
+            )),
+            "{message}"
         ));
     }
     Ok(())
 }
 
-/// Applies [`ensure_within_read_budget`] to every record of a replaced or
-/// imported shard.
+/// Applies [`ensure_within_read_budget`] to every record of an imported or
+/// landed batch.
 pub fn ensure_slice_within_read_budget<T: ReadBudget>(records: &[T]) -> anyhow::Result<()> {
     for record in records {
         ensure_within_read_budget(record)?;
+    }
+    Ok(())
+}
+
+/// Applies [`ensure_within_read_budget`] to each record of `after` that is
+/// not the same in `before`. A stored row over the budget that the write does
+/// not change does not refuse the write, so a write can still make it fit.
+pub fn ensure_changed_within_read_budget<T: ReadBudget + PartialEq>(
+    before: &[T],
+    after: &[T],
+) -> anyhow::Result<()> {
+    let stored: std::collections::HashMap<&str, &T> = before
+        .iter()
+        .map(|record| (record.read_id(), record))
+        .collect();
+    for record in after {
+        if stored.get(record.read_id()) != Some(&record) {
+            ensure_within_read_budget(record)?;
+        }
     }
     Ok(())
 }
@@ -204,6 +285,18 @@ macro_rules! projection_budget {
             impl ReadBudget for $kind {
                 fn read_bytes(&self) -> anyhow::Result<usize> {
                     self.row()?.iter().map(column_bytes).sum()
+                }
+
+                fn longest_field(&self) -> anyhow::Result<Option<String>> {
+                    let columns = <$kind as provenance_core::model::ProjectionRow>::COLUMNS;
+                    let mut longest = None;
+                    for (name, value) in columns.iter().zip(self.row()?) {
+                        let bytes = column_bytes(&value)?;
+                        if longest.is_none_or(|(_, most)| bytes > most) {
+                            longest = Some((*name, bytes));
+                        }
+                    }
+                    Ok(longest.map(|(name, _)| name.to_owned()))
                 }
 
                 fn read_id(&self) -> &str {
@@ -267,9 +360,9 @@ crate::families::record_families!(define_family_budgets);
 
 projection_budget!(provenance_core::RequirementReview);
 
-/// A run row keeps the resource budget: no read of a record or a binding
-/// gives a run, and the page read, the member read and the evidence read of
-/// the runs take the resource budget for the one serialized run of each row.
+/// A run row has the resource budget, a second budget larger than the
+/// record budget: the run reads and the evidence read of a Rule give runs, and
+/// they cut their pages by page bytes, so they give a run up to that size.
 impl ReadBudget for provenance_core::VerificationRun {
     fn read_bytes(&self) -> anyhow::Result<usize> {
         Ok(serde_json::to_vec(self)?.len())

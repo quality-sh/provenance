@@ -8,7 +8,9 @@ use provenance_core::{
 use serde::{de::DeserializeOwned, Serialize};
 use time::format_description::well_known::Rfc3339;
 
-use super::read_budget::{ensure_slice_within_read_budget, ensure_within_read_budget, ReadBudget};
+use super::read_budget::{
+    ensure_changed_within_read_budget, ensure_within_read_budget, ReadBudget,
+};
 use super::{RecordStamp, StateStore};
 
 pub trait GraphRecord:
@@ -280,7 +282,7 @@ impl StateStore {
         self.mutate_jsonl_records_with_store(path, |held, records| {
             let before = records.clone();
             held.stamp_records(records, &mut replacement)?;
-            ensure_slice_within_read_budget(&replacement)?;
+            ensure_changed_within_read_budget(&before, &replacement)?;
             *records = replacement;
             Ok(before)
         })

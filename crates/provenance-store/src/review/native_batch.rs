@@ -3,7 +3,7 @@
 use crate::{
     review::{publication::with_record_state, write_actor::AUTHORING_ACTOR},
     state_store::{
-        read_budget::ensure_slice_within_read_budget, record_stamps::GraphRecord, RecordStamp,
+        read_budget::ensure_changed_within_read_budget, record_stamps::GraphRecord, RecordStamp,
         StateStore,
     },
 };
@@ -113,7 +113,7 @@ impl NativeRecordBatch<'_> {
                     let before = records.clone();
                     let (result, guarded_id) = mutate(held, records)?;
                     held.stamp_records(&before, records)?;
-                    ensure_slice_within_read_budget(records)?;
+                    ensure_changed_within_read_budget(&before, records)?;
                     if let (Some(expected), Some(id)) = (expected_etag, guarded_id.as_ref()) {
                         check_etag(&before, id, expected)?;
                     }

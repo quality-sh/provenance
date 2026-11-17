@@ -135,6 +135,8 @@ mod read_budget;
 #[cfg(feature = "host")]
 mod read_budget_boundaries;
 #[cfg(feature = "host")]
+mod record_budget_kinds;
+#[cfg(feature = "host")]
 mod record_fault;
 #[cfg(feature = "host")]
 mod references;
