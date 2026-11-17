@@ -26,7 +26,7 @@ use std::sync::Arc;
 
 /// The hint of a state file that does not parse, as a person reads it.
 const HINT: &str = "To correct this fault, correct the line of the file that this answer \
-    names, and then do the command again. If you cannot correct that line, use one of these \
+    names. Then do the operation again. If you cannot correct that line, use one of these \
     two procedures. \
     Procedure 1: get .provenance/state from a commit where Provenance can read it. \
     This can remove records and changes that are not in that commit. \
