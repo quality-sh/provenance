@@ -51,9 +51,23 @@ fn working_project() -> Option<Utf8PathBuf> {
     crate::layout::enclosing_project(&directory).map(Utf8Path::to_path_buf)
 }
 
-/// Names the shard and its line when a stored line is not one JSON record.
+/// The parse messages of a message row whose `actor` is missing or blank.
+const MESSAGE_ACTOR_FAULTS: [&str; 2] = ["missing field `actor`", "the field `actor` is blank"];
+
+/// The step that corrects a message row whose `actor` is missing or blank.
+const MESSAGE_ACTOR_CORRECTION: &str = "To correct this fault, add the field actor to this \
+    line, with the actor that wrote the Message. If that actor is not known, use the actor \
+    authoring.";
+
+/// Names the shard and its line when a stored line is not one JSON record. A message row
+/// with no actor or a blank actor gets the step that corrects that line.
 pub fn located(path: &Utf8Path, line_number: usize, error: &serde_json::Error) -> anyhow::Error {
-    crate::refusal::state_fault(&ShardLine::new(path, line_number), parse_message(error))
+    let at = ShardLine::new(path, line_number);
+    let message = parse_message(error);
+    if is_message_month_shard(path) && MESSAGE_ACTOR_FAULTS.contains(&message.as_str()) {
+        return crate::refusal::corrected_state_fault(&at, message, MESSAGE_ACTOR_CORRECTION);
+    }
+    crate::refusal::state_fault(&at, message)
 }
 
 /// The message of a serde error with no position, because the refusal gives

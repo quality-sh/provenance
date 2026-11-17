@@ -228,7 +228,7 @@ async fn default_list_has_truthful_parent_status_and_bounded_opening() {
         .post_thread_message(
             serde_json::from_value(json!({
                 "scope_id":"default", "parent":{"node_type":"requirement","node_id":"req_a"},
-                "role":"user", "body":"legacy message"
+                "role":"user", "actor":"agent", "body":"legacy message"
             }))
             .unwrap(),
         )

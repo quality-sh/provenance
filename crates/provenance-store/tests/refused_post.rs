@@ -54,6 +54,7 @@ fn post() -> PostMessageInput {
             node_id: id("req_expiry"),
         },
         role: MessageRole::User,
+        actor: "agent".into(),
         body: "Who owns a link?".into(),
     }
 }
