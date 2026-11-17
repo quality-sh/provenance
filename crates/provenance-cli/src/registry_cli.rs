@@ -121,12 +121,11 @@ pub fn bound_context(matches: &ArgMatches) -> BoundContext {
 /// command's own `format` field does not count, so each command decides the form of
 /// its output and of a refusal from the value that the caller gave.
 pub fn asks_for_json(matches: &ArgMatches) -> bool {
-    matches.value_source("format") == Some(clap::parser::ValueSource::CommandLine)
-        && matches
-            .try_get_one::<String>("format")
-            .ok()
-            .flatten()
-            .is_some_and(|format| crate::output::JsonFormat::from_flag(format).is_some())
+    let Ok(Some(format)) = matches.try_get_one::<String>("format") else {
+        return false;
+    };
+    crate::output::JsonFormat::from_flag(format).is_some()
+        && matches.value_source("format") == Some(clap::parser::ValueSource::CommandLine)
 }
 
 /// The command with the shared repository options that the porcelain parsers take.

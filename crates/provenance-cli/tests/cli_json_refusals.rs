@@ -1,7 +1,7 @@
 //! With `--format json`, a refused record command prints one `{error,meta}`
-//! object on standard error, with the recovery hint in `error.hint`. Errors
-//! outside the operation, such as a missing graph, stay text. Text mode
-//! keeps its wording.
+//! object on standard error, with the recovery hint in `error.hint`. An error
+//! of no known kind, such as a missing graph, gives the kind `operation_failed`
+//! and its text in `error.message`. Text mode keeps its wording.
 
 use predicates::prelude::*;
 use provenance_macros::verifies;
@@ -174,17 +174,67 @@ fn an_invalid_update_refusal_gives_the_reason() {
     );
 }
 
-// Implementation aid: an error outside the operation, such as a missing graph, stays text.
 #[test]
-fn a_missing_graph_stays_a_text_error_in_json_mode() {
+#[verifies("rule_cli_json_refusal_object", examples)]
+fn a_missing_graph_is_an_operation_failed_object_in_json_mode() {
     let directory = tempfile::tempdir().unwrap();
     let repo = directory.path().to_str().unwrap();
 
+    let error = refusal(repo, &["req_a"]);
+    assert_eq!(error["error"]["kind"], "operation_failed");
+    let message = error["error"]["message"].as_str().unwrap();
+    assert!(message.contains("not initialized"), "{message}");
+}
+
+#[test]
+#[verifies("rule_cli_json_refusal_object", examples)]
+fn an_api_refusal_is_one_object_and_text_mode_keeps_its_line() {
+    let (_directory, repo) = init();
+
+    let error = refusal(&repo, &["api", "nosuch"]);
+    assert_eq!(
+        error,
+        serde_json::json!({"error": {"kind": "unknown_operation"}, "meta": {}})
+    );
     provenance()
-        .args(["req_a", "--repo", repo, "--format", "json"])
+        .args(["api", "nosuch", "--repo", &repo])
         .assert()
         .code(1)
         .stdout(predicate::str::is_empty())
-        .stderr(predicate::str::starts_with("Error: "))
-        .stderr(predicate::str::contains("not initialized"));
+        .stderr("Error: {\"error\":{\"kind\":\"unknown_operation\"},\"meta\":{}}\n");
+}
+
+/// `validate` declares `format` with the default `json`. The value that the caller
+/// gives decides the form of the refusal, not the default.
+#[test]
+#[verifies("rule_cli_json_refusal_object", examples)]
+fn a_default_format_keeps_the_text_refusal_and_a_given_format_gives_the_object() {
+    let directory = tempfile::tempdir().unwrap();
+    let input = directory.path().join("contribution.json");
+    std::fs::write(&input, "not json\n").unwrap();
+    let input = input.to_str().unwrap();
+    let validate = ["validate", "contribution", "--input", input];
+
+    provenance()
+        .args(validate)
+        .assert()
+        .code(1)
+        .stdout(predicate::str::is_empty())
+        .stderr("Error: expected ident at line 1 column 2\n");
+    let output = provenance()
+        .args(validate)
+        .args(["--format", "json"])
+        .output()
+        .unwrap();
+    assert_eq!(output.status.code(), Some(1));
+    assert!(output.stdout.is_empty());
+    let text = String::from_utf8(output.stderr).unwrap();
+    let error: Value = serde_json::from_str(&text).unwrap();
+    assert_eq!(
+        error,
+        serde_json::json!({
+            "error": {"kind": "operation_failed", "message": "expected ident at line 1 column 2"},
+            "meta": {}
+        })
+    );
 }
