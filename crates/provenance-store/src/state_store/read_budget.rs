@@ -1,7 +1,9 @@
 //! One write/read size invariant for canonical resource records.
 //!
-//! Supported reads limit page keys, stored row bytes, and serialized page
-//! items. A write must check each limit before it publishes the record.
+//! Supported reads limit page keys, row bytes and serialized page items. A
+//! write checks the key and the row bytes before it publishes the record. A
+//! row inside the record budget serializes to a page item far inside the page
+//! item budget, so the write does not measure the page item.
 use provenance_core::model::projection_row::ColumnValue;
 use provenance_core::model::ProjectionRow;
 use provenance_macros::rule;
