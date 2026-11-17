@@ -51,7 +51,8 @@ pub struct ScopeSnapshot {
 }
 
 impl ScopeSnapshot {
-    pub fn graph_records(&self) -> GraphRecords<'_> {
+    /// The graph families of the snapshot, which the reference check reads.
+    pub(crate) fn graph_records(&self) -> GraphRecords<'_> {
         GraphRecords {
             sources: &self.sources,
             requirements: &self.requirements,
@@ -65,14 +66,18 @@ impl ScopeSnapshot {
     }
 }
 
+/// Borrowed slices of the graph families of one [`ScopeSnapshot`].
 #[derive(Debug, Clone, Copy)]
-pub struct GraphRecords<'a> {
-    pub sources: &'a [Source],
-    pub requirements: &'a [Requirement],
-    pub topics: &'a [Topic],
-    pub questions: &'a [Question],
-    pub resolutions: &'a [Resolution],
-    pub rules: &'a [Rule],
-    pub verification_bindings: &'a [VerificationBinding],
-    pub implementation_bindings: &'a [ImplementationBinding],
+pub(crate) struct GraphRecords<'a> {
+    pub(crate) sources: &'a [Source],
+    pub(crate) requirements: &'a [Requirement],
+    pub(crate) topics: &'a [Topic],
+    pub(crate) questions: &'a [Question],
+    pub(crate) resolutions: &'a [Resolution],
+    pub(crate) rules: &'a [Rule],
+    pub(crate) verification_bindings: &'a [VerificationBinding],
+    pub(crate) implementation_bindings: &'a [ImplementationBinding],
 }
+
+#[cfg(test)]
+mod tests;

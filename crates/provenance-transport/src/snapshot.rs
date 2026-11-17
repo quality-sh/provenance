@@ -1,4 +1,4 @@
-pub use provenance_store::scope_snapshot::{snapshot, GraphRecords, ScopeSnapshot};
+pub use provenance_store::scope_snapshot::{snapshot, ScopeSnapshot};
 use provenance_store::{repository::Repository, state_store::StateStore};
 
 /// The live store of one opened repository.

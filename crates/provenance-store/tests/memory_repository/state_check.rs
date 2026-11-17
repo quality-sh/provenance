@@ -9,17 +9,22 @@ use provenance_store::state_check::{check_state, StateFindings};
 use provenance_store::storage::StateKey;
 use serde_json::{json, Value};
 
-/// The findings of a repository-wide check of the initial state with `rows`.
+/// The findings of a repository-wide check of the initial state with `rows`,
+/// run in one publication section as `provenance check` runs it. The check
+/// writes no file and gives the adapter no write set.
 fn findings(rows: &[(&str, Vec<Value>)]) -> StateFindings {
     let memory = memory_repository_with(
         rows.iter()
             .map(|(path, rows)| (key(path), shard(rows)))
             .collect::<Vec<(StateKey, Vec<u8>)>>(),
     );
-    let store = memory.repository.store();
-    let manifest = store.manifest().unwrap();
-    let found = check_state(&store, &manifest, true).unwrap();
+    let found = memory
+        .repository
+        .store()
+        .with_repository_publication(|held| check_state(held, &held.manifest()?, true))
+        .unwrap();
     memory.assert_empty();
+    assert!(memory.recorded.0.lock().unwrap().is_empty());
     found
 }
 
@@ -230,69 +235,121 @@ fn findings_keep_the_order_of_scopes_and_then_of_families() {
 
 #[test]
 #[verifies("rule_state_check_without_host", examples)]
-fn a_scope_directory_absent_from_the_manifest_wins_over_dangling_references() {
-    let found = findings(&[
-        (
-            "scopes/unlisted/requirements/req.jsonl",
-            vec![json!({
-                "scope_id": "unlisted",
-                "id": "req_unlisted",
-                "statement": "Unlisted",
-                "status": "active",
-            })],
-        ),
-        (
-            "scopes/default/threads/2026-07.jsonl",
-            vec![message("default", "message_orphan", "thread_missing")],
-        ),
-    ]);
+fn a_review_row_that_a_read_refuses_gives_the_line_of_provenance_check() {
+    let found = findings(&[class_rows(Class::ReviewRow)]);
 
     assert_eq!(
-        found.scope_directories,
-        ["scope directory unlisted is absent from manifest"]
-    );
-    assert_eq!(
-        found.dangling,
-        ["message message_orphan has dangling reference: thread thread thread_missing"]
+        found,
+        StateFindings {
+            review_rows: vec![REVIEW_ROW.into()],
+            ..StateFindings::default()
+        }
     );
     assert_eq!(
         found.message().as_deref(),
-        Some("scope directory finding(s):\n- scope directory unlisted is absent from manifest"),
+        Some(format!("review row finding(s):\n- {REVIEW_ROW}").as_str()),
     );
 }
 
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+enum Class {
+    ScopeOwnership,
+    ReviewRow,
+    ScopeDirectory,
+    Dangling,
+}
+
+const SCOPE_OWNERSHIP: &str =
+    "source source_misfiled loaded from scope imported has embedded scope_id default";
+const REVIEW_ROW: &str = "scopes/default/ideation/withdrawals.jsonl line 1: withdrawal \
+    withdrawal_lost names no review submission: proposal_missing; To repair, remove \
+    ideation/withdrawals.jsonl line 1, then commit.";
+const SCOPE_DIRECTORY: &str = "scope directory unlisted is absent from manifest";
+const DANGLING: &str =
+    "message message_orphan has dangling reference: thread thread thread_missing";
+
+/// The rows that give one finding of `class`.
+fn class_rows(class: Class) -> (&'static str, Vec<Value>) {
+    let (path, row) = match class {
+        Class::ScopeOwnership => (
+            "scopes/imported/sources/source.jsonl",
+            json!({"scope_id": "default", "id": "source_misfiled", "name": "Misfiled",
+                "source_type": "document"}),
+        ),
+        Class::ReviewRow => (
+            "scopes/default/ideation/withdrawals.jsonl",
+            json!({"scope_id": "default", "id": "withdrawal_lost",
+                "proposal_id": "proposal_missing", "actor": "agent", "reason": "Lost."}),
+        ),
+        Class::ScopeDirectory => (
+            "scopes/unlisted/requirements/req.jsonl",
+            json!({"scope_id": "unlisted", "id": "req_unlisted", "statement": "Unlisted",
+                "status": "active"}),
+        ),
+        Class::Dangling => (
+            "scopes/default/threads/2026-07.jsonl",
+            message("default", "message_orphan", "thread_missing"),
+        ),
+    };
+    (path, vec![row])
+}
+
+/// The findings that hold the one finding of each class in `classes`.
+fn holding(classes: &[Class]) -> StateFindings {
+    let line = |class: Class, text: &str| {
+        if classes.contains(&class) {
+            vec![text.to_owned()]
+        } else {
+            Vec::new()
+        }
+    };
+    StateFindings {
+        scope_ownership: line(Class::ScopeOwnership, SCOPE_OWNERSHIP),
+        review_rows: line(Class::ReviewRow, REVIEW_ROW),
+        scope_directories: line(Class::ScopeDirectory, SCOPE_DIRECTORY),
+        dangling: line(Class::Dangling, DANGLING),
+    }
+}
+
+/// Each pair of finding classes, the line that `provenance check` reports,
+/// and the classes that the check reached. A scope-ownership finding stops
+/// the check before the review rows and the references; a review-row finding
+/// stops it before the references.
 #[test]
 #[verifies("rule_state_check_without_host", examples)]
-fn a_record_in_the_directory_of_another_scope_wins_over_every_other_finding() {
-    let found = findings(&[
+fn each_pair_of_finding_classes_gives_the_class_of_provenance_check() {
+    use Class::{Dangling, ReviewRow, ScopeDirectory, ScopeOwnership};
+    let ownership = ("scope ownership finding(s)", SCOPE_OWNERSHIP);
+    let review = ("review row finding(s)", REVIEW_ROW);
+    let directory = ("scope directory finding(s)", SCOPE_DIRECTORY);
+    let cases: [([Class; 2], (&str, &str), &[Class]); 6] = [
+        ([ScopeOwnership, ReviewRow], ownership, &[ScopeOwnership]),
         (
-            "scopes/imported/sources/source.jsonl",
-            vec![json!({
-                "scope_id": "default",
-                "id": "source_misfiled",
-                "name": "Misfiled",
-                "source_type": "document",
-            })],
+            [ScopeOwnership, ScopeDirectory],
+            ownership,
+            &[ScopeOwnership, ScopeDirectory],
         ),
+        ([ScopeOwnership, Dangling], ownership, &[ScopeOwnership]),
         (
-            "scopes/unlisted/requirements/req.jsonl",
-            vec![json!({
-                "scope_id": "unlisted",
-                "id": "req_unlisted",
-                "statement": "Unlisted",
-                "status": "active",
-            })],
+            [ReviewRow, ScopeDirectory],
+            review,
+            &[ReviewRow, ScopeDirectory],
         ),
-    ]);
+        ([ReviewRow, Dangling], review, &[ReviewRow]),
+        (
+            [ScopeDirectory, Dangling],
+            directory,
+            &[ScopeDirectory, Dangling],
+        ),
+    ];
+    for (pair, (title, line), reached) in cases {
+        let found = findings(&pair.map(class_rows));
 
-    assert_eq!(
-        found.scope_ownership,
-        ["source source_misfiled loaded from scope imported has embedded scope_id default"]
-    );
-    assert_eq!(
-        found.message().as_deref(),
-        Some(
-            "scope ownership finding(s):\n- source source_misfiled loaded from scope imported has embedded scope_id default"
-        ),
-    );
+        assert_eq!(found, holding(reached), "{pair:?}");
+        assert_eq!(
+            found.message(),
+            Some(format!("{title}:\n- {line}")),
+            "{pair:?}"
+        );
+    }
 }

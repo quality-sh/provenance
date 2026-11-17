@@ -1,6 +1,17 @@
-//! The reference and scope-ownership checks of a state. They read the state
-//! through [`StateStore`] only, so a caller without `host` (the web kernel) runs
-//! the same checks as `provenance check`.
+//! The check of a state that `provenance check` runs. It reads the state
+//! through [`StateStore`] only, so a caller without `host` (the web kernel)
+//! runs the same check.
+//!
+//! The check refuses a state with no scope, with one canonical ID in two
+//! records, with a graph or ideation fault in a manifest scope, or with a row
+//! that does not parse. Else it gives four lists of findings: records that
+//! another scope owns, review rows that a read refuses, scope directories
+//! that the manifest does not list (only for a repository-wide check), and
+//! dangling references.
+//!
+//! The check reads each scope in its own publication section. A caller
+//! that holds the section for the whole check, or that reads a read-only
+//! store, gets findings from one state.
 
 use crate::scope_snapshot::{snapshot, ScopeSnapshot};
 use crate::state_store::StateStore;
@@ -15,12 +26,15 @@ mod ideation;
 mod index;
 mod references;
 
-/// The findings of one check of a state, each list in the order of the
-/// manifest scopes and then of the record families.
+/// The findings of one check of a state.
 ///
-/// A record that another scope owns makes the later checks meaningless, so
-/// the review-row and dangling-reference lists stay empty when
-/// `scope_ownership` holds a finding.
+/// `scope_ownership` and `dangling` follow the manifest scopes and then the
+/// core, collaboration and ideation families. `review_rows` follows the
+/// manifest scopes. `scope_directories` follows the listing of the scope
+/// directories. The check stops at the first of `scope_ownership` and
+/// `review_rows` that holds a finding, so the lists after it stay empty; an
+/// empty list after a stop is not a clean result. `scope_directories` is
+/// filled before each stop.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct StateFindings {
     pub scope_ownership: Vec<String>,
@@ -45,7 +59,9 @@ impl StateFindings {
     }
 }
 
-/// Checks the references and the scope ownership of the manifest scopes of a state.
+/// Checks a state as `provenance check` does and writes nothing. Call it on a
+/// store that holds the publication section, or on a read-only store, and set
+/// `repository_wide` only when the manifest lists every scope of the state.
 #[rule("rule_state_check_without_host")]
 pub fn check_state(
     store: &StateStore,
@@ -87,6 +103,9 @@ pub fn check_state(
         findings
             .review_rows
             .extend(store.review_row_faults(&scope.id)?);
+    }
+    if !findings.review_rows.is_empty() {
+        return Ok(findings);
     }
 
     let mut index = CheckIndex::default();
