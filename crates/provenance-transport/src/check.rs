@@ -361,10 +361,9 @@ fn validate_locked(
     manifest: &Manifest,
     repository_wide: bool,
 ) -> anyhow::Result<()> {
-    match check_state(store, manifest, repository_wide)?.message() {
-        Some(message) => Err(anyhow::anyhow!(message)),
-        None => Ok(()),
-    }
+    check_state(store, manifest, repository_wide)?
+        .message()
+        .map_or(Ok(()), |message| Err(anyhow::anyhow!(message)))
 }
 
 #[cfg(test)]
