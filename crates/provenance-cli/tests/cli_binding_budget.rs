@@ -91,15 +91,18 @@ fn an_import_with_a_long_implementation_symbol_is_refused_and_writes_nothing() {
         &[("--input", seed.to_str().unwrap()), ("--format", "json")],
     );
 
-    // The import command prints the native text of a refusal.
+    // The import command gives the text of a refusal as the message of
+    // `operation_failed`.
+    let message = format!(
+        "record `implementation_binding_one` uses 70074 bytes and the limit is {BUDGET} bytes; \
+         make the field `symbol` shorter"
+    );
     assert_eq!(refused.status.code(), Some(1));
     assert_eq!(String::from_utf8_lossy(&refused.stdout), "");
+    let stderr: serde_json::Value = serde_json::from_slice(&refused.stderr).unwrap();
     assert_eq!(
-        String::from_utf8(refused.stderr).unwrap(),
-        format!(
-            "Error: record `implementation_binding_one` uses 70074 bytes and the limit is \
-             {BUDGET} bytes; make the field `symbol` shorter\n"
-        )
+        stderr,
+        json!({"error": {"kind": "operation_failed", "message": message}, "meta": {}})
     );
     assert_eq!(state_files(repo), before);
 }
