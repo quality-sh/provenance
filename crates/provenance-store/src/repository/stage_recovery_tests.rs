@@ -9,32 +9,21 @@ use crate::cache::tests::fixtures::{open, seeded_layout, sid};
 use crate::cache::{catch_up_state, open_cache};
 use crate::layout::ProvenanceLayout;
 use crate::state_store::StateStore;
-use crate::stopped_child::{names, run_as_child};
+use crate::stopped_child::{copy_state, names, run_as_child, state_tree, CRASH_PHASES};
 use crate::test_probes;
 use camino::{Utf8Path, Utf8PathBuf};
 use provenance_core::{ScopeId, Stamp};
 use provenance_macros::verifies;
 use std::collections::BTreeMap;
 
-const STAGED_RULE: &str = "rule_staged_publication";
+pub(super) const STAGED_RULE: &str = "rule_staged_publication";
+pub(super) const STAGED_REQUIREMENT: &str = "req_staged_publication";
 
-/// Crash probes in publication order, and whether the reopened state is new.
-const CRASH_PHASES: [(&str, bool); 8] = [
-    ("state_prepared", false),
-    ("state_marker_prepared", false),
-    ("state_after_backup_rename", false),
-    ("state_backup_created", false),
-    ("state_before_install", false),
-    ("state_after_install_rename", true),
-    ("state_installed", true),
-    ("state_published", true),
-];
-
-fn scope() -> ScopeId {
+pub(super) fn scope() -> ScopeId {
     ScopeId::new("default").unwrap()
 }
 
-fn stamp() -> Stamp {
+pub(super) fn stamp() -> Stamp {
     serde_json::from_value(serde_json::json!({
         "commit": "a".repeat(40),
         "at": "2026-10-28T00:00:00Z"
@@ -42,8 +31,29 @@ fn stamp() -> Stamp {
     .unwrap()
 }
 
-/// Adds one Rule to the staged Rule shard.
+/// Adds one Rule to the staged Rule shard and one Requirement to the staged
+/// Requirement shard. A stage of two shards lands as a whole set, so it
+/// reaches each crash probe of the whole set.
 fn write_rule(staged: &StateStore) -> anyhow::Result<()> {
+    write_one_rule(staged)?;
+    write_one_requirement(staged)
+}
+
+/// Adds one Requirement to the staged Requirement shard: a stage of one key.
+pub(super) fn write_one_requirement(staged: &StateStore) -> anyhow::Result<()> {
+    let path = crate::shards::requirements_path(&staged.layout, &scope());
+    let mut requirements = staged.list_requirements(&scope())?;
+    let mut requirement = requirements[0].clone();
+    requirement.id = sid(STAGED_REQUIREMENT);
+    requirement.created = None;
+    requirement.updated = None;
+    requirements.push(requirement);
+    staged.replace_graph_records_guarded(&path, requirements)?;
+    Ok(())
+}
+
+/// Adds one Rule to the staged Rule shard: a stage of one key.
+pub(super) fn write_one_rule(staged: &StateStore) -> anyhow::Result<()> {
     let path = crate::shards::rules_path(&staged.layout, &scope());
     let mut rules = staged.list_rules(&scope())?;
     let mut rule = rules[0].clone();
@@ -60,35 +70,7 @@ fn stage_rule(repository: &Repository) -> anyhow::Result<()> {
     repository.stage(false, Some(stamp()), write_rule)
 }
 
-/// Every state file under `root`, by path relative to the state directory.
-fn state_tree(root: &Utf8Path) -> BTreeMap<Utf8PathBuf, Vec<u8>> {
-    fn visit(base: &Utf8Path, directory: &Utf8Path, tree: &mut BTreeMap<Utf8PathBuf, Vec<u8>>) {
-        for entry in std::fs::read_dir(directory).unwrap() {
-            let path = Utf8PathBuf::from_path_buf(entry.unwrap().path()).unwrap();
-            if path.is_dir() {
-                visit(base, &path, tree);
-            } else {
-                let relative = path.strip_prefix(base).unwrap().to_owned();
-                tree.insert(relative, std::fs::read(&path).unwrap());
-            }
-        }
-    }
-    let state = ProvenanceLayout::new(root).state_dir();
-    let mut tree = BTreeMap::new();
-    visit(&state, &state, &mut tree);
-    tree
-}
-
-fn copy_state(from: &Utf8Path, to: &Utf8Path) {
-    let target = ProvenanceLayout::new(to).state_dir();
-    for (relative, bytes) in state_tree(from) {
-        let path = target.join(relative);
-        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
-        std::fs::write(path, bytes).unwrap();
-    }
-}
-
-fn serial(repository: &Repository) -> i64 {
+pub(super) fn serial(repository: &Repository) -> i64 {
     tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()
@@ -170,7 +152,7 @@ fn assert_reopened(fixture: &Fixture, committed: bool, phase: &str) {
 
 /// The entries of the transaction directory of the cache under `root`, in
 /// name order.
-fn transactions(root: &Utf8Path) -> Vec<Utf8PathBuf> {
+pub(super) fn transactions(root: &Utf8Path) -> Vec<Utf8PathBuf> {
     let directory = ProvenanceLayout::new(root).import_transactions_dir();
     names(&directory)
         .iter()

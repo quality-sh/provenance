@@ -1,5 +1,5 @@
 use super::requirement_archive::{archive, assert_invalid_update, child};
-use super::seeded_requirement_store;
+use super::reviewed_requirement_store;
 use crate::state_store::StateStore;
 use provenance_core::ScopeId;
 use provenance_macros::verifies;
@@ -7,7 +7,7 @@ use serde_json::json;
 
 /// Archives `req_old`, which refines `req_overtime`; `req_overtime` stays live.
 fn archived_parent_store() -> (tempfile::TempDir, StateStore, ScopeId) {
-    let (directory, store, scope) = seeded_requirement_store();
+    let (directory, store, scope) = reviewed_requirement_store();
     child(&store, "req_old", "req_overtime");
     archive(&store, "req_old");
     (directory, store, scope)

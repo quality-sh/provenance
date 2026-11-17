@@ -20,6 +20,11 @@ pub trait HostAccess: ContextResolver {
     fn read_operations(&self) -> Option<Arc<dyn ReadOperations>> {
         None
     }
+    /// The reviewer list of the bound repository: the actors that can make a
+    /// review decision. `None` when the access cannot read it.
+    fn reviewer_ids(&self) -> Option<Vec<String>> {
+        None
+    }
 }
 
 /// The transport policy an HTTP request must satisfy before the host classifies it.
@@ -71,5 +76,9 @@ impl HostAccess for crate::fixture::FixtureAccess {
 
     fn bound_identity(&self) -> Option<(String, String)> {
         self.bound_identity()
+    }
+
+    fn reviewer_ids(&self) -> Option<Vec<String>> {
+        self.reviewer_ids()
     }
 }

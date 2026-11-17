@@ -59,10 +59,12 @@ fn manifest_text(layout: &ProvenanceLayout) -> String {
     String::from_utf8(std::fs::read(layout.manifest_path()).unwrap()).unwrap()
 }
 
-/// A person changes AGENTS.md, so a second init moves it to a backup file
-/// and moves the new file in.
+/// The text of AGENTS.md after a person changed it.
+const PERSON_AGENTS: &str = "# Team notes\n";
+
+/// A person changes AGENTS.md, so a second init replaces it.
 fn change_agents(repo: &Utf8Path) {
-    std::fs::write(repo.join("AGENTS.md"), "# Team notes\n").unwrap();
+    std::fs::write(repo.join("AGENTS.md"), PERSON_AGENTS).unwrap();
 }
 
 /// Opens the repository as the review follow and the commands do, on its own thread.
@@ -79,8 +81,8 @@ fn open_on_a_thread(repo: &Utf8Path) -> mpsc::Receiver<anyhow::Result<Vec<String
     receiver
 }
 
-/// An init on its own thread that stopped when it first moved a file away.
-/// The manifest goes last, through the store, which moves no file away.
+/// An init on its own thread that stopped after it compared the first project
+/// file that it replaces, before the rename. The manifest goes last.
 struct StoppedInit {
     resume: mpsc::Sender<()>,
     finished: mpsc::Receiver<anyhow::Result<()>>,
@@ -93,7 +95,7 @@ impl StoppedInit {
         let (finished_sender, finished) = mpsc::channel();
         std::thread::spawn(move || {
             let mut gate = Some((stopped_sender, resume_receiver));
-            crate::test_probes::arm("file_displaced", move || {
+            crate::test_probes::arm("project_file_compared", move || {
                 if let Some((stopped, resume)) = gate.take() {
                     let _ = stopped.send(());
                     let _ = resume.recv();
@@ -103,7 +105,7 @@ impl StoppedInit {
         });
         stopped
             .recv_timeout(LIMIT)
-            .expect("init did not move a file away");
+            .expect("init did not replace a project file");
         Self { resume, finished }
     }
 
@@ -115,14 +117,14 @@ impl StoppedInit {
     }
 }
 
-/// While a second init has AGENTS.md moved away, it holds the publication
+/// While a second init replaces AGENTS.md, it holds the publication
 /// lock, so a holder of the lock waits for init, and the old manifest is in
 /// place. The new manifest lands when init continues, and the lock is then
 /// free.
 /// This test has no Rule binding: it does no read, and it checks the lock that
 /// the read test depends on.
 #[test]
-fn second_init_holds_the_publication_lock_while_it_moves_a_file_away() {
+fn second_init_holds_the_publication_lock_while_it_replaces_a_project_file() {
     let (_directory, repo, layout) = initialized();
     change_agents(&repo);
     let plan = prepare_init(&repo, options("new-reviewer")).unwrap();
@@ -138,7 +140,7 @@ fn second_init_holds_the_publication_lock_while_it_moves_a_file_away() {
     );
     assert!(
         !lock_free,
-        "init moved a file away without the publication lock"
+        "init replaced a project file without the publication lock"
     );
     assert!(lock_is_free(&layout), "init kept the publication lock");
     let after = manifest_text(&layout);
@@ -146,7 +148,7 @@ fn second_init_holds_the_publication_lock_while_it_moves_a_file_away() {
 }
 
 /// A repository open, the read of the review follow and of the commands,
-/// starts while a second init has a file moved away. The read waits for init
+/// starts while a second init replaces a project file. The read waits for init
 /// and gets the graph from after init; it does not get an error.
 #[test]
 #[provenance_macros::verifies("rule_read_waits_for_repeated_init", examples)]
@@ -211,52 +213,45 @@ fn targets(repo: &Utf8Path) -> BTreeMap<String, Option<Vec<u8>>> {
     entries
 }
 
-/// A second init fails after it moved AGENTS.md away and wrote it again,
-/// while it holds the publication lock, and before it writes the manifest.
-/// The files are as they were before that init, no new path stays, and the
-/// lock is free: a following read and a following init work.
+/// A second init fails after it replaced AGENTS.md, while it holds the
+/// publication lock, and before it writes the manifest. The files are as
+/// they were before that init, no new path stays, and the lock is free: a
+/// following read and a following init work.
 #[test]
 #[provenance_macros::verifies("rule_init_apply_rolls_back_owned_changes", examples)]
 fn a_failed_second_init_restores_the_state_and_frees_the_lock() {
     let (_directory, repo, layout) = initialized();
-    // Init writes AGENTS.md and then .gitignore again. Every temporary name
-    // of the .gitignore write is taken, so init fails after AGENTS.md moved.
+    // Init replaces AGENTS.md and then .gitignore. The probe removes the
+    // temporary file of the .gitignore write before its rename, so init
+    // fails after it replaced AGENTS.md.
     change_agents(&repo);
     std::fs::write(repo.join(".gitignore"), "target/\n").unwrap();
     let plan = prepare_init(&repo, options("new-reviewer")).unwrap();
-    let occupied: Vec<Utf8PathBuf> = (0..100_u8)
-        .map(|attempt| {
-            repo.join(format!(
-                "..gitignore.provenance-{}-{attempt}.tmp",
-                std::process::id()
-            ))
-        })
-        .collect();
-    for path in &occupied {
-        std::fs::write(path, "occupied\n").unwrap();
-    }
     let before = tree(&repo);
 
     let held = std::rc::Rc::new(std::cell::Cell::new(None));
     let seen = std::rc::Rc::clone(&held);
     let probe_layout = layout.clone();
-    crate::test_probes::arm("file_displaced", move || {
+    let probe_repo = repo.clone();
+    crate::test_probes::arm("project_file_compared", move || {
         if seen.get().is_none() {
             seen.set(Some(!lock_is_free(&probe_layout)));
         }
+        remove_temporary_files(&probe_repo, ".gitignore");
     });
     let error = plan.apply().unwrap_err();
-    crate::test_probes::disarm("file_displaced");
+    crate::test_probes::disarm("project_file_compared");
 
+    let gitignore = repo.join(".gitignore");
     assert!(
-        format!("{error:#}").contains("could not allocate tmp file"),
+        format!("{error:#}").starts_with(&format!(
+            "failed to replace {}: ",
+            gitignore.as_std_path().display()
+        )),
         "{error:#}"
     );
     assert_eq!(held.get(), Some(true), "init failed without the lock");
     assert_eq!(tree(&repo), before, "the failed init changed the files");
-    for path in &occupied {
-        std::fs::remove_file(path).unwrap();
-    }
     let read = open_on_a_thread(&repo)
         .recv_timeout(LIMIT)
         .expect("the read after the failed init did not end");
@@ -267,6 +262,45 @@ fn a_failed_second_init_restores_the_state_and_frees_the_lock() {
         .unwrap();
     let after = manifest_text(&layout);
     assert!(after.contains("new-reviewer"), "{after}");
+}
+
+/// An initialized repository in which the person changed AGENTS.md, so that
+/// a second init replaces it and no other project file.
+fn repository_with_changed_agents() -> (tempfile::TempDir, Utf8PathBuf) {
+    let directory = tempfile::tempdir().unwrap();
+    let repo = Utf8PathBuf::from_path_buf(directory.path().join("repo")).unwrap();
+    std::fs::create_dir_all(&repo).unwrap();
+    init_through_the_port(init_input(&repo, &["reviewer"]), || {}).unwrap();
+    change_agents(&repo);
+    (directory, repo)
+}
+
+/// The reviewers in the manifest of the scope `default` of `repo`.
+fn reviewers(repo: &Utf8Path) -> anyhow::Result<Vec<String>> {
+    let manifest = Repository::open(repo, "default")?.manifest()?;
+    Ok(manifest.disposition_actor_ids)
+}
+
+/// The paths of `repo` with `.provenance-` in the name: the temporary files
+/// of init.
+fn temporary_files(repo: &Utf8Path) -> Vec<String> {
+    tree(repo)
+        .into_keys()
+        .filter(|name| name.contains(".provenance-"))
+        .collect()
+}
+
+/// Removes the temporary file of the replacement of `file_name` in `folder`.
+/// A probe at `project_file_compared` calls it, so that the rename of that
+/// file fails after the compare.
+pub(super) fn remove_temporary_files(folder: &Utf8Path, file_name: &str) {
+    let prefix = format!(".{file_name}.provenance-");
+    for entry in folder.read_dir_utf8().unwrap() {
+        let entry = entry.unwrap();
+        if entry.file_name().starts_with(&prefix) && entry.path().extension() == Some("tmp") {
+            std::fs::remove_file(entry.path()).unwrap();
+        }
+    }
 }
 
 /// The input of an init of the scope `default` at the root of `repo`, as the
@@ -299,5 +333,10 @@ fn init_through_the_port(
 }
 
 mod check_and_write_tests;
+mod edit_during_replacement_tests;
+#[cfg(unix)]
+mod folder_sync_tests;
 mod moved_state_tests;
+mod removal_tests;
+mod replacement_stop_tests;
 mod stop_tests;

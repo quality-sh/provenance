@@ -464,6 +464,26 @@ class ReportTests(unittest.TestCase):
             text = report.summary("cli-linux", "missing", "none", root, succeeded=True)
         self.assertIn("| stops | 3 |", text)
 
+    def test_the_summary_gives_the_stops_of_each_probe_in_rows_of_their_own(self):
+        with tempfile.TemporaryDirectory() as root:
+            (Path(root) / "cli-linux.json").write_text(json.dumps({"stops": 3}))
+            (Path(root) / "cli-linux.probe.one-key-write.json").write_text(
+                json.dumps({"cases": 1, "stops of a write that ended before the test saw a point": 1}))
+            (Path(root) / "cli-linux.probe.each-kind.json").write_text(
+                json.dumps({"stops before the marker": 2, "stops before the rename of the key": 4}))
+            (Path(root) / "cli-macos.probe.one-key-write.json").write_text(
+                json.dumps({"stops after the answer": 1}))
+            text = report.summary("cli-linux", "missing", "none", root, succeeded=True)
+        self.assertIn("| stops | 3 |", text)
+        self.assertIn("### Stops of the probes of the cli-linux layer", text)
+        self.assertIn(
+            "| one-key-write | stops of a write that ended before the test saw a point | 1 |", text)
+        self.assertIn("| each-kind | stops before the marker | 2 |", text)
+        self.assertIn("| each-kind | stops before the rename of the key | 4 |", text)
+        self.assertNotIn("| one-key-write | cases |", text)
+        self.assertNotIn("stops after the answer", text)
+        self.assertLess(text.index("| each-kind |"), text.index("| one-key-write |"))
+
     def test_the_text_of_a_run_without_a_law_names_each_cause(self):
         text = report.describe_run("engine", False)
         self.assertIn("does not show the end of the tests. The build failed", text)

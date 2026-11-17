@@ -1,0 +1,90 @@
+// @provenance rule: rule_class
+export class Token {}
+
+// @provenance rule: rule_default_function
+export default function pays(hours) {
+  return hours > 38;
+}
+
+// @provenance rule: rule_generator
+export function* shifts() {
+  yield 1;
+}
+
+// @provenance verification: examples
+// @provenance rule: rule_test_callback
+test("hours above 38", function overtimeExamples() {
+  expect(pays(39)).toBe(true);
+});
+
+// @provenance verification: examples
+// @provenance rule: rule_arrow_test
+test("hours above 38", () => {
+  expect(pays(39)).toBe(true);
+});
+
+// @provenance rule: rule_anonymous_default
+export default function () {}
+
+export function namedAfter() {}
+
+export class Clock {
+  // @provenance rule: rule_generator_method
+  *hours() {
+    let total = 0;
+    return total;
+  }
+}
+
+// @provenance rule: rule_let
+let first, second;
+
+// @provenance rule: rule_var
+var counter = 0;
+
+const pick = ready ?
+  // @provenance rule: rule_multiline_ternary
+  foo(a) :
+  bar;
+
+app.get("/",
+  // @provenance rule: rule_handler_argument
+  async (req, res) => {
+    res.end();
+  });
+
+function* keywords() {
+  // @provenance rule: rule_keyword_if
+  if (ready) {
+  }
+  // @provenance rule: rule_keyword_for
+  for (const shift of shifts) {
+  }
+  // @provenance rule: rule_keyword_while
+  while (ready) {
+  }
+  // @provenance rule: rule_keyword_switch
+  switch (ready) {
+    // @provenance rule: rule_keyword_case
+    case (ready): {
+    }
+  }
+  try {
+  }
+  // @provenance rule: rule_keyword_catch
+  catch (error) {
+  }
+  // @provenance rule: rule_keyword_with
+  with (scope) {
+  }
+}
+
+// @provenance rule: rule_default_class_extends
+export default class extends Base {
+}
+
+const el = <p>
+  hours
+</p>
+// @provenance rule: rule_after_jsx
+function afterJsx() {}

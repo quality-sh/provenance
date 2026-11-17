@@ -26,6 +26,10 @@ mod coverage_binding_settings;
 #[path = "../discussion_support.rs"]
 mod discussion_support;
 use discussion_support::base as review_support;
+#[path = "../evidence_run_budget.rs"]
+mod evidence_run_budget;
+#[path = "../fail_verification_clock.rs"]
+mod fail_verification_clock;
 #[path = "../history_git_failures.rs"]
 mod history_git_failures;
 #[path = "../history_versions_contract.rs"]
@@ -56,9 +60,13 @@ mod refusals_declare_a_kind;
 mod relation_deltas;
 #[path = "../repository_open.rs"]
 mod repository_open;
+#[path = "../stage_landing_local_disk.rs"]
+mod stage_landing_local_disk;
 #[path = "../staged_view.rs"]
 mod staged_view;
 #[path = "../state_view.rs"]
 mod state_view;
 #[path = "../stray_state_entries.rs"]
 mod stray_state_entries;
+#[path = "../swarm_run_merge_domain.rs"]
+mod swarm_run_merge_domain;

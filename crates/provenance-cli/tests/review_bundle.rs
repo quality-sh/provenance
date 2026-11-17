@@ -84,7 +84,7 @@ fn retain_directory(source: &Path, destination: &Path) -> std::io::Result<()> {
 
 fn request(host: &Value, method: &str, path: &str, auth: bool) -> ureq::Request {
     let request = ureq::AgentBuilder::new()
-        .timeout(Duration::from_secs(5))
+        .timeout(review_host_support::waits::LIMIT)
         .build()
         .request(
             method,

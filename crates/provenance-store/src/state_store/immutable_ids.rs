@@ -8,8 +8,8 @@
 //! lines of its file. Both refuse with `invalid_state_file` at the second
 //! line, and the message names the two lines.
 //!
-//! The records that the checks get have no lines: each list of a kind joins
-//! the rows of its file, the landings and the record of the write. So the
+//! The records that the checks get have no lines: a write check gets the
+//! rows of the file of each kind with the records of the write. So the
 //! refusal path reads the file of the kind again with the same typed parse
 //! as the list reader, and finds the id with
 //! [`IdeationRecord::immutable_id`], as the aggregate check does.
@@ -46,8 +46,7 @@ impl StateStore {
     ///
     /// Two records of one kind with one id come only from two lines of the
     /// file of that kind: a write and a landing refuse or replace a record
-    /// with an id that the store holds, and a list replaces a row of the file
-    /// with a landed record that has its id. So the refusal is `duplicate`
+    /// with an id that the store holds. So the refusal is `duplicate`
     /// with no file and no line only when the file has other bytes at the
     /// second read. A view never changes, and a store with a section holds
     /// the publication section, so there only a program outside Provenance

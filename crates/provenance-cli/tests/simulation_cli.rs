@@ -51,6 +51,8 @@ use process::stop::{Landing, Stop};
 use process::{etag, layer};
 use provenance_simulation::generate::{Case, Fault, Operation, Step, FIRST_REQUIREMENT};
 use provenance_simulation::report;
+use provenance_store::storage::StateKey;
+use std::collections::BTreeSet;
 use std::time::Instant;
 
 // No Rule: L3, L4, L6 and L7 have their basis tests; this is the random
@@ -115,18 +117,25 @@ fn two_updates_at_once_have_one_winner() {
 }
 
 /// Runs a case with a stop at `at` and checks it: an update, a create on a
-/// branch that git merges back through `provenance merge-jsonl`, and a claim
-/// that the stop kills. The stop must land at `landing`, which is before the
-/// install of the new state. After the kill, one read runs through the CLI.
-/// Then the marker is gone, the state is the state before the claim, and the
-/// transaction of the claim stays only for a stop before the marker. The run
-/// must keep the laws.
-fn stop_probe(at: u8, landing: Landing) {
+/// branch that git merges back through `provenance merge-jsonl`, and the
+/// write `stopped` that the stop kills. The stop must land at one of
+/// `landings`. A one-key write can also answer after the test saw its
+/// temporary file and before the kill: then it must answer success. A write
+/// that ends before the test sees its point fails the probe, because then
+/// the probe tested no stop. A stop before the rename keeps each file below
+/// the state directory and its bytes, and leaves the temporary file in the
+/// cache. After the stop, one read runs through the CLI. Then no marker, no
+/// transaction and no temporary file of the write are there, and the state
+/// is the state before `stopped`, with only the Topic key changed for a stop
+/// after a rename or a write that answered. The run must keep the laws. The
+/// job summary counts the landing of the stop under `probe`.
+fn stop_probe(probe: &'static str, stopped: Operation, at: u8, landings: &[Landing]) {
+    provenance_simulation::stats::record_probe(probe);
     let started = Instant::now();
     let steps = vec![
         write(0, update(0)),
         Step::OutsideWrite(Operation::CreateRequirement { n: 0 }),
-        write(1, Operation::ClaimTopic),
+        write(1, stopped),
         Step::Fault(Fault::Stop { engine: 1, at }),
     ];
     let case = Case { engines: 2, steps };
@@ -135,52 +144,136 @@ fn stop_probe(at: u8, landing: Landing) {
     assert_eq!(ways, [Ran::Alone, Ran::Outside, Ran::Stopped]);
     let (_, outside) = &fixture.groups[1];
     assert!(outside[0].result.is_ok(), "{outside:?}");
-    let [Stop::Landed(landed)] = fixture.stops.as_slice() else {
-        let rows: Vec<_> = fixture.stops.iter().map(Stop::row).collect();
-        panic!("the stop did not kill the claim before its answer: {rows:?}");
+    let one_key = landings.contains(&Landing::BeforeRename);
+    let (landing, before) = match fixture.stops.as_slice() {
+        [Stop::Landed(landed)] => {
+            assert!(
+                landings.contains(&landed.landing),
+                "the stop landed at another point: {:?}",
+                landed.landing
+            );
+            (Some(landed), &landed.before)
+        }
+        [Stop::Answered { before }] if one_key => {
+            let (_, stopped) = &fixture.groups[2];
+            assert!(stopped[0].result.is_ok(), "{stopped:?}");
+            (None, before)
+        }
+        [Stop::Ended] => {
+            panic!("the write ended before the test saw its point, so the probe tested no stop")
+        }
+        other => {
+            let rows: Vec<_> = other.iter().map(Stop::row).collect();
+            panic!("the stop did not kill the write before its answer: {rows:?}");
+        }
     };
-    assert_eq!(landed.landing, landing, "the stop landed at another point");
+    let row = fixture.stops[0].row();
     let root = fixture.root();
     etag(&root, FIRST_REQUIREMENT).expect("the read after the stop answers");
-    let marker = fixture.repo.layout.publication_marker_path();
-    assert!(!marker.exists(), "the read after the stop left the marker");
-    assert_eq!(
-        state_entries(&root),
-        landed.before,
-        "after the read, the state is not the state before the claim"
+    let layout = &fixture.repo.layout;
+    assert!(
+        !layout.publication_marker_path().exists(),
+        "{row}: the read after the stop left the marker"
     );
-    // Recovery removes only the transaction that a marker names.
-    assert_eq!(
-        landed.transaction.exists(),
-        landing == Landing::BeforeMarker,
-        "the transaction of the claim after the read"
-    );
+    let transactions =
+        std::fs::read_dir(layout.import_transactions_dir()).map_or(0, std::iter::Iterator::count);
+    assert_eq!(transactions, 0, "{row}: a transaction stays after the read");
+    let after = state_entries(&root).expect("the state reads after the stop");
+    let before = before.clone().expect("the state read before the write");
+    let changed: BTreeSet<_> = before
+        .keys()
+        .chain(after.keys())
+        .filter(|key| before.get(*key) != after.get(*key))
+        .map(StateKey::as_str)
+        .collect();
+    let landing = landing.map(|landed| landed.landing);
+    if one_key && landing != Some(Landing::BeforeRename) {
+        assert!(
+            changed.len() == 1 && changed.iter().all(|key| key.contains("/topics/")),
+            "{row}: after the read, keys other than the Topic key changed: {changed:?}"
+        );
+    } else {
+        assert!(
+            changed.is_empty(),
+            "{row}: after the read, the state is not the state before the write: {changed:?}"
+        );
+    }
+    // A stop before the rename keeps each file of the state tree and its
+    // bytes; the test saw the temporary file in the cache after the kill.
+    // The section entry of the read removes a transaction with no marker and
+    // the temporary file of a one-key write, and recovery the transaction
+    // that a marker names.
+    if let [Stop::Landed(landed)] = fixture.stops.as_slice() {
+        if landed.landing == Landing::BeforeRename {
+            let (files_before, files_after) = &landed.files;
+            assert_eq!(
+                files_after.keys().collect::<Vec<_>>(),
+                files_before.keys().collect::<Vec<_>>(),
+                "{row}: the files below the state directory after the kill"
+            );
+            assert!(
+                files_after == files_before,
+                "{row}: a file below the state directory changed its bytes"
+            );
+        }
+        assert!(
+            !landed.made.exists(),
+            "{row}: the transaction or the temporary file of the write stays after the read"
+        );
+    }
     report::probe_laws(&layer(), check(&case, &fixture.finish(started)));
 }
 
-// No Rule: a probe of the nightly simulation. It runs `stop_probe` with the
-// stop at the transaction, which must land before the marker.
+// No Rule: a probe of the nightly simulation. It runs `stop_probe` on an
+// update of two keys with the stop at the transaction, which must land
+// before the marker.
 #[test]
 #[ignore = "a probe of the nightly simulation"]
 fn a_merged_branch_and_a_stop_before_the_marker_keep_the_laws() {
-    stop_probe(0, Landing::BeforeMarker);
+    stop_probe("stop-before-marker", update(0), 0, &[Landing::BeforeMarker]);
 }
 
-// No Rule: a probe of the nightly simulation. It runs `stop_probe` with the
-// stop at the marker, which must land after the marker and before the
-// install, so that the read after the stop recovers the publish.
+// No Rule: a probe of the nightly simulation. It runs `stop_probe` on an
+// update of two keys with the stop at the marker, which must land after the
+// marker and before the install, so that the read after the stop recovers
+// the publish.
 #[test]
 #[ignore = "a probe of the nightly simulation"]
 fn a_merged_branch_and_a_stop_after_the_marker_keep_the_laws() {
-    stop_probe(1, Landing::BeforeInstall);
+    stop_probe("stop-after-marker", update(0), 1, &[Landing::BeforeInstall]);
+}
+
+// No Rule: a probe of the nightly simulation. It runs `stop_probe` on a
+// claim, a write of one key, with the stop when its temporary file appears
+// in the cache. The rename comes one file sync later, so the kill lands
+// before or after it, or the write answers first. Each landing has its own
+// asserts. A write that ends before the test sees its temporary file fails
+// the probe.
+#[test]
+#[ignore = "a probe of the nightly simulation"]
+fn a_merged_branch_and_a_stop_of_a_one_key_write_keep_the_laws() {
+    stop_probe(
+        "one-key-write",
+        Operation::ClaimTopic,
+        0,
+        &[Landing::BeforeRename, Landing::AfterRename],
+    );
 }
 
 // No Rule: a probe that each kind of write that the simulation sends
-// publishes through a transaction: a stop at the transaction kills each
-// kind before its answer.
+// publishes through a transaction or a temporary file. A stop at the first
+// point kills a write of two keys before the marker. A write of one key
+// stops before or after its rename, or answers with a success after the test
+// saw its temporary file. A write that ends before the test sees its point
+// fails the probe. A record
+// has one pending submission at most. So a submit that no stop meets gives
+// the stopped withdrawal its proposal, and a second withdrawal ends that
+// submission if the stop landed before the rename. Then the stopped submit
+// has no pending submission in its way.
 #[test]
 #[ignore = "a probe of the nightly simulation"]
-fn a_stop_at_the_transaction_kills_each_kind_of_write() {
+fn a_stop_at_the_first_point_of_each_kind_of_write_keeps_the_laws() {
+    provenance_simulation::stats::record_probe("each-kind");
     let stop = Step::Fault(Fault::Stop { engine: 1, at: 0 });
     let steps = vec![
         write(1, Operation::CreateRequirement { n: 0 }),
@@ -188,10 +281,12 @@ fn a_stop_at_the_transaction_kills_each_kind_of_write() {
         write(1, update(0)),
         stop.clone(),
         write(1, Operation::SubmitReview),
-        stop.clone(),
-        write(1, Operation::SubmitReview),
         Step::Turn(1),
         write(1, Operation::WithdrawReview { n: 0 }),
+        stop.clone(),
+        write(1, Operation::WithdrawReview { n: 0 }),
+        Step::Turn(1),
+        write(1, Operation::SubmitReview),
         stop.clone(),
         write(1, Operation::ClaimTopic),
         stop.clone(),
@@ -207,22 +302,34 @@ fn a_stop_at_the_transaction_kills_each_kind_of_write() {
         .iter()
         .filter(|(way, _)| *way == Ran::Stopped)
         .flat_map(|(_, done)| done)
-        .map(|done| done.op.clone())
         .collect();
     let kinds = [
         Operation::CreateRequirement { n: 0 },
         update(0),
-        Operation::SubmitReview,
         Operation::WithdrawReview { n: 0 },
+        Operation::SubmitReview,
         Operation::ClaimTopic,
         Operation::ReleaseTopic,
     ];
-    assert_eq!(stopped, kinds);
+    let ops: Vec<_> = stopped.iter().map(|done| done.op.clone()).collect();
+    assert_eq!(ops, kinds);
+    assert_eq!(run.stops.len(), kinds.len());
+    let one_key = [Landing::BeforeRename, Landing::AfterRename];
+    let first_point =
+        run.stops
+            .iter()
+            .zip(&stopped)
+            .enumerate()
+            .all(|(n, (stop, done))| match stop {
+                Stop::Landed(landed) if n < 2 => landed.landing == Landing::BeforeMarker,
+                Stop::Landed(landed) => one_key.contains(&landed.landing),
+                Stop::Answered { .. } => n >= 2 && done.result.is_ok(),
+                _ => false,
+            });
     let rows: Vec<_> = run.stops.iter().map(Stop::row).collect();
-    let landed = run.stops.iter().all(|stop| matches!(stop, Stop::Landed(_)));
     assert!(
-        landed,
-        "a stop did not kill its write before its answer: {rows:?}"
+        first_point,
+        "a stop did not land at the first point of its write: {rows:?}"
     );
     report::probe_laws(&layer(), check(&case, &run));
 }

@@ -1,13 +1,9 @@
 //! Record history over a merged Git history and over a shard version that
 //! does not parse.
 use crate::review_support;
-use provenance_core::review::{RecordVersion, ReviewHistoryQuery};
-use provenance_core::{NodeType, StableId};
+use provenance_core::StableId;
 use provenance_macros::verifies;
-use provenance_store::{
-    layout::ProvenanceLayout, operations::read_policy::ReadPolicy, review::read_history,
-    state_store::StateStore,
-};
+use provenance_store::state_store::StateStore;
 use review_support::*;
 use serde_json::json;
 
@@ -69,21 +65,6 @@ fn save_record(store: &StateStore, id: &str, fields: &serde_json::Value) {
         .unwrap();
 }
 
-async fn versions(temp: &tempfile::TempDir) -> Vec<RecordVersion> {
-    let root = camino::Utf8Path::from_path(temp.path()).unwrap();
-    let query = ReviewHistoryQuery {
-        record_kind: NodeType::Requirement,
-        record_id: id(),
-        limit: 50,
-        cursor: None,
-    };
-    read_history(&repository(root), ReadPolicy::default(), query)
-        .await
-        .unwrap()
-        .result
-        .entries
-}
-
 #[tokio::test]
 #[verifies("rule_record_history_reads_git", examples)]
 async fn merged_history_lists_only_the_commits_that_changed_the_record() {
@@ -119,7 +100,7 @@ async fn merged_history_lists_only_the_commits_that_changed_the_record() {
         &["merge", "-q", "--no-edit", "-X", "ours", "feature"],
     );
 
-    let versions = versions(&temp).await;
+    let versions = history(&temp, "req_a").await;
     let ids = versions.iter().map(|v| v.id.as_str()).collect::<Vec<_>>();
     assert_eq!(ids, [created.as_str(), alice.as_str()]);
     assert_eq!(versions[1].author.as_deref(), Some("alice"));
@@ -132,8 +113,7 @@ async fn merged_history_lists_only_the_commits_that_changed_the_record() {
 async fn history_skips_a_shard_version_that_does_not_parse() {
     let (temp, store) = fixture();
     let created = commit_state(&temp, "Create");
-    let layout = ProvenanceLayout::new(camino::Utf8Path::from_path(temp.path()).unwrap());
-    let path = provenance_store::shards::path_for(&layout, &scope(), NodeType::Requirement);
+    let path = requirements(&temp);
     let text = std::fs::read_to_string(&path).unwrap();
     std::fs::write(&path, format!("<<<<<<< HEAD\n{text}")).unwrap();
     commit_state(&temp, "Commit a conflict marker");
@@ -143,7 +123,7 @@ async fn history_skips_a_shard_version_that_does_not_parse() {
         .save_requirement(save(&store, json!({"description":"Described."})))
         .unwrap();
 
-    let versions = versions(&temp).await;
+    let versions = history(&temp, "req_a").await;
     let ids = versions.iter().map(|v| v.id.as_str()).collect::<Vec<_>>();
     assert_eq!(ids, [created.as_str(), "working"]);
     assert_eq!(versions[1].changed_fields, ["description"]);
@@ -195,7 +175,7 @@ async fn merge_that_keeps_one_side_of_a_conflict_adds_no_version() {
         &["merge", "-q", "--no-edit", "-X", "ours", "feature"],
     );
 
-    let versions = versions(&temp).await;
+    let versions = history(&temp, "req_a").await;
     let ids = versions.iter().map(|v| v.id.as_str()).collect::<Vec<_>>();
     assert_eq!(ids, [created.as_str(), bob.as_str()]);
     assert_eq!(versions[1].before.as_ref(), Some(&versions[0].id));
@@ -212,6 +192,51 @@ async fn merge_that_resolves_a_conflict_to_new_content_adds_one_version() {
         "merger",
         &["merge", "-q", "--no-edit", "-X", "ours", "feature"],
     );
+    // Where the two sides of the Proposal file conflict, the merge keeps the
+    // lines of main. The merger also keeps the lines that only feature
+    // added, as a person who keeps both sides does. Each branch opened a
+    // review submission of req_a with review cycle 2, so a read of req_a
+    // refuses.
+    let path = ".provenance/state/scopes/default/ideation/proposal_cards.jsonl";
+    let proposals = temp.path().join(path);
+    let merged = std::fs::read_to_string(&proposals).unwrap();
+    let feature = git_as(&temp, "merger", &["show", &format!("feature:{path}")]);
+    let mut lines = merged.lines().collect::<Vec<_>>();
+    for line in feature.lines() {
+        if !lines.contains(&line) {
+            lines.push(line);
+        }
+    }
+    let store_lines = |lines: &[&str]| {
+        let mut text = String::new();
+        for line in lines {
+            text.push_str(line);
+            text.push('\n');
+        }
+        std::fs::write(&proposals, text).unwrap();
+    };
+    store_lines(&lines);
+    let refusal = store
+        .requirement_decision_state(&scope(), &id())
+        .unwrap_err()
+        .to_string();
+    assert!(
+        refusal.contains("requirement req_a has 2 review submissions with review cycle 2. ")
+            && refusal.ends_with(
+                "; To repair, keep one submission and remove the lines of each other submission, \
+                 then commit."
+            ),
+        "{refusal}"
+    );
+    // The merger removes the line of one of them, as the refusal says:
+    // neither has a decision or a withdrawal.
+    let cycle_two = "\"proposal_key\":\"review:requirement:req_a:2\"";
+    let removed = lines
+        .iter()
+        .rposition(|line| line.contains(cycle_two))
+        .unwrap();
+    lines.remove(removed);
+    store_lines(&lines);
     store
         .save_requirement(save(
             &store,
@@ -222,7 +247,7 @@ async fn merge_that_resolves_a_conflict_to_new_content_adds_one_version() {
     git_as(&temp, "merger", &["commit", "-q", "--amend", "--no-edit"]);
     let merge = git_as(&temp, "merger", &["rev-parse", "HEAD"]);
 
-    let versions = versions(&temp).await;
+    let versions = history(&temp, "req_a").await;
     let ids = versions.iter().map(|v| v.id.as_str()).collect::<Vec<_>>();
     assert_eq!(ids, [created.as_str(), bob.as_str(), merge.as_str()]);
     assert_eq!(versions[2].author.as_deref(), Some("merger"));
@@ -248,14 +273,14 @@ async fn history_shows_the_older_commits_after_a_shallow_clone_gets_deeper() {
     let source = format!("file://{}", origin.path().display()).replace('\\', "/");
     git(&clone, &["clone", "-q", "--depth", "1", &source, "."]);
 
-    let shallow = versions(&clone).await;
+    let shallow = history(&clone, "req_a").await;
     let ids = shallow.iter().map(|v| v.id.as_str()).collect::<Vec<_>>();
     assert_eq!(ids, [commits[2].as_str()]);
 
     // HEAD stays at the same commit. Only the shallow boundary moves.
     git(&clone, &["fetch", "-q", "--deepen", "2"]);
     assert_eq!(git(&clone, &["rev-parse", "HEAD"]), commits[2]);
-    let deeper = versions(&clone).await;
+    let deeper = history(&clone, "req_a").await;
     let ids = deeper.iter().map(|v| v.id.as_str()).collect::<Vec<_>>();
     assert_eq!(ids, commits.iter().map(String::as_str).collect::<Vec<_>>());
     assert_eq!(deeper[2].before.as_ref(), Some(&deeper[1].id));
@@ -287,10 +312,10 @@ async fn history_reads_of_two_repositories_list_the_commits_of_each() {
     let second_changed = commit_state(&second, "Change");
 
     for _ in 0..2 {
-        let ids = versions(&first).await;
+        let ids = history(&first, "req_a").await;
         let ids = ids.iter().map(|v| v.id.as_str()).collect::<Vec<_>>();
         assert_eq!(ids, [first_created.as_str()]);
-        let ids = versions(&second).await;
+        let ids = history(&second, "req_a").await;
         let ids = ids.iter().map(|v| v.id.as_str()).collect::<Vec<_>>();
         assert_eq!(ids, [second_created.as_str(), second_changed.as_str()]);
     }

@@ -50,6 +50,8 @@ pub struct Publish {
     pub outside_writes: usize,
     /// The set lands as one whole set: only a stage gives one.
     pub whole_set: bool,
+    /// The number of keys that the set puts or deletes.
+    pub keys: usize,
     /// The set names the revision that it was made on.
     pub on_base: bool,
 }
@@ -88,8 +90,9 @@ struct State {
     stopped: bool,
     /// The planted fault met its first chance.
     planted: bool,
-    /// A key whose landing fails, as the storage contract suite asks.
-    broken: Option<StateKey>,
+    /// Keys whose writes fail, whichever set makes them, as the storage
+    /// contract suite asks.
+    broken: BTreeSet<StateKey>,
     publishes: Vec<Publish>,
     outside_writes: usize,
     /// The entries that an engine read before its last moved base (planted
@@ -163,12 +166,15 @@ impl World {
         after: &BTreeMap<StateKey, Vec<u8>>,
     ) {
         let mut state = self.lock();
+        let mut keys = 0;
         for key in before.keys().filter(|key| !after.contains_key(*key)) {
             state.entries.remove(key);
+            keys += 1;
         }
         for (key, bytes) in after {
             if before.get(key) != Some(bytes) {
                 state.entries.insert(key.clone(), bytes.clone());
+                keys += 1;
             }
         }
         state.outside_writes += 1;
@@ -179,14 +185,18 @@ impl World {
             outcome: Outcome::Landed,
             outside_writes,
             whole_set: false,
+            keys,
             on_base: false,
         });
     }
 
-    /// Makes each later landing of `key` fail: a per-key set lands the keys
-    /// before it, a whole set lands no key, and the outcome is unknown.
+    /// Makes each later write of `key` fail, whichever set makes it.
+    ///
+    /// A per-key set lands the keys before it, and its outcome is unknown;
+    /// a per-key set that fails at its first key is refused. A whole set
+    /// lands no key, and its outcome is unknown.
     pub fn break_key(&self, key: StateKey) {
-        self.lock().broken = Some(key);
+        self.lock().broken.insert(key);
     }
 
     /// Notes that an engine of the case stopped.

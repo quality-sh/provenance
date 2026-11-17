@@ -174,10 +174,12 @@ async fn lifecycle_update_keeps_the_current_submission() {
         .await
         .unwrap();
     let pending = created.decision.pending.unwrap();
+    // A change to active or archived opens a status request; the other
+    // lifecycle statuses apply at once.
     let request: UpdateRequirementRequest = serde_json::from_value(json!({
         "actor":"ben", "expected_etag":created.edit.etag,
         "declared_by":null, "statement":null, "description":null,
-        "status":"active", "clear_fields":[],
+        "status":"refinement", "clear_fields":[],
         "relationships":null, "id":"req_a"
     }))
     .unwrap();

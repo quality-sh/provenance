@@ -141,7 +141,9 @@ impl StageLock {
 
     /// Every change of the stage as one whole set on the view where the
     /// stage started: a put for each key that is new or has other bytes, and
-    /// a delete for each key of the base that the overlay does not hold.
+    /// a delete for each key of the base that the overlay does not hold. The
+    /// store gives a set of one key to the adapter with the atomicity of each
+    /// key, and a set of no key writes no data.
     #[rule("rule_stage_lands_as_one_whole_set")]
     pub(crate) fn changes(&self) -> WriteSet {
         let overlay = self.overlay();

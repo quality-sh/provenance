@@ -10,7 +10,9 @@ use provenance_porcelain::get::{
     Bounds, GetPort, Impact, Notify, PortFuture, ReadError, RecordResolution, Registration, Review,
     ReviewLink, Traversal, TraversalRequest, View, NO_REVIEW_HOST,
 };
-use provenance_store::operations::catalog::{self, Operation as _};
+use provenance_store::operations::catalog::{
+    self, CallFailure as _, HandlerFailure, Operation as _,
+};
 
 #[path = "shaping_read.rs"]
 mod shaping_read;
@@ -368,10 +370,10 @@ fn response_parts<R>(response: QueryResponse<R>) -> (R, ResponseMeta) {
     )
 }
 
-fn operation_error<E: std::error::Error>(
+fn operation_error<E: HandlerFailure>(
     error: &provenance_core::protocol::failure::OperationError<E>,
 ) -> ReadError {
-    ReadError::Operation(error.to_string())
+    ReadError::Operation(error.message())
 }
 
 pub(super) fn is_available(host: &crate::StatementHost) -> bool {

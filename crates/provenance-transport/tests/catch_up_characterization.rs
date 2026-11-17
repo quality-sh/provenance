@@ -10,6 +10,7 @@
 
 use crate::support;
 
+use provenance_core::protocol::read_failure::STATE_CORRECTIONS;
 use provenance_transport::StatementHost;
 use serde_json::{json, Value};
 use support::catch_up_steps::{write, Answer, Surface, STEPS};
@@ -66,8 +67,8 @@ async fn reads_after_each_write_equal_a_full_rebuild() {
         transcript.push(json!({"step": step, "answers": answers}));
     }
     let text = serde_json::to_string_pretty(&transcript).unwrap();
-    assert_eq!(fingerprint(&transcript[..15]), "841ce06d32c8aee2", "{text}");
-    assert_eq!(fingerprint(&transcript), "982f4db196345d97", "{text}");
+    assert_eq!(fingerprint(&transcript[..15]), "4b95c406da338453", "{text}");
+    assert_eq!(fingerprint(&transcript), "51845083c6512b10", "{text}");
 }
 
 /// A hand edit that each validator refuses, and the answer the next read
@@ -164,16 +165,28 @@ async fn hand_edits_that_validation_refuses_keep_their_refusals() {
         json!({"read": "/topics/topic_a", "status": 200, "freshness_error": error,
             "items": null, "error": null})
     };
+    let topic_fresh = json!({"read": "/topics/topic_a", "status": 200, "freshness_error": null,
+        "items": null, "error": null});
     let cycle_error = "depends_on forms a cycle: req_c -> req_d -> req_c";
     assert_eq!(cycle, at_stored(cycle_error, topic(cycle_error)));
-    let card_error = "scopes/default/ideation/proposal_cards.jsonl line 10: \
-        duplicate immutable proposal id <generated> at line 1 and at line 10";
-    assert_eq!(duplicate_card, at_stored(card_error, topic(card_error)));
-    let line_error = "scopes/default/topics/topic.jsonl line 2: EOF while parsing a value";
+    // The copied line is a review submission. Two equal lines of one review
+    // row ID read as one row, so the catch-up loads it one time.
+    let fresh = json!([
+        {"read": "/requirements", "status": 200, "freshness_error": null, "items": 3,
+            "error": null},
+        topic_fresh,
+        {"read": "/proposals", "status": 200, "freshness_error": null, "items": 9,
+            "error": null},
+    ]);
+    assert_eq!(duplicate_card, fresh);
+    let line_error = format!(
+        "scopes/default/topics/topic.jsonl line 2: EOF while parsing a value; {STATE_CORRECTIONS}"
+    );
     let unreadable = json!({"read": "/topics/topic_a", "status": 500, "freshness_error": null,
         "items": null, "error": {"file": "scopes/default/topics/topic.jsonl",
-            "kind": "invalid_state_file", "line": 2, "message": "EOF while parsing a value"}});
-    assert_eq!(broken_topic, at_stored(line_error, unreadable));
+            "kind": "invalid_state_file", "line": 2, "message": "EOF while parsing a value",
+            "hint": STATE_CORRECTIONS}});
+    assert_eq!(broken_topic, at_stored(&line_error, unreadable));
     assert_eq!(
         missing_artifact,
         json!([

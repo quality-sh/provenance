@@ -78,11 +78,21 @@ pub(crate) use refuse;
 /// Stored records that do not agree, located at the record at fault. It reads
 /// as `invalid_state_file` with that file and line.
 pub fn state_fault(at: &ShardLine, message: String) -> anyhow::Error {
+    located_fault(at, message, None)
+}
+
+/// [`state_fault`] with `correction`, the step that corrects these records,
+/// as the hint of the refusal.
+pub fn corrected_state_fault(at: &ShardLine, message: String, correction: &str) -> anyhow::Error {
+    located_fault(at, message, Some(correction.to_owned()))
+}
+
+fn located_fault(at: &ShardLine, message: String, correction: Option<String>) -> anyhow::Error {
     crate::state_store::readers::unparsable(
         &at.path,
         u64::try_from(at.line).unwrap_or(u64::MAX),
         message,
-        None,
+        correction,
     )
     .into()
 }

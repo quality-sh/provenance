@@ -62,14 +62,39 @@ A word that names an API collection, such as `rules` in `provenance rules list`,
 is not a command. The CLI refuses it with a usage error and shows
 `provenance --help`.
 
-Rule creation defaults to `draft` in the CLI and in catalog operations. Pass
-`--status active` only when a person ratifies the Rule. Coverage reports do not
-produce active-Rule absence findings for a draft Rule.
+A Requirement `create` or `update`, `discuss`, and `reply` take an optional
+`--actor`. A Requirement `create` or `update` or a `discuss` that gives no actor records
+the actor `authoring`, on the CLI, on MCP, and on the HTTP API. A `reply` stores no actor. A
+JSON `null` actor is invalid input. A Rule or Resolution write takes no actor and
+records `authoring`. `submit`, `claim`, and `release` need `--actor`.
+
+Rule creation defaults to `draft` in the CLI and in catalog operations. An
+update with `--status active` or `--status archived`, or a create with
+`--status active`, opens a status request and does not change the status. A
+create with `--status archived` is refused: create the Rule, then request the
+archive. A create with `--status active` writes the Rule as `review` until a
+reviewer accepts the request. Coverage reports do not produce active-Rule
+absence findings for a draft Rule.
+
+A status request of a Rule or a Requirement is a review submission. The result
+of the request gives its Proposal ID under `decision.pending.proposal_id` and
+the call that accepts it. A reviewer on the reviewer list of the repository
+accepts it with `provenance api <collection>/<id>/submissions/<proposal_id>/decide
+--method post --input -`, where `<collection>` is `rules` or `requirements`. The
+input names the reviewer, the decision and the reviewed record:
+`{"actor":{"identity_type":"human","id":"<reviewer>"},"decision":"accepted","canonical_artifact":{"artifact_type":"rule","artifact_id":"<id>"}}`.
+An acceptance with the `agent` identity type needs a prior assertion, which a
+review submission does not have, so it is refused with
+`approval_evidence_required`. The status changes in the write of the
+acceptance. A rejection or a withdrawal keeps the status. With an empty
+reviewer list, nobody can accept the request: the result says so and names
+`provenance init --disposition-actor-id <id>`, which adds a reviewer.
 
 A typed specification cannot set a Rule status, so apply creates each new
-specification Rule as `draft`. To make a specification Rule active, a person
-changes its status with `provenance <id> update --status active
---declared-by <owner> --if-match <etag>`. A later apply keeps that status. If a
+specification Rule as `draft`. To make a specification Rule active, request the
+status with `provenance <id> update --status active --declared-by <owner>
+--if-match <etag>`. The Rule is active when an allowed reviewer accepts the
+request. A later apply keeps the accepted status. If a
 Rule declaration changes its key or moves to a different Requirement, apply
 creates a new `draft` Rule and deletes the old Rule. A move between a
 Requirement and the shared specification context keeps the Rule and its status
@@ -230,6 +255,45 @@ The review host binds one repository, one scope, and one credential to each
 connection. See [review-host.md](review-host.md). Import and export operate on a
 complete scope. They remain separate from resource writes.
 
+## JSONL merge driver
+
+State is one record per line, so the line merge of git makes conflicts when two
+branches change different records. `provenance merge-jsonl` merges state files
+by record id. `provenance init` sets this up:
+
+- It adds this line to `.gitattributes`, unless the file has that line:
+
+  ```
+  .provenance/state/**/*.jsonl merge=provenance-jsonl
+  ```
+
+- Git does not keep the command of a merge driver in the repository, so init
+  also sets `merge.provenance-jsonl.driver` in the local git configuration of
+  the clone. The value is the command that runs Provenance in the project,
+  followed by `merge-jsonl %O %A %B --output %A --path %P`. For a native
+  install the command is `provenance`, which git finds on `PATH`. When a git
+  configuration level already sets the driver, init keeps that value.
+
+Run `provenance init` one time in each clone. In a new clone it changes no file
+and sets only the driver. Outside a git work tree, or when git does not run,
+init writes `.gitattributes` and prints a notice. Git runs the driver from the
+top folder of the work tree. A TypeScript project in a subfolder has a command
+that does not run from there, so init does not set the driver and prints the
+command to set by hand.
+
+`provenance check --graph` shows a finding when git sends state files to the
+driver and the clone has no command for it. The finding does not change the
+exit code. Without the driver, git merges state files line by line.
+
+The placeholders are the full contract of the command. `%O %A %B` are the
+temporary base, ours, and theirs files. `--output %A` writes the merged records
+over the ours file, which git reads. `--path %P` is the path of the file in the
+repository, which tells the merge the record kind. The command exits non-zero
+when the merge has a conflict or when the merged records fail the write checks;
+git then leaves the path unmerged. The JSON report names each conflicting
+record, its kind (`add_add`, `divergent_edit`, or `delete_modify`), and the
+base, ours, and theirs versions.
+
 ## MCP server
 
 `provenance mcp --repo <repository> --scope <scope>` starts an MCP server on
@@ -256,6 +320,10 @@ them as read-only and closed-world:
 - `discuss` starts a Discussion, and `reply` replies to one.
 - `notify` registers a client thread for the review changes of one record, as
   `--notify` does on the CLI.
+- `materialize`, `import`, `dictionary_import`, and `swarm_backtrace_land`
+  write the repository files, as `provenance materialize`, `provenance import`,
+  `provenance dictionary import`, and `provenance swarm-backtrace land` do. The
+  server lists them when it serves a repository, as `provenance mcp` does.
 
 The annotations of `change` mark it as destructive, not idempotent, and
 open-world: an update can replace field values, remove list entries, and archive
@@ -351,6 +419,8 @@ that store and names the duplicate ID and all its shard lines:
 Message ID msg_000021 appears more than once: <shard>:<line>, <shard>:<line>
 ```
 
+The `hint` of the refusal names this section.
+
 To repair the store by hand:
 
 1. Stop writes to the repository. Make a backup of `.provenance/state`.
@@ -374,11 +444,70 @@ To repair the store by hand:
 There is no automatic repair command. The duplicate rows do not always contain
 enough information to select the owning Discussion.
 
+## Repairing review rows that do not agree
+
+The review rows of a record are its review submissions, the decisions on them,
+and their withdrawals. They are in `ideation/proposal_cards.jsonl`,
+`ideation/dispositions.jsonl`, and `ideation/withdrawals.jsonl`. A merge of two
+branches keeps the rows that each branch added, and a person can keep the two
+sides when Git cannot merge a file.
+
+Rows that say the same thing read as one row: one row ID on two equal lines,
+two decisions on one submission with the same result, and two withdrawals of
+one submission. Rows that do not agree make each read and each review write of
+their record refuse with `invalid_state_file`:
+
+- One row ID is on more than one line, and the lines do not have equal
+  contents.
+- The decisions on one submission have different results.
+- One submission has an approval and a withdrawal.
+- More than one submission of one record has the same review cycle.
+
+Each line takes part in each of these tests, also a line of an ID whose lines
+do not agree. Thus the decisions and the withdrawals that name such a
+submission, and the review cycle of each of its lines, give their faults in the
+same read. A write that needs the approval of
+the record gives the same refusal: an active Rule or an answered Question that
+cites a Resolution that is not approved needs the approval of that Resolution.
+
+The refusal names the file and the line of one row. Its message names the rows
+and their lines, and its `hint` gives the repair step, which names each line
+that the repair removes. The text form gives the message, then `; ` and the
+repair step. For example:
+
+```text
+scopes/default/ideation/dispositions.jsonl line 2: review submission S of requirement req_a has decisions with different results in ideation/dispositions.jsonl: accepted D1 at line 1 and rejected D2 at line 2; To repair, remove each of these lines that has a result that you do not keep, then commit.
+```
+
+This refusal does not give the two general procedures of a state file that
+does not parse, because it has a repair step of its own.
+
+Other records, the documents that do not hold the record, and the reads of all
+records of a type continue. `provenance check` reports each of these faults
+with its file and its line.
+
+A withdrawal that names no review submission makes each review read of the
+scope refuse. Its message names the withdrawal, and its repair step names its
+line.
+
+To repair the rows, do the repair step that the refusal gives, then commit.
+Some steps give a choice: keep one line of an ID, keep the decisions of one
+result, keep the approval or the withdrawals, or keep one submission. Remove
+only the lines that the step tells you to remove. One run of `provenance check`
+reports each fault of the record, and a repair step does not show a new fault.
+After the repair step of each fault, the reads of the record and
+`provenance check` pass. This is the only hand edit of
+`.provenance/state` that the generated AGENTS.md permits.
+
 ## Agent guidance
 
 `provenance prime` introduces the Provenance domain. It explains Requirements,
 Rules, Resolutions, Sources, and code bindings. It does not read project records,
-inspect installed skills, scan code, or update a cache.
+inspect installed skills, scan code, or update a cache. Its list of actions has one
+line for each command that `provenance --help` lists, including `review` and `mcp`.
+The line gives each form that selects the command, for example `<id> update` for an
+action on a record, and `discussions or <id> discussions` for a command that also
+acts on a record.
 
 The default output is Markdown. `provenance prime --format json` returns an
 object with a `guidance` string that contains the same text. This replaces the
@@ -388,8 +517,11 @@ code bindings. The SDK prime state query keeps its existing contract.
 
 The old `--repo`, `--scope`, and `--include-threads` options remain accepted for
 compatibility but have no effect on guidance. MCP supplies the same domain
-content in server instructions and shared tool descriptions. MCP has no prime
-tool. Each MCP client controls how it presents server instructions.
+content in server instructions and shared tool descriptions. The instructions
+have one line for each tool and each action that the server lists, with its MCP
+name, for example `dictionary_import`. The `notify` action is not a command: it has
+no line of its own, and the `change` line names it. MCP has no prime tool. Each MCP client
+controls how it presents server instructions.
 
 ## Dictionary setup
 

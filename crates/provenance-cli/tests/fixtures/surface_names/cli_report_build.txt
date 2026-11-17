@@ -1,4 +1,4 @@
-Build a report envelope from a real repository at a named base and head
+Build a report envelope from a real repository at a named base and head.
 
 Usage: provenance report build [OPTIONS] --base <BASE> --head <HEAD> --repository <REPOSITORY>
 

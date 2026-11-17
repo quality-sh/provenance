@@ -78,6 +78,7 @@ mod create;
 pub use create::CreateReviewRequirement;
 mod authoring;
 mod native_batch;
+pub(crate) mod write_actor;
 pub(crate) use native_batch::NativeRecordBatch;
 mod discussion_discovery;
 mod discussion_messages;
@@ -100,11 +101,13 @@ pub use decision_input::{
     DecideRecordReview, ReviewFeedback, SubmitRecordReview, WithdrawRecordReview,
 };
 mod automatic_submission;
-mod cycle_index;
 mod decision;
 mod decision_reads;
-pub(crate) use decision_reads::DocumentReviewState;
+mod status_request;
+pub(crate) use decision_reads::{DocumentReviewState, ResolutionAcceptance};
 mod decision_state;
+mod review_row_refusal;
+mod review_rows;
 
 #[cfg(test)]
 #[cfg(feature = "host")]

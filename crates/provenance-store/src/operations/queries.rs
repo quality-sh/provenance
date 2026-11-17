@@ -187,6 +187,7 @@ pub async fn evidence(
 ) -> anyhow::Result<Stamped<EvidenceResult>> {
     evidence_answer(repository, policy, request)
         .await
+        .and_then(evidence::within_response)
         .and_then(|answer| page::checked("evidence", answer))
 }
 

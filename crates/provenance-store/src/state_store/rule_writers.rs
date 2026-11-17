@@ -105,13 +105,7 @@ impl StateStore {
         Ok(resolution)
     }
 
-    pub fn create_rule(&self, input: CreateRuleInput) -> anyhow::Result<Rule> {
-        let path = shards::rules_path(&self.layout, &input.scope_id);
-        let id = input.id.clone();
-        self.create_native_record(&path, &id, |store| store.write_rule(input))
-    }
-
-    fn write_rule(&self, input: CreateRuleInput) -> anyhow::Result<Rule> {
+    pub(crate) fn write_rule(&self, input: CreateRuleInput) -> anyhow::Result<Rule> {
         let CreateRuleInput {
             scope_id,
             id,

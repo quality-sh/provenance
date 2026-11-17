@@ -40,6 +40,14 @@ fn requirement_update(
     update
 }
 
+/// The update that asks for the archive of the Requirement `id`.
+fn archive_update(id: &str) -> UpdateRequirementInput {
+    requirement_update(id, |update| {
+        update.status = Some(RequirementStatus::Archived);
+        update.archived_in_commit = Some(archive_stamp());
+    })
+}
+
 /// The stamp of an archive.
 pub fn archive_stamp() -> provenance_core::ArchivedStamp {
     provenance_core::ArchivedStamp {
@@ -182,12 +190,34 @@ pub fn apply(repository: &Repository, task: &Task) -> anyhow::Result<Effect> {
                 version: discussion.version,
             }
         }
-        Operation::ArchiveRequirement { n } => {
+        Operation::ArchiveRequirement { n, leave_open } => {
             let id = requirement_id(*n);
-            store.update_requirement(requirement_update(&id, |update| {
-                update.status = Some(RequirementStatus::Archived);
-                update.archived_in_commit = Some(archive_stamp());
-            }))?;
+            store.update_requirement(archive_update(&id))?;
+            let request = super::call::open_status_request(repository, &id)?;
+            if *leave_open {
+                return Ok(
+                    request.map_or(Effect::Skipped, |proposal| Effect::Proposal {
+                        id: proposal.as_str().to_owned(),
+                    }),
+                );
+            }
+            // The allowed reviewer accepts the status request, so the archive
+            // and its cascade apply.
+            if let Some(proposal) = request {
+                store.decide_record_review(DecideRecordReview {
+                    scope_id: scope(),
+                    actor: decider(),
+                    proposal_id: proposal,
+                    decision: provenance_core::DispositionDecision::Accepted,
+                    rationale: None,
+                    canonical_artifact: Some(provenance_core::CanonicalArtifact {
+                        artifact_type: provenance_core::CanonicalArtifactType::Requirement,
+                        artifact_id: stable(&id),
+                    }),
+                    feedback: None,
+                    declared_by: None,
+                })?;
+            }
             Effect::Archived { id }
         }
         Operation::ClaimTopic => {

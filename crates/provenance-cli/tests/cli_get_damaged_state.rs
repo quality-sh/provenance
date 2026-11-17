@@ -4,6 +4,7 @@
 //! holds no revision, the get refuses and names `provenance materialize`. When the record
 //! changed after the stored serial, an update with the `ETag` of the get refuses.
 
+use provenance_core::protocol::read_failure::STATE_CORRECTIONS;
 use provenance_macros::verifies;
 use serde_json::{json, Value};
 use std::io::Write as _;
@@ -32,7 +33,7 @@ fn names(warning: &str, file: &str) -> bool {
 }
 
 /// The exit code, the standard output and the standard error of one CLI command.
-fn run(repo: &str, args: &[&str]) -> (Option<i32>, String, String) {
+pub fn run(repo: &str, args: &[&str]) -> (Option<i32>, String, String) {
     let output = assert_cmd::Command::new(assert_cmd::cargo::cargo_bin!("provenance"))
         .args(args)
         .args(["--repo", repo])
@@ -47,22 +48,41 @@ fn run(repo: &str, args: &[&str]) -> (Option<i32>, String, String) {
 }
 
 /// The refusal object of one CLI command that exits with code 1.
-fn cli_refusal(repo: &str, args: &[&str]) -> Value {
+pub fn cli_refusal(repo: &str, args: &[&str]) -> Value {
     let (code, stdout, stderr) = run(repo, &[args, &["--format", "json"][..]].concat());
     assert_eq!((code, stdout.as_str()), (Some(1), ""), "{args:?}: {stderr}");
     crate::porcelain_api::envelope(&stderr)
 }
 
 /// The refusal object of one MCP tool call that fails.
-async fn mcp_refusal(server: &Server, tool: &str, arguments: Value) -> Value {
+pub async fn mcp_refusal(server: &Server, tool: &str, arguments: Value) -> Value {
     let called = server.client.call(tool, arguments).await;
     assert_eq!(called["isError"], json!(true), "{called}");
     serde_json::from_str(called["content"][0]["text"].as_str().unwrap()).unwrap()
 }
 
+/// `refusal` is the refusal of a read with no stored revision whose catch-up failed with
+/// `cause`: its message names the read database, `provenance materialize` and the cause.
+pub fn assert_no_revision_refusal(refusal: &Value, cause: &str) {
+    let message = refusal["error"]["message"].as_str().unwrap();
+    let database = message
+        .strip_prefix("no projection revision in ")
+        .and_then(|rest| {
+            rest.strip_suffix(&format!(
+                "; run `provenance materialize` (catch-up failed: {cause})"
+            ))
+        })
+        .unwrap_or_else(|| panic!("{message}"));
+    assert!(database.ends_with("provenance.db"), "{message}");
+    assert_eq!(
+        refusal,
+        &json!({"error":{"kind":"operation_failed","message":message},"meta":{}})
+    );
+}
+
 /// An update of the Rule with the guard `etag` refuses with `by_cli` on the CLI and with
 /// `by_mcp` on MCP.
-async fn assert_update_refused(
+pub async fn assert_update_refused(
     server: &Server,
     repo: &str,
     etag: &str,
@@ -86,7 +106,12 @@ async fn assert_update_refused(
 /// The get of the Rule over damaged state, on each interface: the record at the stored
 /// serial with the freshness warning `warning`, and otherwise the answer of `clean`, the
 /// JSON and text of the get before the damage.
-async fn assert_stored_record(server: &Server, repo: &str, clean: &(Value, String), warning: &str) {
+pub async fn assert_stored_record(
+    server: &Server,
+    repo: &str,
+    clean: &(Value, String),
+    warning: &str,
+) {
     let by_cli = cli_json(repo, &[RULE, "get"]);
     let mut expected = clean.0.clone();
     expected["record_metadata"]["freshness_error"] = json!(warning);
@@ -122,7 +147,7 @@ async fn assert_stored_record(server: &Server, repo: &str, clean: &(Value, Strin
 }
 
 /// The JSON and the text of the get of the Rule.
-fn clean_get(repo: &str) -> (Value, String) {
+pub fn clean_get(repo: &str) -> (Value, String) {
     let text = cli(&[RULE, "get", "--repo", repo]);
     (cli_json(repo, &[RULE, "get"]), text)
 }
@@ -147,7 +172,8 @@ async fn a_get_over_a_bad_record_line_gives_the_stored_record_on_each_interface(
 
     let etag = clean.0["edit"]["etag"].as_str().unwrap();
     let refused = json!({"error":{"file":RULES,"kind":"invalid_state_file","line":line,
-        "message":"EOF while parsing a value"},"meta":{}});
+        "message":"EOF while parsing a value",
+        "hint":STATE_CORRECTIONS},"meta":{}});
     assert_update_refused(&server, &repo, etag, &refused, &refused).await;
     server.close().await;
 }
@@ -206,7 +232,7 @@ async fn a_get_over_a_bad_review_history_line_gives_the_stored_record_on_each_in
     let line = damage(directory.path(), CARDS);
     let server = Server::start(&repo).await;
 
-    let warning = format!("{CARDS} line {line}: EOF while parsing a value");
+    let warning = format!("{CARDS} line {line}: EOF while parsing a value; {STATE_CORRECTIONS}");
     assert_stored_record(&server, &repo, &clean, &warning).await;
     server.close().await;
 }
@@ -222,15 +248,9 @@ async fn a_get_over_a_bad_line_with_no_stored_revision_refuses_on_each_interface
     let server = Server::start(&repo).await;
 
     let by_cli = cli_refusal(&repo, &[RULE, "get"]);
-    let message = by_cli["error"]["message"].as_str().unwrap();
-    let cause = format!("catch-up failed: {RULES} line {line}: EOF while parsing a value");
-    let database = message
-        .strip_prefix("no projection revision in ")
-        .and_then(|rest| rest.strip_suffix(&format!("; run `provenance materialize` ({cause})")))
-        .unwrap_or_else(|| panic!("{message}"));
-    assert!(database.ends_with("provenance.db"), "{message}");
-    let refused = json!({"error":{"kind":"operation_failed","message":message},"meta":{}});
-    assert_eq!(by_cli, refused);
+    let cause = format!("{RULES} line {line}: EOF while parsing a value; {STATE_CORRECTIONS}");
+    assert_no_revision_refusal(&by_cli, &cause);
+    let refused = by_cli;
     assert_eq!(
         mcp_refusal(&server, "get", json!({"target":RULE})).await,
         refused

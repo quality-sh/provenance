@@ -9,6 +9,7 @@ mod cases;
 mod commit;
 mod edges;
 mod memory;
+mod not_a_file;
 
 pub use cases::{
     a_file_that_no_commit_holds_has_no_versions, text_gives_the_file_at_a_commit,
@@ -22,6 +23,7 @@ pub use edges::{
     TWO_LINES, UNKNOWN_COMMIT, UNREADABLE,
 };
 pub use memory::{memory_adapter, MemoryFileVersions};
+pub use not_a_file::{an_entry_that_is_not_a_file_has_no_text, not_a_file_graph, NOT_A_FILE};
 
 use super::versions::FileVersions;
 use std::collections::BTreeMap;

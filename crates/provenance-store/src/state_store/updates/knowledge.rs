@@ -1,6 +1,6 @@
 use super::{
     inputs::{RuleClearField, SourceClearField, UpdateRuleInput, UpdateSourceInput},
-    missing, optional, owner_matches, required_text, set, validate_final_relations,
+    missing, optional, owner_matches, required_text, set,
 };
 use crate::{review, shards, state_store::StateStore};
 use provenance_core::{validate_optional_commit_pin, Rule, Source};
@@ -14,8 +14,9 @@ impl StateStore {
         let scope = input.scope_id.clone();
         let path = shards::sources_path(&self.layout, &input.scope_id);
         let expected_etag = input.expected_etag.clone();
-        let record = self.mutate_graph_record_with_store(
+        self.mutate_graph_record_checked(
             &path,
+            &scope,
             expected_etag.as_deref(),
             |store, records: &mut Vec<Source>| {
                 let position = records
@@ -64,21 +65,18 @@ impl StateStore {
                     .map_err(|error| crate::refusal::refuse!(InvalidCommitPin, "{error:#}"))?;
                 Ok(record.clone())
             },
-        )?;
-        validate_final_relations(self, &scope, &record)?;
-        Ok(record)
+        )
     }
 
-    pub fn update_rule(&self, input: UpdateRuleInput) -> anyhow::Result<Rule> {
-        self.prepare_rule_update(input)
-    }
-
-    fn prepare_rule_update(&self, input: UpdateRuleInput) -> anyhow::Result<Rule> {
+    /// Writes a Rule update directly. [`StateStore::update_rule`] calls it
+    /// for each update that does not wait for a reviewer.
+    pub(crate) fn prepare_rule_update(&self, input: UpdateRuleInput) -> anyhow::Result<Rule> {
         let scope = input.scope_id.clone();
         let path = shards::rules_path(&self.layout, &input.scope_id);
         let expected_etag = input.expected_etag.clone();
-        let record = self.mutate_graph_record_with_store(
+        self.mutate_graph_record_checked(
             &path,
+            &scope,
             expected_etag.as_deref(),
             |store, records: &mut Vec<Rule>| {
                 let position = records
@@ -145,8 +143,6 @@ impl StateStore {
                 )?;
                 Ok(record.clone())
             },
-        )?;
-        validate_final_relations(self, &scope, &record)?;
-        Ok(record)
+        )
     }
 }

@@ -117,7 +117,8 @@ fn process_crashes_reopen_as_complete_old_or_new_state() {
             .pending
             .unwrap();
         assert_eq!(pending.proposal_id == previous, !committed, "{phase}");
-        super::decision_state::CycleFacts::validated(&store, &scope()).unwrap();
+        let stored = super::review_rows::StoredRows::read(&store, &scope()).unwrap();
+        stored.facts().unwrap();
         assert!(!ProvenanceLayout::new(root)
             .publication_marker_path()
             .exists());

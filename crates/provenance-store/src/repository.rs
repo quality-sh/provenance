@@ -138,8 +138,9 @@ impl Repository {
         let Some(manifest) = view.get(&manifest_key) else {
             return Err(OpenFailure::NotInitialized);
         };
-        let manifest = crate::state_store::manifest_from_bytes(manifest)
-            .map_err(|error| OpenFailure::Io(error.context("failed to parse the manifest")))?;
+        let path = ProvenanceLayout::new(identity.working_tree()).manifest_path();
+        let manifest =
+            crate::state_store::parse_manifest(&path, manifest).map_err(OpenFailure::Io)?;
         declared_scope(&manifest, identity.scope().as_str())?;
         Ok(Self::with_parts(
             identity,
@@ -439,6 +440,8 @@ fn gate_failure(error: anyhow::Error) -> OpenFailure {
     }
 }
 
+#[cfg(all(test, feature = "host"))]
+mod one_key_stop_tests;
 #[cfg(test)]
 #[cfg(feature = "host")]
 mod stage_recovery_tests;

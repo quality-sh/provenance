@@ -56,6 +56,7 @@ pub use creation::{
 };
 pub use discussions::{ListMessages, ListThreads};
 pub use entry::{CallFailure, HandlerFailure, Invoke, Operation, OperationFuture, WireSchema};
+pub use failures::ReadError;
 pub use ideation::{
     CreateAssertion, CreateDisposition, CreateProposal, ListAssertions, ListDispositions,
     ListProposals,
@@ -63,6 +64,7 @@ pub use ideation::{
 #[cfg(any(test, feature = "test-fixture"))]
 pub use invoke::Direct;
 pub use invoke::{frame_failure, invoke_authorized_typed, invoke_typed};
+pub use provenance_core::actor_input::ActorInput;
 pub use statement::CheckStatement;
 pub use target_discussion_writes::{WriteTargetDiscussion, WriteTargetDiscussionRequest};
 

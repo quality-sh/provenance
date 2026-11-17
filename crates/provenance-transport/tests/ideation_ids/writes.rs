@@ -1,10 +1,11 @@
 //! The refusal of each ideation write over an id on two lines of its file.
 
 use super::repository::{
-    copy_row, copy_row_with_key, ideation_repository, merge_assertion_two_times, refused,
-    state_path, write_answers, IDEATION, WRITES,
+    copy_row, copy_row_with_key, ideation_repository, refused, state_path, write_answers, IDEATION,
+    WRITES,
 };
 use super::support::resource_http::{call, call_with_headers, host};
+use provenance_core::protocol::read_failure::STATE_CORRECTIONS;
 use provenance_macros::verifies;
 use serde_json::{json, Value};
 
@@ -14,7 +15,7 @@ pub fn located(name: &str, kind: &str, id: &str, (first, second): (usize, usize)
     let message =
         format!("duplicate immutable {kind} id {id} at line {first} and at line {second}");
     json!({"kind":"invalid_state_file", "file":format!("{IDEATION}/{name}"), "line":second,
-        "message":message})
+        "message":message, "hint":STATE_CORRECTIONS})
 }
 
 /// The answers of the three ideation writes when each refuses with `refusal`.
@@ -46,7 +47,7 @@ async fn a_proposal_id_on_two_lines_under_two_keys_refuses_each_write_at_the_sec
 #[verifies("rule_inconsistent_records_refusal_names_records", examples)]
 async fn an_assertion_id_on_two_lines_refuses_each_write_at_the_second_line() {
     let (repo, _) = ideation_repository().await;
-    let lines = merge_assertion_two_times(&repo);
+    let lines = copy_row(&repo, "assertions.jsonl", "assertion_a");
     let refusal = located("assertions.jsonl", "assertion", "assertion_a", lines);
     assert_eq!(write_answers(&repo).await, refused_writes(&refusal));
 }
@@ -109,7 +110,7 @@ async fn an_id_on_three_lines_is_located_at_the_second_line() {
 async fn an_id_on_two_lines_in_two_files_is_located_in_the_proposal_file() {
     let (repo, _) = ideation_repository().await;
     let lines = copy_row(&repo, "proposal_cards.jsonl", "proposal_b");
-    merge_assertion_two_times(&repo);
+    copy_row(&repo, "assertions.jsonl", "assertion_a");
     let refusal = located("proposal_cards.jsonl", "proposal", "proposal_b", lines);
     assert_eq!(write_answers(&repo).await, refused_writes(&refusal));
 }

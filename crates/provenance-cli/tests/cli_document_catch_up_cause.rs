@@ -1,10 +1,12 @@
 //! A document read whose catch-up fails on a state line that does not parse
-//! gives the file, the line and the parse message of that line, in JSON and
-//! in text, for a line of the wrong type and for a line that is not JSON. A
-//! cause with a kind of its own and no file gives its text as the message.
+//! gives the file, the line and the parse message of that line, and the steps
+//! that correct the state, in JSON and in text, for a line of the wrong type
+//! and for a line that is not JSON. A cause with a kind of its own and no file
+//! gives its text as the message, with no hint.
 
 use crate::state_lines::give_refines_a_string;
 use fs2::FileExt;
+use provenance_core::protocol::read_failure::STATE_CORRECTIONS;
 use provenance_macros::verifies;
 use serde_json::{json, Value};
 use std::path::Path;
@@ -66,6 +68,7 @@ fn refusal(output: &Output) -> Value {
 #[test]
 #[verifies("rule_state_parse_refusal_names_the_line", examples)]
 #[verifies("rule_document_catch_up_refusal_gives_typed_cause", examples)]
+#[verifies("rule_state_parse_refusal_names_the_corrections", examples)]
 fn a_document_read_gives_the_line_that_stops_its_catch_up() {
     let directory = tempfile::tempdir().unwrap();
     read_once(directory.path());
@@ -75,7 +78,8 @@ fn a_document_read_gives_the_line_that_stops_its_catch_up() {
             "kind": "document_catch_up_failed",
             "file": "scopes/default/requirements/req.jsonl",
             "line": 1,
-            "message": "invalid type: string \"req_parent\", expected a sequence"
+            "message": "invalid type: string \"req_parent\", expected a sequence",
+            "hint": STATE_CORRECTIONS
         },
         "meta": {}
     });
@@ -106,7 +110,8 @@ fn a_document_read_gives_the_line_that_is_not_json() {
                 "kind": "document_catch_up_failed",
                 "file": "scopes/default/rules/rule.jsonl",
                 "line": 2,
-                "message": "expected value"
+                "message": "expected value",
+                "hint": STATE_CORRECTIONS
             },
             "meta": {}
         })

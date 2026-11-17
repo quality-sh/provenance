@@ -85,8 +85,9 @@ fn add_rule_links(
     resolutions: &[&str],
     status: RuleStatus,
 ) {
-    store
-        .create_rule(CreateRuleInput {
+    crate::test_support::create_rule(
+        store,
+        CreateRuleInput {
             archived_in_commit: (status == RuleStatus::Archived).then(|| ArchivedStamp {
                 commit: "a".repeat(40),
                 at: None,
@@ -104,8 +105,8 @@ fn add_rule_links(
             source_section: None,
             origin_thread: None,
             origin_message: None,
-        })
-        .unwrap();
+        },
+    );
 }
 
 fn seed_lifecycle_records(store: &StateStore, scope: &ScopeId) {

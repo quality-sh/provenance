@@ -2,7 +2,7 @@
 //! stored JSON line bytes, an adopted row keeps the line bytes of the side
 //! that moved it, and a record no side stored is refused.
 
-use super::{preserved_lines, read_jsonl_rows, StoredRow};
+use super::{preserved_lines, read_jsonl_rows, MergeSide, StoredRow};
 
 #[test]
 fn rows_carry_the_stored_line_exactly_as_written() {
@@ -11,7 +11,7 @@ fn rows_carry_the_stored_line_exactly_as_written() {
     let stored = r#"{ "id" : "rule_one" , "note":"kept, as stored" }"#;
     std::fs::write(&path, format!("{stored}\n")).unwrap();
 
-    let rows = read_jsonl_rows(&path).unwrap();
+    let rows = read_jsonl_rows(&path, MergeSide::Ours).unwrap();
 
     assert_eq!(rows.len(), 1);
     assert_eq!(rows[0].line, stored);

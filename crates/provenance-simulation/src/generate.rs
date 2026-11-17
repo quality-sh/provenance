@@ -72,9 +72,12 @@ pub enum Fault {
     /// The next publish lands `landed` keys and its outcome is unknown.
     UnknownOutcome { landed: u8 },
     /// The engine stops where it is; a new engine takes its place. The CLI
-    /// layer kills the write process at a point of its publish: an even `at`
-    /// when its transaction appears, an odd `at` when the publication marker
-    /// appears while its transaction exists.
+    /// layer kills the write process at a point of its publish. For a write
+    /// of two keys or more: an even `at` when its transaction appears, an
+    /// odd `at` when the publication marker appears while its transaction
+    /// exists. For a write of one key, at each `at`: when its temporary file
+    /// appears in the cache. The test reads after the kill whether the stop
+    /// landed before or after the rename, or the write answered first.
     Stop { engine: u8, at: u8 },
 }
 
@@ -107,8 +110,13 @@ pub enum Operation {
     },
     /// Archives a Requirement. The archive of its dependents lands in a
     /// stage.
+    ///
+    /// The archive is a status request. The allowed reviewer accepts it,
+    /// unless `leave_open`: then the request stays open, so a later
+    /// withdrawal or rejection can take it.
     ArchiveRequirement {
         n: u8,
+        leave_open: bool,
     },
     ClaimTopic,
     ReleaseTopic,
@@ -294,7 +302,10 @@ impl Operation {
             ),
             Self::ClaimTopic => (Target::Topic, topic(TopicStatus::Open, Some(actor(engine)))),
             Self::ReleaseTopic => (Target::Topic, topic(TopicStatus::Open, None)),
-            Self::ArchiveRequirement { n } if requirement_id(*n) == FIRST_REQUIREMENT => {
+            Self::ArchiveRequirement {
+                n,
+                leave_open: false,
+            } if requirement_id(*n) == FIRST_REQUIREMENT => {
                 (Target::Topic, topic(TopicStatus::Archived, None))
             }
             _ => return Vec::new(),

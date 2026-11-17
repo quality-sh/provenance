@@ -6,7 +6,7 @@ use crate::plant::Plant;
 use provenance_store::storage::{
     Atomicity, PublishFailure, Revision, StateKey, StateView, StorageError, WriteSet,
 };
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 impl World {
     pub(super) fn read(&self) -> Result<StateView, StorageError> {
@@ -41,6 +41,11 @@ impl World {
             .wait_for_turn(Call::Publish)
             .unwrap_or_else(|| self.lock());
         let (engine, operation) = current_engine().map_or((None, 0), |(s, o)| (Some(s), o));
+        let atomicity = if self.plant == Some(Plant::LandWholeSetPerKey) && engine.is_some() {
+            Atomicity::PerKey
+        } else {
+            writes.atomicity()
+        };
         let current = StateView::new(state.entries.clone());
         let checks_base = !self.no_concurrency_control();
         let moved = writes.base().is_some_and(|base| base != current.revision());
@@ -65,14 +70,26 @@ impl World {
                         "the simulated storage refused the set"
                     )));
                     if self.plant == Some(Plant::LandRefused) {
-                        writes.apply_to(&mut state.entries);
+                        // An armed fault gives its own outcome, so a broken
+                        // key changes only the keys that land.
+                        let state = &mut *state;
+                        let broken = &state.broken;
+                        let _ = land(&mut state.entries, broken, writes, atomicity, usize::MAX);
                         (refused, Outcome::Landed)
                     } else {
                         (refused, Outcome::Refused)
                     }
                 }
                 Some(Armed::Unknown { landed }) => {
-                    land_prefix(&mut state.entries, writes, landed);
+                    let count = match atomicity {
+                        Atomicity::WholeSet if landed > 0 => usize::MAX,
+                        Atomicity::WholeSet => 0,
+                        Atomicity::PerKey => landed,
+                    };
+                    // An armed fault gives its own outcome, so a broken key
+                    // changes only the keys that land.
+                    let state = &mut *state;
+                    let _ = land(&mut state.entries, &state.broken, writes, atomicity, count);
                     (
                         Err(PublishFailure::Started(anyhow::anyhow!(
                             "the simulated storage lost the outcome"
@@ -80,40 +97,34 @@ impl World {
                         Outcome::Unknown,
                     )
                 }
-                None if state
-                    .broken
-                    .as_ref()
-                    .is_some_and(|key| touches(writes, key)) =>
-                {
-                    let broken = state.broken.clone().expect("a broken key");
-                    let landed = match writes.atomicity() {
-                        Atomicity::PerKey => keys_in_order(writes)
-                            .iter()
-                            .position(|key| **key == broken)
-                            .unwrap_or_default(),
-                        Atomicity::WholeSet => 0,
-                    };
-                    land_prefix(&mut state.entries, writes, landed);
-                    (
-                        Err(PublishFailure::Started(anyhow::anyhow!(
-                            "the simulated storage failed to land {}",
-                            broken.as_str()
-                        ))),
-                        Outcome::Unknown,
-                    )
-                }
                 None => {
-                    let lose = self.plant == Some(Plant::LoseWrite)
-                        && engine.is_some()
-                        && !std::mem::replace(&mut state.planted, true);
-                    if !lose {
-                        writes.apply_to(&mut state.entries);
+                    let mut entries = state.entries.clone();
+                    let landing = land(&mut entries, &state.broken, writes, atomicity, usize::MAX);
+                    if let Err(Broken { landed, key }) = landing {
+                        let error = anyhow::anyhow!(
+                            "the simulated storage failed to land {}",
+                            key.as_str()
+                        );
+                        if atomicity == Atomicity::PerKey && landed == 0 {
+                            // No key changed, so the set is refused.
+                            (Err(PublishFailure::Refused(error)), Outcome::Refused)
+                        } else {
+                            state.entries = entries;
+                            (Err(PublishFailure::Started(error)), Outcome::Unknown)
+                        }
+                    } else {
+                        let lose = self.plant == Some(Plant::LoseWrite)
+                            && engine.is_some()
+                            && !std::mem::replace(&mut state.planted, true);
+                        if !lose {
+                            state.entries = entries;
+                        }
+                        if self.plant == Some(Plant::BackdateMessage) {
+                            backdate_newest_message(&mut state.entries, writes);
+                        }
+                        let revision = StateView::new(state.entries.clone()).revision().clone();
+                        (Ok(revision), Outcome::Landed)
                     }
-                    if self.plant == Some(Plant::BackdateMessage) {
-                        backdate_newest_message(&mut state.entries, writes);
-                    }
-                    let revision = StateView::new(state.entries.clone()).revision().clone();
-                    (Ok(revision), Outcome::Landed)
                 }
             }
         };
@@ -123,7 +134,8 @@ impl World {
             operation,
             outcome,
             outside_writes,
-            whole_set: writes.atomicity() == Atomicity::WholeSet,
+            whole_set: atomicity == Atomicity::WholeSet,
+            keys: writes.key_count(),
             on_base: writes.base().is_some(),
         });
         result
@@ -160,25 +172,23 @@ fn backdate_newest_message(entries: &mut BTreeMap<StateKey, Vec<u8>>, writes: &W
     }
 }
 
-/// Tells if `writes` puts or deletes `key`.
-fn touches(writes: &WriteSet, key: &StateKey) -> bool {
-    writes.puts().contains_key(key) || writes.deletes().contains(key)
+/// The broken key that stopped a landing, after `landed` keys of the set.
+struct Broken {
+    landed: usize,
+    key: StateKey,
 }
 
-/// The keys of `writes` in key order.
-fn keys_in_order(writes: &WriteSet) -> Vec<&StateKey> {
-    let mut keys: Vec<&StateKey> = writes
-        .deletes()
-        .iter()
-        .chain(writes.puts().keys())
-        .collect();
-    keys.sort();
-    keys
-}
-
-/// Lands the first `landed` keys of `writes` in key order. A whole set lands
-/// every key or none.
-fn land_prefix(entries: &mut BTreeMap<StateKey, Vec<u8>>, writes: &WriteSet, landed: usize) {
+/// Writes the first `count` keys of `writes`, in key order, into `entries`,
+/// with `atomicity`. Each write of a key in `broken` fails, whichever set
+/// makes it. A per-key set keeps the keys before the broken key. A whole set
+/// lands on a copy, so it keeps no key when one fails.
+fn land(
+    entries: &mut BTreeMap<StateKey, Vec<u8>>,
+    broken: &BTreeSet<StateKey>,
+    writes: &WriteSet,
+    atomicity: Atomicity,
+    count: usize,
+) -> Result<(), Broken> {
     let mut keys: Vec<(&StateKey, Option<&Vec<u8>>)> = writes
         .deletes()
         .iter()
@@ -186,15 +196,20 @@ fn land_prefix(entries: &mut BTreeMap<StateKey, Vec<u8>>, writes: &WriteSet, lan
         .chain(writes.puts().iter().map(|(key, bytes)| (key, Some(bytes))))
         .collect();
     keys.sort_by(|a, b| a.0.cmp(b.0));
-    let count = match writes.atomicity() {
-        Atomicity::WholeSet if landed > 0 => keys.len(),
-        Atomicity::WholeSet => 0,
-        Atomicity::PerKey => landed.min(keys.len()),
-    };
-    for (key, bytes) in keys.into_iter().take(count) {
+    let mut landed = entries.clone();
+    for (done, (key, bytes)) in keys.into_iter().take(count).enumerate() {
+        if broken.contains(key) {
+            if atomicity == Atomicity::PerKey {
+                *entries = landed;
+            }
+            let key = key.clone();
+            return Err(Broken { landed: done, key });
+        }
         match bytes {
-            Some(bytes) => entries.insert(key.clone(), bytes.clone()),
-            None => entries.remove(key),
+            Some(bytes) => landed.insert(key.clone(), bytes.clone()),
+            None => landed.remove(key),
         };
     }
+    *entries = landed;
+    Ok(())
 }

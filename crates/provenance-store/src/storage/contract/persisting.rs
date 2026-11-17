@@ -5,6 +5,7 @@ use super::*;
 use crate::storage::memory::MemoryStateStorage;
 use crate::storage::StatePersistence;
 use provenance_macros::verifies;
+use std::collections::BTreeSet;
 use std::sync::atomic::{AtomicBool, Ordering::SeqCst};
 use std::sync::{Arc, Mutex};
 
@@ -12,6 +13,9 @@ use std::sync::{Arc, Mutex};
 struct Kept {
     sets: Mutex<Vec<WriteSet>>,
     refuse: AtomicBool,
+    /// Keys that the persistence refuses to keep, in each set that names
+    /// them.
+    broken: Mutex<BTreeSet<StateKey>>,
 }
 
 impl StatePersistence for Kept {
@@ -19,6 +23,15 @@ impl StatePersistence for Kept {
         if self.refuse.load(SeqCst) {
             return Err(PublishFailure::Refused(crate::refusal::fault!("refused")));
         }
+        let broken = self.broken.lock().unwrap();
+        let mut keys = writes.deletes().iter().chain(writes.puts().keys());
+        if let Some(key) = keys.find(|key| broken.contains(*key)) {
+            return Err(PublishFailure::Refused(crate::refusal::fault!(
+                "the persistence failed to keep `{}`",
+                key.as_str()
+            )));
+        }
+        drop(broken);
         self.sets.lock().unwrap().push(writes.clone());
         Ok(())
     }
@@ -41,8 +54,11 @@ impl Harness for Persisting {
         call(&self.storage)
     }
 
+    /// The memory and the persistence both fail each later write of `key`.
     fn break_key(&mut self, key: &str) {
-        self.storage.fail_on(StateKey::new(key).unwrap());
+        let key = StateKey::new(key).unwrap();
+        self.kept.broken.lock().unwrap().insert(key.clone());
+        self.storage.fail_on(key);
     }
 }
 

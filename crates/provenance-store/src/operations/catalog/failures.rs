@@ -35,6 +35,12 @@ impl super::HandlerFailure for ReadError {
     fn log_cause(&self) -> Option<String> {
         self.unclassified_cause()
     }
+    fn message(&self) -> String {
+        match (self.common(), self.safe()) {
+            (None, ReadFailure::ReadFailed { cause }) => cause,
+            _ => self.to_string(),
+        }
+    }
 }
 impl super::HandlerFailure for WriteError {
     fn failure_status(&self) -> u16 {
@@ -42,6 +48,10 @@ impl super::HandlerFailure for WriteError {
     }
     fn log_cause(&self) -> Option<String> {
         self.unclassified_cause()
+    }
+    fn message(&self) -> String {
+        self.unclassified_message()
+            .unwrap_or_else(|| self.to_string())
     }
 }
 impl ReadError {
@@ -87,8 +97,8 @@ impl ReadError {
         )
     }
     /// The refusal of a document read whose catch-up failed with `cause`: the
-    /// location and the message of a state line that does not parse, else
-    /// the cause as text.
+    /// location, the message and the hint of a state line that does not
+    /// parse, else the cause as text.
     #[rule("rule_document_catch_up_refusal_gives_typed_cause")]
     fn catch_up_refusal(&self, cause: &anyhow::Error) -> ReadFailure {
         let message = match self.classified(cause, UnparsableStateFile::catch_up_failure) {
@@ -99,6 +109,7 @@ impl ReadError {
         ReadFailure::DocumentCatchUpFailed {
             location: None,
             message,
+            hint: None,
         }
     }
     /// The closed failure for `error`, the native error or a cause in it. A

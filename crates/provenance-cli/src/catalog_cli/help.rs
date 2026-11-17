@@ -109,7 +109,7 @@ fn discussion_help(
 /// The flags a Discussion action needs on the command line: the required
 /// schema fields that neither the target nor a CLI default supplies.
 pub fn required_discussion_flags(schema: &Value) -> BTreeSet<String> {
-    let supplied = ["target", "actor", "role"];
+    let supplied = ["target", "role"];
     schema
         .get("required")
         .and_then(Value::as_array)
@@ -146,10 +146,15 @@ To archive a record, set the archived status and give the commit that contains t
   provenance <id> update --status archived --archived-in-commit <full_commit_sha> \\
     --if-match <etag>
 
-An archived status is terminal. Archiving a Requirement also archives each Requirement,
-Rule, and Resolution under it when all its parents are archived, and the Topics of each
-archived Requirement with their Questions. A record that also has a parent that is not
-archived is not archived. It loses only its link to the archived Requirement. An abandoned
-or rejected Resolution keeps its status. Archiving a Topic also archives all Questions in
-that Topic. Merge the pull request with a merge commit: a squash or rebase merge drops the
-commit that the archive names.";
+For a Rule or a Requirement, this update opens a status request. The status changes when
+a reviewer on the reviewer list accepts it with a POST through provenance api to
+<rules|requirements>/<id>/submissions/<proposal_id>/decide. The result names the request
+and this call.
+
+An archived status is terminal. When a reviewer accepts the archive of a Requirement, the
+archive also archives each Requirement, Rule, and Resolution under it when all its parents
+are archived, and the Topics of each archived Requirement with their Questions. A record
+that also has a parent that is not archived is not archived. It loses only its link to the
+archived Requirement. An abandoned or rejected Resolution keeps its status. Archiving a
+Topic also archives all Questions in that Topic. Merge the pull request with a merge
+commit: a squash or rebase merge drops the commit that the archive names.";

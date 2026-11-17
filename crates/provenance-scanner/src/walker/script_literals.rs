@@ -1,10 +1,12 @@
 //! Removes regex contents before the shared comment and binding lexers run.
+use crate::language::CommentSyntax;
 use crate::parser::ParseWarning;
 use provenance_macros::rule;
 
 /// Keeps regex contents out of string and comment scans without moving source anchors.
+/// `comments` is the comment syntax of the script language.
 #[rule("rule_prov_annot_regex")]
-pub fn mask_regex_literals(source: &str) -> (String, Vec<ParseWarning>) {
+pub fn mask_regex_literals(source: &str, comments: CommentSyntax) -> (String, Vec<ParseWarning>) {
     let bytes = source.as_bytes();
     let mut masked = bytes.to_vec();
     let mut warnings = Vec::new();
@@ -17,26 +19,29 @@ pub fn mask_regex_literals(source: &str) -> (String, Vec<ParseWarning>) {
         masked[..index].fill(b' ');
     }
     while index < bytes.len() {
+        let rest = &bytes[index..];
+        if comments.starts_line_comment(rest) {
+            index = line_end(bytes, index);
+            continue;
+        }
+        if let Some(open) = comments.block_open_at(rest) {
+            index += open;
+            while index < bytes.len() {
+                if let Some(close) = comments.block_close_at(&bytes[index..]) {
+                    index += close;
+                    break;
+                }
+                line += usize::from(bytes[index] == b'\n');
+                index += 1;
+            }
+            continue;
+        }
         match bytes[index] {
             b'\n' => {
                 line += 1;
                 index += 1;
             }
             byte if byte.is_ascii_whitespace() => index += 1,
-            b'/' if bytes.get(index + 1) == Some(&b'/') => {
-                index = line_end(bytes, index);
-            }
-            b'/' if bytes.get(index + 1) == Some(&b'*') => {
-                index += 2;
-                while index < bytes.len() {
-                    if bytes[index..].starts_with(b"*/") {
-                        index += 2;
-                        break;
-                    }
-                    line += usize::from(bytes[index] == b'\n');
-                    index += 1;
-                }
-            }
             b'\'' | b'"' | b'`' => {
                 let opening_line = line;
                 let quote = bytes[index];

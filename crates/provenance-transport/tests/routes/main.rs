@@ -12,6 +12,7 @@ mod support {
     #[path = "../support/asserted_proposal.rs"]
     pub mod asserted_proposal;
     pub mod catch_up_steps;
+    pub mod decisions;
     pub mod depends_on_cycle;
     pub mod ideation;
     pub mod names;
@@ -101,7 +102,11 @@ mod typed_spec_discussion_deletion;
 mod typed_spec_plan_refusals;
 #[path = "../unadvertised_route_refusals.rs"]
 mod unadvertised_route_refusals;
+#[path = "../verification_run_read_budget.rs"]
+mod verification_run_read_budget;
 #[path = "../verification_runs_cache_lines.rs"]
 mod verification_runs_cache_lines;
 #[path = "../wire.rs"]
 mod wire;
+#[path = "../write_actor_default.rs"]
+mod write_actor_default;

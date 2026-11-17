@@ -1,4 +1,4 @@
-Report the committed dictionary reference and the analyzer it selects
+Report the committed dictionary reference and the analyzer it selects.
 
 Usage: provenance dictionary status [OPTIONS]
 

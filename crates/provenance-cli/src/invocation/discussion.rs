@@ -69,10 +69,8 @@ pub async fn dispatch_target(
             .unwrap_or_else(|error| crate::catalog_cli::usage_error(error));
     let target = StableId::new(args.target)?;
     input.insert("target".into(), json!(target));
-    for (field, value) in [("actor", "cli"), ("role", "user")] {
-        if schema["properties"].get(field).is_some() {
-            input.entry(field).or_insert_with(|| json!(value));
-        }
+    if schema["properties"].get("role").is_some() {
+        input.entry("role").or_insert_with(|| json!("user"));
     }
     let host = provenance_cli::porcelain::local_host(&args.common.context().repo)?;
     let request = host

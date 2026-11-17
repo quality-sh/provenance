@@ -2,28 +2,35 @@
 //! through `run`.
 
 use crate::surface::{Effect, SchemaDeclaration};
+use provenance_porcelain::action_input::ActionInput;
 use provenance_porcelain::registry::Command;
 use provenance_transport::porcelain::{Action, ActionError};
 use provenance_transport::StatementHost;
 use rmcp::model::{CallToolResult, ContentBlock, Tool};
 use serde_json::{Map, Value};
 
-/// The discussions tool: the list and one conversation, selected by the action argument.
+/// The discussions tool: the Discussion reads that the host grants, selected by the action
+/// argument. Its description is the description of the read that it runs without an action
+/// argument.
 #[provenance_macros::rule("rule_mcp_one_tool_for_discussions")]
 pub fn tool(host: &StatementHost) -> Option<Tool> {
-    let readable = [Action::Discussions, Action::Discussion]
-        .into_iter()
-        .any(|action| host.porcelain().discussion_is_available(action));
-    let declaration = Command::Action(Action::Discussions).declaration();
-    readable.then(|| {
-        crate::surface::tool(
-            crate::exposed::name(Command::Action(Action::Discussions)),
-            declaration.description,
-            Effect::Reads,
-            provenance_porcelain::discussion::action_input_schema(),
-            provenance_porcelain::discussion::output_schema(),
-            SchemaDeclaration::Remove,
-        )
+    let granted = |action| host.porcelain().discussion_is_available(action);
+    let description = provenance_porcelain::guidance::discussions_description(granted)?;
+    Some(crate::surface::tool(
+        crate::exposed::name(Command::Action(Action::Discussions)),
+        description,
+        Effect::Reads,
+        input(host)?.schema(),
+        provenance_porcelain::discussion::output_schema(),
+        SchemaDeclaration::Remove,
+    ))
+}
+
+/// The input of the discussions tool: an action argument that offers each Discussion read
+/// that the host grants.
+pub fn input(host: &StatementHost) -> Option<ActionInput> {
+    provenance_porcelain::discussion::action_input(|action| {
+        host.porcelain().discussion_is_available(action)
     })
 }
 

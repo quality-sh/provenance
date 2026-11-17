@@ -8,10 +8,15 @@
 #[path = "../support"]
 mod support {
     pub mod import_reviews;
+    pub mod landing_runs;
+    pub mod merge_driver;
     pub mod record_review;
     pub mod review_paths;
+    pub mod stale_repo;
+    pub mod state_faults;
     pub mod state_files;
 }
+use support::review_paths;
 #[path = "../cli_approval_evidence.rs"]
 mod cli_approval_evidence;
 #[path = "../cli_archive_commit_plain_flag.rs"]
@@ -64,6 +69,8 @@ mod cli_merge_jsonl;
 mod cli_merge_jsonl_preservation;
 #[path = "../cli_merge_jsonl_refusals.rs"]
 mod cli_merge_jsonl_refusals;
+#[path = "../cli_merge_swarm_runs.rs"]
+mod cli_merge_swarm_runs;
 #[path = "../cli_multiple_parents.rs"]
 mod cli_multiple_parents;
 #[path = "../cli_origin.rs"]
@@ -84,6 +91,8 @@ mod cli_refusal_discussions_word;
 mod cli_refusal_guidance;
 #[path = "../cli_refusal_next_step.rs"]
 mod cli_refusal_next_step;
+#[path = "../cli_refused_update_state.rs"]
+mod cli_refused_update_state;
 #[path = "../cli_registration.rs"]
 mod cli_registration;
 #[path = "../cli_resolution_decision_guard.rs"]
@@ -110,12 +119,20 @@ mod cli_shaping_turn_state;
 mod cli_shard_parse_errors;
 #[path = "../cli_source_requirement.rs"]
 mod cli_source_requirement;
+#[path = "../cli_state_corrections.rs"]
+mod cli_state_corrections;
+#[path = "../cli_state_procedures.rs"]
+mod cli_state_procedures;
 #[path = "../cli_statement_write_gate.rs"]
 mod cli_statement_write_gate;
+#[path = "../cli_status_request.rs"]
+mod cli_status_request;
 #[path = "../cli_ste_statement_paths.rs"]
 mod cli_ste_statement_paths;
 #[path = "../cli_swarm_backtrace_land.rs"]
 mod cli_swarm_backtrace_land;
+#[path = "../cli_swarm_landing_place.rs"]
+mod cli_swarm_landing_place;
 #[path = "../cli_time_range.rs"]
 mod cli_time_range;
 #[path = "../cli_typed_deletion_mixed_ids.rs"]
@@ -126,6 +143,8 @@ mod cli_typed_deletion_month_shards;
 mod cli_typed_deletion_origins;
 #[path = "../cli_typed_spec_review_plan.rs"]
 mod cli_typed_spec_review_plan;
+#[path = "../cli_unchanged_update.rs"]
+mod cli_unchanged_update;
 #[path = "../cli_unclassified_cause.rs"]
 mod cli_unclassified_cause;
 #[path = "../cli_unparsable_state.rs"]

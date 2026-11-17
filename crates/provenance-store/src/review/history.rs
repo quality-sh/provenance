@@ -21,7 +21,12 @@ pub(crate) use versions::NoFileVersions;
 pub use versions::{BoxFuture, FileVersion, FileVersions};
 
 use super::classifier;
-use crate::{families::review_families, shards, state_store::StateStore};
+use crate::{
+    families::review_families,
+    jsonl::{committed_line_value, numbered_lines},
+    shards,
+    state_store::StateStore,
+};
 use provenance_core::review::{RecordVersion, SaveOutcome};
 use provenance_core::{NodeType, ScopeId, StableId};
 use provenance_macros::rule;
@@ -156,11 +161,12 @@ fn lineage(files: &[FileVersion], records: &[Option<Value>]) -> Vec<usize> {
     chain
 }
 
-/// The record with `id` in the text of one JSONL record file. A line that is
-/// not a JSON record, such as a committed conflict marker, holds no record.
+/// The record with `id` in the text of one JSONL record file. A line that
+/// [`committed_line_value`] does not read, such as a committed conflict marker
+/// or a line that holds a top-level member two times, holds no record.
 fn find(text: &str, id: &StableId) -> Option<Value> {
-    text.lines()
-        .filter_map(|line| serde_json::from_str::<Value>(line).ok())
+    numbered_lines(text.as_bytes())
+        .filter_map(|(_, line)| committed_line_value(line))
         .find(|value| value.get("id").and_then(Value::as_str) == Some(id.as_str()))
 }
 

@@ -3,7 +3,7 @@ use crate::{
     operations::{
         catalog::{
             ContextResolver, ExecutionNeed, ExecutionNeeds, PreparedContext, PreparedRead,
-            PreparedRepository, PreparedScope, RequestedContext,
+            PreparedRepository, PreparedScope, ReadError, RequestedContext,
         },
         read_operations::ReadOperations,
         read_policy::ReadPolicy,
@@ -75,13 +75,11 @@ impl LocalRepository {
         self.reads.clone()
     }
 
-    /// Read disposition actors from the repository bound at startup.
-    pub fn disposition_actor_ids(&self) -> Result<Vec<String>, OperationFailure> {
-        Ok(self
-            .repository
-            .manifest()
-            .map_err(|_| OperationFailure::Internal)?
-            .disposition_actor_ids)
+    /// Read disposition actors from the repository bound at startup. A
+    /// manifest that does not parse gives the read failure of the manifest,
+    /// such as `invalid_state_file` with its line.
+    pub fn disposition_actor_ids(&self) -> Result<Vec<String>, ReadError> {
+        Ok(self.repository.manifest()?.disposition_actor_ids)
     }
 
     /// The alias and scope compare that both resolver steps apply; no repository read.
@@ -95,22 +93,6 @@ impl LocalRepository {
         }
         if scope.is_some_and(|scope| scope != self.scope().as_str()) {
             return Err(OperationFailure::access_denied());
-        }
-        Ok(())
-    }
-
-    /// The manifest must still declare the bound scope.
-    fn check_scope(&self) -> Result<(), OperationFailure> {
-        let manifest = self
-            .repository
-            .manifest()
-            .map_err(|_| OperationFailure::Internal)?;
-        if !manifest
-            .scopes
-            .iter()
-            .any(|scope| &scope.id == self.scope())
-        {
-            return Err(OperationFailure::UnknownScope);
         }
         Ok(())
     }
@@ -151,8 +133,6 @@ impl ContextResolver for LocalRepository {
                 requested_target: repository,
             }));
         }
-        // Validate the grant before recovery or projection access.
-        self.check_scope()?;
         if !needs.contains(&ExecutionNeed::ProjectionMaintenance) {
             return Ok(PreparedContext::for_scope(PreparedScope {
                 repository: self.repository.clone(),
@@ -170,16 +150,16 @@ impl ContextResolver for LocalRepository {
 
 #[cfg(test)]
 #[cfg(feature = "host")]
-mod tests {
+pub(crate) mod tests {
     use super::*;
     use crate::layout::ProvenanceLayout;
     use provenance_core::{
         protocol::repository::{RepositoryContext, RepositoryScope, RepositoryTarget},
         Manifest, RepoPathPrefix,
     };
-    use provenance_macros::verifies;
 
-    fn repository() -> (tempfile::TempDir, LocalRepository) {
+    /// A repository with one scope `default`, bound under the alias `native`.
+    pub fn repository() -> (tempfile::TempDir, LocalRepository) {
         let dir = tempfile::tempdir().unwrap();
         let layout = ProvenanceLayout::new(dir.path().to_str().unwrap());
         std::fs::create_dir_all(layout.state_dir()).unwrap();
@@ -205,9 +185,12 @@ mod tests {
             "not a manifest",
         )
         .unwrap();
+        let refused = binding.disposition_actor_ids().unwrap_err();
         assert_eq!(
-            binding.disposition_actor_ids(),
-            Err(OperationFailure::Internal)
+            serde_json::to_value(refused).unwrap(),
+            serde_json::json!({"kind": "invalid_state_file", "file": "manifest.json", "line": 1,
+                "message": "expected ident",
+                "hint": provenance_core::protocol::read_failure::STATE_CORRECTIONS})
         );
 
         let other_alias = RequestedContext::Repository(RepositoryTarget {
@@ -238,49 +221,5 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         assert!(Repository::open(dir.path(), "default").is_err());
         assert!(!dir.path().join(".provenance").exists());
-    }
-
-    /// The probe starts the host call while the publication holds its lock with the live
-    /// state moved away. The call must wait for the publication and not fail.
-    #[test]
-    #[verifies("rule_preparation_reads_published_state", examples)]
-    fn preparation_in_the_publication_gap_succeeds_after_the_publication() {
-        let (dir, binding) = repository();
-        let layout = ProvenanceLayout::new(dir.path().to_str().unwrap());
-        let reader = std::rc::Rc::new(std::cell::RefCell::new(None));
-        crate::test_probes::arm("state_after_backup_rename", {
-            let reader = reader.clone();
-            let mut binding = Some(binding);
-            move || {
-                let binding = binding.take().expect("one publication");
-                let (done, finished) = std::sync::mpsc::channel();
-                reader.replace(Some(std::thread::spawn(move || {
-                    let context = RequestedContext::Scoped(RepositoryContext {
-                        repository: "native".into(),
-                        scope: "default".into(),
-                        freshness: None,
-                    });
-                    let prepared = binding.prepare("search", context, &[]).map(|_| ());
-                    let _ = done.send(());
-                    prepared
-                })));
-                // A call that does not wait ends in the gap. A call that waits ends only
-                // after the publication, so this wait times out.
-                let _ = finished.recv_timeout(std::time::Duration::from_secs(1));
-                Ok(())
-            }
-        });
-        crate::publication::with_repository_publication(&layout, |held| {
-            crate::publication::with_staged_state(
-                held,
-                false,
-                crate::state_store::RecordStamp::ResolveFromRepository,
-                |_| Ok(()),
-            )
-        })
-        .unwrap();
-        crate::test_probes::disarm("state_after_backup_rename");
-        let reader = reader.take().expect("the publication reached the gap");
-        assert_eq!(reader.join().unwrap(), Ok(()));
     }
 }

@@ -158,8 +158,8 @@ printf '%s' '{"status":"approved","approved_by":"reviewer","approved_at":1234}' 
 Here `null` clears `reference`, as on the route. A body that carries `id`,
 `scope_id`, or a header fact is refused.
 
-A Requirement update sends the ETag of the last read of the record. The CLI
-supplies the `actor` default:
+A Requirement update sends the ETag of the last read of the record. The
+`actor` is optional: an update that gives no actor records the actor `authoring`:
 
 ```sh
 etag=$(provenance req_policy get --repo . --scope default --format json | jq -r .edit.etag)
