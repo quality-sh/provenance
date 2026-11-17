@@ -10,6 +10,7 @@ mod support {
     pub mod import_reviews;
     pub mod landing_runs;
     pub mod merge_driver;
+    pub mod record_budget;
     pub mod record_review;
     pub mod review_paths;
     pub mod stale_repo;
@@ -171,3 +172,9 @@ mod review_host_support;
 use review_host_support::bounded_process;
 #[path = "../support/thread_record.rs"]
 mod thread_record;
+#[path = "../cli_binding_budget.rs"]
+mod cli_binding_budget;
+#[path = "../cli_record_budget.rs"]
+mod cli_record_budget;
+#[path = "../cli_stored_long_rows.rs"]
+mod cli_stored_long_rows;

@@ -119,3 +119,5 @@ mod typed_plan_refusals;
 mod verification_run_budget;
 #[path = "../wire.rs"]
 mod wire;
+#[path = "../record_budget.rs"]
+mod record_budget;

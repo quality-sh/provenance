@@ -110,3 +110,5 @@ mod verification_runs_cache_lines;
 mod wire;
 #[path = "../write_actor_default.rs"]
 mod write_actor_default;
+#[path = "../record_budget.rs"]
+mod record_budget;
