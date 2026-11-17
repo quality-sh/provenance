@@ -54,7 +54,9 @@ async fn evidence_reassembles_exact_unicode_and_history_cursor_is_bound() {
     let (temp, store) = fixture();
     let root = camino::Utf8Path::from_path(temp.path()).unwrap();
     commit_state(&temp, "Create");
-    let text = "😀\n\"é\\".repeat(25_000);
+    // The stored row stays inside the record budget, and its JSON text,
+    // with each escape, needs more than one evidence page.
+    let text = "😀\n\"é\\".repeat(7_000);
     store
         .save_requirement(save(&store, json!({"description":text})))
         .unwrap();
@@ -64,7 +66,9 @@ async fn evidence_reassembles_exact_unicode_and_history_cursor_is_bound() {
         .unwrap();
     let mut offset = 0;
     let mut bytes = String::new();
+    let mut pages = 0;
     loop {
+        pages += 1;
         let page = read_evidence(
             &repository(root),
             ReadPolicy::default(),
@@ -87,6 +91,7 @@ async fn evidence_reassembles_exact_unicode_and_history_cursor_is_bound() {
             None => break,
         }
     }
+    assert!(pages > 1, "{pages}");
     let record: provenance_core::Requirement = serde_json::from_str(&bytes).unwrap();
     assert_eq!(record.description.as_deref(), Some(text.as_str()));
     let one = read_history(&repository(root), ReadPolicy::default(), query(1, None))
