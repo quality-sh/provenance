@@ -316,7 +316,7 @@ where
     let outcome = database
         .write_then_read(
             catch_up_work(&mut guard, &mut report, database.max_bound_values()),
-            reading.work(Check::None, StampPolicy::CatchUp, None),
+            reading.work(Check::None, StampPolicy::CatchUp),
         )
         .await;
     drop(guard);
@@ -374,10 +374,21 @@ pub(super) async fn ensure_current_schema(
     Ok(())
 }
 
+/// The refusal of a read whose database did not open with `error`. A
+/// database file that does not exist is [`NoRevisionCause::Absent`].
 fn no_projection(layout: &ProvenanceLayout, error: anyhow::Error) -> anyhow::Error {
+    let database = layout.cache_db_path();
+    let absent = std::fs::symlink_metadata(&database)
+        .is_err_and(|error| error.kind() == std::io::ErrorKind::NotFound);
+    let error = located(layout, error);
+    let cause = if absent {
+        NoRevisionCause::Absent(error)
+    } else {
+        NoRevisionCause::Unopened(error)
+    };
     ReadRefusal::NoProjection {
-        database: layout.cache_db_path(),
-        cause: Some(NoRevisionCause::Unopened(located(layout, error))),
+        database,
+        cause: Some(cause),
     }
     .into()
 }

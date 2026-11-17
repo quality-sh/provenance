@@ -169,20 +169,24 @@ impl ReadError {
         }
     }
     /// The `no_projection` failure of a read with no stored revision: the
-    /// members of `document_catch_up_failed` for a failed catch-up, the text
-    /// of a read database that did not open, and `provenance materialize` as
-    /// the hint of a read with no cause.
+    /// members of `document_catch_up_failed` for a failed catch-up, and the
+    /// text of a read database that did not open. `provenance materialize` is
+    /// the hint of a read with no cause or with an absent database, the two
+    /// causes that it corrects.
     fn no_projection(&self, cause: Option<&NoRevisionCause>) -> ReadFailure {
-        let unopened = |message| ReadFailure::NoProjection {
+        let unopened = |error: &anyhow::Error, hint: Option<&str>| ReadFailure::NoProjection {
             location: None,
-            message,
-            hint: Some(MATERIALIZE.to_owned()),
+            message: Some(failure_cause(error, native(error))),
+            hint: hint.map(str::to_owned),
         };
         match cause {
-            None => unopened(None),
-            Some(NoRevisionCause::Unopened(error)) => {
-                unopened(Some(failure_cause(error, native(error))))
-            }
+            None => ReadFailure::NoProjection {
+                location: None,
+                message: None,
+                hint: Some(MATERIALIZE.to_owned()),
+            },
+            Some(NoRevisionCause::Absent(error)) => unopened(error, Some(MATERIALIZE)),
+            Some(NoRevisionCause::Unopened(error)) => unopened(error, None),
             Some(NoRevisionCause::CatchUp(error)) => match self.catch_up_refusal(native(error)) {
                 ReadFailure::DocumentCatchUpFailed {
                     location,

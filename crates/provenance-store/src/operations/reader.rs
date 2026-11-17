@@ -100,7 +100,9 @@ pub struct CatchUpFailed(pub anyhow::Error);
 pub enum NoRevisionCause {
     /// The catch-up that builds the read database failed.
     CatchUp(anyhow::Error),
-    /// The read database did not open.
+    /// The read database file does not exist, so it did not open.
+    Absent(anyhow::Error),
+    /// The read database file exists and did not open.
     Unopened(anyhow::Error),
 }
 
@@ -112,17 +114,19 @@ impl NoRevisionCause {
 }
 
 /// The part of the `NoProjection` display text after the database: the step
-/// that corrects the read, and the cause. A failed catch-up has its own
-/// correction or none, so its text does not name `provenance materialize`.
+/// that corrects the read, and the cause. `provenance materialize` builds an
+/// absent database, and refuses with each other cause, so only a read with no
+/// cause or an absent database names it.
 fn no_revision_detail(cause: Option<&NoRevisionCause>) -> String {
     match cause {
         None => format!("; {MATERIALIZE}"),
         Some(NoRevisionCause::CatchUp(error)) => {
             format!(" (catch-up failed: {})", NoRevisionCause::text(error))
         }
-        Some(NoRevisionCause::Unopened(error)) => {
+        Some(NoRevisionCause::Absent(error)) => {
             format!("; {MATERIALIZE} ({})", NoRevisionCause::text(error))
         }
+        Some(NoRevisionCause::Unopened(error)) => format!(" ({})", NoRevisionCause::text(error)),
     }
 }
 

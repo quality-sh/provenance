@@ -198,3 +198,54 @@ async fn a_read_whose_database_does_not_open_gives_its_error_and_materialize() {
         }))
     );
 }
+
+/// An `annotate_only` read whose read database file exists and does not open
+/// refuses with `no_projection` and the error of the database. The refusal has
+/// no hint: `provenance materialize` refuses with the same error.
+#[tokio::test]
+#[verifies("rule_no_revision_refuses_and_names_materialize", examples)]
+async fn a_read_whose_database_file_is_not_a_database_gives_no_hint() {
+    let repo = Repository::new("The shared graph is readable.");
+    read_policy(&repo, "annotate_only");
+    no_stored_revision(&repo);
+    let cache = repo.dir.path().join(".provenance/cache");
+    std::fs::create_dir_all(&cache).unwrap();
+    std::fs::write(cache.join("provenance.db"), [0x55; 4096]).unwrap();
+    let host = host(&repo, false);
+
+    let (status, refused) = call(&host, "GET", "/requirements/req_shared", None).await;
+
+    assert_eq!(status, 409);
+    let damaged = "(code: 26) file is not a database";
+    assert_eq!(
+        refused,
+        no_projection(&json!({
+            "message": format!("error returned from database: {damaged}: {damaged}")
+        }))
+    );
+}
+
+/// With no stored revision, a read whose catch-up stops at a record file
+/// that is not UTF-8 refuses with `no_projection`. The native error names the
+/// file by its absolute path; the message gives it relative to the
+/// repository. No Rule states the paths in the cause of this refusal.
+#[tokio::test]
+async fn a_read_with_no_stored_revision_gives_no_absolute_path_in_the_cause() {
+    let repo = Repository::new("The shared graph is readable.");
+    let shown = ".provenance/state/scopes/default/requirements/req.jsonl";
+    let mut bytes = std::fs::read(repo.dir.path().join(shown)).unwrap();
+    bytes.extend_from_slice(b"\xff\n");
+    std::fs::write(repo.dir.path().join(shown), bytes).unwrap();
+    no_stored_revision(&repo);
+    let host = host(&repo, false);
+
+    let (status, refused) = call(&host, "GET", "/requirements/req_shared", None).await;
+
+    assert_eq!(status, 409);
+    assert_eq!(
+        refused,
+        no_projection(&json!({
+            "message": format!("read {shown}: the file is not UTF-8: invalid data")
+        }))
+    );
+}

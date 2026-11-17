@@ -258,3 +258,26 @@ async fn a_get_over_a_bad_line_with_no_stored_revision_refuses_on_each_interface
     assert_eq!(mcp_refusal(&server, "get", arguments).await, refused);
     server.close().await;
 }
+
+/// With no stored revision, a get whose catch-up stops at a record file that is not UTF-8
+/// refuses with the cause. The native error names the file by its absolute path; the CLI
+/// text gives it relative to the repository. No Rule states the paths in this cause.
+#[test]
+fn a_get_with_no_stored_revision_gives_the_path_of_the_cause_relative_to_the_repository() {
+    let directory = tempfile::tempdir().unwrap();
+    let repo = directory.path().to_str().unwrap().to_owned();
+    chain(&repo);
+    let file = directory
+        .path()
+        .join(".provenance/state")
+        .join(REQUIREMENTS);
+    let mut opened = std::fs::OpenOptions::new().append(true).open(file).unwrap();
+    opened.write_all(b"\xff\n").unwrap();
+    std::fs::remove_dir_all(directory.path().join(".provenance/cache")).unwrap();
+
+    let cause = format!(".provenance/state/{REQUIREMENTS}: the file is not UTF-8: invalid data");
+    assert_no_revision_refusal(
+        &cli_refusal(&repo, &[RULE, "get"]),
+        &format!("read {cause}"),
+    );
+}
