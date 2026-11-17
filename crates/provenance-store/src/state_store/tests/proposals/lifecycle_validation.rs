@@ -393,7 +393,9 @@ fn seed_blocked_evidence(store: &crate::state_store::StateStore, scope: &provena
 
 fn allow_actor(store: &crate::state_store::StateStore, id: &str) {
     let mut manifest = store.manifest().unwrap();
-    manifest.disposition_actor_ids.push(id.into());
+    manifest
+        .disposition_actor_ids
+        .push(provenance_core::DispositionActor::human(id));
     std::fs::write(
         store.layout.manifest_path(),
         serde_json::to_vec(&manifest).unwrap(),

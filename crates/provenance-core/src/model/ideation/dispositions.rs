@@ -41,6 +41,26 @@ pub struct DispositionActor {
     pub name: Option<String>,
 }
 
+impl DispositionActor {
+    /// A listed actor of the manifest field `disposition_actor_ids`: the identity type
+    /// and the ID both equal one entry, and the name has no effect.
+    #[provenance_macros::rule("rule_reviewer_entry_matches_identity_type_and_id")]
+    pub fn is_listed(&self, entries: &[Self]) -> bool {
+        entries
+            .iter()
+            .any(|entry| entry.identity_type == self.identity_type && entry.id == self.id)
+    }
+
+    /// An entry of `disposition_actor_ids` for a person with this ID.
+    pub fn human(id: impl Into<String>) -> Self {
+        Self {
+            identity_type: IdentityType::Human,
+            id: id.into(),
+            name: None,
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]

@@ -53,7 +53,7 @@ fn a_publication_passes_while_a_reader_has_the_marker_open() {
         }
     });
     let mut published = manifest;
-    published.disposition_actor_ids = vec!["actor_after".to_owned()];
+    published.disposition_actor_ids = vec![provenance_core::DispositionActor::human("actor_after")];
     let result = with_repository_publication(&layout, |held| {
         with_staged_state(held, false, StampFromGit, |staged| {
             let manifest = staged.layout.manifest_path();

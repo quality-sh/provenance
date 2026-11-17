@@ -25,6 +25,13 @@ Repeat `--disposition-actor-id` to permit more than one reviewer. Use
 `--clear-disposition-actors` to remove all reviewers. If the reviewer list is
 empty, `provenance review` permits reads but not review decisions.
 
+Each entry of the manifest field `disposition_actor_ids` names an identity type
+and an ID, in the same form as the actor of a review decision:
+`{"identity_type":"human","id":"reviewer-id"}`. The init command writes a
+`human` entry for each `--disposition-actor-id`. A review decision is recorded
+only when its actor has the identity type and the ID of one entry; the name of
+the actor has no effect.
+
 ## Record commands and the api command
 
 The CLI reads and changes one record with the record ID as the first word.

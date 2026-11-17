@@ -380,7 +380,9 @@ pub(super) fn rejected_input(
 
 pub(super) fn allow_actor(store: &StateStore) {
     let mut manifest = store.manifest().unwrap();
-    manifest.disposition_actor_ids.push("reviewer".into());
+    manifest
+        .disposition_actor_ids
+        .push(provenance_core::DispositionActor::human("reviewer"));
     std::fs::write(
         store.layout.manifest_path(),
         serde_json::to_vec(&manifest).unwrap(),

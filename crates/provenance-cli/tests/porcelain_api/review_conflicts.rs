@@ -6,7 +6,9 @@ fn allow_reviewer(repo: &str) {
     let layout = ProvenanceLayout::new(camino::Utf8Path::new(repo));
     let mut manifest: Manifest =
         serde_json::from_slice(&std::fs::read(layout.manifest_path()).unwrap()).unwrap();
-    manifest.disposition_actor_ids.push("reviewer".into());
+    manifest
+        .disposition_actor_ids
+        .push(provenance_core::DispositionActor::human("reviewer"));
     std::fs::write(
         layout.manifest_path(),
         serde_json::to_vec(&manifest).unwrap(),
@@ -138,7 +140,9 @@ fn terminal(repo: &str, proposal: &str, action: &str) -> Value {
             "decision":"accepted", "rationale":null,
             "canonical_artifact":{"artifact_type":"requirement","artifact_id":"req_review"},
             "feedback":null, "declared_by":null}),
-        _ => json!({"actor":"agent","declared_by":null,"reason":null}),
+        _ => {
+            json!({"actor":"agent","declared_by":null,"reason":null})
+        }
     };
     refused(&api(
         repo,

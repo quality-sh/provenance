@@ -253,7 +253,9 @@ fn seed_proposal_ready_for_disposition(store: &StateStore, scope: &ScopeId) {
 
 fn allow_disposition_actor(store: &StateStore) {
     let mut manifest = store.manifest().unwrap();
-    manifest.disposition_actor_ids.push("ben".into());
+    manifest
+        .disposition_actor_ids
+        .push(provenance_core::DispositionActor::human("ben"));
     std::fs::write(
         store.layout.manifest_path(),
         serde_json::to_vec(&manifest).unwrap(),

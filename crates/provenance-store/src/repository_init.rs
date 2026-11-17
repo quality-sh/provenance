@@ -9,7 +9,7 @@ use crate::layout::ProvenanceLayout;
 use crate::state_store::StateStore;
 use crate::storage::{Atomicity, StateKey, StateView, WriteSet};
 use camino::Utf8PathBuf;
-use provenance_core::{Manifest, RepoPathPrefix, Scope, ScopeId};
+use provenance_core::{DispositionActor, Manifest, RepoPathPrefix, Scope, ScopeId};
 use std::sync::Arc;
 
 /// Plans the scope and reviewer settings before initialization writes files.
@@ -59,9 +59,12 @@ pub fn plan_manifest(
     if clear_actors {
         manifest.disposition_actor_ids.clear();
     } else if !actor_ids.is_empty() {
-        manifest.disposition_actor_ids = actor_ids;
+        manifest.disposition_actor_ids =
+            actor_ids.into_iter().map(DispositionActor::human).collect();
     } else if is_new {
-        manifest.disposition_actor_ids.extend(selected_actor);
+        manifest
+            .disposition_actor_ids
+            .extend(selected_actor.map(DispositionActor::human));
     }
     Ok(manifest)
 }

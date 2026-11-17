@@ -50,7 +50,9 @@ fn exact_duplicate_assertion_id_is_rejected_at_batch_ingress() {
 fn exact_duplicate_disposition_id_is_rejected_at_batch_ingress() {
     let (_dir, store, scope) = initialized_store();
     let mut manifest = store.manifest().unwrap();
-    manifest.disposition_actor_ids.push("reviewer".into());
+    manifest
+        .disposition_actor_ids
+        .push(provenance_core::DispositionActor::human("reviewer"));
     std::fs::write(
         store.layout.manifest_path(),
         serde_json::to_vec(&manifest).unwrap(),

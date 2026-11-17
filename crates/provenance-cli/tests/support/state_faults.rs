@@ -95,7 +95,7 @@ pub fn older_manifest(repo: &Path) -> (u64, String) {
         .as_array()
         .unwrap()
         .iter()
-        .map(|actor| actor.as_str().unwrap())
+        .map(|actor| actor["id"].as_str().unwrap())
         .collect::<Vec<_>>()
         .join(" ");
     manifest["disposition_actor_ids"] = json!(actors);

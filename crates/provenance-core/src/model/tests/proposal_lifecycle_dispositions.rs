@@ -24,7 +24,7 @@ fn rejected_disposition_allows_blocked_or_contested_proposal_without_assertion()
 
         crate::validate_ideation_aggregate(crate::IdeationAggregate {
             legacy_policy: crate::LegacyProposalPolicy::ModernOnly,
-            disposition_actor_ids: &["reviewer".into()],
+            disposition_actor_ids: &[crate::DispositionActor::human("reviewer")],
             contributions: &contributions,
             synthesis_packets: &synthesis_packets,
             proposals: &proposals,
@@ -56,11 +56,12 @@ fn validate_ratified_acceptance(identity_type: &str, names_artifact: bool) -> an
         disposition["canonical_artifact"] =
             serde_json::json!({"artifact_type": "resolution", "artifact_id": "res_a"});
     }
+    let reviewer = serde_json::json!({"identity_type": identity_type, "id": "reviewer"});
     let dispositions = vec![serde_json::from_value(disposition).unwrap()];
 
     crate::validate_ideation_aggregate(crate::IdeationAggregate {
         legacy_policy: crate::LegacyProposalPolicy::ModernOnly,
-        disposition_actor_ids: &["reviewer".into()],
+        disposition_actor_ids: &[serde_json::from_value(reviewer).unwrap()],
         contributions: &contributions,
         synthesis_packets: &synthesis_packets,
         proposals: &proposals,
@@ -107,7 +108,7 @@ fn accepted_disposition_still_requires_assertion() {
 
     let error = crate::validate_ideation_aggregate(crate::IdeationAggregate {
         legacy_policy: crate::LegacyProposalPolicy::ModernOnly,
-        disposition_actor_ids: &["reviewer".into()],
+        disposition_actor_ids: &[crate::DispositionActor::human("reviewer")],
         contributions: &contributions,
         synthesis_packets: &synthesis_packets,
         proposals: &proposals,
@@ -136,7 +137,7 @@ fn rejected_or_deferred_disposition_can_override_asserted_state() {
 
         crate::validate_ideation_aggregate(crate::IdeationAggregate {
             legacy_policy: crate::LegacyProposalPolicy::ModernOnly,
-            disposition_actor_ids: &["reviewer".into()],
+            disposition_actor_ids: &[crate::DispositionActor::human("reviewer")],
             contributions: &contributions,
             synthesis_packets: &synthesis_packets,
             proposals: &proposals,
@@ -204,7 +205,7 @@ fn disposition_external_action_rejects_null_and_blank_identity_parts() {
 /// decides on: the manifest allowlist, the acting identity, and whether the
 /// aggregate carries a disposition at all.
 fn validate_allowlist_case(
-    allowlist: &[String],
+    allowlist: &[crate::DispositionActor],
     actor_id: &str,
     carries_disposition: bool,
 ) -> anyhow::Result<()> {
@@ -238,15 +239,27 @@ fn validate_allowlist_case(
 #[test]
 #[verifies("rule_disposition_actor_allowlist", examples)]
 fn allowlisted_actor_may_dispose_a_live_proposal() {
-    validate_allowlist_case(&["auditor".into(), "reviewer".into()], "reviewer", true).unwrap();
+    validate_allowlist_case(
+        &[
+            crate::DispositionActor::human("auditor"),
+            crate::DispositionActor::human("reviewer"),
+        ],
+        "reviewer",
+        true,
+    )
+    .unwrap();
 }
 
 #[test]
 #[verifies("rule_disposition_actor_allowlist", examples)]
 fn actor_outside_the_allowlist_cannot_dispose_a_live_proposal() {
-    let error = validate_allowlist_case(&["reviewer".into()], "intruder", true)
-        .unwrap_err()
-        .to_string();
+    let error = validate_allowlist_case(
+        &[crate::DispositionActor::human("reviewer")],
+        "intruder",
+        true,
+    )
+    .unwrap_err()
+    .to_string();
     // A populated allowlist names the field and the init command, and gives
     // no actor ID of the list.
     assert_eq!(
@@ -290,7 +303,7 @@ fn allowlist_ignores_actor_shaped_ids_on_other_record_kinds() {
 
     crate::validate_ideation_aggregate(crate::IdeationAggregate {
         legacy_policy: crate::LegacyProposalPolicy::ModernOnly,
-        disposition_actor_ids: &["reviewer".into()],
+        disposition_actor_ids: &[crate::DispositionActor::human("reviewer")],
         contributions: &contributions,
         synthesis_packets: &synthesis_packets,
         proposals: &proposals,
@@ -314,8 +327,8 @@ fn allowlist_gates_disposition_actors_over_every_manifest() {
             .iter()
             .enumerate()
             .filter(|&(index, _)| mask & (1u8 << index) != 0)
-            .map(|(_, actor)| (*actor).to_owned())
-            .collect::<Vec<String>>();
+            .map(|(_, actor)| crate::DispositionActor::human(*actor))
+            .collect::<Vec<_>>();
         for (index, actor) in ACTORS.iter().enumerate() {
             let listed = mask & (1u8 << index) != 0;
             for carries_disposition in [false, true] {
@@ -358,7 +371,7 @@ fn validate_qualified_proposal(carries_ratified_acceptance: bool) -> anyhow::Res
 
     crate::validate_ideation_aggregate(crate::IdeationAggregate {
         legacy_policy: crate::LegacyProposalPolicy::ModernOnly,
-        disposition_actor_ids: &["reviewer".into()],
+        disposition_actor_ids: &[crate::DispositionActor::human("reviewer")],
         contributions: &contributions,
         synthesis_packets: &synthesis_packets,
         proposals: &proposals,

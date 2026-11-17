@@ -40,7 +40,7 @@ fn init_uses_the_normalized_git_email_as_the_reviewer() {
 
     assert_eq!(
         manifest(&repo)["disposition_actor_ids"],
-        serde_json::json!(["jane_doe_review_example_com"])
+        serde_json::json!([{"identity_type": "human", "id": "jane_doe_review_example_com"}])
     );
 }
 
@@ -57,6 +57,6 @@ fn init_keeps_the_explicit_reviewer() {
 
     assert_eq!(
         manifest(&repo)["disposition_actor_ids"],
-        serde_json::json!(["maintainer"])
+        serde_json::json!([{"identity_type": "human", "id": "maintainer"}])
     );
 }

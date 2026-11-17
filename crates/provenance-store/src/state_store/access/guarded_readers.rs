@@ -92,7 +92,7 @@ impl GuardedStore<'_> {
     pub fn list_proposal_cards_with_actor_ids(
         &self,
         scope: &ScopeId,
-        disposition_actor_ids: &[String],
+        disposition_actor_ids: &[provenance_core::DispositionActor],
     ) -> anyhow::Result<Vec<ProposalCard>> {
         self.store
             .list_proposal_cards_with_actor_ids(scope, disposition_actor_ids)
@@ -105,7 +105,7 @@ impl GuardedStore<'_> {
     pub fn validate_ideation_scope_with_actor_ids(
         &self,
         scope: &ScopeId,
-        disposition_actor_ids: &[String],
+        disposition_actor_ids: &[provenance_core::DispositionActor],
     ) -> anyhow::Result<()> {
         self.store
             .validate_ideation_scope_with_actor_ids(scope, disposition_actor_ids)

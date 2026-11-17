@@ -13,7 +13,7 @@ impl StateStore {
     pub fn validate_ideation_scope_with_actor_ids(
         &self,
         scope: &ScopeId,
-        disposition_actor_ids: &[String],
+        disposition_actor_ids: &[provenance_core::DispositionActor],
     ) -> anyhow::Result<()> {
         self.with_repository_read(|held| {
             held.validate_ideation_scope_snapshot(scope, disposition_actor_ids)
@@ -23,7 +23,7 @@ impl StateStore {
     fn validate_ideation_scope_snapshot(
         &self,
         scope: &ScopeId,
-        disposition_actor_ids: &[String],
+        disposition_actor_ids: &[provenance_core::DispositionActor],
     ) -> anyhow::Result<()> {
         let contributions = self.list_contributions(scope)?;
         let synthesis_packets = self.list_synthesis_packets(scope)?;

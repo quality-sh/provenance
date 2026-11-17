@@ -93,7 +93,9 @@ fn append(
 fn two_ideation_aggregates(layout: &ProvenanceLayout, scope: &ScopeId) {
     let mut manifest: provenance_core::Manifest =
         serde_json::from_slice(&std::fs::read(layout.manifest_path()).unwrap()).unwrap();
-    manifest.disposition_actor_ids.push("reviewer".into());
+    manifest
+        .disposition_actor_ids
+        .push(provenance_core::DispositionActor::human("reviewer"));
     std::fs::write(
         layout.manifest_path(),
         serde_json::to_vec(&manifest).unwrap(),

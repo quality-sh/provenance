@@ -94,7 +94,10 @@ fn init_after_the_removal_of_the_state_gives_a_state_that_reads() {
         let scopes = json!([{"id": "default", "path_prefix": "."}]);
         assert_eq!(manifest["scopes"], scopes, "{manifest}");
         let actors = manifest["disposition_actor_ids"].as_array().unwrap();
-        assert!(!actors.contains(&json!("approver")), "{manifest}");
+        assert!(
+            !actors.iter().any(|actor| actor["id"] == "approver"),
+            "{manifest}"
+        );
         assert_eq!(technical_names(repo), None);
         let (code, stdout, stderr) = run(repo, &["req_child", "get", "--format", "json"]);
         assert_eq!(code, Some(1), "{stdout}");

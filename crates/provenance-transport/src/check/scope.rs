@@ -17,7 +17,7 @@ impl ScopeRecords {
     fn load(
         store: &StateStore,
         scope_id: &ScopeId,
-        disposition_actor_ids: &[String],
+        disposition_actor_ids: &[provenance_core::DispositionActor],
     ) -> anyhow::Result<Self> {
         store.validate_ideation_scope_with_actor_ids(scope_id, disposition_actor_ids)?;
         store.validate_graph_scope(scope_id)?;
@@ -68,7 +68,7 @@ fn check_scope_ownership(
 pub(super) fn validate(
     store: &StateStore,
     scopes: &[Scope],
-    disposition_actor_ids: &[String],
+    disposition_actor_ids: &[provenance_core::DispositionActor],
     manifest_scopes: &BTreeSet<String>,
     index: &mut CheckIndex,
     dangling: &mut Vec<String>,

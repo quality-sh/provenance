@@ -78,7 +78,9 @@ impl LocalRepository {
     /// Read disposition actors from the repository bound at startup. A
     /// manifest that does not parse gives the read failure of the manifest,
     /// such as `invalid_state_file` with its line.
-    pub fn disposition_actor_ids(&self) -> Result<Vec<String>, ReadError> {
+    pub fn disposition_actor_ids(
+        &self,
+    ) -> Result<Vec<provenance_core::DispositionActor>, ReadError> {
         Ok(self.repository.manifest()?.disposition_actor_ids)
     }
 

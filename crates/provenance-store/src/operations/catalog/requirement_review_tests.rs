@@ -207,7 +207,9 @@ async fn revision_keeps_the_prior_submission_and_feedback_readable() {
         .unwrap();
     let proposal = created.decision.pending.unwrap().proposal_id;
     let mut manifest = store.manifest().unwrap();
-    manifest.disposition_actor_ids.push("reviewer".to_owned());
+    manifest
+        .disposition_actor_ids
+        .push(provenance_core::DispositionActor::human("reviewer"));
     std::fs::write(
         store.layout.manifest_path(),
         serde_json::to_vec(&manifest).unwrap(),

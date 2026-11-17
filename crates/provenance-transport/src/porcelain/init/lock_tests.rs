@@ -75,7 +75,13 @@ fn open_on_a_thread(repo: &Utf8Path) -> mpsc::Receiver<anyhow::Result<Vec<String
         let read = Repository::open(&repo, "default")
             .map_err(anyhow::Error::from)
             .and_then(|repository| repository.manifest())
-            .map(|manifest| manifest.disposition_actor_ids);
+            .map(|manifest| {
+                manifest
+                    .disposition_actor_ids
+                    .into_iter()
+                    .map(|actor| actor.id)
+                    .collect()
+            });
         let _ = sender.send(read);
     });
     receiver
@@ -278,7 +284,11 @@ fn repository_with_changed_agents() -> (tempfile::TempDir, Utf8PathBuf) {
 /// The reviewers in the manifest of the scope `default` of `repo`.
 fn reviewers(repo: &Utf8Path) -> anyhow::Result<Vec<String>> {
     let manifest = Repository::open(repo, "default")?.manifest()?;
-    Ok(manifest.disposition_actor_ids)
+    Ok(manifest
+        .disposition_actor_ids
+        .into_iter()
+        .map(|actor| actor.id)
+        .collect())
 }
 
 /// The paths of `repo` with `.provenance-` in the name: the temporary files

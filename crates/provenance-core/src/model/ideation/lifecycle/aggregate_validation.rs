@@ -4,8 +4,8 @@ use super::{
     IdeationRecord,
 };
 use crate::model::{
-    disposition_requires_prior_assertion, validate_disposition_intrinsic, DispositionActorRefusal,
-    DispositionRecord, PromotionState, ProposalCard,
+    disposition_requires_prior_assertion, validate_disposition_intrinsic, DispositionActor,
+    DispositionActorRefusal, DispositionRecord, PromotionState, ProposalCard,
 };
 use provenance_macros::rule;
 use std::collections::BTreeMap;
@@ -86,7 +86,7 @@ fn validate_actor_allowlists(
             validate_actor_allowlist(
                 proposal,
                 aggregate.assertions,
-                &disposition.actor.id,
+                &disposition.actor,
                 aggregate.disposition_actor_ids,
             )?;
         }
@@ -98,20 +98,20 @@ fn validate_actor_allowlists(
 fn validate_actor_allowlist(
     proposal: &ProposalCard,
     assertions: &[AssertionRecord],
-    actor_id: &str,
-    disposition_actor_ids: &[String],
+    actor: &DispositionActor,
+    disposition_actor_ids: &[DispositionActor],
 ) -> anyhow::Result<()> {
     let requires_allowlisted_actor = matches!(
         effective_proposal_state(proposal, assertions, &[]),
         PromotionState::Proposed | PromotionState::Asserted
     );
-    if requires_allowlisted_actor && !disposition_actor_ids.iter().any(|id| id == actor_id) {
+    if requires_allowlisted_actor && !actor.is_listed(disposition_actor_ids) {
         return Err(allowlist_refusal(disposition_actor_ids).into());
     }
     Ok(())
 }
 
-const fn allowlist_refusal(disposition_actor_ids: &[String]) -> DispositionActorRefusal {
+const fn allowlist_refusal(disposition_actor_ids: &[DispositionActor]) -> DispositionActorRefusal {
     if disposition_actor_ids.is_empty() {
         DispositionActorRefusal::NoActorsConfigured
     } else {
@@ -233,7 +233,9 @@ mod disposition_actor_trigger_tests {
     use serde_json::json;
 
     use super::validate_actor_allowlist;
-    use crate::model::{AssertionRecord, DispositionActorRefusal, PromotionState, ProposalCard};
+    use crate::model::{
+        AssertionRecord, DispositionActor, DispositionActorRefusal, PromotionState, ProposalCard,
+    };
 
     #[test]
     #[verifies("rule_disposition_actor_allowlist", examples)]
@@ -256,7 +258,13 @@ mod disposition_actor_trigger_tests {
         }))
         .unwrap();
 
-        let error = validate_actor_allowlist(&proposal, &[assertion], "reviewer", &[]).unwrap_err();
+        let error = validate_actor_allowlist(
+            &proposal,
+            &[assertion],
+            &DispositionActor::human("reviewer"),
+            &[],
+        )
+        .unwrap_err();
         assert_eq!(
             error.downcast_ref::<DispositionActorRefusal>(),
             Some(&DispositionActorRefusal::NoActorsConfigured),
@@ -264,6 +272,7 @@ mod disposition_actor_trigger_tests {
         );
 
         proposal.promotion_state = PromotionState::Accepted;
-        validate_actor_allowlist(&proposal, &[], "reviewer", &[]).unwrap();
+        validate_actor_allowlist(&proposal, &[], &DispositionActor::human("reviewer"), &[])
+            .unwrap();
     }
 }

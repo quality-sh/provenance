@@ -2,6 +2,7 @@ use camino::Utf8PathBuf;
 use serde::{Deserialize, Serialize};
 
 use super::ids::ScopeId;
+use super::DispositionActor;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(transparent)]
@@ -25,8 +26,10 @@ pub struct Scope {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Manifest {
     pub scopes: Vec<Scope>,
+    /// The actors that can make a review decision. An actor matches an entry
+    /// when its identity type and its ID both equal those of the entry.
     #[serde(default)]
-    pub disposition_actor_ids: Vec<String>,
+    pub disposition_actor_ids: Vec<DispositionActor>,
 }
 
 impl Manifest {

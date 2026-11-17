@@ -143,7 +143,7 @@ fn init_rerun_with_actor_flag_updates_only_the_allowlist() {
     .success();
 
     let mut expected = original;
-    expected["disposition_actor_ids"] = serde_json::json!(["maintainer", "release-manager"]);
+    expected["disposition_actor_ids"] = serde_json::json!([{"identity_type": "human", "id": "maintainer"}, {"identity_type": "human", "id": "release-manager"}]);
     assert_eq!(read_manifest(&repo), expected);
 }
 

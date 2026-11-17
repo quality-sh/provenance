@@ -110,7 +110,7 @@ impl HostAccess for LocalRepository {
         ))
     }
 
-    fn reviewer_ids(&self) -> Option<Vec<String>> {
+    fn reviewer_ids(&self) -> Option<Vec<provenance_core::DispositionActor>> {
         self.disposition_actor_ids().ok()
     }
 
