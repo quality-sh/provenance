@@ -6,6 +6,7 @@ use crate::operations::reader::{
 };
 use crate::repository::Repository;
 use crate::write_error::{failure_cause, in_repository, native};
+use anyhow::Context as _;
 use provenance_core::protocol::{read_failure::ReadFailure, Stamped};
 use provenance_core::review::{
     EvidencePage, EvidenceQuery, RecordVersion, ReviewHistoryPage, ReviewHistoryQuery,
@@ -43,7 +44,7 @@ async fn indexed<R: Send>(
         Err(error) => Err(error),
     };
     match (answer, saved) {
-        (Err(refusal), Err(failed)) => Err(unwritten(repository, refusal, failed)),
+        (Err(refusal), Err(failed)) => unwritten(repository, refusal, failed),
         (answer, _) => answer,
     }
 }
@@ -51,17 +52,17 @@ async fn indexed<R: Send>(
 /// The failure of a read whose index write failed with `failed`. A refusal
 /// while more versions wait gives the cause of the write, with each path
 /// relative to the repository; any other failure stays as it is.
-fn unwritten(
+fn unwritten<R>(
     repository: &Repository,
     refusal: anyhow::Error,
     failed: anyhow::Error,
-) -> anyhow::Error {
+) -> anyhow::Result<Stamped<R>> {
     let Some(indexing) = refusal.downcast_ref::<Indexing>() else {
-        return refusal;
+        return Err(refusal);
     };
     let located = in_repository(repository.layout().root().as_std_path(), failed);
     let cause = failure_cause(&located, native(&located));
-    anyhow::Error::from(ReadFailure::PageBudgetExceeded).context(format!(
+    Err(ReadFailure::PageBudgetExceeded).context(format!(
         "versions of {} that are not in the index of record changes: {}; the history read could \
          not write the index, so a repeat does not continue: {cause}",
         indexing.path, indexing.waiting

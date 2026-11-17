@@ -27,6 +27,7 @@ use crate::{
     shards,
     state_store::StateStore,
 };
+use anyhow::Context as _;
 use index::{Held, RecordIndex};
 use provenance_core::protocol::read_failure::ReadFailure;
 use provenance_core::review::{RecordVersion, SaveOutcome};
@@ -174,13 +175,11 @@ impl StateStore {
 #[rule("rule_history_reads_bound_file_versions")]
 fn bound_file_versions(path: &str, added: usize, waiting: usize) -> anyhow::Result<()> {
     if waiting > HISTORY_FILE_VERSIONS {
-        return Err(
-            anyhow::Error::from(ReadFailure::PageBudgetExceeded).context(Indexing {
-                path: path.to_owned(),
-                added,
-                waiting,
-            }),
-        );
+        return Err(ReadFailure::PageBudgetExceeded).context(Indexing {
+            path: path.to_owned(),
+            added,
+            waiting,
+        });
     }
     Ok(())
 }
