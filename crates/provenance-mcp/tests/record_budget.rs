@@ -55,19 +55,33 @@ async fn the_api_tool_refuses_a_rule_create_and_update_over_the_budget() {
         .await;
     let after = session.call(json!({"path": "rules/rule_shared"})).await;
 
-    for (result, id) in [(&created, "rule_long"), (&updated, "rule_shared")] {
+    for (result, id, bytes) in [
+        (&created, "rule_long", 73_022),
+        (&updated, "rule_shared", 73_021),
+    ] {
         assert_eq!(result.is_error, Some(true), "{result:?}");
         let error = &result.structured_content.as_ref().unwrap()["error"];
-        assert_eq!(
-            (&error["kind"], &error["record_id"], &error["limit"]),
-            (&json!("record_too_large"), &json!(id), &json!(BUDGET)),
-            "{error}"
-        );
-        assert!(error["bytes"].as_u64().unwrap() > 72_900, "{error}");
+        assert_eq!(error, &too_large(id, bytes), "{error}");
     }
     assert_eq!(
         after.structured_content.unwrap()["data"],
         before.structured_content.unwrap()["data"]
     );
     session.shutdown().await;
+}
+
+/// The refusal of the Rule `id` whose row uses `bytes` bytes, most of them
+/// in its description.
+fn too_large(id: &str, bytes: u64) -> serde_json::Value {
+    json!({
+        "kind": "record_too_large",
+        "record_id": id,
+        "field": "description",
+        "bytes": bytes,
+        "limit": BUDGET,
+        "message": format!(
+            "record `{id}` uses {bytes} bytes and the limit is {BUDGET} bytes; \
+             make the field `description` shorter"
+        )
+    })
 }

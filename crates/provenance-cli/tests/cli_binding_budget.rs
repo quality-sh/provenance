@@ -4,7 +4,9 @@
 use provenance_macros::verifies;
 use serde_json::json;
 
-use crate::support::record_budget::{api, cli, refusal, repository, success, write, BUDGET};
+use crate::support::record_budget::{
+    api, cli, refusal, repository, success, too_large, write, BUDGET,
+};
 use crate::support::review_paths::provenance;
 use crate::support::state_files::state_files;
 
@@ -43,10 +45,9 @@ fn begin_verification_with_a_long_symbol_is_refused_and_writes_nothing() {
         Some(&start),
     ));
 
-    assert_eq!(refused["kind"], "record_too_large", "{refused}");
-    assert!(refused["record_id"].is_string(), "{refused}");
-    assert!(refused["bytes"].as_u64().unwrap() > 70_000);
-    assert_eq!(refused["limit"], BUDGET);
+    let id = refused["record_id"].as_str().unwrap();
+    assert!(id.starts_with("verification_binding_"), "{refused}");
+    assert_eq!(refused, too_large(id, "symbol", 70_078));
     assert_eq!(state_files(repo), before);
     let evidence = success(&api(repo, "rules/rule_one/evidence", None));
     assert_eq!(evidence["data"]["verification_bindings"], json!([]));
@@ -93,16 +94,13 @@ fn an_import_with_a_long_implementation_symbol_is_refused_and_writes_nothing() {
     // The import command prints the native text of a refusal.
     assert_eq!(refused.status.code(), Some(1));
     assert_eq!(String::from_utf8_lossy(&refused.stdout), "");
-    let stderr = String::from_utf8(refused.stderr).unwrap();
-    let text = stderr
-        .trim_end()
-        .strip_prefix("Error: record `implementation_binding_one` uses ");
-    let (bytes, limit) = text
-        .unwrap()
-        .split_once(" bytes; the supported read allows at most ")
-        .unwrap();
-    assert!(bytes.parse::<usize>().unwrap() > 70_000, "{stderr}");
-    assert_eq!(limit, format!("{BUDGET} bytes"));
+    assert_eq!(
+        String::from_utf8(refused.stderr).unwrap(),
+        format!(
+            "Error: record `implementation_binding_one` uses 70074 bytes and the limit is \
+             {BUDGET} bytes; make the field `symbol` shorter\n"
+        )
+    );
     assert_eq!(state_files(repo), before);
 }
 
@@ -116,10 +114,21 @@ fn a_restatement_whose_review_passes_the_budget_is_refused_and_writes_nothing() 
 
     let refused = refusal(&restate(repo, &statement(250, "shows")));
 
-    assert_eq!(refused["kind"], "record_too_large", "{refused}");
-    assert!(refused["record_id"].is_string(), "{refused}");
-    assert!(refused["bytes"].as_u64().unwrap() > 80_000);
-    assert_eq!(refused["limit"], BUDGET);
+    let bytes = 81_623;
+    assert_eq!(
+        refused,
+        json!({
+            "kind": "record_too_large",
+            "record_id": "req_data",
+            "field": "statement",
+            "bytes": bytes,
+            "limit": BUDGET,
+            "message": format!(
+                "the review of the restated Requirement `req_data` uses {bytes} bytes and the \
+                 limit is {BUDGET} bytes; make the field `statement` shorter"
+            )
+        })
+    );
     assert_eq!(state_files(repo), before);
     let evidence = success(&api(repo, "rules/rule_one/evidence", None));
     assert_eq!(evidence["data"]["review_required"], true);

@@ -15,6 +15,7 @@ use crate::support::state_files::state_files;
 fn a_rule_with_a_long_description_is_refused_at_create_and_at_update() {
     let directory = repository();
     let repo = directory.path();
+    let base = rule_row_base(repo, "rule_long");
     let description = "x".repeat(72_900);
     let before = state_files(repo);
 
@@ -25,18 +26,15 @@ fn a_rule_with_a_long_description_is_refused_at_create_and_at_update() {
         &json!({"description": description}),
     ));
 
-    let created_bytes = created["bytes"].as_u64().unwrap();
-    assert!(created_bytes > 72_900, "{created}");
     assert_eq!(
         created,
-        too_large(
-            "rule_long",
-            "description",
-            usize::try_from(created_bytes).unwrap()
-        )
+        too_large("rule_long", "description", base + 72_900)
     );
-    assert_eq!(updated["record_id"], "rule_one", "{updated}");
-    assert_eq!(updated["limit"], BUDGET);
+    // The id `rule_one` is one byte shorter than the id `rule_long`.
+    assert_eq!(
+        updated,
+        too_large("rule_one", "description", base - 1 + 72_900)
+    );
     assert_eq!(state_files(repo), before);
     success(&cli(repo, &["rule_one", "get"], &[("--format", "json")]));
     success(&api(repo, "rules/rule_one/evidence", None));
@@ -55,8 +53,15 @@ fn a_requirement_with_a_long_description_is_refused() {
         &json!({"statement": "The system keeps the data", "description": "x".repeat(70_000)}),
     ));
 
-    assert_eq!(refused["record_id"], "req_long", "{refused}");
-    assert_eq!(refused["limit"], BUDGET);
+    let longer = refusal(&write(
+        repo,
+        &["req_long", "create", "--type", "requirement"],
+        &json!({"statement": "The system keeps the data", "description": "x".repeat(70_001)}),
+    ));
+
+    let bytes = usize::try_from(refused["bytes"].as_u64().unwrap()).unwrap();
+    assert_eq!(refused, too_large("req_long", "description", bytes));
+    assert_eq!(longer, too_large("req_long", "description", bytes + 1));
     assert_eq!(state_files(repo), before);
 }
 

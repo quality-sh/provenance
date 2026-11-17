@@ -50,19 +50,29 @@ async fn a_rule_create_and_update_over_the_budget_answer_record_too_large() {
     let (missing, _) = call(&host, "GET", "/rules/rule_long", None).await;
     let (evidence, _) = call(&host, "GET", "/rules/rule_shared/evidence", None).await;
 
-    for (status, refusal, id) in [
-        (created_status, &created, "rule_long"),
-        (updated_status, &updated, "rule_shared"),
+    for (status, refusal, id, bytes) in [
+        (created_status, &created, "rule_long", 73_022),
+        (updated_status, &updated, "rule_shared", 73_021),
     ] {
-        let error = &refusal["error"];
         assert_eq!(status, 400, "{refusal}");
-        assert_eq!(
-            (&error["kind"], &error["record_id"], &error["limit"]),
-            (&json!("record_too_large"), &json!(id), &json!(BUDGET)),
-            "{refusal}"
-        );
-        assert!(error["bytes"].as_u64().unwrap() > 72_900, "{refusal}");
+        assert_eq!(refusal["error"], too_large(id, bytes), "{refusal}");
     }
     assert_eq!(after["data"], before["data"]);
     assert_eq!((missing, evidence), (404, 200));
+}
+
+/// The refusal of the Rule `id` whose row uses `bytes` bytes, most of them
+/// in its description.
+fn too_large(id: &str, bytes: u64) -> serde_json::Value {
+    json!({
+        "kind": "record_too_large",
+        "record_id": id,
+        "field": "description",
+        "bytes": bytes,
+        "limit": BUDGET,
+        "message": format!(
+            "record `{id}` uses {bytes} bytes and the limit is {BUDGET} bytes; \
+             make the field `description` shorter"
+        )
+    })
 }

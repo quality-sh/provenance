@@ -127,15 +127,6 @@ async fn a_completion_with_a_row_over_the_budget_is_refused_and_the_run_stays_ru
     assert_eq!(member["data"], run["data"]);
 }
 
-/// The symbol that makes the row of a new run `row` bytes long, measured on
-/// the row of `probe`, a run with the symbol `s`. The new run starts in a
-/// later millisecond, so that its id has the length of the id of `probe`.
-fn symbol_for_row(probe: &Value, row: usize) -> String {
-    std::thread::sleep(std::time::Duration::from_millis(2));
-    let probe_row = serde_json::to_vec(&probe["data"]).unwrap().len();
-    "s".repeat(row + 1 - probe_row)
-}
-
 /// Changes the statement of `req_shared`, which opens a review of the
 /// evidence of `rule_shared`.
 async fn restate(host: &StatementHost) {
@@ -186,24 +177,42 @@ async fn a_start_with_a_binding_row_at_the_record_budget_is_given_by_each_read()
     );
 }
 
+/// A start stores a binding that holds each long field of the start, so the
+/// binding refuses the start at the record budget, before the run row can
+/// pass the run budget.
 #[tokio::test]
 #[verifies("rule_accepted_writes_stay_readable", examples)]
-async fn a_start_with_a_row_over_the_budget_writes_no_run_no_binding_and_no_cleared_review() {
+async fn a_start_whose_binding_passes_the_record_budget_writes_no_run_no_binding_and_no_cleared_review(
+) {
     let repo = repository();
     let host = host(&repo, true);
     let (_, probe) = begin(&host, "probe", "s").await;
     restate(&host).await;
-    let symbol = symbol_for_row(&probe, BUDGET + 1);
+    let (_, long) = begin(&host, "check", &"s".repeat(70_000)).await;
+    let base = usize::try_from(long["error"]["bytes"].as_u64().unwrap()).unwrap() - 70_000;
 
-    let (status, refusal) = begin(&host, "check", &symbol).await;
+    let (status, refusal) = begin(&host, "check", &"s".repeat(RECORD_BUDGET + 1 - base)).await;
     let (_, runs) = call(&host, "GET", "/verification-runs", None).await;
     let (_, bindings) = call(&host, "GET", "/verification-bindings", None).await;
     let open = review_required(&host).await;
     let (cleared, _) = begin(&host, "check", "s").await;
 
+    let id = refusal["error"]["record_id"].as_str().unwrap();
+    assert!(id.starts_with("verification_binding_"), "{refusal}");
+    let bytes = RECORD_BUDGET + 1;
     assert_eq!(
-        (status, &refusal["error"]["kind"]),
-        (400, &json!("record_too_large"))
+        (status, &refusal["error"]),
+        (
+            400,
+            &json!({
+                "kind": "record_too_large", "record_id": id, "field": "symbol",
+                "bytes": bytes, "limit": RECORD_BUDGET,
+                "message": format!(
+                    "record `{id}` uses {bytes} bytes and the limit is {RECORD_BUDGET} bytes; \
+                     make the field `symbol` shorter"
+                )
+            })
+        )
     );
     assert_eq!(runs["data"]["items"], json!([probe["data"]]));
     let keys: Vec<&Value> = bindings["data"]["items"]
