@@ -75,7 +75,11 @@ fn a_rule_at_the_budget_lands_and_reads_back_and_one_byte_more_is_refused() {
     let base = rule_row_base(repo, "rule_edge");
     let before = state_files(repo);
 
-    let over = refusal(&create_rule(repo, "rule_edge", &"x".repeat(BUDGET + 1 - base)));
+    let over = refusal(&create_rule(
+        repo,
+        "rule_edge",
+        &"x".repeat(BUDGET + 1 - base),
+    ));
     let unchanged = state_files(repo);
     let description = "x".repeat(BUDGET - base);
     success(&create_rule(repo, "rule_edge", &description));

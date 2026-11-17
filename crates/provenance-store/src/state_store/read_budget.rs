@@ -124,7 +124,11 @@ pub fn ensure_within_read_budget<T: ReadBudget>(record: &T) -> anyhow::Result<()
     let id = record.read_id();
     ensure_within(id, id.len(), ID_BYTES)?;
     ensure_row_within(id, record.read_bytes()?, T::read_budget())?;
-    ensure_within(id, serde_json::to_vec(record)?.len(), resource_record_bytes())
+    ensure_within(
+        id,
+        serde_json::to_vec(record)?.len(),
+        resource_record_bytes(),
+    )
 }
 
 /// Refuses a stored row over the budget of its kind, with the record, the

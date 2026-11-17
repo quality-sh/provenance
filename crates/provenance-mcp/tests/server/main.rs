@@ -101,6 +101,8 @@ mod porcelain_schema_variants;
 mod porcelain_search;
 #[path = "../query_response_budgets.rs"]
 mod query_response_budgets;
+#[path = "../record_budget.rs"]
+mod record_budget;
 #[path = "../refusal_characterization.rs"]
 mod refusal_characterization;
 #[path = "../refusal_guidance.rs"]
