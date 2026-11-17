@@ -223,6 +223,8 @@ fn recovery_refuses_backup_leaf_slashes_and_parent_segments() {
     }
 }
 
+/// The entry completes the state of the edit and then refuses for the file
+/// that a person put at the target.
 #[test]
 fn same_before_bytes_with_a_different_identity_are_an_external_change() {
     let temp = fixture();
@@ -240,7 +242,7 @@ fn same_before_bytes_with_a_different_identity_are_an_external_change() {
         error.downcast_ref::<SourceEditRecoveryFailure>(),
         Some(SourceEditRecoveryFailure::ExternalChange { .. })
     ));
-    assert_bytes(root, BEFORE, BEFORE);
+    assert_bytes(root, BEFORE, AFTER);
     assert!(layout.source_edit_marker_path().exists());
 }
 

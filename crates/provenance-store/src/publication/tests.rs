@@ -44,7 +44,8 @@ fn source_edit_recovery_runs_before_import_recovery() {
     assert_eq!(
         format!("{error:#}"),
         format!(
-            "read {}: EOF while parsing an object at line 1 column 1",
+            "read marker {}: this program cannot read the content of the marker: EOF while \
+             parsing an object at line 1 column 1",
             layout.source_edit_marker_path()
         )
     );
