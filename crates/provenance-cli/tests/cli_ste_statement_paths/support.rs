@@ -113,13 +113,15 @@ pub fn diagnostic(kind: &str, id: &str, start: usize) -> Value {
     })
 }
 
+/// The refusal object of a `--format json` command: all of standard error,
+/// one line with no prefix.
 pub fn error_json(output: &std::process::Output) -> Value {
     let stderr = String::from_utf8(output.stderr.clone()).unwrap();
-    // With `--format json` the refusal object is all of standard error. In
-    // text mode it comes after `Error: `.
-    let text = stderr.trim();
-    serde_json::from_str(text.strip_prefix("Error: ").unwrap_or(text))
-        .expect("CLI failure contains one machine-readable JSON object")
+    assert_eq!(stderr.lines().count(), 1, "{stderr}");
+    let refusal: Value = serde_json::from_str(&stderr)
+        .unwrap_or_else(|error| panic!("{error}: standard error is not one object: {stderr}"));
+    assert!(refusal["meta"].is_object(), "{refusal}");
+    refusal
 }
 
 pub fn provenance_tree(repo: &Path) -> BTreeMap<String, Vec<u8>> {
