@@ -231,7 +231,17 @@ fn export_names_the_two_lines_of_a_proposal_id() {
         .output()
         .unwrap();
     let (code, stdout, stderr) = answer(&export);
-    let refusal = format!("Error: {DUPLICATE_PROPOSAL}; {STATE_CORRECTIONS}");
+    let refusal = serde_json::json!({
+        "error": {
+            "file": "scopes/default/ideation/proposal_cards.jsonl",
+            "hint": STATE_CORRECTIONS,
+            "kind": "invalid_state_file",
+            "line": 2,
+            "message": "duplicate immutable proposal id proposal_a at line 1 and at line 2",
+        },
+        "meta": {},
+    })
+    .to_string();
     assert_eq!(
         (
             code,

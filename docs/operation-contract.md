@@ -125,6 +125,24 @@ A body-bearing request uses `{data}`. Every successful response uses
 envelope. `meta` carries the projection stamp, freshness information, page
 limit, `has_more`, and the opaque next cursor when those fields apply.
 
+The MCP tools and the CLI with `--format json` give a refused command as the
+same `{error,meta}` object. `error.kind` names the failure, and the other
+members of `error` are the fields of that failure. These kinds have a definition
+here:
+
+- `operation_failed` is a failure of no declared kind. `message` gives the
+  error and each cause, joined by `: `. A cause that the text before it already
+  holds is not given again. The text of `message` is for a person; a program
+  does not parse it.
+- `statement_invalid` is a statement that the ASD-STE100 analyzer refuses. A
+  record write gives the analyzer `report` of its one statement. An import or a
+  merge gives `diagnostics`, one item for each refused statement, with the
+  record kind, scope, ID, field, rule, span, and message of the finding.
+- `invalid_input` from the CLI is an option that the action does not take, or
+  an input value that the command cannot read, such as standard input that is
+  not one JSON object. `field` names the input when the CLI knows it, `reason`
+  gives the cause, and `message` gives the text that text mode prints.
+
 The base failure status set is 400, 401, 403, 404, 500, and 503. A mutating
 operation also declares 409. The catalog adds operation-specific statuses from
 its typed failure family. The OpenAPI responses come from this declared set.
