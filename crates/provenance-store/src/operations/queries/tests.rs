@@ -93,6 +93,35 @@ fn repository_at(root: &camino::Utf8Path) -> Repository {
     Repository::open(root, "default").unwrap()
 }
 
+/// The search text that a separator requirement holds only across two pieces.
+const SEPARATOR_TEXT: &str = "\u{1}plain";
+
+/// Appends the requirements `req_00000` up to `req_{count - 1}` in one write.
+/// A requirement that `matches` selects holds [`SEPARATOR_TEXT`] inside one
+/// piece. Each other one holds it only across two pieces: the SQL test of the
+/// search text selects it and the check of each piece refuses it.
+fn append_separator_requirements(
+    store: &StateStore,
+    scope: &ScopeId,
+    count: usize,
+    matches: impl Fn(usize) -> bool,
+) {
+    let path = crate::shards::requirements_path(&store.layout, scope);
+    let mut record = serde_json::json!(store.list_requirements(scope).unwrap()[0]);
+    let mut contents = std::fs::read_to_string(&path).unwrap();
+    for i in 0..count {
+        record["id"] = serde_json::json!(format!("req_{i:05}"));
+        record["description"] = serde_json::json!(if matches(i) {
+            "the \u{1}plain needle"
+        } else {
+            "plain"
+        });
+        contents.push_str(&record.to_string());
+        contents.push('\n');
+    }
+    std::fs::write(&path, contents).unwrap();
+}
+
 #[tokio::test]
 async fn filter_only_search_reaches_the_selected_kind() {
     let (dir, _store, _scope) = seeded_store();

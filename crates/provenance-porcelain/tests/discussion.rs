@@ -20,7 +20,8 @@ fn readable_list_reports_bounds_and_true_entry_fields() {
             "discussion_id": "discussion_a",
             "parent": {"node_type": "requirement", "node_id": "req_a"},
             "status": "active", "version": 2,
-            "opening_excerpt": "Opening text", "excerpt_truncated": true
+            "opening_excerpt": "Opening text", "excerpt_truncated": true,
+            "actor": "reviewer"
         }], "limit": 1, "has_more": true, "next_cursor": "next-page"},
         "limit": 1, "has_more": true,
         "stamp": null, "freshness_error": null
@@ -31,6 +32,7 @@ fn readable_list_reports_bounds_and_true_entry_fields() {
         "req_a",
         "active",
         "version=2",
+        "actor=reviewer",
         "Opening text",
         "truncated=true",
         "limit=1",

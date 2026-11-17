@@ -16,6 +16,9 @@ mod held_writes;
 mod prepared_file_tests;
 #[path = "tests/prepared_files.rs"]
 mod prepared_files;
+#[cfg(unix)]
+#[path = "../../publication/rollback_stop_tests.rs"]
+mod rollback_stop_tests;
 #[cfg(any(unix, windows))]
 #[path = "../../publication/source_edit_recovery_tests.rs"]
 mod source_edit_recovery_tests;

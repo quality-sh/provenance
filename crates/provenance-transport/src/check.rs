@@ -12,20 +12,16 @@ use provenance_porcelain::check::{
 use provenance_store::dictionary_reference::{resolve_project_dictionary, DictionaryResolution};
 use provenance_store::layout::ProvenanceLayout;
 use provenance_store::repository::declared_scope;
+use provenance_store::state_check::check_state;
 use provenance_store::state_store::StateStore;
-use std::collections::BTreeSet;
 use std::sync::Arc;
 
 mod bindings;
 mod gaps;
-mod index;
 mod merge_driver;
-mod references;
-mod scope;
 mod statement_report;
 
 pub use bindings::Options as BindingOptions;
-use index::CheckIndex;
 
 #[derive(Clone)]
 pub struct RepositoryCheckPort {
@@ -365,48 +361,9 @@ fn validate_locked(
     manifest: &Manifest,
     repository_wide: bool,
 ) -> anyhow::Result<()> {
-    manifest.ensure_has_scopes()?;
-    let manifest_scopes: BTreeSet<_> = manifest
-        .scopes
-        .iter()
-        .map(|scope| scope.id.as_str().to_string())
-        .collect();
-
-    store.validate_canonical_ids_unique(&manifest.scopes)?;
-
-    let scope_directory_findings = if repository_wide {
-        store
-            .list_scope_directories()?
-            .into_iter()
-            .filter(|directory| !manifest_scopes.contains(directory))
-            .map(|directory| format!("scope directory {directory} is absent from manifest"))
-            .collect::<Vec<_>>()
-    } else {
-        Vec::new()
-    };
-
-    let mut index = CheckIndex::default();
-    let mut dangling = Vec::new();
-    scope::validate(
-        store,
-        &manifest.scopes,
-        &manifest.disposition_actor_ids,
-        &manifest_scopes,
-        &mut index,
-        &mut dangling,
-    )?;
-
-    anyhow::ensure!(
-        scope_directory_findings.is_empty(),
-        "scope directory finding(s):\n- {}",
-        scope_directory_findings.join("\n- ")
-    );
-    anyhow::ensure!(
-        dangling.is_empty(),
-        "dangling reference(s):\n- {}",
-        dangling.join("\n- ")
-    );
-    Ok(())
+    check_state(store, manifest, repository_wide)?
+        .message()
+        .map_or(Ok(()), |message| Err(anyhow::anyhow!(message)))
 }
 
 #[cfg(test)]

@@ -3,12 +3,10 @@
 //! pages, letter case, the characters `%` and `_`, a search with no text, a
 //! text across two pieces, candidates that fail the check of each piece, and a
 //! large record that does not hold the text.
-//!
-//! These tests have no Rule, because no active Rule states that a page holds a
-//! record when more records match.
 
 use crate::search_repository;
 
+use provenance_macros::verifies;
 use search_repository::{
     all_pages, binary, ids, page, plain_sources, repository, requirement, requirement_node,
     search_json, source, source_node, without_stamp,
@@ -29,6 +27,7 @@ fn version(repo: &str) -> Value {
 }
 
 #[test]
+#[verifies("rule_search_page_with_more_holds_a_record", examples)]
 fn kind_filter_page_holds_the_matches_after_520_records_of_that_kind() {
     let directory = tempfile::tempdir().unwrap();
     let mut requirements = (0..520)
@@ -61,6 +60,7 @@ fn kind_filter_page_holds_the_matches_after_520_records_of_that_kind() {
 }
 
 #[test]
+#[verifies("rule_search_page_with_more_holds_a_record", examples)]
 fn page_holds_the_second_kind_matches_after_513_first_kind_records() {
     let directory = tempfile::tempdir().unwrap();
     let requirements = vec![
@@ -86,6 +86,7 @@ fn page_holds_the_second_kind_matches_after_513_first_kind_records() {
 }
 
 #[test]
+#[verifies("rule_search_page_with_more_holds_a_record", examples)]
 fn matches_over_many_pages_come_back_once_each_in_kind_and_id_order() {
     let directory = tempfile::tempdir().unwrap();
     let mut sources = plain_sources(520);
@@ -196,11 +197,12 @@ fn text_across_two_pieces_finds_no_record() {
     assert_eq!(answer, page(&version(&repo), 50, false, Vec::new()));
 }
 
-/// A characterization test: it pins an empty first page with a continuation
-/// when 512 candidates fail the check of each piece, which the SQL test of the
-/// search text keeps.
+/// Candidates that hold the text only across two pieces fail the check of
+/// each piece. The search reads past them and gives one empty page with no
+/// continuation.
 #[test]
-fn candidates_that_fail_the_piece_check_keep_a_continuation() {
+#[verifies("rule_search_page_with_more_holds_a_record", examples)]
+fn a_separator_needle_that_matches_no_piece_gives_one_empty_page() {
     let directory = tempfile::tempdir().unwrap();
     let mut sources = plain_sources(513);
     sources.push(source("source_needle", "Needle record"));
@@ -211,10 +213,7 @@ fn candidates_that_fail_the_piece_check_keep_a_continuation() {
     let version = version(&repo);
     assert_eq!(
         pages.iter().map(without_stamp).collect::<Vec<_>>(),
-        [
-            page(&version, 50, true, Vec::new()),
-            page(&version, 50, false, Vec::new()),
-        ]
+        [page(&version, 50, false, Vec::new())]
     );
 }
 

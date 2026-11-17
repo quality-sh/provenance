@@ -93,7 +93,7 @@ fn old_post_and_direct_enrolled_mutation_refuse_before_publication() {
     assert!(store
         .post_thread_message(
             serde_json::from_value(
-                json!({"scope_id":"default","parent":a.parent,"role":"user","body":"bypass"})
+                json!({"scope_id":"default","parent":a.parent,"role":"user","actor":"agent","body":"bypass"})
             )
             .unwrap()
         )
@@ -146,7 +146,7 @@ fn resolving_a_discussion_leaves_all_container_statuses_unchanged() {
 #[test]
 fn legacy_messages_in_an_enrolled_thread_cannot_be_deleted_by_an_old_writer() {
     let (temp, store) = fixture();
-    let old=store.post_thread_message(serde_json::from_value(json!({"scope_id":"default","parent":{"node_type":"requirement","node_id":"req_a"},"role":"user","body":"Legacy"})).unwrap()).unwrap();
+    let old=store.post_thread_message(serde_json::from_value(json!({"scope_id":"default","parent":{"node_type":"requirement","node_id":"req_a"},"role":"user","actor":"agent","body":"Legacy"})).unwrap()).unwrap();
     start(&store, "root");
     let layout = ProvenanceLayout::new(camino::Utf8Path::from_path(temp.path()).unwrap());
     let messages = store
@@ -165,7 +165,7 @@ fn legacy_messages_in_an_enrolled_thread_cannot_be_deleted_by_an_old_writer() {
 #[test]
 fn posting_refuses_a_container_stored_under_the_wrong_scope() {
     let (temp, store) = fixture();
-    let old=store.post_thread_message(serde_json::from_value(json!({"scope_id":"default","parent":{"node_type":"requirement","node_id":"req_a"},"role":"user","body":"Legacy"})).unwrap()).unwrap();
+    let old=store.post_thread_message(serde_json::from_value(json!({"scope_id":"default","parent":{"node_type":"requirement","node_id":"req_a"},"role":"user","actor":"agent","body":"Legacy"})).unwrap()).unwrap();
     replace_threads(&store, &temp, |threads| {
         threads[0].scope_id = provenance_core::ScopeId::new("elsewhere").unwrap();
     });
@@ -180,7 +180,7 @@ fn posting_refuses_a_container_stored_under_the_wrong_scope() {
 #[test]
 fn new_messages_do_not_reuse_identities_from_legacy_shards() {
     let (temp, store) = fixture();
-    let old=store.post_thread_message(serde_json::from_value(json!({"scope_id":"default","parent":{"node_type":"requirement","node_id":"req_a"},"role":"user","body":"Legacy"})).unwrap()).unwrap();
+    let old=store.post_thread_message(serde_json::from_value(json!({"scope_id":"default","parent":{"node_type":"requirement","node_id":"req_a"},"role":"user","actor":"agent","body":"Legacy"})).unwrap()).unwrap();
     let layout = ProvenanceLayout::new(camino::Utf8Path::from_path(temp.path()).unwrap());
     let path = shards::messages_path(&layout, &scope());
     std::fs::rename(&path, path.parent().unwrap().join("2020-01.jsonl")).unwrap();
