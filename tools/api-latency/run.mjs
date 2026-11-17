@@ -70,7 +70,7 @@ async function clone(name, actor) {
 
 async function context(repo, operations, http) {
   const manifest = JSON.parse(await readFile(join(repo, '.provenance/state/manifest.json'), 'utf8'));
-  const actor = manifest.disposition_actor_ids?.[0] ?? 'api_latency';
+  const actor = manifest.disposition_actor_ids?.[0]?.id ?? 'api_latency';
   const base = await git(['rev-parse', 'HEAD~1'], repo).catch(() => git(['rev-parse', 'HEAD'], repo));
   const bindings = await http.call({ method: 'get', path: '/verification-bindings', query: { limit: 1 } });
   const rules = await http.call({ method: 'get', path: '/rules', query: { limit: 1, exclude_terminal: true } });

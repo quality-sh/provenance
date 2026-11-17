@@ -144,7 +144,7 @@ impl ScopeRecords {
     fn load(
         store: &StateStore,
         scope_id: &ScopeId,
-        disposition_actor_ids: &[String],
+        disposition_actor_ids: &provenance_core::Reviewers,
     ) -> anyhow::Result<Self> {
         store.validate_ideation_scope_with_actor_ids(scope_id, disposition_actor_ids)?;
         store.validate_graph_scope(scope_id)?;

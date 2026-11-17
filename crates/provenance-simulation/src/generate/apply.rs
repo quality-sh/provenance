@@ -139,7 +139,11 @@ pub fn apply(repository: &Repository, task: &Task) -> anyhow::Result<Effect> {
             };
             store.withdraw_record_review(WithdrawRecordReview {
                 scope_id: scope(),
-                actor: "reviewer".into(),
+                actor: provenance_core::DispositionActor {
+                    identity_type: provenance_core::IdentityType::Agent,
+                    id: "reviewer".into(),
+                    name: None,
+                },
                 proposal_id: stable(proposal),
                 declared_by: None,
                 reason: None,

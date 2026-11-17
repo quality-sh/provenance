@@ -157,9 +157,9 @@ fn check_rejects_missing_wrong_kind_and_wrong_scope_canonical_artifacts() {
         std::fs::write(
             state.join("manifest.json"),
             if case == "wrong_scope" {
-                serde_json::json!({"scopes":[{"id":"default","path_prefix":"."},{"id":"other","path_prefix":"other"}],"disposition_actor_ids":["reviewer"]}).to_string()
+                serde_json::json!({"scopes":[{"id":"default","path_prefix":"."},{"id":"other","path_prefix":"other"}],"disposition_actor_ids":[{"identity_type":"human","id":"reviewer"}]}).to_string()
             } else {
-                serde_json::json!({"scopes":[{"id":"default","path_prefix":"."}],"disposition_actor_ids":["reviewer"]}).to_string()
+                serde_json::json!({"scopes":[{"id":"default","path_prefix":"."}],"disposition_actor_ids":[{"identity_type":"human","id":"reviewer"}]}).to_string()
             },
         )
         .unwrap();

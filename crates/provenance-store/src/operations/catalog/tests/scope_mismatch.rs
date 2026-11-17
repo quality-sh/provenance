@@ -156,7 +156,7 @@ async fn withdraw_record_review_rejects_a_scope_mismatch_without_writing() {
         "scope_id": "other",
         "record_kind": "requirement",
         "record_id": "req_one",
-        "actor": "agent",
+        "actor": {"identity_type":"agent","id":"agent"},
         "proposal_id": "proposal_one",
         "declared_by": null,
         "reason": "The author will revise the proposal."

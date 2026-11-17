@@ -52,7 +52,8 @@ fn seeded_store() -> (tempfile::TempDir, StateStore, ScopeId) {
     std::fs::create_dir_all(layout.manifest_path().parent().unwrap()).unwrap();
     let scope = ScopeId::new("default").unwrap();
     let mut manifest = Manifest::default_with_scope(scope.clone(), RepoPathPrefix::new("."));
-    manifest.disposition_actor_ids = vec!["reviewer".to_owned()];
+    manifest.disposition_actor_ids =
+        std::iter::once(provenance_core::DispositionActor::human("reviewer")).collect();
     std::fs::write(
         layout.manifest_path(),
         serde_json::to_string(&manifest).unwrap(),

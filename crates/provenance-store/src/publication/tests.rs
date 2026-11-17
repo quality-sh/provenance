@@ -371,7 +371,8 @@ fn a_repository_read_in_the_publication_gap_waits_for_the_publication() {
         }
     });
     let mut published = manifest;
-    published.disposition_actor_ids = vec!["actor_after".to_owned()];
+    let after = provenance_core::DispositionActor::human("actor_after");
+    published.disposition_actor_ids = std::iter::once(after).collect();
     with_repository_publication(&layout, |held| {
         with_staged_state(held, false, StampFromGit, |staged| {
             let manifest = staged.layout.manifest_path();

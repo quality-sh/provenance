@@ -14,7 +14,7 @@ use serde_json::{json, Value};
 
 const NEXT_STEP: &str = "To change this field, use the command provenance init \
     --disposition-actor-id <DISPOSITION_ACTOR_ID>. Give --disposition-actor-id one time for each \
-    actor that can make a review decision.";
+    person that can make a review decision.";
 
 /// A repository whose manifest field holds `actor_ids`.
 fn repository(actor_ids: &[&str]) -> (tempfile::TempDir, Repository) {
@@ -25,7 +25,10 @@ fn repository(actor_ids: &[&str]) -> (tempfile::TempDir, Repository) {
     std::fs::create_dir_all(layout.manifest_path().parent().unwrap()).unwrap();
     let mut manifest =
         Manifest::default_with_scope(ScopeId::new("default").unwrap(), RepoPathPrefix::new("."));
-    manifest.disposition_actor_ids = actor_ids.iter().map(|id| (*id).to_owned()).collect();
+    manifest.disposition_actor_ids = actor_ids
+        .iter()
+        .map(|id| provenance_core::DispositionActor::human(*id))
+        .collect();
     std::fs::write(
         layout.manifest_path(),
         serde_json::to_string(&manifest).unwrap(),

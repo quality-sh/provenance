@@ -260,12 +260,12 @@ async fn a_review_refusal_has_a_declared_kind() {
         (
             "withdraw with a blank reason",
             format!("{missing}/withdraw"),
-            json!({"actor":"agent", "declared_by":null, "reason":" "}),
+            json!({"actor":{"identity_type":"agent","id":"agent"}, "declared_by":null, "reason":" "}),
         ),
         (
             "withdraw a missing submission",
             format!("{missing}/withdraw"),
-            json!({"actor":"agent", "declared_by":null, "reason":"Revise it."}),
+            json!({"actor":{"identity_type":"agent","id":"agent"}, "declared_by":null, "reason":"Revise it."}),
         ),
         (
             "decide a missing submission",

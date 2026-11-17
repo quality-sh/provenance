@@ -280,7 +280,7 @@ fn class_rows(class: Class) -> (&'static str, Vec<Value>) {
         Class::ReviewRow => (
             "scopes/default/ideation/withdrawals.jsonl",
             json!({"scope_id": "default", "id": "withdrawal_lost",
-                "proposal_id": "proposal_missing", "actor": "agent", "reason": "Lost."}),
+                "proposal_id": "proposal_missing", "actor": {"identity_type": "agent", "id": "agent"}, "reason": "Lost."}),
         ),
         Class::ScopeDirectory => (
             "scopes/unlisted/requirements/req.jsonl",

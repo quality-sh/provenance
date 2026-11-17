@@ -1,7 +1,7 @@
 use super::*;
 
 fn named_action_repo() -> (tempfile::TempDir, String) {
-    let (directory, repo) = initialized_repo(None);
+    let (directory, repo) = initialized_repo(Some("reviewer"));
     json_output(&[
         "req_actions",
         "create",
@@ -138,7 +138,7 @@ fn target_first_requirement_submit_infers_kind_and_records_the_submission() {
             "--format",
             "json",
         ],
-        &serde_json::json!({"actor":"agent","declared_by":null,"reason":null}),
+        &serde_json::json!({"actor":{"identity_type":"human","id":"reviewer"},"declared_by":null,"reason":null}),
     );
     let submitted = json_stdin_output(
         &[

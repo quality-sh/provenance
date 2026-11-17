@@ -112,7 +112,7 @@ mod tests {
                     path_prefix: RepoPathPrefix::new(*prefix),
                 })
                 .collect(),
-            disposition_actor_ids: Vec::new(),
+            disposition_actor_ids: crate::Reviewers::default(),
         }
     }
 

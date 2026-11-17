@@ -27,8 +27,7 @@ pub use ideation::contributions::{
 };
 pub use ideation::dispositions::{
     disposition_requires_prior_assertion, validate_disposition_intrinsic, ApprovalEvidenceRequired,
-    CanonicalArtifact, DispositionActor, DispositionActorRefusal, DispositionRecord,
-    ExternalActionCorrelation,
+    CanonicalArtifact, DispositionActor, DispositionRecord, ExternalActionCorrelation,
 };
 pub use ideation::lifecycle::{
     effective_proposal_state, packet_qualifies_proposal, validate_assertion_intrinsic,
@@ -39,6 +38,7 @@ pub use ideation::lifecycle::{
 pub use ideation::proposals::{
     Proposal, ProposalCard, ProposalTraceability, RecordRevisionBinding,
 };
+pub use ideation::reviewers::{DispositionActorRefusal, Reviewers};
 pub use ideation::synthesis::{
     ConsensusFinding, ContestedClaim, EvidenceGap, MinorityObjection, RequiredHumanDecision,
     SuggestedArtifact, SynthesisPacket, UnsupportedSpeculation,

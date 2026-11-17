@@ -132,7 +132,8 @@ fn seed_requirement(store: &StateStore, scope: &ScopeId) {
 /// repository names who may decide.
 fn allow_actor(store: &StateStore, id: &str) {
     let mut manifest = store.manifest().unwrap();
-    manifest.disposition_actor_ids.push(id.into());
+    manifest.disposition_actor_ids =
+        std::iter::once(provenance_core::DispositionActor::human(id)).collect();
     std::fs::write(
         store.layout.manifest_path(),
         serde_json::to_vec(&manifest).unwrap(),

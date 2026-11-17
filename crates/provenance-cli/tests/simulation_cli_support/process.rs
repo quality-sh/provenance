@@ -333,7 +333,10 @@ fn request(root: &Path, task: &Task) -> Option<Result<Request, String>> {
         Operation::WithdrawReview { .. } => {
             let proposal = task.proposal.as_ref()?;
             let path = format!("{review}/submissions/{proposal}/withdraw");
-            Request::post(path, json!({"actor": "reviewer"}))
+            Request::post(
+                path,
+                json!({"actor": {"identity_type":"agent","id":"reviewer"}}),
+            )
         }
         Operation::ClaimTopic => {
             Request::post(format!("topics/{TOPIC}/claim"), json!({"actor": actor}))

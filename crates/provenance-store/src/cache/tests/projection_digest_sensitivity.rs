@@ -111,7 +111,8 @@ pub(super) fn aggregate_layout() -> (tempfile::TempDir, ProvenanceLayout, ScopeI
 
     let mut manifest: provenance_core::Manifest =
         serde_json::from_slice(&std::fs::read(layout.manifest_path()).unwrap()).unwrap();
-    manifest.disposition_actor_ids.push("reviewer".into());
+    manifest.disposition_actor_ids =
+        std::iter::once(provenance_core::DispositionActor::human("reviewer")).collect();
     std::fs::write(
         layout.manifest_path(),
         serde_json::to_vec(&manifest).unwrap(),
@@ -210,7 +211,7 @@ pub(super) fn change_one_record(
             store
                 .withdraw_record_review(
                     serde_json::from_value(json!({
-                        "scope_id":scope, "actor":"reviewer",
+                        "scope_id":scope, "actor":{"identity_type":"agent","id":"reviewer"},
                         "proposal_id":pending.proposal_id, "declared_by":null, "reason":null
                     }))
                     .unwrap(),

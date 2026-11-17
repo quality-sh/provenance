@@ -226,14 +226,21 @@ fn submit_after_guarded_update_names_the_pending_review_and_withdrawal() {
         "provenance api requirements/req_pending/submissions/{pending}/withdraw --method post --input -"
     );
     assert!(error.contains(&withdraw), "{error}");
-    assert!(error.contains(r#"'{"actor":"<actor>"}'"#), "{error}");
+    assert!(
+        error.contains(r#"'{"actor":{"identity_type":"<identity_type>","id":"<actor>"}}'"#),
+        "{error}"
+    );
     let after = json(
         repo,
         &["api", "requirements/req_pending", "--format", "json"],
     );
     assert_eq!(after["data"]["decision"], updated["data"]["decision"]);
     let body = std::path::Path::new(repo).join("withdraw.json");
-    std::fs::write(&body, r#"{"actor":"agent"}"#).unwrap();
+    std::fs::write(
+        &body,
+        r#"{"actor":{"identity_type":"human","id":"reviewer"}}"#,
+    )
+    .unwrap();
     json(
         repo,
         &[

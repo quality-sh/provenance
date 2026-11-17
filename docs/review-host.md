@@ -292,8 +292,10 @@ The host reserves `/review-config` for authenticated runtime configuration:
 ```
 
 The host reads `dispositionActorIds` from the repository manifest for each
-authenticated request. It keeps the manifest order. If the manifest has no
-configured disposition actors, this field is an empty list. The response does
+authenticated request. It gives the IDs of the `human` entries of the manifest
+field `disposition_actor_ids`, because the page decides as a person. It keeps
+the manifest order. If the manifest has no `human` entry, this field is an
+empty list. The response does
 not contain the bearer credential.
 
 `reviewer` identifies the person who runs the host. The host reads it from Git
@@ -307,12 +309,20 @@ this key in their own Git configuration, for example with
 value is the Git identity: `user.email`, else `user.name`, converted to an actor
 ID as `provenance init` does. If neither gives a value, the response does not
 contain `reviewer`. `reviewer.allowed` is `true` when `actorId` is in
-`dispositionActorIds`, and `false` when it is not. The identity is the
-statement of the person. It is not proof. A disposition write from an actor
-that is not in `dispositionActorIds` gets 403 `access_denied`. Its `message`
+`dispositionActorIds`, and `false` when it is not. The page sends a decision
+with the actor `{"identity_type":"human","id":actorId}`, and a withdrawal must
+send the same actor object: a withdrawal with `actor` as a text is 400
+`invalid_input`. The identity is the statement of the person. It is not proof.
+A disposition write from an actor whose identity type and ID are not one entry
+of the manifest field `disposition_actor_ids` gets 403 `access_denied`. A
+withdrawal gets the same refusal unless its actor has the ID of the author of
+the submission. For an actor with the identity type `human`, the `message`
 names the manifest field `disposition_actor_ids` and the command
 `provenance init --disposition-actor-id <DISPOSITION_ACTOR_ID>` that changes it.
-The message does not give an actor ID.
+For an `agent` or `service` actor, the `message` tells it to add an object with
+its identity type and its ID to the field in `.provenance/state/manifest.json`,
+because the init command writes only `human` entries. The message does not give
+an actor ID.
 
 The generic renderer does not read credentials, fetch host configuration, or
 mount itself. Its index is an empty shell. The concrete application in

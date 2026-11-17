@@ -62,8 +62,9 @@ const INIT_FIELDS: &[Field] = &[
     Field::text("scope"),
     Field::text("path_prefix"),
     Field::repeated("disposition_actor_id").doc(
-        "Repository-local actor ID allowed to attest proposal dispositions. Repeat for \
-         multiple actors. On re-init, omission preserves the allowlist",
+        "ID of a person who can make a review decision. The command writes an entry with the \
+         identity type human. Repeat for each person. A given value replaces the list; on re-init, \
+         omission keeps the list",
     ),
     Field::switch("clear_disposition_actors")
         .doc("Empty the repository-local disposition actor allowlist"),

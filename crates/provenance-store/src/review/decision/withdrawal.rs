@@ -41,7 +41,7 @@ impl StateStore {
         addressed: Option<(NodeType, StableId)>,
         input: WithdrawRecordReview,
     ) -> anyhow::Result<CycleEntry> {
-        crate::write_error::ensure_actor(&input.actor)?;
+        crate::write_error::ensure_actor(&input.actor.id)?;
         if let Some(reason) = &input.reason {
             if reason.trim().is_empty() {
                 return Err(crate::refusal::refuse!(
@@ -88,6 +88,10 @@ impl StateStore {
                     "{reason}"
                 ));
             }
+            let author = super::super::write_actor::author(proposal.actor.as_deref());
+            held.manifest()?
+                .disposition_actor_ids
+                .admits_withdrawal(&input.actor, author)?;
             with_record_state(held, RecordStamp::ResolveFromRepository, |staged| {
                 staged.commit_withdrawal(input)
             })
@@ -119,7 +123,7 @@ impl StateStore {
             fact: CycleFact::Withdrawn,
             disposition_id: None,
             feedback_message_id: None,
-            actor: input.actor,
+            actor: input.actor.id,
         }
         .entry())
     }

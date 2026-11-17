@@ -42,8 +42,8 @@ pub(super) fn decision(id: &str, submission: &str, result: &str, actor: &str) ->
 
 pub(super) fn withdrawal(id: &str, submission: &str, actor: &str) -> Withdrawal {
     serde_json::from_value(json!({
-        "scope_id": "default", "id": id, "proposal_id": submission, "actor": actor,
-        "reason": null
+        "scope_id": "default", "id": id, "proposal_id": submission,
+        "actor": {"identity_type": "agent", "id": actor}, "reason": null
     }))
     .unwrap()
 }

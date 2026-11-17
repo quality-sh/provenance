@@ -2,6 +2,7 @@ use camino::Utf8PathBuf;
 use serde::{Deserialize, Serialize};
 
 use super::ids::ScopeId;
+use super::Reviewers;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(transparent)]
@@ -25,8 +26,9 @@ pub struct Scope {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Manifest {
     pub scopes: Vec<Scope>,
+    /// The actors that can make a review decision.
     #[serde(default)]
-    pub disposition_actor_ids: Vec<String>,
+    pub disposition_actor_ids: Reviewers,
 }
 
 impl Manifest {
@@ -44,7 +46,7 @@ impl Manifest {
                 id: scope,
                 path_prefix,
             }],
-            disposition_actor_ids: Vec::new(),
+            disposition_actor_ids: Reviewers::default(),
         }
     }
 }
