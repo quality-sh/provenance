@@ -57,7 +57,7 @@ fn catalog_reply(
     .unwrap()
 }
 
-fn failure(result: anyhow::Result<provenance_core::threads::Discussion>) -> WriteFailure {
+fn failure(result: anyhow::Result<provenance_core::threads::DiscussionReceipt>) -> WriteFailure {
     WriteError(result.unwrap_err()).safe()
 }
 
@@ -227,7 +227,7 @@ async fn catalog_operation_uses_the_target_write_path() {
         invoke_typed::<WriteTargetDiscussion>(context, catalog_reply("catalog", &started))
             .await
             .unwrap();
-    assert_eq!(receipt.version, 2);
+    assert_eq!(receipt.discussion.version, 2);
     assert_eq!(store.list_messages(&scope()).unwrap().len(), 2);
 }
 

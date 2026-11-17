@@ -115,7 +115,13 @@ async fn an_api_discussion_start_with_no_actor_records_authoring() {
             "outcomes": [], "disposition_id": null,
         })
     );
-    assert_eq!(started, json!({"data": stored, "meta": {}}));
+    let mut written = stored.clone();
+    written["message"] = json!({
+        "scope_id": "default", "id": root, "thread_id": "thread_requirement_req_shared",
+        "role": "user", "actor": "authoring", "body": "A concern.",
+        "created_at": started["data"]["message"]["created_at"],
+    });
+    assert_eq!(started, json!({"data": written, "meta": {}}));
 }
 
 /// A status change names the actor who makes it, so a status change with no actor is
@@ -187,11 +193,12 @@ async fn a_status_change_with_no_actor_is_refused_before_the_host_opens_the_repo
     );
 }
 
-/// Implementation aid: no Rule states what a reply stores for its actor. A reply with an
-/// actor and a reply with no actor are accepted. The message rows have no actor, and the
+/// A reply with an actor and a reply with no actor are accepted. Each message row and each
+/// receipt give the actor of the reply, or `authoring` for the reply with no actor, and the
 /// Discussion keeps the actor of its start.
 #[tokio::test]
-async fn an_api_reply_with_or_without_an_actor_stores_no_actor() {
+#[verifies("rule_message_records_its_actor", examples)]
+async fn an_api_reply_with_or_without_an_actor_records_the_actor_of_the_reply() {
     let repo = Repository::new("The shared graph is readable.");
     let host = host(&repo, true);
     let discussion = discussion(&host).await;
@@ -234,10 +241,15 @@ async fn an_api_reply_with_or_without_an_actor_stores_no_actor() {
         .collect::<Vec<_>>();
     assert_eq!(discussions[0]["message_ids"], json!(message_ids));
     let thread = &discussions[0]["thread_id"];
-    for (row, body) in messages.iter().zip(["A concern.", "A reply.", "A reply."]) {
+    let written = [
+        ("reviewer", "A concern."),
+        ("agent", "A reply."),
+        ("authoring", "A reply."),
+    ];
+    for (row, (actor, body)) in messages.iter().zip(written) {
         let expected = json!({
             "scope_id": "default", "id": row["id"], "thread_id": thread, "role": "user",
-            "body": body, "created_at": row["created_at"],
+            "actor": actor, "body": body, "created_at": row["created_at"],
         });
         assert_eq!(row, &expected);
     }
@@ -249,6 +261,7 @@ async fn an_api_reply_with_or_without_an_actor_stores_no_actor() {
             "thread_id": thread, "root_message_id": message_ids[0],
             "message_ids": message_ids[..version], "status": "active", "version": version,
             "actor": "reviewer", "outcomes": [], "disposition_id": null,
+            "message": messages[version - 1],
         })
     };
     let expected = [2, 3].map(|version| json!({"data": receipt(version), "meta": {}}));

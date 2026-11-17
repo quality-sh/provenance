@@ -116,7 +116,8 @@ fn every_kind_starts_replies_and_resolves_a_concern() {
                 }))
                 .unwrap(),
             )
-            .unwrap_or_else(|error| panic!("{node}: {error}"));
+            .unwrap_or_else(|error| panic!("{node}: {error}"))
+            .discussion;
         assert_eq!(started.parent.node_type, kind, "{node}");
         assert_eq!(started.version, 1, "{node}");
         let replied = store
@@ -130,7 +131,8 @@ fn every_kind_starts_replies_and_resolves_a_concern() {
                 }))
                 .unwrap(),
             )
-            .unwrap_or_else(|error| panic!("{node}: {error}"));
+            .unwrap_or_else(|error| panic!("{node}: {error}"))
+            .discussion;
         assert_eq!(replied.status, DiscussionStatus::Active, "{node}");
         let resolved = store
             .write_discussion(
@@ -143,7 +145,8 @@ fn every_kind_starts_replies_and_resolves_a_concern() {
                 }))
                 .unwrap(),
             )
-            .unwrap_or_else(|error| panic!("{node}: {error}"));
+            .unwrap_or_else(|error| panic!("{node}: {error}"))
+            .discussion;
         assert_eq!(resolved.status, DiscussionStatus::Resolved, "{node}");
     }
     let threads = store.list_threads(&scope()).unwrap();
@@ -188,7 +191,8 @@ fn parent_ownership_and_existence_are_per_kind() {
         );
         store
             .write_discussion(write_for(kind, node, &json!(null)))
-            .unwrap_or_else(|error| panic!("{node}: {error}"));
+            .unwrap_or_else(|error| panic!("{node}: {error}"))
+            .discussion;
     }
     assert!(store
         .write_discussion(write_for(NodeType::Source, "source_missing", &json!(null)))
