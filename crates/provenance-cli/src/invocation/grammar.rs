@@ -25,9 +25,7 @@ impl Common {
         Self {
             repo: text("repo"),
             scope: text("scope"),
-            format: matches
-                .get_one::<String>("format")
-                .and_then(|format| JsonFormat::from_flag(format)),
+            format: crate::registry_cli::asks_for_json(matches).then_some(JsonFormat::Json),
             quiet: matches.get_flag("quiet"),
         }
     }

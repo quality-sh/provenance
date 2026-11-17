@@ -3,7 +3,8 @@
 //! A refusal from the local host reaches the CLI as a typed error. In text
 //! mode the error prints as before. In JSON mode the CLI prints one
 //! `{error,meta}` object with no `Error: ` prefix and puts the recovery hint
-//! in `error.hint`.
+//! in `error.hint`. An error of no known type gives `operation_failed` and its
+//! text in `error.message`.
 
 use provenance_core::protocol::failure::OperationFailure;
 use provenance_core::protocol::read_failure::UnparsableStateFile;
@@ -13,10 +14,8 @@ use serde_json::{json, Map, Value};
 
 pub use provenance_cli::refusal::HostRefusal;
 
-/// The `{error,meta}` object for an error that a JSON caller can parse, or
-/// `None` when the error is not a host refusal and has no state file that does
-/// not parse in its cause chain.
-pub fn json_refusal(error: &anyhow::Error) -> Option<Value> {
+/// The `{error,meta}` object of an error for a JSON caller.
+pub fn json_refusal(error: &anyhow::Error) -> Value {
     if let Some(refusal) = error.downcast_ref::<HostRefusal>() {
         let mut failure = refusal.failure.clone();
         if let Some(hint) = &refusal.hint {
@@ -24,7 +23,7 @@ pub fn json_refusal(error: &anyhow::Error) -> Option<Value> {
                 object.insert("hint".into(), json!(hint));
             }
         }
-        return Some(failure);
+        return failure;
     }
     if let Some(failure) = error.downcast_ref::<OperationFailure>() {
         let mut object = match serde_json::to_value(failure) {
@@ -32,16 +31,20 @@ pub fn json_refusal(error: &anyhow::Error) -> Option<Value> {
             _ => Map::new(),
         };
         object.insert("message".into(), json!(failure.to_string()));
-        return Some(json!({"error": object, "meta": {}}));
+        return json!({"error": object, "meta": {}});
     }
     if let Some(read) = error.downcast_ref::<ReadError>() {
-        return Some(read.failure());
+        return read.failure();
     }
     if let Some(action) = error.downcast_ref::<ActionError>() {
-        return Some(envelope(action_error(action), &action.to_string()));
+        return envelope(action_error(action), &action.to_string());
     }
-    UnparsableStateFile::find(error.as_ref())
-        .map(|state| json!({"error": state.failure(), "meta": {}}))
+    if let Some(state) = UnparsableStateFile::find(error.as_ref()) {
+        return json!({"error": state.failure(), "meta": {}});
+    }
+    let mut object = Map::new();
+    object.insert("kind".into(), json!("operation_failed"));
+    envelope(object, &format!("{error:#}"))
 }
 
 /// Prints the refusal object as the only line on standard error, with no

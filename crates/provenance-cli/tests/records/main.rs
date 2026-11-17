@@ -57,6 +57,8 @@ mod cli_import_threads;
 mod cli_import_unknown_fields;
 #[path = "../cli_input_boundaries.rs"]
 mod cli_input_boundaries;
+#[path = "../cli_json_refusal_each_command.rs"]
+mod cli_json_refusal_each_command;
 #[path = "../cli_json_refusals.rs"]
 mod cli_json_refusals;
 #[path = "../cli_manifest_diagnostics.rs"]
