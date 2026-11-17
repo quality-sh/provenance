@@ -87,11 +87,8 @@ fn cli(root: &Path, method: &str, path: &str, input: Option<&Value>) -> Answer {
     }
     assert!(output.stdout.is_empty(), "{output:?}");
     let text = String::from_utf8(output.stderr).unwrap();
-    // A write refusal starts with `Error: `; a read refusal is the envelope alone.
-    let envelope = text.trim();
-    let envelope = envelope.strip_prefix("Error: ").unwrap_or(envelope);
     let envelope: Value =
-        serde_json::from_str(envelope).unwrap_or_else(|error| panic!("{error}: {text}"));
+        serde_json::from_str(text.trim()).unwrap_or_else(|error| panic!("{error}: {text}"));
     Answer {
         code,
         body: envelope["error"].clone(),

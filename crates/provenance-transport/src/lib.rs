@@ -56,6 +56,8 @@ mod onboarding;
 #[cfg(feature = "host")]
 pub mod porcelain;
 #[cfg(feature = "host")]
+pub mod refusal;
+#[cfg(feature = "host")]
 pub mod repository;
 #[cfg(feature = "host")]
 mod review_page;

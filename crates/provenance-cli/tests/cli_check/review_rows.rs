@@ -54,7 +54,7 @@ fn line_of(repo: &Path, file: &str, id: &str) -> usize {
 
 /// Each review row finding of `provenance check` on `repo`, which exits 1.
 fn findings(repo: &Path) -> Vec<String> {
-    review_row_findings(provenance(repo).failure().get_output())
+    review_row_findings(provenance(repo).failure().get_output(), true)
 }
 
 fn withdrawal(id: &str, submission: &Value, reason: &str) -> Value {

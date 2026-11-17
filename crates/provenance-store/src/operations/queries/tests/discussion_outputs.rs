@@ -61,8 +61,8 @@ async fn seed(store: &TestStore) {
         run(thread, row.map(String::from).to_vec()).await;
     }
     let message =
-        "INSERT INTO messages (scope_id, id, thread_id, role, body, created_at, payload) \
-                   VALUES ('default', ?, ?, ?, ?, CAST(? AS INTEGER), '{}')";
+        "INSERT INTO messages (scope_id, id, thread_id, role, actor, body, created_at, payload) \
+                   VALUES ('default', ?, ?, ?, 'agent', ?, CAST(? AS INTEGER), '{}')";
     let long = format!("{} end", "é".repeat(300));
     for row in [
         ["message_one_a", "thread_one", "user", "Opening one", "1"],

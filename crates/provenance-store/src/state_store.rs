@@ -36,6 +36,7 @@ mod shaping_writers;
 mod statement_policy;
 mod thread_origins;
 mod thread_writers;
+pub(crate) use thread_writers::MessageWrite;
 pub(super) mod typed_specs;
 mod typed_statement_policy;
 mod updates;

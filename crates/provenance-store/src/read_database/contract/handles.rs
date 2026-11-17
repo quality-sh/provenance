@@ -30,7 +30,7 @@ fn projection() -> Vec<Statement> {
         "INSERT INTO threads VALUES \
          ('default', 'thread_one', 'requirement', 'req_root', 'active', 5, '{}')",
         "INSERT INTO messages VALUES \
-         ('default', 'message_one', 'thread_one', 'user', 'Hello', 7, '{}')",
+         ('default', 'message_one', 'thread_one', 'user', 'agent', 'Hello', 7, '{}')",
     ] {
         statements.push(statement(sql, Vec::new()));
     }
@@ -162,6 +162,7 @@ pub async fn the_message_handle_reads_the_projection<H: Harness + Send + Sync>(h
     assert_eq!(
         answer,
         "[Message { scope_id: ScopeId(\"default\"), id: StableId(\"message_one\"), \
-         thread_id: StableId(\"thread_one\"), role: User, body: \"Hello\", created_at: 7 }] true"
+         thread_id: StableId(\"thread_one\"), role: User, actor: \"agent\", body: \"Hello\", \
+         created_at: 7 }] true"
     );
 }

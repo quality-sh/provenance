@@ -348,7 +348,7 @@ fn api_create_with_source_refs_names_the_unknown_field() {
                 "command": "api requirements",
                 "format": "json",
                 "stderr": [
-                    "Error: {\"error\":{\"field\":\"request.source_refs\",\"kind\":\"invalid_input\",\"message\":\"create-requirement does not take source_refs; accepted fields: `actor`, `id`, `statement`, `description`, `status`, `refines`, `depends_on`, `supersedes`, `spawned_by`, `origin_thread`, `origin_message`, `origin`; to cite a Source, update the record with the Source in relationships.cites\",\"reason\":\"unknown_field\"},\"meta\":{}}"
+                    "{\"error\":{\"field\":\"request.source_refs\",\"kind\":\"invalid_input\",\"message\":\"create-requirement does not take source_refs; accepted fields: `actor`, `id`, `statement`, `description`, `status`, `refines`, `depends_on`, `supersedes`, `spawned_by`, `origin_thread`, `origin_message`, `origin`; to cite a Source, update the record with the Source in relationships.cites\",\"reason\":\"unknown_field\"},\"meta\":{}}"
                 ],
                 "stdout_empty": true
             }
@@ -378,7 +378,7 @@ fn a_read_names_the_line_of_a_withdrawal_that_names_no_submission() {
             "format": "json",
             "stderr": [
                 refusal_line(
-                    "Error: ",
+                    "",
                     "scopes/default/ideation/withdrawals.jsonl",
                     1,
                     "withdrawal withdrawal_lost names no review submission: proposal_missing",

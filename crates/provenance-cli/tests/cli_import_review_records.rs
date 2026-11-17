@@ -228,8 +228,7 @@ fn a_requirement_change_through_the_api_with_an_unreadable_rule_file_names_the_r
                 .assert(),
         );
 
-        let error: Value =
-            serde_json::from_str(refused.1.strip_prefix("Error: ").unwrap()).unwrap();
+        let error: Value = serde_json::from_str(&refused.1).unwrap();
         assert_eq!(refused.0, Some(1), "{change}");
         assert_eq!(error["error"]["kind"], "invalid_state_file", "{change}");
         assert_eq!(error["error"]["file"], "scopes/default/rules/rule.jsonl");

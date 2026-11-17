@@ -86,7 +86,7 @@ impl Task {
                 "post-thread-message",
                 json!({
                     "scope_id": SCOPE, "parent": first_parent(), "role": "user",
-                    "body": self.body(),
+                    "actor": self.actor(), "body": self.body(),
                 }),
             ),
             Operation::SubmitReview => call(

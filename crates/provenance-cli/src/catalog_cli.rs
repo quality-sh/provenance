@@ -70,8 +70,7 @@ pub async fn dispatch_target(
     matches: ArgMatches,
 ) -> anyhow::Result<()> {
     if action == Action::Create {
-        provenance_core::ensure_record_id_assignable(&target)
-            .unwrap_or_else(|error| usage_error(error));
+        provenance_core::ensure_record_id_assignable(&target).map_err(refusal::usage)?;
     }
     let repo = context.repo.clone();
     let host = provenance_cli::porcelain::local_host(&repo)?;
@@ -90,11 +89,9 @@ pub async fn dispatch_target(
         None,
         &["type", "stdin", "replace_parent", "with_parent"],
     )
-    .unwrap_or_else(|error| usage_error(error));
+    .map_err(refusal::usage)?;
     if !query.is_empty() {
-        usage_error(anyhow::anyhow!(
-            "target actions do not accept query options"
-        ));
+        return Err(refusal::usage("target actions do not accept query options"));
     }
     let writes_statement = statement_warning::has_statement(&data);
     let requested = data
@@ -296,7 +293,8 @@ const COMMON: &[&str] = &[
     "discussion_id",
 ];
 
-pub fn ensure_only_fields(matches: &ArgMatches, allowed: &[&str]) {
+/// Refuses an option that the command line gives and that the action does not take.
+pub fn ensure_only_fields(matches: &ArgMatches, allowed: &[&str]) -> anyhow::Result<()> {
     for id in matches.ids() {
         let name = id.as_str();
         if matches.value_source(name) != Some(ValueSource::CommandLine) {
@@ -307,33 +305,30 @@ pub fn ensure_only_fields(matches: &ArgMatches, allowed: &[&str]) {
             && !allowed.contains(&name)
             && !allowed.contains(&normalized.as_str())
         {
-            usage_error(anyhow::anyhow!(
+            return Err(refusal::usage(format!(
                 "unsupported option --{}",
                 name.replace('_', "-")
-            ));
+            )));
         }
     }
+    Ok(())
 }
 
-/// Exits with a usage refusal: exit code 2 and the text of the error, which ends with a
-/// newline.
-pub fn usage_error(error: impl std::fmt::Display) -> ! {
-    let mut text = error.to_string();
-    if !text.ends_with('\n') {
-        text.push('\n');
-    }
-    clap::Error::raw(clap::error::ErrorKind::InvalidValue, text).exit()
-}
-
-/// Exits with the CLI text of an action that cannot be selected. The CLI names the
+/// The usage refusal of an action that cannot be selected. The CLI names the
 /// record type field by its `--type` option.
-pub fn action_usage_error(error: provenance_porcelain::action::ActionError) -> ! {
-    match error {
-        provenance_porcelain::action::ActionError::KindSelection => usage_error(
-            "create requires --type and existing-record actions infer it without --type",
-        ),
-        error => usage_error(error),
-    }
+pub fn action_usage(error: &provenance_porcelain::action::ActionError) -> anyhow::Error {
+    let failure = refusal::json_refusal(&anyhow::anyhow!(error.clone()));
+    let text = match error {
+        provenance_porcelain::action::ActionError::KindSelection => {
+            "create requires --type and existing-record actions infer it without --type".to_owned()
+        }
+        error => error.to_string(),
+    };
+    let mut failure = failure["error"].clone();
+    failure["message"] = serde_json::json!(text);
+    refusal::CommandRefusal::usage(text)
+        .with_failure(failure)
+        .into()
 }
 
 fn warn_if_skills_missing(repo: &str, quiet: bool) -> anyhow::Result<()> {

@@ -196,10 +196,29 @@ fn check_rejects_missing_wrong_kind_and_wrong_scope_canonical_artifacts() {
             ),
         );
 
-        provenance(dir.path()).failure().stderr(contains(format!(
-            "scopes/default/ideation/dispositions.jsonl line 1: disposition disposition_a \
-                 names {artifact_type} {artifact_id}, which the scope does not have"
-        )));
+        let refused = provenance(dir.path()).failure();
+        let stderr = String::from_utf8(refused.get_output().stderr.clone()).unwrap();
+        let refusal: serde_json::Value = serde_json::from_str(&stderr).unwrap();
+        let error = &refusal["error"];
+        let message = format!(
+            "disposition disposition_a names {artifact_type} {artifact_id}, \
+             which the scope does not have"
+        );
+        assert_eq!(
+            (
+                &error["kind"],
+                &error["file"],
+                &error["line"],
+                &error["message"]
+            ),
+            (
+                &serde_json::json!("invalid_state_file"),
+                &serde_json::json!("scopes/default/ideation/dispositions.jsonl"),
+                &serde_json::json!(1),
+                &serde_json::json!(message),
+            ),
+            "{refusal}"
+        );
     }
 }
 
@@ -276,11 +295,11 @@ fn check_accepts_origin_message_in_non_default_month_shard() {
     );
     write_jsonl(
         &state.join("scopes/default/threads/2026-07.jsonl"),
-        serde_json::json!({"scope_id":"default","id":"msg_july","thread_id":"thread_source_july","role":"user","body":"July policy discussion","created_at":1}).to_string(),
+        serde_json::json!({"scope_id":"default","id":"msg_july","thread_id":"thread_source_july","role":"user","actor":"agent","body":"July policy discussion","created_at":1}).to_string(),
     );
     write_jsonl(
         &state.join("scopes/default/threads/2026-08.jsonl"),
-        serde_json::json!({"scope_id":"default","id":"msg_august","thread_id":"thread_source_august","role":"user","body":"August policy discussion","created_at":2}).to_string(),
+        serde_json::json!({"scope_id":"default","id":"msg_august","thread_id":"thread_source_august","role":"user","actor":"agent","body":"August policy discussion","created_at":2}).to_string(),
     );
 
     provenance(dir.path())
