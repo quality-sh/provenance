@@ -42,3 +42,4 @@ windows-sys = { workspace = true, features = ["Win32_System_Threading", "Win32_S
 [dev-dependencies]
 provenance-transport = { path = "../provenance-transport", version = "0.4.0", features = ["test-fixture"] }
 tempfile.workspace = true
+tokio = { workspace = true, features = ["test-util"] }
