@@ -212,6 +212,10 @@ fn each_kind_lands_at_the_record_budget_and_is_refused_one_byte_over() {
         rule["id"] = json!(format!("bind_{suffix}"));
         store.create_rule(parse(rule)).unwrap();
     }
+    let mut manifest = store.manifest().unwrap();
+    manifest.disposition_actor_ids.push("ben".into());
+    let manifest = serde_json::to_vec(&manifest).unwrap();
+    std::fs::write(store.layout.manifest_path(), manifest).unwrap();
     let budget = u64::try_from(BUDGET).unwrap();
     for kind in graph_kinds()
         .into_iter()
