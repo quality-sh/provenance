@@ -26,7 +26,7 @@ pub async fn dispatch_root(
     let action = Action::Discussions;
     let schema = discussion::input_schema(action);
     let input = crate::catalog_cli::fields::schema_input(&schema, matches, &["target"], &[])
-        .unwrap_or_else(|error| crate::catalog_cli::usage_error(error));
+        .map_err(crate::catalog_cli::refusal::usage)?;
     let host = provenance_cli::porcelain::local_host(&args.common.context().repo)?;
     let request = host
         .porcelain()
@@ -66,7 +66,7 @@ pub async fn dispatch_target(
     let schema = discussion::input_schema(action);
     let mut input =
         crate::catalog_cli::fields::schema_input(&schema, matches, &["target"], &["limit"])
-            .unwrap_or_else(|error| crate::catalog_cli::usage_error(error));
+            .map_err(crate::catalog_cli::refusal::usage)?;
     let target = StableId::new(args.target)?;
     input.insert("target".into(), json!(target));
     if schema["properties"].get("role").is_some() {
@@ -78,7 +78,7 @@ pub async fn dispatch_target(
         .get()
         .discussion_request(action, input.clone())
         .await?;
-    ensure_required_flags(&schema, action, &input);
+    ensure_required_flags(&schema, action, &input)?;
     let outcome = host
         .porcelain()
         .discussion()
@@ -103,16 +103,20 @@ fn print(
 }
 
 /// A Discussion action that lacks a required option is a usage error, so
-/// the shell sees exit code 2 and the flag name, not a host refusal.
-fn ensure_required_flags(schema: &Value, action: Action, input: &serde_json::Map<String, Value>) {
+/// the caller sees the flag name, not a host refusal.
+fn ensure_required_flags(
+    schema: &Value,
+    action: Action,
+    input: &serde_json::Map<String, Value>,
+) -> anyhow::Result<()> {
     let missing = crate::catalog_cli::required_discussion_flags(schema)
         .into_iter()
         .filter(|flag| !input.contains_key(&flag.replace('-', "_")))
         .collect::<Vec<_>>();
-    if let Some(first) = missing.first() {
-        crate::catalog_cli::usage_error(anyhow::anyhow!(
+    missing.first().map_or(Ok(()), |first| {
+        Err(crate::catalog_cli::refusal::usage(format!(
             "--{first} is required for {}",
             action.as_str()
-        ));
-    }
+        )))
+    })
 }

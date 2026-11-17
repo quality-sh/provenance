@@ -43,7 +43,7 @@ pub(super) fn parse(
     let mut allowed = fields::accepted_flags(&declared);
     allowed.extend(extra.iter().map(|name| (*name).to_owned()));
     let allowed = allowed.iter().map(String::as_str).collect::<Vec<_>>();
-    ensure_only_fields(matches, &allowed);
+    ensure_only_fields(matches, &allowed)?;
 
     let mut data = Map::new();
     let mut assignments = BTreeMap::<String, Assignment>::new();

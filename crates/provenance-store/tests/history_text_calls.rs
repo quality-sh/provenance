@@ -3,25 +3,33 @@
 //!
 //! Implementation aid with no Rule binding: no Rule states how many texts a
 //! history read asks for. The adapter counts its text calls, so these tests
-//! do not need a Git process and run on each platform. A history read keeps
-//! what it found for the last version list in the process, so these tests
-//! are in their own binary, and the tests that read a history to its end
-//! take `ONE_READER` so that no other test changes what the process keeps.
+//! do not need a Git process and run on each platform. Each test has a
+//! repository of its own, and so an index of its own. The tests that read
+//! a history to its end take `ONE_READER`, so that one long read at a time
+//! runs.
 //! `entry_edges` holds the entry reads at the edges of a page, and
 //! `page_edges` the history pages at the same edges; its budget refusal
-//! test is evidence of `rule_query_pages_bound_shared_reads`.
+//! test is evidence of `rule_query_pages_bound_shared_reads`. The reads of
+//! a file with more than 1,000 versions to index are evidence of
+//! `rule_history_reads_bound_file_versions`, and the reads of an indexed
+//! file of `rule_record_history_reads_index`.
 
 mod discussion_support;
 #[path = "history_text_calls/entry_edges.rs"]
 mod entry_edges;
 #[path = "support/history_pages.rs"]
 mod history_pages;
+#[path = "history_text_calls/index_rewrites.rs"]
+mod index_rewrites;
+#[path = "history_text_calls/index_writes.rs"]
+mod index_writes;
 #[path = "history_text_calls/page_edges.rs"]
 mod page_edges;
 use camino::Utf8Path;
 use discussion_support::*;
-use provenance_core::review::{ReviewHistoryPage, ReviewHistoryQuery};
+use provenance_core::review::{RecordVersion, ReviewHistoryPage, ReviewHistoryQuery};
 use provenance_core::{NodeType, StableId};
+use provenance_macros::verifies;
 use provenance_store::layout::ProvenanceLayout;
 use provenance_store::operations::read_operations::{InProcessReadOperations, ReadOperations};
 use provenance_store::operations::read_policy::ReadPolicy;
@@ -118,13 +126,14 @@ impl FileVersions for Counted {
     }
 }
 
-/// The path of the Requirement records file below the working tree, and its
-/// saved text.
-fn records(temp: &tempfile::TempDir) -> (String, String) {
-    let layout = ProvenanceLayout::new(Utf8Path::from_path(temp.path()).unwrap());
+/// The path of the Requirement records file below the working tree at
+/// `root`, and its saved text.
+fn records(root: impl AsRef<std::path::Path>) -> (String, String) {
+    let root = Utf8Path::from_path(root.as_ref()).unwrap();
+    let layout = ProvenanceLayout::new(root);
     let shard = shards::path_for(&layout, &scope(), NodeType::Requirement);
     let relative = shard
-        .strip_prefix(Utf8Path::from_path(temp.path()).unwrap())
+        .strip_prefix(root)
         .unwrap()
         .as_str()
         .replace('\\', "/");
@@ -217,10 +226,12 @@ async fn the_first_text_that_is_not_utf8_wins_with_no_later_error() {
     assert_eq!(versions.calls(), 5, "each version");
 }
 
-/// A new read of the same version list reads no text, and a read of another
-/// record of the same file does not take the kept answer.
+/// Once a read indexed the record file, a new read of a record of the file
+/// reads no text, also of another record, and a new commit costs one text
+/// of the record file and one of the Discussion file.
 #[tokio::test]
-async fn a_new_read_of_the_same_versions_reads_no_text() {
+#[verifies("rule_record_history_reads_index", examples)]
+async fn a_read_of_an_indexed_record_file_reads_no_text() {
     let _one = ONE_READER.lock().await;
     let (temp, store) = fixture();
     store
@@ -230,69 +241,90 @@ async fn a_new_read_of_the_same_versions_reads_no_text() {
         }))
         .unwrap())
         .unwrap();
-    let (relative, text) = records(&temp);
-    let entries = (0..3)
-        .map(|index| Entry::text(&format!("{text}{index}\n")))
-        .collect();
-    let versions = Counted::new(&chain(&relative, entries));
+    let commits = statement_edits(&temp, 4);
+    let versions = Counted::new_lists(&commits[..3]);
     let root = Utf8Path::from_path(temp.path()).unwrap();
-    let repository = repository(root).with_file_versions(versions.clone());
+    let opened = repository(root).with_file_versions(versions.clone());
     let answer = |page: ReviewHistoryPage| serde_json::to_value(page).unwrap();
 
-    let first = answer(history(&repository, "req_a").await.unwrap());
-    assert!(versions.calls() > 0, "the first read reads texts");
-    let again = answer(history(&repository, "req_a").await.unwrap());
-    assert_eq!(versions.calls(), 0, "a new read of the same versions");
+    let first = answer(history(&opened, "req_a").await.unwrap());
+    assert!(versions.calls() > 0, "the first read indexes the file");
+    let again = answer(history(&opened, "req_a").await.unwrap());
+    assert_eq!(versions.calls(), 0, "a new read of the same record");
     assert_eq!(again, first);
-
-    let other = answer(history(&repository, "req_b").await.unwrap());
-    assert!(versions.calls() > 0, "a read of another record reads texts");
+    let other = answer(history(&opened, "req_b").await.unwrap());
+    assert_eq!(versions.calls(), 0, "a read of another record");
     assert_ne!(other, first, "the revision of another record differs");
 
-    let last = answer(history(&repository, "req_a").await.unwrap());
-    assert_eq!(last, first);
+    let longer = Counted::new_lists(&commits);
+    let reopened = repository(root).with_file_versions(longer.clone());
+    let last = answer(history(&reopened, "req_a").await.unwrap());
+    assert_eq!(longer.calls(), 2, "one new commit");
+    let ids = last["entries"].as_array().unwrap().iter();
+    let ids = ids
+        .map(|entry| entry["id"].as_str().unwrap())
+        .collect::<Vec<_>>();
+    assert_eq!(ids, ["c0", "c1", "c2", "c3", "working"]);
 }
 
 /// `count` commits, each the child of the one before, that each give
-/// `req_a` in the saved records file a new statement.
-fn statement_edits(temp: &tempfile::TempDir, count: usize) -> Vec<Commit> {
-    let (relative, text) = records(temp);
+/// `req_a` in the saved records file below `root` a new statement.
+fn statement_edits(root: impl AsRef<std::path::Path>, count: usize) -> Vec<Commit> {
+    let (relative, _) = records(&root);
     let entries = (0..count)
-        .map(|index| {
-            let mut file = String::new();
-            for line in text.lines() {
-                let mut record: Value = serde_json::from_str(line).unwrap();
-                if record["id"] == json!("req_a") {
-                    record["statement"] = json!(format!("Edit {index} of the statement."));
-                }
-                file.push_str(&serde_json::to_string(&record).unwrap());
-                file.push('\n');
-            }
-            Entry::text(&file)
-        })
+        .map(|index| Entry::text(&statement_text(&root, index)))
         .collect();
     chain(&relative, entries)
+}
+
+/// The saved records file below `root`, where `req_a` has the statement of
+/// edit `index`.
+fn statement_text(root: impl AsRef<std::path::Path>, index: usize) -> String {
+    let (_, text) = records(root);
+    let mut file = String::new();
+    for line in text.lines() {
+        let mut record: Value = serde_json::from_str(line).unwrap();
+        if record["id"] == json!("req_a") {
+            record["statement"] = json!(format!("Edit {index} of the statement."));
+        }
+        file.push_str(&serde_json::to_string(&record).unwrap());
+        file.push('\n');
+    }
+    file
+}
+
+/// The answer of the read operation `name` for `request`, or the error of
+/// its failure.
+async fn operation(
+    repository: &Repository,
+    name: &'static str,
+    request: Value,
+) -> Result<Value, Value> {
+    let binding = LocalRepository::bind(repository.clone(), "folder").unwrap();
+    let request = json!({
+        "context": {"repository": "folder", "scope": "default"},
+        "request": request,
+    });
+    InProcessReadOperations::new(&binding)
+        .run(name, request)
+        .await
+        .map_err(|failure| failure.error)
 }
 
 /// The answer of `review-history-entry` for the entry `entry` of `req_a`,
 /// or the error of its failure.
 async fn history_entry(repository: &Repository, entry: &str) -> Result<Value, Value> {
-    let binding = LocalRepository::bind(repository.clone(), "folder").unwrap();
-    let request = json!({
-        "context": {"repository": "folder", "scope": "default"},
-        "request": {"record_kind": "requirement", "record_id": "req_a", "entry_id": entry},
-    });
-    InProcessReadOperations::new(&binding)
-        .run("review-history-entry", request)
-        .await
-        .map_err(|failure| failure.error)
+    let request = json!({"record_kind": "requirement", "record_id": "req_a", "entry_id": entry});
+    operation(repository, "review-history-entry", request).await
 }
 
 /// The entry operation reads the history of the record once, also when the
 /// entry is after the first page of 200 versions and the adapter gives a
 /// new version list on each call: one text of the records file and one of
-/// the Discussions file for each committed version.
+/// the Discussions file for each committed version. At 1,000 versions the
+/// read answers in one call.
 #[tokio::test]
+#[verifies("rule_history_reads_bound_file_versions", examples)]
 async fn an_entry_read_reads_the_history_once() {
     let _one = ONE_READER.lock().await;
     let mut counts = Vec::new();
@@ -306,4 +338,105 @@ async fn an_entry_read_reads_the_history_once() {
         counts.push((committed, versions.calls()));
     }
     assert_eq!(counts, [(205, 410), (1_000, 2_000)]);
+}
+
+/// The three history operations for the working entry of `req_a`.
+fn history_reads() -> [(&'static str, Value); 3] {
+    let record = json!({"record_kind": "requirement", "record_id": "req_a"});
+    let mut entry = record.clone();
+    entry["entry_id"] = json!("working");
+    let mut evidence = entry.clone();
+    evidence["side"] = json!("after");
+    [
+        ("review-history", record),
+        ("review-history-entry", entry),
+        ("review-evidence", evidence),
+    ]
+}
+
+/// A history read indexes at most 1,000 versions of a record file: one
+/// text of the record file and one of the Discussion file for each. While
+/// more versions wait, it gives the budget refusal after it indexed 1,000.
+/// The read after the last of them answers, as a read of a shorter file.
+#[tokio::test]
+#[verifies("rule_history_reads_bound_file_versions", examples)]
+async fn a_read_indexes_at_most_1000_versions_and_refuses_while_more_wait() {
+    let _one = ONE_READER.lock().await;
+    let (temp, _store) = fixture();
+    let versions = Counted::new_lists(&statement_edits(&temp, 2_500));
+    let root = Utf8Path::from_path(temp.path()).unwrap();
+    let repository = repository(root).with_file_versions(versions.clone());
+    let mut reads = Vec::new();
+    for (name, request) in history_reads() {
+        let answer = operation(&repository, name, request).await;
+        reads.push((name, answer.err(), versions.calls()));
+    }
+    let refused = Some(json!({"kind": "page_budget_exceeded"}));
+    assert_eq!(
+        reads,
+        [
+            ("review-history", refused.clone(), 2_000),
+            ("review-history-entry", refused, 2_000),
+            ("review-evidence", None, 1_000),
+        ]
+    );
+    let entries = all_entries(&repository).await;
+    assert_eq!(versions.calls(), 0, "the file is indexed");
+    assert_eq!(entries.len(), 2_501);
+    let shape = |entry: &RecordVersion| {
+        let mut entry = serde_json::to_value(entry).unwrap();
+        for name in ["id", "commit", "before", "revision"] {
+            entry[name] = Value::Null;
+        }
+        entry
+    };
+    for (index, entry) in entries[..2_500].iter().enumerate() {
+        let name = format!("c{index}");
+        assert_eq!(entry.id.as_str(), name);
+        assert_eq!(entry.commit.as_deref(), Some(name.as_str()));
+        let before = index.checked_sub(1).map(|before| format!("c{before}"));
+        assert_eq!(
+            entry.before.as_ref().map(StableId::as_str),
+            before.as_deref()
+        );
+        if index > 0 {
+            assert_eq!(shape(entry), shape(&entries[1]), "{name}");
+        }
+    }
+    assert_eq!(entries[1].changed_fields, ["statement"]);
+    assert_eq!(entries[1].author.as_deref(), Some("ann"));
+    assert_eq!(entries[1].committed_at, Some(1_700_000_000));
+    assert_eq!(entries[2_500].id.as_str(), "working");
+    assert_eq!(entries[2_500].before.as_ref().unwrap().as_str(), "c2499");
+    let revisions = entries
+        .iter()
+        .map(|entry| entry.revision.as_str())
+        .collect::<std::collections::BTreeSet<_>>();
+    assert_eq!(revisions.len(), 2_501, "each statement has its revision");
+    let last = history_entry(&repository, "c2499").await.unwrap();
+    assert_eq!(last, serde_json::to_value(&entries[2_499]).unwrap());
+    assert_eq!(versions.calls(), 0, "the file is indexed");
+}
+
+/// Each entry of the history of `req_a`, page by page to the end.
+async fn all_entries(repository: &Repository) -> Vec<RecordVersion> {
+    let mut entries = Vec::new();
+    let mut cursor = None;
+    loop {
+        let query = ReviewHistoryQuery {
+            record_kind: NodeType::Requirement,
+            record_id: StableId::new("req_a").unwrap(),
+            limit: 200,
+            cursor,
+        };
+        let page = read_history(repository, ReadPolicy::default(), query)
+            .await
+            .unwrap()
+            .result;
+        entries.extend(page.entries);
+        cursor = page.next_cursor;
+        if cursor.is_none() {
+            return entries;
+        }
+    }
 }

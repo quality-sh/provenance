@@ -1,9 +1,11 @@
-//! Parses `provenance search`, and refuses search text that is not in `--text`.
+//! Parses and runs `provenance search`, and refuses search text that is not in `--text`.
 
 use super::grammar::SearchArgs;
 use clap::error::{ContextKind, ContextValue, ErrorKind};
 use clap::{Arg, Command};
+use provenance_cli::porcelain;
 use provenance_porcelain::registry;
+use provenance_porcelain::search::SearchInput;
 
 /// Parses the search command. When clap refuses a word that is not a flag, or a word
 /// after `--`, the refusal says that the search text goes in `--text`. Each other
@@ -148,4 +150,44 @@ fn shell_word(value: &str) -> String {
 /// The value in single quotes for a POSIX shell. Each single quote in it becomes `'\''`.
 fn quoted_text(value: &str) -> String {
     format!("'{}'", value.replace('\'', r"'\''"))
+}
+
+impl SearchArgs {
+    pub(crate) async fn dispatch(self) -> anyhow::Result<()> {
+        let parameters = provenance_contract::definitions()
+            .iter()
+            .find_map(|definition| {
+                definition
+                    .registration
+                    .queries
+                    .iter()
+                    .find(|query| query.name == "search")
+                    .map(|query| query.parameters.as_slice())
+            })
+            .ok_or_else(|| anyhow::anyhow!("the operation catalog does not declare root search"))?;
+        let default_exclude_terminal = crate::read_policy::default_exclude_terminal(parameters)
+            .ok_or_else(|| {
+                anyhow::anyhow!("the root search query does not declare exclude_terminal")
+            })?;
+        // A file search returns every bound Rule, so only a text search takes the default.
+        let include_terminal = crate::read_policy::include_terminal(self.include_terminal)
+            .or_else(|| self.file.is_none().then_some(!default_exclude_terminal));
+        let query = SearchInput {
+            text: self.text,
+            kind: self.kind,
+            include_terminal,
+            cursor: self.cursor,
+            limit: self.limit,
+            file: self.file,
+            symbol: self.symbol,
+            line: self.line,
+        };
+        porcelain::dispatch_search(
+            &self.common.repo,
+            &self.common.scope,
+            self.common.format(),
+            query,
+        )
+        .await
+    }
 }

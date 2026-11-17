@@ -6,7 +6,6 @@ use provenance_core::NodeType;
 use provenance_macros::rule;
 use provenance_porcelain::action::{validate_target, Action};
 use provenance_porcelain::get::View;
-use provenance_porcelain::search::SearchInput;
 use provenance_transport::repository::RepoContext;
 
 mod api;
@@ -29,8 +28,13 @@ mod surface_tests;
 #[cfg(test)]
 mod tests;
 
-/// One command selected from a declared grammar.
-pub enum Invocation {
+/// One command selected from a declared grammar, and whether the caller asked for JSON.
+pub struct Invocation {
+    selected: Selected,
+    json: bool,
+}
+
+enum Selected {
     Check(CheckInput, crate::registry_cli::BoundContext),
     Prime(PrimeInput),
     Repository(RepositoryInput, bool),
@@ -45,6 +49,9 @@ pub enum Invocation {
     DiscussionRoot(DiscussionsArgs, Box<clap::ArgMatches>),
     DiscussionTarget(TargetArgs, Action, Box<clap::ArgMatches>),
     Target(TargetInvocation),
+    /// A refusal of a command line that the parser accepted. It takes the
+    /// refusal path of the command, so `--format json` prints the object.
+    Refused(anyhow::Error),
 }
 
 pub struct GlobalContext {
@@ -81,13 +88,17 @@ impl Invocation {
         };
         match exposed::find(&[word]) {
             Some(registry::Command::Search) => {
-                return Ok(Self::Search(search_text::parse(&arguments)));
+                let args = search_text::parse(&arguments);
+                let json = args.common.format.is_some();
+                return Ok(Self::new(json, Selected::Search(args)));
             }
             Some(registry::Command::Api) => {
                 let matches =
                     crate::registry_cli::root_word_matches(registry::Command::Api, &arguments)
                         .unwrap_or_else(|error| error.exit());
-                return Ok(Self::Api(ApiArgs::from_matches(&matches)));
+                let args = ApiArgs::from_matches(&matches);
+                let json = args.common.format.is_some();
+                return Ok(Self::new(json, Selected::Api(args)));
             }
             Some(
                 registry::Command::Check
@@ -115,9 +126,11 @@ impl Invocation {
                 let matches = grammar::discussions_command()?
                     .try_get_matches_from(arguments)
                     .unwrap_or_else(|error| error.exit());
-                return Ok(Self::DiscussionRoot(
-                    DiscussionsArgs::from_matches(&matches),
-                    Box::new(matches),
+                let args = DiscussionsArgs::from_matches(&matches);
+                let json = args.common.format.is_some();
+                return Ok(Self::new(
+                    json,
+                    Selected::DiscussionRoot(args, Box::new(matches)),
                 ));
             }
         }
@@ -141,41 +154,46 @@ impl Invocation {
             .try_get_matches_from(arguments)
             .unwrap_or_else(|error| positional_tip::with_tip(error, arguments).exit());
         let (words, selected) = crate::registry_cli::selected(&matches);
-        if let Some(server) = Server::find(&words) {
-            return Self::Server(
-                ServerInput::from_matches(server, selected)
-                    .unwrap_or_else(|error| catalog_cli::usage_error(error)),
-            );
-        }
-        match exposed::find(&words) {
-            Some(registry::Command::Check) => Self::Check(
-                crate::registry_cli::input(&registry::Command::Check.declaration(), selected)
-                    .unwrap_or_else(|error| catalog_cli::usage_error(error)),
-                crate::registry_cli::bound_context(selected),
-            ),
-            Some(registry::Command::Prime) => Self::Prime(
+        let json = crate::registry_cli::asks_for_json(selected);
+        let command = Server::find(&words).map_or_else(
+            || Self::registry_selected(&matches, &words, selected),
+            |server| ServerInput::from_matches(server, selected).map(Selected::Server),
+        );
+        let refused = |error| Selected::Refused(catalog_cli::refusal::usage(error));
+        Self::new(json, command.unwrap_or_else(refused))
+    }
+
+    /// The registry command of a root line that the parser accepted.
+    fn registry_selected(
+        matches: &clap::ArgMatches,
+        words: &[&str],
+        selected: &clap::ArgMatches,
+    ) -> anyhow::Result<Selected> {
+        match exposed::find(words) {
+            Some(registry::Command::Check) => {
+                crate::registry_cli::input(&registry::Command::Check.declaration(), selected).map(
+                    |input| Selected::Check(input, crate::registry_cli::bound_context(selected)),
+                )
+            }
+            Some(registry::Command::Prime) => {
                 crate::registry_cli::input(&registry::Command::Prime.declaration(), selected)
-                    .unwrap_or_else(|error| catalog_cli::usage_error(error)),
-            ),
-            Some(registry::Command::Repository(command)) => Self::Repository(
+                    .map(Selected::Prime)
+            }
+            Some(registry::Command::Repository(command)) => {
                 RepositoryInput::from_matches(command, selected)
-                    .unwrap_or_else(|error| catalog_cli::usage_error(error)),
-                matches.get_flag("quiet"),
-            ),
-            Some(registry::Command::Graph(command)) => Self::Graph(
-                GraphInput::from_matches(command, selected)
-                    .unwrap_or_else(|error| catalog_cli::usage_error(error)),
-            ),
-            Some(registry::Command::Workspace(command)) => Self::Workspace(
-                WorkspaceInput::from_matches(command, selected)
-                    .unwrap_or_else(|error| catalog_cli::usage_error(error)),
-            ),
+                    .map(|input| Selected::Repository(input, matches.get_flag("quiet")))
+            }
+            Some(registry::Command::Graph(command)) => {
+                GraphInput::from_matches(command, selected).map(Selected::Graph)
+            }
+            Some(registry::Command::Workspace(command)) => {
+                WorkspaceInput::from_matches(command, selected).map(Selected::Workspace)
+            }
             #[cfg(feature = "dogfood")]
-            Some(registry::Command::Dogfood(command)) => Self::Dogfood(
+            Some(registry::Command::Dogfood(command)) => {
                 handlers::DogfoodInput::from_matches(command, selected)
-                    .unwrap_or_else(|error| catalog_cli::usage_error(error)),
-                matches.get_flag("quiet"),
-            ),
+                    .map(|input| Selected::Dogfood(input, matches.get_flag("quiet")))
+            }
             _ => root_command()
                 .error(
                     clap::error::ErrorKind::InvalidSubcommand,
@@ -185,10 +203,10 @@ impl Invocation {
         }
     }
 
-    /// Parses the target before its action, defaults to get, and handles help before validation.
+    /// The matches of the target parser. A help request prints the help of the selected
+    /// action and kind and exits before validation.
     #[provenance_macros::rule("rule_record_help_exits_before_validation")]
-    #[rule("rule_porcelain_cli_target_action_order")]
-    fn parse_target(arguments: Vec<String>) -> anyhow::Result<Self> {
+    fn target_matches(arguments: Vec<String>) -> anyhow::Result<clap::ArgMatches> {
         let command = catalog_cli::target_command()?;
         let help_command = command.clone().mut_arg("type", |arg| {
             arg.value_parser(clap::builder::StringValueParser::new())
@@ -216,23 +234,38 @@ impl Invocation {
             }
             Err(error) => error.exit(),
         };
+        Ok(matches)
+    }
+
+    /// Parses the target before its action and defaults to get.
+    #[rule("rule_porcelain_cli_target_action_order")]
+    fn parse_target(arguments: Vec<String>) -> anyhow::Result<Self> {
+        let matches = Self::target_matches(arguments)?;
         let args = TargetArgs::from_matches(&matches);
-        if let Some(TargetVerb::Action(action)) = args.action {
-            if Action::DISCUSSION.contains(&action) {
-                return Ok(Self::DiscussionTarget(args, action, Box::new(matches)));
+        let json = args.common.format.is_some();
+        let selected = match args.action {
+            Some(TargetVerb::Action(action)) if Action::DISCUSSION.contains(&action) => {
+                Ok(Selected::DiscussionTarget(args, action, Box::new(matches)))
             }
-        }
+            _ => Self::target_selected(args, matches),
+        };
+        Ok(Self::new(json, selected.unwrap_or_else(Selected::Refused)))
+    }
+
+    /// The command of a target line that the parser accepted, or the refusal of
+    /// an option or a value that the action does not take.
+    fn target_selected(args: TargetArgs, matches: clap::ArgMatches) -> anyhow::Result<Selected> {
         let format = args.common.format();
         let context = args.common.context();
         if args.action == Some(TargetVerb::Trace) {
-            catalog_cli::ensure_only_fields(&matches, &["kind", registry::DEPTH.name, "limit"]);
+            catalog_cli::ensure_only_fields(&matches, &["kind", registry::DEPTH.name, "limit"])?;
             let input = provenance_porcelain::get::TraceInput {
                 target: args.target,
                 depth: args.depth,
                 kind: args.kind,
                 limit: args.limit,
             };
-            return Ok(Self::Get(GetInvocation {
+            return Ok(Selected::Get(GetInvocation {
                 context,
                 format,
                 input: input.into(),
@@ -253,7 +286,7 @@ impl Invocation {
                     "notify",
                     "thread",
                 ],
-            );
+            )?;
             let mut input = provenance_porcelain::get::GetInput::new(
                 args.target,
                 args.view
@@ -265,7 +298,7 @@ impl Invocation {
             input.kind = args.kind;
             input.limit = args.limit;
             (input.notify, input.thread) = notify(&matches)?;
-            return Ok(Self::Get(GetInvocation {
+            return Ok(Selected::Get(GetInvocation {
                 context,
                 format,
                 input,
@@ -276,10 +309,9 @@ impl Invocation {
             anyhow::bail!("unsupported target action");
         };
         let kind = args.record_type;
-        if let Err(error) = validate_target(action, &args.target, kind) {
-            catalog_cli::action_usage_error(error);
-        }
-        Ok(Self::Target(TargetInvocation {
+        validate_target(action, &args.target, kind)
+            .map_err(|error| catalog_cli::action_usage(&error))?;
+        Ok(Selected::Target(TargetInvocation {
             context,
             format,
             target: args.target,
@@ -289,40 +321,28 @@ impl Invocation {
         }))
     }
 
-    /// Whether the caller asked for JSON, so a refusal prints as one
+    const fn new(json: bool, selected: Selected) -> Self {
+        Self { selected, json }
+    }
+
+    /// Whether the caller gave `--format json`, so a refusal prints as one
     /// `{error,meta}` object instead of text.
-    pub fn json_output(&self) -> bool {
-        let format = match self {
-            Self::Check(..)
-            | Self::Prime(_)
-            | Self::Repository(..)
-            | Self::Graph(_)
-            | Self::Workspace(_)
-            | Self::Server(_) => None,
-            #[cfg(feature = "dogfood")]
-            Self::Dogfood(..) => None,
-            Self::Api(args) => args.common.format(),
-            Self::Get(invocation) => invocation.format,
-            Self::Search(args) => args.common.format(),
-            Self::DiscussionRoot(args, _) => args.common.format(),
-            Self::DiscussionTarget(args, _, _) => args.common.format(),
-            Self::Target(invocation) => invocation.format,
-        };
-        format == Some(porcelain::OutputFormat::Json)
+    pub const fn json_output(&self) -> bool {
+        self.json
     }
 
     pub async fn dispatch(self) -> anyhow::Result<()> {
-        match self {
-            Self::Check(input, context) => handlers::check_command(input, context).await,
-            Self::Prime(input) => handlers::prime_command(&input),
-            Self::Repository(input, quiet) => handlers::repository_command(input, quiet).await,
-            Self::Graph(input) => handlers::graph_command(input).await,
-            Self::Workspace(input) => handlers::workspace_command(input).await,
-            Self::Server(input) => handlers::server_command(input).await,
+        match self.selected {
+            Selected::Check(input, context) => handlers::check_command(input, context).await,
+            Selected::Prime(input) => handlers::prime_command(&input),
+            Selected::Repository(input, quiet) => handlers::repository_command(input, quiet).await,
+            Selected::Graph(input) => handlers::graph_command(input).await,
+            Selected::Workspace(input) => handlers::workspace_command(input).await,
+            Selected::Server(input) => handlers::server_command(input).await,
             #[cfg(feature = "dogfood")]
-            Self::Dogfood(input, quiet) => handlers::dogfood_command(input, quiet).await,
-            Self::Api(args) => api::dispatch(args).await,
-            Self::Get(invocation) => {
+            Selected::Dogfood(input, quiet) => handlers::dogfood_command(input, quiet).await,
+            Selected::Api(args) => api::dispatch(args).await,
+            Selected::Get(invocation) => {
                 if invocation.delivery == Delivery::Follow {
                     anyhow::ensure!(
                         invocation.input.view == View::Review
@@ -362,53 +382,16 @@ impl Invocation {
                 )
                 .await
             }
-            Self::Search(args) => args.dispatch().await,
-            Self::DiscussionRoot(args, matches) => discussion::dispatch_root(args, &matches).await,
-            Self::DiscussionTarget(args, action, matches) => {
+            Selected::Search(args) => args.dispatch().await,
+            Selected::DiscussionRoot(args, matches) => {
+                discussion::dispatch_root(args, &matches).await
+            }
+            Selected::DiscussionTarget(args, action, matches) => {
                 discussion::dispatch_target(args, action, &matches).await
             }
-            Self::Target(invocation) => invocation.dispatch().await,
+            Selected::Target(invocation) => invocation.dispatch().await,
+            Selected::Refused(error) => Err(error),
         }
-    }
-}
-
-impl SearchArgs {
-    pub(crate) async fn dispatch(self) -> anyhow::Result<()> {
-        let parameters = provenance_contract::definitions()
-            .iter()
-            .find_map(|definition| {
-                definition
-                    .registration
-                    .queries
-                    .iter()
-                    .find(|query| query.name == "search")
-                    .map(|query| query.parameters.as_slice())
-            })
-            .ok_or_else(|| anyhow::anyhow!("the operation catalog does not declare root search"))?;
-        let default_exclude_terminal = crate::read_policy::default_exclude_terminal(parameters)
-            .ok_or_else(|| {
-                anyhow::anyhow!("the root search query does not declare exclude_terminal")
-            })?;
-        // A file search returns every bound Rule, so only a text search takes the default.
-        let include_terminal = crate::read_policy::include_terminal(self.include_terminal)
-            .or_else(|| self.file.is_none().then_some(!default_exclude_terminal));
-        let query = SearchInput {
-            text: self.text,
-            kind: self.kind,
-            include_terminal,
-            cursor: self.cursor,
-            limit: self.limit,
-            file: self.file,
-            symbol: self.symbol,
-            line: self.line,
-        };
-        porcelain::dispatch_search(
-            &self.common.repo,
-            &self.common.scope,
-            self.common.format(),
-            query,
-        )
-        .await
     }
 }
 
@@ -486,7 +469,11 @@ fn notify(
         .or_else(|| std::env::var("CODEX_THREAD_ID").ok())
         .filter(|thread| !thread.is_empty());
     let Some(thread) = thread else {
-        anyhow::bail!("--notify needs --thread or the CODEX_THREAD_ID environment variable");
+        return Err(provenance_cli::refusal::CommandRefusal::missing(
+            "thread",
+            "--notify needs --thread or the CODEX_THREAD_ID environment variable",
+        )
+        .into());
     };
     Ok((Some(client), Some(thread)))
 }

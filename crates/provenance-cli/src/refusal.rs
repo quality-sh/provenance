@@ -42,3 +42,77 @@ impl HostRefusal {
         }
     }
 }
+
+/// A refusal that the CLI gives itself: input that the parser accepted but
+/// that has no valid value, or a check whose findings refuse.
+#[derive(Debug)]
+pub struct CommandRefusal {
+    text: String,
+    /// The `error` member of the failure object.
+    pub failure: Value,
+    /// Whether text mode prints the refusal as a usage error with exit code 2.
+    pub usage: bool,
+}
+
+impl CommandRefusal {
+    /// A usage refusal: an option that the command does not take, or an
+    /// input value that it cannot read.
+    pub fn usage(text: impl std::fmt::Display) -> Self {
+        let text = text.to_string();
+        let failure = serde_json::json!({
+            "kind": "invalid_input",
+            "field": null,
+            "reason": "invalid_value",
+            "message": text.trim_end(),
+        });
+        Self {
+            text,
+            failure,
+            usage: true,
+        }
+    }
+
+    /// A required input that the caller did not give.
+    pub fn missing(field: &str, text: &str) -> Self {
+        let failure = serde_json::json!({
+            "kind": "invalid_input",
+            "field": field,
+            "reason": "required",
+            "message": text,
+        });
+        Self {
+            text: text.to_owned(),
+            failure,
+            usage: false,
+        }
+    }
+
+    /// A refusal with the text `text` and the failure object `failure`.
+    pub const fn new(text: String, failure: Value) -> Self {
+        Self {
+            text,
+            failure,
+            usage: false,
+        }
+    }
+
+    /// The same refusal with the failure object `failure`.
+    #[must_use]
+    pub fn with_failure(mut self, failure: Value) -> Self {
+        self.failure = failure;
+        self
+    }
+
+    /// The text of the refusal.
+    pub fn text(&self) -> &str {
+        &self.text
+    }
+}
+
+impl std::fmt::Display for CommandRefusal {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str(&self.text)
+    }
+}
+
+impl std::error::Error for CommandRefusal {}

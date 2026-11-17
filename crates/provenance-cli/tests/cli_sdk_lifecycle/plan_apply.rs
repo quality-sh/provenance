@@ -214,7 +214,7 @@ fn the_plan_shows_each_deletion_that_the_apply_refuses_with_its_cause() {
 
     assert_eq!(refused.code, Some(1), "{}", refused.stdout);
     assert_eq!(refused.stdout, "");
-    let error = refused.stderr.strip_prefix("Error: ").unwrap();
+    let error = refused.stderr.as_str();
     assert_eq!(
         serde_json::from_str::<Value>(error).unwrap(),
         json!({"error": {"kind": "invalid_update", "message": disposition_message}, "meta": {}})
@@ -340,7 +340,7 @@ fn the_plan_shows_each_cascade_deletion_that_the_apply_refuses() {
     );
 
     assert_eq!(refused.code, Some(1), "{}", refused.stdout);
-    let error = refused.stderr.strip_prefix("Error: ").unwrap();
+    let error = refused.stderr.as_str();
     assert_eq!(
         serde_json::from_str::<Value>(error).unwrap(),
         json!({"error": {"kind": "enrolled_record_deletion_conflict", "record_kind": "topic",

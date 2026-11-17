@@ -1,4 +1,5 @@
 use super::support::{export_scope, import_scope, init_repo, write_json};
+use provenance_core::protocol::read_failure::STATE_CORRECTIONS;
 
 #[test]
 fn forged_terminal_import_fails_without_changing_live_scope() {
@@ -193,12 +194,23 @@ fn missing_disposition_canonical_artifact_import_is_atomic() {
     let input = dir.path().join("invalid-canonical-artifact.json");
     write_json(&input, &invalid);
 
-    import_scope(&repo, &input)
-        .failure()
-        .stderr(predicates::str::contains(
-            "scopes/default/ideation/dispositions.jsonl line 1: disposition disposition_a \
-             names requirement req_missing, which the scope does not have",
-        ));
+    let refused = import_scope(&repo, &input).code(1);
+    let stderr = String::from_utf8(refused.get_output().stderr.clone()).unwrap();
+    let refusal: serde_json::Value = serde_json::from_str(&stderr)
+        .unwrap_or_else(|error| panic!("{error}: standard error is not one object: {stderr}"));
+    assert_eq!(
+        refusal,
+        serde_json::json!({
+            "error": {
+                "kind": "invalid_state_file",
+                "file": "scopes/default/ideation/dispositions.jsonl",
+                "line": 1,
+                "message": "disposition disposition_a names requirement req_missing, which the scope does not have",
+                "hint": STATE_CORRECTIONS,
+            },
+            "meta": {},
+        })
+    );
 
     let after = dir.path().join("after.json");
     export_scope(&repo, &after).success();

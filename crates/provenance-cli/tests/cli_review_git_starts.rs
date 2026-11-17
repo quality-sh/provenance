@@ -102,7 +102,7 @@ fn review_host_git_starts_of_each_request_step() {
     assert_eq!(history(&host, "req_review"), edited);
     steps.record("history read after the working tree edit");
 
-    // The other Requirement is in the same record file, so the versions of the file are kept.
+    // The other Requirement is in the same record file, so the read cache holds its changes.
     assert_eq!(history(&host, "req_other"), [committed(&created)]);
     steps.record("history read of a second Requirement");
     assert_eq!(history(&host, "req_review"), edited);
@@ -150,18 +150,18 @@ fn expected_starts() -> Vec<(&'static str, Vec<String>)> {
         ),
         ("working tree edit", &["rev-parse"]),
         ("history read after the working tree edit", &["rev-parse"]),
-        (
-            "history read of a second Requirement",
-            &["rev-parse", "cat-file"],
-        ),
+        ("history read of a second Requirement", &["rev-parse"]),
         (
             "history read of the first Requirement again",
-            &["rev-parse", "cat-file"],
+            &["rev-parse"],
         ),
         ("configuration read after an identity change", &[]),
         ("host restart", &[]),
         ("configuration read after the restart", &reviewer_read),
-        ("history read after the restart", &first_read),
+        (
+            "history read after the restart",
+            &["--version", "rev-parse", "log"],
+        ),
     ])
 }
 

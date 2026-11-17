@@ -11,6 +11,24 @@ fn command(repo: &str, args: &[&str]) -> Command {
     command
 }
 
+/// Runs a repeated option in text mode and with `--format json`. Text mode
+/// gives the usage text with exit code 2; JSON mode gives one `invalid_input`
+/// object with exit code 1. Each names the option.
+fn refuses_repeated(repo: &str, args: &[&str], message: &str) {
+    Command::new(assert_cmd::cargo::cargo_bin!("provenance"))
+        .args(args)
+        .args(["--repo", repo])
+        .assert()
+        .code(2)
+        .stderr(contains(message));
+    let refused = command(repo, args).assert().code(1);
+    let stderr = String::from_utf8(refused.get_output().stderr.clone()).unwrap();
+    let refusal: Value = serde_json::from_str(&stderr).unwrap();
+    assert_eq!(refusal["error"]["kind"], "invalid_input", "{refusal}");
+    let text = refusal["error"]["message"].as_str().unwrap();
+    assert!(text.contains(message), "{refusal}");
+}
+
 fn output(command: &mut Command) -> Value {
     let result = command.output().unwrap();
     assert!(
@@ -57,7 +75,7 @@ fn fixture() -> tempfile::TempDir {
 fn discussion_list_refuses_repeated_scalar_flags() {
     let directory = fixture();
     let repo = directory.path().to_str().unwrap();
-    command(
+    refuses_repeated(
         repo,
         &[
             "req_parent",
@@ -67,10 +85,8 @@ fn discussion_list_refuses_repeated_scalar_flags() {
             "--status",
             "resolved",
         ],
-    )
-    .assert()
-    .code(2)
-    .stderr(contains("--status is supplied more than once"));
+        "--status is supplied more than once",
+    );
     let single = output(&mut command(
         repo,
         &["req_parent", "discussions", "--status", "active"],
@@ -83,7 +99,7 @@ fn discussion_list_refuses_repeated_scalar_flags() {
 fn discussion_write_refuses_repeated_actor_without_creating_a_discussion() {
     let directory = fixture();
     let repo = directory.path().to_str().unwrap();
-    command(
+    refuses_repeated(
         repo,
         &[
             "req_parent",
@@ -95,10 +111,8 @@ fn discussion_write_refuses_repeated_actor_without_creating_a_discussion() {
             "--actor",
             "second",
         ],
-    )
-    .assert()
-    .code(2)
-    .stderr(contains("--actor is supplied more than once"));
+        "--actor is supplied more than once",
+    );
     let list = output(&mut command(repo, &["req_parent", "discussions"]));
     assert_eq!(list["result"]["entries"], json!([]));
 }

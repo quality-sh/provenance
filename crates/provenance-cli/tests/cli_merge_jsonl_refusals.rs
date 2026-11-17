@@ -61,14 +61,22 @@ fn merge(base: impl AsRef<[u8]>, ours: &str, theirs: impl AsRef<[u8]>) -> Answer
 }
 
 /// The answer of a refusal at `line` of the Rule shard with `message`, when
-/// the file of ours holds `ours`.
+/// the file of ours holds `ours`. With `--format json` it is one error object.
 fn refusal(line: usize, message: &str, ours: String) -> Answer {
+    let error = json!({
+        "error": {
+            "file": "scopes/default/rules/rule.jsonl",
+            "hint": STATE_CORRECTIONS,
+            "kind": "invalid_state_file",
+            "line": line,
+            "message": message,
+        },
+        "meta": {},
+    });
     Answer {
         code: Some(1),
         stdout: String::new(),
-        stderr: vec![format!(
-            "Error: scopes/default/rules/rule.jsonl line {line}: {message}; {STATE_CORRECTIONS}"
-        )],
+        stderr: vec![error.to_string()],
         ours,
     }
 }

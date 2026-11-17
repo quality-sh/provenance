@@ -17,12 +17,19 @@ pub fn long_name(index: i64) -> String {
 /// `req_a` in the Requirement file of `default` in `working` a new
 /// statement.
 pub fn long_history(working: &Tree) -> Vec<Commit> {
+    edits(working, LONG)
+}
+
+/// `count` commits, each the child of the one before, that each give
+/// `req_a` in the Requirement file of `default` in `working` a new
+/// statement.
+pub fn edits(working: &Tree, count: i64) -> Vec<Commit> {
     let path = working
         .keys()
         .find(|path| path.starts_with(&format!("{STATE}scopes/default/requirements/")))
         .expect("a Requirement file in default");
     let text = String::from_utf8(working[path].clone()).unwrap();
-    (0..LONG)
+    (0..count)
         .map(|index| {
             let mut file = String::new();
             for line in text.lines() {
