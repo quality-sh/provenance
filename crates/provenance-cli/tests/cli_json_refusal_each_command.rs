@@ -116,7 +116,62 @@ fn refusal_kind(stderr: &str) -> Option<String> {
 
 /// The outcome of each line of the walk: the kind of its refusal object, or
 /// [`ACCEPTED`] for a line that the command accepts.
-const OUTCOMES: &[(&str, &str)] = &[];
+const OUTCOMES: &[(&str, &str)] = &[
+    ("record_x get --kind source --format json", "invalid_input"),
+    ("search --kind source --format json", ACCEPTED),
+    ("api damaged --format json", "unknown_operation"),
+    ("check --format json", ACCEPTED),
+    (
+        "record_x trace --kind source --format json",
+        "resource_not_found",
+    ),
+    ("prime --format json", ACCEPTED),
+    (
+        "record_x create --type source --format json",
+        "invalid_input",
+    ),
+    ("record_x update --format json", "resource_not_found"),
+    ("record_x answer --format json", "resource_not_found"),
+    ("record_x claim --format json", "resource_not_found"),
+    ("record_x release --format json", "resource_not_found"),
+    ("record_x submit --format json", "resource_not_found"),
+    ("discussions --format json", ACCEPTED),
+    ("record_x discussions --format json", "resource_not_found"),
+    ("record_x discussion --format json", "resource_not_found"),
+    ("record_x discuss --format json", "resource_not_found"),
+    ("record_x reply --format json", "invalid_input"),
+    ("materialize --format json", ACCEPTED),
+    ("export --format json", ACCEPTED),
+    ("import --input damaged --format json", "operation_failed"),
+    (
+        "merge-jsonl damaged damaged damaged --format json",
+        "invalid_state_file",
+    ),
+    (
+        "validate contribution --input damaged --format json",
+        "operation_failed",
+    ),
+    ("schema show contribution --format json", ACCEPTED),
+    (
+        "dictionary import --pdf damaged --format json",
+        "operation_failed",
+    ),
+    ("dictionary status --format json", ACCEPTED),
+    (
+        "swarm-backtrace land --run-dir damaged --format json",
+        "operation_failed",
+    ),
+    ("skills list --format json", ACCEPTED),
+    ("skills install --format json", ACCEPTED),
+    (
+        "report render --input damaged --format json",
+        "operation_failed",
+    ),
+    (
+        "report build --base damaged --head damaged --repository damaged --format json",
+        "operation_failed",
+    ),
+];
 
 /// The outcome of a line that the command accepts with exit code 0.
 const ACCEPTED: &str = "accepted";
