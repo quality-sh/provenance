@@ -319,7 +319,7 @@ mod tests {
                 .collect(),
         );
         assert_eq!(&kept, expected_catalog());
-        assert_eq!(expected_catalog().0.len(), 52);
+        assert_eq!(expected_catalog().0.len(), 53);
         pool.close().await;
     }
 
