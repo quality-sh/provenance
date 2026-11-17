@@ -1,12 +1,14 @@
 //! A graph file that an outside writer saves in place in two steps: the review host reports
 //! a fault of the file only when a read after the file stops changing gives the fault.
 use crate::review_host_support;
-use provenance_core::protocol::read_failure::STATE_CORRECTIONS;
 use provenance_macros::verifies;
-use review_host_support::follow::{page_rule, setup};
+use review_host_support::{
+    events::Socket,
+    follow::{page_rule, setup},
+    manifest::{self, damaged_reason, save_in_two_steps, DAMAGED},
+    repository, start,
+};
 use std::{
-    io::Write as _,
-    path::{Path, PathBuf},
     sync::{
         atomic::{AtomicBool, Ordering},
         Arc,
@@ -14,32 +16,11 @@ use std::{
     time::Duration,
 };
 
-const DAMAGED: &str = "{\"scopes\":\"default\"}\n";
-
-fn manifest(root: &Path) -> PathBuf {
-    root.join(".provenance/state/manifest.json")
-}
-
-fn damaged_reason() -> String {
-    format!(
-        "manifest.json line 1: invalid type: string \"default\", expected a sequence; \
-         {STATE_CORRECTIONS}"
-    )
-}
-
-/// Saves `text` in place as an editor does: the file is empty for a short time before the
-/// text is in it.
-fn save_in_two_steps(path: &Path, text: &str) {
-    let mut file = std::fs::File::create(path).unwrap();
-    std::thread::sleep(Duration::from_millis(100));
-    file.write_all(text.as_bytes()).unwrap();
-}
-
 #[test]
 #[verifies("rule_review_host_reads_settled_state", examples)]
 fn a_write_caught_half_done_gives_no_fault() {
     let (repo, host, follow, _) = setup();
-    let path = manifest(repo.path());
+    let path = manifest::path(repo.path());
     let text = std::fs::read_to_string(&path).unwrap();
 
     save_in_two_steps(&path, &text);
@@ -54,12 +35,16 @@ fn a_write_caught_half_done_gives_no_fault() {
     }
 }
 
+/// The reported fault is the fault of the complete file. On `main` this test is red because
+/// the reason is the fault of the empty file that the first step leaves ("EOF while parsing a
+/// value"). It is not red for the count: on `main` the follow stream also ends after its
+/// first read-error.
 #[test]
 #[verifies("rule_review_host_reads_settled_state", examples)]
 fn a_fault_of_the_settled_file_is_given_one_time() {
     let (repo, _host, mut follow, _) = setup();
 
-    save_in_two_steps(&manifest(repo.path()), DAMAGED);
+    save_in_two_steps(&manifest::path(repo.path()), DAMAGED);
 
     let frame = follow.frame();
     assert_eq!(frame["type"], "read-error", "{frame}");
@@ -72,7 +57,7 @@ fn a_fault_of_the_settled_file_is_given_one_time() {
 #[verifies("rule_review_host_reads_settled_state", examples)]
 fn a_file_that_continues_to_change_gets_an_answer() {
     let (repo, _host, follow, _) = setup();
-    let path = manifest(repo.path());
+    let path = manifest::path(repo.path());
     save_in_two_steps(&path, DAMAGED);
     let writing = Arc::new(AtomicBool::new(true));
     let writer = {
@@ -91,4 +76,22 @@ fn a_file_that_continues_to_change_gets_an_answer() {
 
     assert_eq!(frame["type"], "read-error", "{frame}");
     assert_eq!(frame["reason"], damaged_reason());
+}
+
+#[test]
+#[verifies("rule_review_host_reads_settled_state", examples)]
+fn a_write_caught_half_done_resets_the_review_events_socket_as_recovered() {
+    let repo = repository();
+    let host = start(repo.path());
+    let mut socket = Socket::connect(&host);
+    let ready = socket.frame();
+    let path = manifest::path(repo.path());
+    let text = std::fs::read_to_string(&path).unwrap();
+
+    save_in_two_steps(&path, &text);
+
+    let reset = socket.frame();
+    assert_eq!(reset["type"], "reset", "{reset}");
+    assert_eq!(reset["reason"], "observation-recovered", "{reset}");
+    assert_eq!(reset["epoch"], ready["epoch"]);
 }
