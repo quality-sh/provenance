@@ -464,7 +464,6 @@
         "dunce",
         "fs2",
         "fs_at",
-        "libsqlite3-sys",
         "provenance-scanner",
         "rustix",
         "sqlx",
