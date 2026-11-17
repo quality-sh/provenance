@@ -1,7 +1,8 @@
 //! The reader of one stored line of a JSONL file. Each read of a state shard,
 //! each write that loads a JSONL file and each read of the verification runs
 //! cache give the bytes of one line and its number here, so that a fault of a
-//! line gets the same refusal from each of them.
+//! line gets the same refusal from each of them. The record history reads
+//! each line of a record file through [`committed_line_value`].
 
 use crate::refusal::state_fault;
 use crate::state_store::message_ids::ShardLine;
@@ -150,8 +151,7 @@ pub fn record_line_value<'a, T: DeserializeOwned>(
     bytes: &'a [u8],
 ) -> anyhow::Result<(&'a str, serde_json::Value)> {
     let text = checked_line::<T>(path, number, bytes)?.text;
-    let value = serde_json::from_str(text).map_err(|error| located(path, number, &error))?;
-    Ok((text, value))
+    Ok((text, json_value(path, number, text)?))
 }
 
 /// The text and the JSON value of the stored line `bytes`, line `number` of
@@ -169,6 +169,22 @@ pub fn untyped_line_value<'a>(
     let value = value_checks(path, number, text)?;
     members_once(path, number, text)?;
     Ok((text, value))
+}
+
+/// The JSON value of the line `bytes` of a record file, for the record
+/// history. The line is of a past commit or of the saved working copy, and
+/// the history reads it as data of its own time: the checks of a record type
+/// and of the `retired` member do not apply. A line that is not UTF-8, that
+/// is not one JSON value, or that holds a top-level member two times holds
+/// no record, so it gives none.
+pub fn committed_line_value(bytes: &[u8]) -> Option<serde_json::Value> {
+    let text = std::str::from_utf8(bytes).ok()?;
+    let value = serde_json::from_str(text).ok()?;
+    top_level_members(text)
+        .ok()?
+        .repeated
+        .is_none()
+        .then_some(value)
 }
 
 /// The line `bytes` as text, or `invalid_state_file` at the line when it is
@@ -194,9 +210,15 @@ fn members_once(path: &Utf8Path, number: usize, text: &str) -> anyhow::Result<Sc
 /// `text` as one JSON value, after the checks that it parses and that it
 /// holds no `retired` member.
 fn value_checks(path: &Utf8Path, number: usize, text: &str) -> anyhow::Result<serde_json::Value> {
-    let value = serde_json::from_str(text).map_err(|error| located(path, number, &error))?;
+    let value = json_value(path, number, text)?;
     ensure_no_legacy_retirement(path, number, &value)?;
     Ok(value)
+}
+
+/// `text` as one JSON value, or `invalid_state_file` at the line when it is
+/// not one JSON value.
+fn json_value(path: &Utf8Path, number: usize, text: &str) -> anyhow::Result<serde_json::Value> {
+    serde_json::from_str(text).map_err(|error| located(path, number, &error))
 }
 
 /// Refuses a stored record that still holds the removed `retired` field, as

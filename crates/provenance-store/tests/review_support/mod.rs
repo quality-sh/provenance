@@ -77,6 +77,35 @@ pub fn commit_state(temp: &tempfile::TempDir, message: &str) -> String {
     git(temp, &["rev-parse", "HEAD"])
 }
 
+/// The Requirement file of the fixture at `temp`.
+pub fn requirements(temp: &tempfile::TempDir) -> camino::Utf8PathBuf {
+    let layout = ProvenanceLayout::new(Utf8Path::from_path(temp.path()).unwrap());
+    provenance_store::shards::path_for(&layout, &scope(), provenance_core::NodeType::Requirement)
+}
+
+/// The review history of the Requirement `record` in the fixture at `temp`.
+pub async fn history(
+    temp: &tempfile::TempDir,
+    record: &str,
+) -> Vec<provenance_core::review::RecordVersion> {
+    let query = provenance_core::review::ReviewHistoryQuery {
+        record_kind: provenance_core::NodeType::Requirement,
+        record_id: StableId::new(record).unwrap(),
+        limit: 50,
+        cursor: None,
+    };
+    let root = Utf8Path::from_path(temp.path()).unwrap();
+    provenance_store::review::read_history(
+        &repository(root),
+        provenance_store::operations::read_policy::ReadPolicy::default(),
+        query,
+    )
+    .await
+    .unwrap()
+    .result
+    .entries
+}
+
 #[path = "../support/initialization.rs"]
 pub mod initialization;
 
