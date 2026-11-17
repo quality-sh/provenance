@@ -3,7 +3,6 @@
 //! trace, search and evidence.
 use provenance_macros::verifies;
 use serde_json::{json, Value};
-use std::path::Path;
 
 use crate::support::record_budget::{
     api, cli, create_rule, refusal, repository, rule_row_base, success, too_large, write, BUDGET,
