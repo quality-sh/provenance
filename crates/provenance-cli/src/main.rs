@@ -21,6 +21,10 @@ async fn main() -> anyhow::Result<()> {
         Err(error) if json => {
             catalog_cli::refusal::exit_with_json(&catalog_cli::refusal::json_refusal(&error))
         }
+        Err(error) => match error.downcast_ref::<catalog_cli::refusal::CommandRefusal>() {
+            Some(refusal) if refusal.usage => catalog_cli::refusal::exit_with_usage(refusal),
+            _ => Err(error),
+        },
         result => result,
     }
 }

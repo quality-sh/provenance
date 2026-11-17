@@ -4,6 +4,7 @@
 use crate::coverage::ReportFormat;
 use crate::repository::{initialization_hint, is_not_initialized, RepoContext};
 use camino::{Utf8Path, Utf8PathBuf};
+use provenance_core::protocol::read_failure::UnparsableStateFile;
 use provenance_core::Manifest;
 use provenance_macros::rule;
 use provenance_porcelain::check::{
@@ -89,7 +90,7 @@ impl RepositoryCheckPort {
                 let mut findings = match validation {
                     Ok(()) => Vec::new(),
                     Err(error) if refuses_graph_run(&error) => return Err(error),
-                    Err(error) => vec![Finding::new(format!("{error:#}"))],
+                    Err(error) => vec![error_finding(&error)],
                 };
                 findings.extend(gaps.into_iter().map(|gap| Finding::new(gap.to_string())));
                 Ok(findings)
@@ -98,7 +99,7 @@ impl RepositoryCheckPort {
         let mut findings = match result {
             Ok(findings) => findings,
             Err(error) if refuses_graph_run(&error) => return Err(format!("{error:#}")),
-            Err(error) => vec![Finding::new(format!("{error:#}"))],
+            Err(error) => vec![error_finding(&error)],
         };
         let refusal = if findings.is_empty() {
             Refusal::None
@@ -354,6 +355,19 @@ fn ensure_strict_dictionary_index(
 }
 
 /// An unreadable or uninitialized graph refuses the run instead of giving a finding.
+/// The graph finding of an error. A state file that does not parse gives its
+/// `invalid_state_file` failure as the detail.
+fn error_finding(error: &anyhow::Error) -> Finding {
+    let text = format!("{error:#}");
+    match UnparsableStateFile::find(error.as_ref()) {
+        Some(state) => Finding::with_detail(
+            text,
+            serde_json::to_value(state.failure()).expect("a failure is JSON"),
+        ),
+        None => Finding::new(text),
+    }
+}
+
 fn refuses_graph_run(error: &anyhow::Error) -> bool {
     error.downcast_ref::<std::io::Error>().is_some() || is_not_initialized(error)
 }

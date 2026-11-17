@@ -49,6 +49,9 @@ enum Selected {
     DiscussionRoot(DiscussionsArgs, Box<clap::ArgMatches>),
     DiscussionTarget(TargetArgs, Action, Box<clap::ArgMatches>),
     Target(TargetInvocation),
+    /// A refusal of a command line that the parser accepted. It takes the
+    /// refusal path of the command, so `--format json` prints the object.
+    Refused(anyhow::Error),
 }
 
 pub struct GlobalContext {
@@ -152,52 +155,53 @@ impl Invocation {
             .unwrap_or_else(|error| positional_tip::with_tip(error, arguments).exit());
         let (words, selected) = crate::registry_cli::selected(&matches);
         let json = crate::registry_cli::asks_for_json(selected);
-        if let Some(server) = Server::find(&words) {
-            let input = ServerInput::from_matches(server, selected)
-                .unwrap_or_else(|error| catalog_cli::usage_error(error));
-            return Self::new(json, Selected::Server(input));
-        }
-        let command = match exposed::find(&words) {
-            Some(registry::Command::Check) => Selected::Check(
-                crate::registry_cli::input(&registry::Command::Check.declaration(), selected)
-                    .unwrap_or_else(|error| catalog_cli::usage_error(error)),
-                crate::registry_cli::bound_context(selected),
-            ),
-            Some(registry::Command::Prime) => Selected::Prime(
-                crate::registry_cli::input(&registry::Command::Prime.declaration(), selected)
-                    .unwrap_or_else(|error| catalog_cli::usage_error(error)),
-            ),
-            Some(registry::Command::Repository(command)) => Selected::Repository(
-                RepositoryInput::from_matches(command, selected)
-                    .unwrap_or_else(|error| catalog_cli::usage_error(error)),
-                matches.get_flag("quiet"),
-            ),
-            Some(registry::Command::Graph(command)) => Selected::Graph(
-                GraphInput::from_matches(command, selected)
-                    .unwrap_or_else(|error| catalog_cli::usage_error(error)),
-            ),
-            Some(registry::Command::Workspace(command)) => Selected::Workspace(
-                WorkspaceInput::from_matches(command, selected)
-                    .unwrap_or_else(|error| catalog_cli::usage_error(error)),
-            ),
-            #[cfg(feature = "dogfood")]
-            Some(registry::Command::Dogfood(command)) => Selected::Dogfood(
-                handlers::DogfoodInput::from_matches(command, selected)
-                    .unwrap_or_else(|error| catalog_cli::usage_error(error)),
-                matches.get_flag("quiet"),
-            ),
-            _ => root_command()
-                .error(
-                    clap::error::ErrorKind::InvalidSubcommand,
-                    format!("'{}' is not a command", words.join(" ")),
-                )
-                .exit(),
+        let usage = catalog_cli::refusal::usage;
+        let command = if let Some(server) = Server::find(&words) {
+            ServerInput::from_matches(server, selected).map(Selected::Server)
+        } else {
+            match exposed::find(&words) {
+                Some(registry::Command::Check) => {
+                    crate::registry_cli::input(&registry::Command::Check.declaration(), selected)
+                        .map(|input| {
+                            Selected::Check(input, crate::registry_cli::bound_context(selected))
+                        })
+                }
+                Some(registry::Command::Prime) => {
+                    crate::registry_cli::input(&registry::Command::Prime.declaration(), selected)
+                        .map(Selected::Prime)
+                }
+                Some(registry::Command::Repository(command)) => {
+                    RepositoryInput::from_matches(command, selected)
+                        .map(|input| Selected::Repository(input, matches.get_flag("quiet")))
+                }
+                Some(registry::Command::Graph(command)) => {
+                    GraphInput::from_matches(command, selected).map(Selected::Graph)
+                }
+                Some(registry::Command::Workspace(command)) => {
+                    WorkspaceInput::from_matches(command, selected).map(Selected::Workspace)
+                }
+                #[cfg(feature = "dogfood")]
+                Some(registry::Command::Dogfood(command)) => {
+                    handlers::DogfoodInput::from_matches(command, selected)
+                        .map(|input| Selected::Dogfood(input, matches.get_flag("quiet")))
+                }
+                _ => root_command()
+                    .error(
+                        clap::error::ErrorKind::InvalidSubcommand,
+                        format!("'{}' is not a command", words.join(" ")),
+                    )
+                    .exit(),
+            }
         };
-        Self::new(json, command)
+        Self::new(
+            json,
+            command.unwrap_or_else(|error| Selected::Refused(usage(error))),
+        )
     }
 
     /// The matches of the target parser. A help request prints the help of the selected
-    /// action and kind and exits.
+    /// action and kind and exits before validation.
+    #[provenance_macros::rule("rule_record_help_exits_before_validation")]
     fn target_matches(arguments: Vec<String>) -> anyhow::Result<clap::ArgMatches> {
         let command = catalog_cli::target_command()?;
         let help_command = command.clone().mut_arg("type", |arg| {
@@ -229,39 +233,40 @@ impl Invocation {
         Ok(matches)
     }
 
-    /// Parses the target before its action, defaults to get, and handles help before validation.
-    #[provenance_macros::rule("rule_record_help_exits_before_validation")]
+    /// Parses the target before its action and defaults to get.
     #[rule("rule_porcelain_cli_target_action_order")]
     fn parse_target(arguments: Vec<String>) -> anyhow::Result<Self> {
         let matches = Self::target_matches(arguments)?;
         let args = TargetArgs::from_matches(&matches);
-        if let Some(TargetVerb::Action(action)) = args.action {
-            if Action::DISCUSSION.contains(&action) {
-                let json = args.common.format.is_some();
-                let selected = Selected::DiscussionTarget(args, action, Box::new(matches));
-                return Ok(Self::new(json, selected));
+        let json = args.common.format.is_some();
+        let selected = match args.action {
+            Some(TargetVerb::Action(action)) if Action::DISCUSSION.contains(&action) => {
+                Ok(Selected::DiscussionTarget(args, action, Box::new(matches)))
             }
-        }
+            _ => Self::target_selected(args, matches),
+        };
+        Ok(Self::new(json, selected.unwrap_or_else(Selected::Refused)))
+    }
+
+    /// The command of a target line that the parser accepted, or the refusal of
+    /// an option or a value that the action does not take.
+    fn target_selected(args: TargetArgs, matches: clap::ArgMatches) -> anyhow::Result<Selected> {
         let format = args.common.format();
-        let json = format.is_some();
         let context = args.common.context();
         if args.action == Some(TargetVerb::Trace) {
-            catalog_cli::ensure_only_fields(&matches, &["kind", registry::DEPTH.name, "limit"]);
+            catalog_cli::ensure_only_fields(&matches, &["kind", registry::DEPTH.name, "limit"])?;
             let input = provenance_porcelain::get::TraceInput {
                 target: args.target,
                 depth: args.depth,
                 kind: args.kind,
                 limit: args.limit,
             };
-            return Ok(Self::new(
-                json,
-                Selected::Get(GetInvocation {
-                    context,
-                    format,
-                    input: input.into(),
-                    delivery: Delivery::Read,
-                }),
-            ));
+            return Ok(Selected::Get(GetInvocation {
+                context,
+                format,
+                input: input.into(),
+                delivery: Delivery::Read,
+            }));
         }
         if matches!(args.action, None | Some(TargetVerb::Get)) {
             catalog_cli::ensure_only_fields(
@@ -277,7 +282,7 @@ impl Invocation {
                     "notify",
                     "thread",
                 ],
-            );
+            )?;
             let mut input = provenance_porcelain::get::GetInput::new(
                 args.target,
                 args.view
@@ -289,34 +294,27 @@ impl Invocation {
             input.kind = args.kind;
             input.limit = args.limit;
             (input.notify, input.thread) = notify(&matches)?;
-            return Ok(Self::new(
-                json,
-                Selected::Get(GetInvocation {
-                    context,
-                    format,
-                    input,
-                    delivery: args.delivery,
-                }),
-            ));
+            return Ok(Selected::Get(GetInvocation {
+                context,
+                format,
+                input,
+                delivery: args.delivery,
+            }));
         }
         let Some(TargetVerb::Action(action)) = args.action else {
             anyhow::bail!("unsupported target action");
         };
         let kind = args.record_type;
-        if let Err(error) = validate_target(action, &args.target, kind) {
-            catalog_cli::action_usage_error(error);
-        }
-        Ok(Self::new(
-            json,
-            Selected::Target(TargetInvocation {
-                context,
-                format,
-                target: args.target,
-                action,
-                kind,
-                matches,
-            }),
-        ))
+        validate_target(action, &args.target, kind)
+            .map_err(|error| catalog_cli::action_usage(&error))?;
+        Ok(Selected::Target(TargetInvocation {
+            context,
+            format,
+            target: args.target,
+            action,
+            kind,
+            matches,
+        }))
     }
 
     const fn new(json: bool, selected: Selected) -> Self {
@@ -388,6 +386,7 @@ impl Invocation {
                 discussion::dispatch_target(args, action, &matches).await
             }
             Selected::Target(invocation) => invocation.dispatch().await,
+            Selected::Refused(error) => Err(error),
         }
     }
 }
@@ -466,7 +465,11 @@ fn notify(
         .or_else(|| std::env::var("CODEX_THREAD_ID").ok())
         .filter(|thread| !thread.is_empty());
     let Some(thread) = thread else {
-        anyhow::bail!("--notify needs --thread or the CODEX_THREAD_ID environment variable");
+        return Err(provenance_cli::refusal::CommandRefusal::missing(
+            "thread",
+            "--notify needs --thread or the CODEX_THREAD_ID environment variable",
+        )
+        .into());
     };
     Ok((Some(client), Some(thread)))
 }
