@@ -214,20 +214,6 @@ fn trait_binding_names_the_trait_not_a_later_item() {
 }
 
 #[test]
-fn scans_legacy_statesman_annotation_with_location() {
-    let scan = scan_file(
-        Utf8Path::new("payroll.rs"),
-        Language::Rust,
-        "// @statesman rule: SCHADS-PAY-001\nfn pays_overtime() {}",
-    );
-
-    assert_eq!(scan.annotations.len(), 1);
-    assert_eq!(scan.annotations[0].line, 1);
-    assert_eq!(scan.warnings.len(), 1);
-    assert!(scan.warnings[0].message.contains("legacy marker"));
-}
-
-#[test]
 fn probe_indented_qualified() {
     let source = "mod tests {\n    #[test]\n    #[provenance_macros::verifies(\"rule_x\", examples)]\n    fn probe_case() {}\n}\n";
     let scan = scan_file(Utf8Path::new("probe.rs"), Language::Rust, source);

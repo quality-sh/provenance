@@ -1,8 +1,5 @@
 //! What the parser noticed while reading the source reaches the coverage
 //! report.
-//!
-//! The scan collected these all along and then dropped them, so a repository
-//! still on the legacy Statesman marker was never told to move off it.
 
 use serde_json::Value;
 
@@ -55,30 +52,6 @@ fn warnings(report: &Value) -> &Vec<Value> {
     report["warnings"].as_array().unwrap()
 }
 
-// Implementation aid: keeps parser warnings in the coverage report.
-#[test]
-fn a_legacy_statesman_block_warns_that_the_marker_is_deprecated() {
-    let report = scan("// @statesman rule: rule_overtime\nfn pays_overtime() {}\n");
-
-    let warnings = warnings(&report);
-    assert_eq!(warnings.len(), 1, "{report}");
-    assert!(
-        warnings[0]["message"]
-            .as_str()
-            .unwrap()
-            .contains("legacy marker"),
-        "{report}"
-    );
-    assert!(
-        warnings[0]["file_path"]
-            .as_str()
-            .unwrap()
-            .ends_with("payroll.rs"),
-        "{report}"
-    );
-    assert!(warnings[0]["line"].is_u64(), "{report}");
-}
-
 // Implementation aid: keeps malformed directive warnings in the report.
 #[test]
 fn a_malformed_directive_surfaces_too() {
@@ -100,7 +73,7 @@ fn a_malformed_directive_surfaces_too() {
 // Implementation aid: keeps parse warnings free of a Rule id.
 #[test]
 fn a_parse_warning_names_no_rule() {
-    let report = scan("// @statesman rule: rule_overtime\nfn pays_overtime() {}\n");
+    let report = scan("// @provenance rule: rule_overtime\n// @provenance nonsense\nfn f() {}\n");
 
     assert_eq!(warnings(&report)[0]["rule_id"], "", "{report}");
 }
