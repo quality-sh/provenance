@@ -185,11 +185,8 @@ async fn a_manifest_repaired_after_the_view_is_read_waits_for_the_next_pass() {
     let result = catch_up_state(&repository).await;
     test_probes::disarm("catch_up_global_before_parse");
     let error = result.expect_err("the pass parsed a manifest it did not hash");
-    let refusal = format!(
-        "failed to parse manifest {}: EOF while parsing an object at line 1 column 1",
-        repository.layout().manifest_path()
-    );
-    assert!(format!("{error:#}").contains(&refusal), "{error:#}");
+    let refusal = "manifest.json line 1: EOF while parsing an object; ";
+    assert!(format!("{error:#}").contains(refusal), "{error:#}");
     let report = catch_up_state(&repository).await.unwrap();
     assert!(!report.revision_committed, "{report:?}");
 }

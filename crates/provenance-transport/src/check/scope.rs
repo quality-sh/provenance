@@ -87,6 +87,15 @@ pub(super) fn validate(
         "scope ownership finding(s):\n- {}",
         ownership_findings.join("\n- ")
     );
+    let mut review_row_findings = Vec::new();
+    for scope in scopes {
+        review_row_findings.extend(store.review_row_faults(&scope.id)?);
+    }
+    anyhow::ensure!(
+        review_row_findings.is_empty(),
+        "review row finding(s):\n- {}",
+        review_row_findings.join("\n- ")
+    );
 
     for scope in &records {
         core::Records::load(scope.snapshot.graph_records()).add_to(index);

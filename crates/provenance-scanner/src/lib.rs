@@ -4,6 +4,7 @@
 mod binding_lexer;
 mod coverage;
 mod coverage_anchors;
+mod language;
 mod rule_evidence;
 mod site;
 
@@ -13,6 +14,7 @@ pub mod validate;
 pub mod walker;
 
 pub use coverage::{scan_to_coverage, CoverageBaseline, ScannedCoverage};
+pub use language::Language;
 pub use parser::{
     parse_annotations, Annotation, CoverageLevel, ParseResult, ParseWarning, Verification,
 };
@@ -25,5 +27,5 @@ pub use site::{source_sites, SourceSite, SourceSiteRole};
 pub use validate::{validate_annotations, validate_bindings, ValidationWarning};
 pub use walker::{
     scan_file, scan_path, scan_path_bounded, scan_path_with_content, selects_source_path,
-    source_paths, AnnotationLocation, AttributeBinding, FileScan, FileScanWithContent, Language,
+    source_paths, AnnotationLocation, AttributeBinding, FileScan, FileScanWithContent,
 };

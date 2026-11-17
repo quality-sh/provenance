@@ -89,7 +89,7 @@ fn a_jsonl_file_write_syncs_the_directory_after_the_rename() -> anyhow::Result<(
     let path = directory.join("records.jsonl");
     std::fs::create_dir(&directory)?;
     std::fs::write(&path, "{\"id\":\"old\"}\n")?;
-    let rows = crate::merge::read_jsonl_rows(&side)?;
+    let rows = crate::merge::read_jsonl_rows(&side, crate::merge::MergeSide::Ours)?;
     let records = [serde_json::json!({ "id": "new" })];
 
     let closed = close(&directory, Closed::Reads);

@@ -29,9 +29,11 @@ pub use crate::skills::{SkillsInstallInput, SkillsListInput, SkillsShowInput};
 pub use crate::swarm_backtrace::SwarmBacktraceLandInput;
 pub use crate::validate::ValidateInput;
 pub use dogfood::DogfoodCommand;
-pub use fields::{json_format, Field, FieldValue, Fields, Relation, REPO, SCOPE};
+pub use fields::{json_format, Field, FieldValue, Fields, Relation, JSON, REPO, SCOPE};
 pub use graph::GraphCommand;
 pub use porcelain::{PrimeFormat, PrimeInput};
+pub(crate) use porcelain_fields::CHILDREN;
+pub use porcelain_fields::{DEPTH, SEARCH_TEXT, VIEW};
 pub use repository::RepositoryCommand;
 pub use workspace::WorkspaceCommand;
 
@@ -50,6 +52,10 @@ pub enum Grammar {
 }
 
 impl Grammar {
+    /// The input name of the target record of a command whose grammar takes a target. The
+    /// target is not one of the declared fields: the grammar gives it.
+    pub const TARGET: &'static str = "target";
+
     /// Whether the command can act on a target record.
     pub const fn takes_target(self) -> bool {
         matches!(self, Self::Target | Self::NameAndTarget)
@@ -280,7 +286,7 @@ mod tests {
                 .declaration()
                 .grammar
                 .takes_target()
-                .then_some("target");
+                .then_some(Grammar::TARGET);
             let mut names = fields
                 .fields
                 .iter()

@@ -1,15 +1,16 @@
 //! The local-disk adapter: canonical state as files under `.provenance/state`.
 //!
 //! A per-key set lands each key under the advisory lock of its shard. A put
-//! is a temporary file, a sync of it, a rename, and a sync of its directory
-//! and of each directory that the put made. A delete is a remove and a sync
-//! of its directory. A whole set lands as one swap of a changed copy of the
-//! state directory.
+//! is a temporary file in the cache, a sync of it, a rename onto the key, and
+//! a sync of the directory of the key and of each directory that the put
+//! made. A delete is a remove and a sync of its directory. A whole set lands
+//! as one swap of a changed copy of the state directory.
 
 use super::{Atomicity, PublishFailure, StateKey, StateStorage, StateView, StorageError, WriteSet};
 use crate::layout::ProvenanceLayout;
 use crate::shards;
 use camino::Utf8Path;
+use provenance_macros::rule;
 use std::collections::BTreeMap;
 
 #[cfg(all(test, unix))]
@@ -23,6 +24,7 @@ mod recovery;
 mod section;
 mod transactions;
 pub(crate) mod whole_set;
+pub use durability::is_state_temporary_name;
 #[cfg(any(unix, windows))]
 pub(crate) use file_install::FileInstall;
 #[cfg(all(test, unix))]
@@ -50,13 +52,16 @@ pub(crate) use whole_set::copy_directory;
 /// A per-key set takes the advisory lock of each key it changes, which other
 /// processes take to change that shard. Each key lands with a temporary file
 /// and a rename, so one key lands completely or not at all, and the keys land
-/// one by one, in key order. The adapter syncs the file before the rename,
-/// and after the rename its directory and each directory that the put made.
-/// After a delete, it syncs the directory. Thus on Unix, a key that landed
-/// keeps its new bytes, or stays deleted, after a power loss. On Windows, a
-/// directory has no sync: the file sync occurs, but a power loss can lose a
-/// rename, a new directory or a delete. A whole set lands as one swap of a
-/// changed copy of the state directory, so every key lands or no key lands.
+/// one by one, in key order. The temporary file is in the cache, so a put
+/// that stops leaves no file in the state directory, and the next section
+/// entry removes the temporary file. The adapter syncs the file before the
+/// rename, and after the rename its directory and each directory that the put
+/// made. After a delete, it syncs the directory. Thus on Unix, a key that
+/// landed keeps its new bytes, or stays deleted, after a power loss. On
+/// Windows, a directory has no sync: the file sync occurs, but a power loss
+/// can lose a rename, a new directory or a delete. A whole set lands as one
+/// swap of a changed copy of the state directory, so every key lands or no
+/// key lands.
 #[derive(Clone, Debug)]
 pub struct LocalStateStorage {
     layout: ProvenanceLayout,
@@ -81,24 +86,38 @@ impl StateStorage for LocalStateStorage {
 
     /// With a base, the adapter reads the tree under the lock and compares
     /// its keys and bytes with the base before any key lands. With no base,
-    /// it reads nothing.
+    /// it reads nothing. A set with no key then returns: it makes no
+    /// transaction, file or marker.
     ///
     /// A per-key set lands each key in key order: a put with a temporary
     /// file and a rename, a delete with a remove. It syncs as
-    /// `durability::write_synced_file` and `durability::remove_synced_file`
-    /// state. A whole set lands as one swap of the state directory; see
-    /// `whole_set`.
+    /// `durability::write_synced_state_file` and
+    /// `durability::remove_synced_file` state. A whole set lands as one swap
+    /// of the state directory; see `whole_set`.
     fn publish(&self, writes: WriteSet) -> Result<(), PublishFailure> {
-        self.publish_with(&writes, &mut whole_set::StatePublication)
+        self.ensure_publishable(&writes)?;
+        self.land(&writes)
     }
 }
 
 impl LocalStateStorage {
-    fn publish_with(
-        &self,
-        writes: &WriteSet,
-        hook: &mut dyn whole_set::WholeSetHook,
-    ) -> Result<(), PublishFailure> {
+    /// Lands a set that passed its checks. A set with no key returns before
+    /// it lands, so it makes no transaction, file or marker.
+    #[rule("rule_empty_write_set_writes_no_data")]
+    fn land(&self, writes: &WriteSet) -> Result<(), PublishFailure> {
+        if writes.key_count() == 0 {
+            return Ok(());
+        }
+        match writes.atomicity() {
+            Atomicity::WholeSet => self.land_whole_set(writes, &mut whole_set::StatePublication),
+            Atomicity::PerKey => self.land_per_key(writes),
+        }
+    }
+
+    /// Refuses a set whose puts and deletes share a key, and, under the lock,
+    /// a set whose base is not the stored tree. A set with no base reads
+    /// nothing.
+    fn ensure_publishable(&self, writes: &WriteSet) -> Result<(), PublishFailure> {
         writes.ensure_disjoint()?;
         if writes.base_view().is_some() {
             let view = self
@@ -106,10 +125,7 @@ impl LocalStateStorage {
                 .map_err(|error| PublishFailure::Refused(error.into()))?;
             writes.ensure_base(view.entries())?;
         }
-        match writes.atomicity() {
-            Atomicity::WholeSet => self.land_whole_set(writes, hook),
-            Atomicity::PerKey => self.land_per_key(writes),
-        }
+        Ok(())
     }
 
     /// A failure that leaves the marker of the transaction began to land:
@@ -132,6 +148,10 @@ impl LocalStateStorage {
         })
     }
 
+    /// A failure before the first key changed lands no key: the set is
+    /// refused. A failure after it, or a failed sync of a changed key, began
+    /// to land.
+    #[rule("rule_failure_before_a_key_changes_is_refused")]
     fn land_per_key(&self, writes: &WriteSet) -> Result<(), PublishFailure> {
         let mut changes: BTreeMap<&StateKey, Option<&[u8]>> = BTreeMap::new();
         changes.extend(writes.deletes().iter().map(|key| (key, None)));
@@ -152,14 +172,22 @@ impl LocalStateStorage {
             })
             .collect::<anyhow::Result<Vec<_>>>()
             .map_err(PublishFailure::Refused)?;
+        let mut touched = false;
         for (key, bytes) in changes {
             let path = self.layout.state_dir().join(key.as_str());
-            bytes
-                .map_or_else(
-                    || durability::remove_synced_file(&path),
-                    |bytes| durability::write_synced_file(&path, bytes),
-                )
-                .map_err(PublishFailure::Started)?;
+            let landed = bytes.map_or_else(
+                || durability::remove_synced_file(&path),
+                |bytes| {
+                    durability::write_synced_state_file(&self.layout, &path, bytes).map(|()| true)
+                },
+            );
+            match landed {
+                Ok(landed) => touched |= landed,
+                Err(error) if touched || error.is::<durability::ChangedUnsynced>() => {
+                    return Err(PublishFailure::Started(error));
+                }
+                Err(error) => return Err(PublishFailure::Refused(error)),
+            }
         }
         Ok(())
     }

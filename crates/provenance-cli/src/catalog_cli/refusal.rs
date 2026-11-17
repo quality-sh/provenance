@@ -6,6 +6,7 @@
 //! in `error.hint`.
 
 use provenance_core::protocol::failure::OperationFailure;
+use provenance_core::protocol::read_failure::UnparsableStateFile;
 use provenance_porcelain::action::ActionError;
 use provenance_porcelain::get::ReadError;
 use serde_json::{json, Map, Value};
@@ -13,7 +14,8 @@ use serde_json::{json, Map, Value};
 pub use provenance_cli::refusal::HostRefusal;
 
 /// The `{error,meta}` object for an error that a JSON caller can parse, or
-/// `None` when the error is not a host refusal.
+/// `None` when the error is not a host refusal and has no state file that does
+/// not parse in its cause chain.
 pub fn json_refusal(error: &anyhow::Error) -> Option<Value> {
     if let Some(refusal) = error.downcast_ref::<HostRefusal>() {
         let mut failure = refusal.failure.clone();
@@ -38,7 +40,8 @@ pub fn json_refusal(error: &anyhow::Error) -> Option<Value> {
     if let Some(action) = error.downcast_ref::<ActionError>() {
         return Some(envelope(action_error(action), &action.to_string()));
     }
-    None
+    UnparsableStateFile::find(error.as_ref())
+        .map(|state| json!({"error": state.failure(), "meta": {}}))
 }
 
 /// Prints the refusal object as the only line on standard error, with no

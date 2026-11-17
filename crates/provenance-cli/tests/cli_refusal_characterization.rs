@@ -2,6 +2,7 @@
 //! in text and in JSON format. A test with no Rule is a characterization: its
 //! rows pin the kind, the text and the exit code of each refusal.
 
+use provenance_core::protocol::read_failure::STATE_CORRECTIONS;
 use serde_json::{json, Value};
 
 use crate::support;
@@ -151,23 +152,12 @@ fn a_new_link_to_an_archived_parent_keeps_its_reason() {
     let (_directory, repo) = support::review_paths::init();
     create_requirement(&repo, "req_old");
     create_requirement(&repo, "req_child");
-    let guard = etag(&repo, "req_old");
-    json_output(provenance().args([
-        "req_old",
-        "update",
-        "--if-match",
-        &guard,
-        "--repo",
+    // The archive is a status request: the reviewer accepts it.
+    support::record_review::archive_requirement(
         &repo,
-        "--actor",
-        "author",
-        "--status",
-        "archived",
-        "--archived-in-commit-json",
-        r#"{"commit":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}"#,
-        "--format",
-        "json",
-    ]));
+        "req_old",
+        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    );
     let guard = etag(&repo, "req_child");
     let mut rows = Vec::new();
     both(
@@ -240,7 +230,10 @@ fn a_bad_state_line_gives_the_stored_record_and_refuses_a_create() {
     state.push_str("{\"not\":\"a record\"}\n");
     std::fs::write(&path, state).unwrap();
 
-    let warning = "scopes/default/requirements/req.jsonl line 2: missing field `scope_id`";
+    let warning = format!(
+        "scopes/default/requirements/req.jsonl line 2: missing field `scope_id`; \
+         {STATE_CORRECTIONS}"
+    );
     let text = format!("{text}\nwarning: record freshness: {warning}\n");
     assert_eq!(get(&repo, &[]), (Some(0), text, String::new()));
     let mut expected: Value = serde_json::from_str(&record).unwrap();
@@ -271,7 +264,13 @@ fn a_bad_state_line_gives_the_stored_record_and_refuses_a_create() {
                 "command": "req_b create",
                 "format": "text",
                 "stderr": [
-                    "Error: {\"error\":{\"file\":\"scopes/default/requirements/req.jsonl\",\"kind\":\"invalid_state_file\",\"line\":2,\"message\":\"missing field `scope_id`\"},\"meta\":{}}"
+                    refusal_line(
+                        "Error: ",
+                        "scopes/default/requirements/req.jsonl",
+                        2,
+                        "missing field `scope_id`",
+                        STATE_CORRECTIONS,
+                    )
                 ],
                 "stdout_empty": true
             },
@@ -280,7 +279,13 @@ fn a_bad_state_line_gives_the_stored_record_and_refuses_a_create() {
                 "command": "req_b create",
                 "format": "json",
                 "stderr": [
-                    "{\"error\":{\"file\":\"scopes/default/requirements/req.jsonl\",\"kind\":\"invalid_state_file\",\"line\":2,\"message\":\"missing field `scope_id`\"},\"meta\":{}}"
+                    refusal_line(
+                        "",
+                        "scopes/default/requirements/req.jsonl",
+                        2,
+                        "missing field `scope_id`",
+                        STATE_CORRECTIONS,
+                    )
                 ],
                 "stdout_empty": true
             }
@@ -372,9 +377,23 @@ fn a_read_names_the_line_of_a_withdrawal_that_names_no_submission() {
             "command": "api requirements/req_a",
             "format": "json",
             "stderr": [
-                "Error: {\"error\":{\"file\":\"scopes/default/ideation/withdrawals.jsonl\",\"kind\":\"invalid_state_file\",\"line\":1,\"message\":\"withdrawal withdrawal_lost names no review submission: proposal_missing\"},\"meta\":{}}"
+                refusal_line(
+                    "Error: ",
+                    "scopes/default/ideation/withdrawals.jsonl",
+                    1,
+                    "withdrawal withdrawal_lost names no review submission: proposal_missing",
+                    "To repair, remove ideation/withdrawals.jsonl line 1, then commit.",
+                )
             ],
             "stdout_empty": true
         }]),
     );
+}
+
+/// A standard error line of an `invalid_state_file` refusal of `file` at
+/// `line`, with `hint` as the step that corrects the state.
+fn refusal_line(prefix: &str, file: &str, line: u64, message: &str, hint: &str) -> String {
+    let refusal = json!({"error": {"kind": "invalid_state_file", "file": file, "line": line,
+        "message": message, "hint": hint}, "meta": {}});
+    format!("{prefix}{refusal}")
 }

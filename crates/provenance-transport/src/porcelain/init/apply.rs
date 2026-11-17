@@ -2,6 +2,7 @@
 use super::{already_ending, build_summary, InitPlan};
 use crate::atomic_file::FileRollbackJournal;
 use crate::init_summary::InitEnding;
+use crate::merge_driver::DriverPlan;
 use crate::skills::InstallReport;
 use anyhow::Context;
 use provenance_macros::rule;
@@ -64,6 +65,9 @@ impl InitPlan {
         self.planned
             .gitignore_before
             .recheck(self.path.join(".gitignore").as_std_path())?;
+        self.planned
+            .gitattributes_before
+            .recheck(self.path.join(".gitattributes").as_std_path())?;
         self.dictionary.recheck(&self.path)?;
         let mut rollback = FileRollbackJournal::within(self.path.as_std_path());
         let result = (|| -> anyhow::Result<InstallReport> {
@@ -86,6 +90,16 @@ impl InitPlan {
                     &self.planned.gitignore_bytes,
                 )?;
             }
+            let gitattributes_path = self.path.join(".gitattributes");
+            if self.planned.gitattributes_before.bytes()
+                != Some(self.planned.gitattributes_bytes.as_slice())
+            {
+                rollback.replace(
+                    gitattributes_path.as_std_path(),
+                    &self.planned.gitattributes_before,
+                    &self.planned.gitattributes_bytes,
+                )?;
+            }
             self.dictionary.apply_in(&self.path, &mut rollback)?;
             if self.planned.manifest_before.bytes() != Some(self.planned.manifest_bytes.as_slice())
             {
@@ -105,17 +119,25 @@ impl InitPlan {
             }
         };
         rollback.commit()?;
+        // Git configuration is not a file of the journal, so init sets it
+        // after the files are in place and reports a failure as a notice.
+        let driver_notice =
+            crate::merge_driver::apply(&self.path, &self.merge_driver, self.command);
+        let driver_set =
+            matches!(self.merge_driver, DriverPlan::Set { .. }) && driver_notice.is_none();
         Ok(build_summary(
             &self.path,
             &self.scope_ids,
             &self.planned,
             &skills,
             &self.dictionary,
+            driver_set,
         )
         .map_or_else(
             || already_ending(&self.scope_ids, &self.path, &self.dictionary, self.command),
             |summary| InitEnding::applied(summary, self.dictionary.warning(), self.command),
         )
-        .with_notice(self.reviewer_notice))
+        .with_notice(self.reviewer_notice)
+        .with_notice(driver_notice))
     }
 }

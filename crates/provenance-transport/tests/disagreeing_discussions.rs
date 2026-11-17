@@ -86,7 +86,8 @@ async fn start(repo: &Repository) -> (u16, Value) {
 }
 
 fn located(file: &str, line: usize, message: &str) -> Value {
-    json!({"kind":"invalid_state_file", "file":file, "line":line, "message":message})
+    json!({"kind":"invalid_state_file", "file":file, "line":line, "message":message,
+        "hint":provenance_core::protocol::read_failure::STATE_CORRECTIONS})
 }
 
 #[tokio::test]

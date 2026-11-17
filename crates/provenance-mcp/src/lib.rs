@@ -21,7 +21,7 @@ mod tools;
 #[cfg(feature = "client")]
 pub use client::Client;
 pub use rmcp::service::ServerInitializeError as ServeError;
-pub use server::{instructions, Server};
+pub use server::Server;
 
 use provenance_transport::StatementHost;
 use tokio::io::{AsyncRead, AsyncWrite};

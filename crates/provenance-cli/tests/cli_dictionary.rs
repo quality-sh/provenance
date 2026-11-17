@@ -17,3 +17,5 @@ mod supplied_statement;
 use crate::dictionary_support as support;
 #[path = "cli_dictionary/technical_names.rs"]
 mod technical_names;
+#[path = "cli_dictionary/unreadable_reference.rs"]
+mod unreadable_reference;

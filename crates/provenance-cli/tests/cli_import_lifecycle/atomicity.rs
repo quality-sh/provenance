@@ -94,7 +94,7 @@ fn import_refuses_cross_kind_keyword_reuse_without_changing_live_state() {
 }
 
 #[test]
-fn import_preserves_a_keyword_contribution_from_a_landing() {
+fn import_preserves_a_stored_keyword_contribution() {
     let dir = tempfile::tempdir().unwrap();
     let repo = dir.path().join("repo");
     init_repo(&repo, None);
@@ -111,8 +111,8 @@ fn import_preserves_a_keyword_contribution_from_a_landing() {
         ])
         .assert()
         .success();
-    let landing_path = repo.join(".provenance/state/scopes/default/ideation/landings.jsonl");
-    std::fs::create_dir_all(landing_path.parent().unwrap()).unwrap();
+    let contributions = repo.join(".provenance/state/scopes/default/ideation/contributions.jsonl");
+    std::fs::create_dir_all(contributions.parent().unwrap()).unwrap();
     let contribution = serde_json::json!({
         "scope_id": "default", "id": "search",
         "target": {"artifact_type": "source", "artifact_id": "source_anchor"},
@@ -122,16 +122,7 @@ fn import_preserves_a_keyword_contribution_from_a_landing() {
         "unsupported_recommendations": [],
         "uncertainty": {"level": "low", "rationale": "Direct"}, "open_questions": []
     });
-    std::fs::write(
-        &landing_path,
-        format!(
-            "{}\n",
-            serde_json::json!({
-                "contributions": [contribution]
-            })
-        ),
-    )
-    .unwrap();
+    std::fs::write(&contributions, format!("{contribution}\n")).unwrap();
     let baseline = dir.path().join("baseline.json");
     export_scope(&repo, &baseline).success();
 
@@ -142,7 +133,6 @@ fn import_preserves_a_keyword_contribution_from_a_landing() {
         std::fs::read(after).unwrap(),
         std::fs::read(baseline).unwrap()
     );
-    assert!(!landing_path.exists());
 }
 
 #[test]

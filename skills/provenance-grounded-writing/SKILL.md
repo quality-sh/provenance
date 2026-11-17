@@ -130,8 +130,8 @@ limit needs a second approver." The statement holds no semicolon, because the wr
 applies ASD-STE100 Issue 9. Put the behaviour at the limit in a second Rule, or in the
 description. `--source-document` and `--source-section` cite where the obligation was
 read, which here is the policy clause. Rule creation defaults to `draft`. Keep this default
-for an agent-created Rule. When a person ratifies the Rule, pass `--status active`. This
-agent command keeps the `draft` default:
+for an agent-created Rule. `--status active` opens a status request, and the Rule is
+active when an allowed reviewer accepts it. This agent command keeps the `draft` default:
 
 ```sh
 provenance rule_exp_apr_003 create --type rule --scope <scope> \

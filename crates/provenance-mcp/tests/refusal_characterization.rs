@@ -13,6 +13,8 @@ use serde_json::{json, Value};
 use support::records::Repository;
 
 const REQUIREMENTS: &str = ".provenance/state/scopes/default/requirements/req.jsonl";
+const PROPOSALS: &str = ".provenance/state/scopes/default/ideation/proposal_cards.jsonl";
+const DISPOSITIONS: &str = ".provenance/state/scopes/default/ideation/dispositions.jsonl";
 
 type Client = rmcp::service::RunningService<rmcp::RoleClient, ()>;
 
@@ -40,6 +42,47 @@ fn create(id: &str, extra: &Value) -> Value {
         input[key] = value.clone();
     }
     json!({"path":"requirements", "method":"post", "input": input})
+}
+
+/// One review submission of `req_shared` with `summary`.
+fn submission(summary: &str) -> String {
+    json!({"scope_id":"default", "id":"submission_by_hand",
+        "proposal_key":"review:requirement:req_shared:1", "proposal_type":"record_revision",
+        "title":"Review req_shared", "summary":summary,
+        "traceability":{"target":{"artifact_type":"requirement","artifact_id":"req_shared"},
+            "source_ids":[], "evidence_references":[], "supporting_claim_ids":[]},
+        "promotion_state":"proposed", "record_revision":{"revision":"revision_by_hand"}})
+    .to_string()
+}
+
+/// The read of `req_shared` when a hand edit puts one review submission ID
+/// on two lines with different contents and a decision names it, and the
+/// number of lines before them. A write of a different record answers. The
+/// edit and the written record are removed after the read.
+async fn disagreeing_review_rows(client: &Client, repo: &Repository) -> (Value, usize) {
+    support::records::allow_reviewer(repo);
+    let path = repo.dir.path().join(PROPOSALS);
+    let stored = std::fs::read_to_string(&path).unwrap_or_default();
+    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+    let edited = format!(
+        "{stored}{}\n{}\n",
+        submission("First."),
+        submission("Second.")
+    );
+    std::fs::write(&path, edited).unwrap();
+    let decision = json!({"scope_id":"default", "id":"decision_by_hand",
+        "proposal_id":"submission_by_hand", "decision":"rejected", "rationale":"By hand.",
+        "actor":{"identity_type":"human","id":"reviewer"}});
+    std::fs::write(repo.dir.path().join(DISPOSITIONS), format!("{decision}\n")).unwrap();
+    let mut answer = call(client, "api", json!({"path":"requirements/req_shared"})).await;
+    answer["row"] = json!("read a record whose review rows do not agree");
+    let requirements = std::fs::read_to_string(repo.dir.path().join(REQUIREMENTS)).unwrap();
+    let other = call(client, "api", create("req_other", &json!({}))).await;
+    assert_eq!(other["is_error"], json!(false), "{other}");
+    std::fs::write(repo.dir.path().join(REQUIREMENTS), requirements).unwrap();
+    std::fs::write(&path, &stored).unwrap();
+    std::fs::remove_file(repo.dir.path().join(DISPOSITIONS)).unwrap();
+    (answer, stored.lines().count())
 }
 
 async fn rows(client: &Client, repo: &Repository) -> Vec<Value> {
@@ -80,6 +123,18 @@ async fn rows(client: &Client, repo: &Repository) -> Vec<Value> {
     .await;
     answer["row"] = json!("update with an old etag");
     rows.push(answer);
+    let (answer, before) = disagreeing_review_rows(client, repo).await;
+    let (first, second) = (before + 1, before + 2);
+    assert_eq!(
+        answer["error"],
+        json!({"file":"scopes/default/ideation/proposal_cards.jsonl",
+            "kind":"invalid_state_file", "line":second,
+            "message":format!("review submission submission_by_hand is on lines {first} and \
+                {second} of ideation/proposal_cards.jsonl with different contents"),
+            "hint":"To repair, keep one of these lines and remove the others, then commit."}),
+        "the MCP read gives the envelope of the API read"
+    );
+    rows.push(json!({"is_error":answer["is_error"], "row":answer["row"]}));
 
     let path = repo.dir.path().join(REQUIREMENTS);
     let mut text = std::fs::read_to_string(&path).unwrap();
@@ -170,8 +225,13 @@ async fn each_refusal_keeps_its_mcp_error_object() {
             "row": "update with an old etag"
         },
         {
+            "is_error": true,
+            "row": "read a record whose review rows do not agree"
+        },
+        {
             "error": {
                 "file": "scopes/default/requirements/req.jsonl",
+                "hint": provenance_core::protocol::read_failure::STATE_CORRECTIONS,
                 "kind": "invalid_state_file",
                 "line": 2,
                 "message": "missing field `scope_id`"
@@ -182,6 +242,7 @@ async fn each_refusal_keeps_its_mcp_error_object() {
         {
             "error": {
                 "file": "scopes/default/requirements/req.jsonl",
+                "hint": provenance_core::protocol::read_failure::STATE_CORRECTIONS,
                 "kind": "invalid_state_file",
                 "line": 2,
                 "message": "missing field `scope_id`"

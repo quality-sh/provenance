@@ -26,6 +26,7 @@
 //! the local-disk adapters, git, the dictionary index files, the queries
 //! and the use cases that read through them.
 
+mod byte_count;
 pub mod cache;
 pub mod canonical_digest;
 pub mod code_refs;

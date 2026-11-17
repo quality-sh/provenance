@@ -3,6 +3,13 @@
 //! These tests have no Rule binding. They are implementation aids that keep the library usable
 //! without the CLI; the CLI tests bind the review link Rules.
 
+#[path = "support"]
+mod support {
+    pub mod user_cache;
+}
+
+use support::user_cache::use_user_cache;
+
 use provenance_core::NodeType;
 use provenance_review::{
     issue_launch_code, launch_key, owner_file, review_location, AffectedReviewRecord, PageResult,
@@ -125,14 +132,6 @@ async fn a_launch_link_carries_the_code_the_host_issued_to_the_key_holder() {
         CODE
     );
     assert_eq!(location.show_in_connected_page().await, PageResult::Shown);
-}
-
-/// Points every platform's per-user cache at one isolated directory.
-fn use_user_cache(root: &Path) {
-    let cache = root.join("cache");
-    std::env::set_var("HOME", root);
-    std::env::set_var("XDG_CACHE_HOME", &cache);
-    std::env::set_var("LOCALAPPDATA", &cache);
 }
 
 const KEY: &str = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";

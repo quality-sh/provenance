@@ -1,7 +1,9 @@
 //! A state file line that does not parse is a classified refusal. The CLI
-//! answer names the file below the state directory, the line number and the
-//! parse message, for a create, an update and an `api` read.
+//! answer names the file below the state directory, the line number, the
+//! parse message and the steps that correct the state, for a create, an update
+//! and an `api` read.
 
+use provenance_core::protocol::read_failure::STATE_CORRECTIONS;
 use provenance_macros::verifies;
 use serde_json::Value;
 
@@ -41,14 +43,26 @@ fn refusal(repo: &str, args: &[&str]) -> Value {
     serde_json::from_str(object).unwrap_or_else(|error| panic!("{args:?}: {error}: {text}"))
 }
 
+/// The refusal names the file, the line and the message, and its hint is the
+/// steps that correct the state. No other member and no other text holds a
+/// repository path.
 fn assert_names_the_line(refusal: &Value) {
-    let error = &refusal["error"];
+    let error = refusal["error"].as_object().unwrap();
+    let keys: Vec<&str> = error.keys().map(String::as_str).collect();
+    assert_eq!(
+        keys,
+        ["file", "hint", "kind", "line", "message"],
+        "{refusal}"
+    );
     assert_eq!(error["kind"], "invalid_state_file", "{refusal}");
     assert_eq!(error["file"], CARDS, "{refusal}");
     assert_eq!(error["line"], 1, "{refusal}");
     let message = error["message"].as_str().unwrap_or_default();
     assert!(message.starts_with("unknown variant `widget`"), "{refusal}");
-    assert!(!refusal.to_string().contains(".provenance"), "{refusal}");
+    assert_eq!(error["hint"], STATE_CORRECTIONS, "{refusal}");
+    let mut rest = refusal.clone();
+    rest["error"].as_object_mut().unwrap().remove("hint");
+    assert!(!rest.to_string().contains(".provenance"), "{refusal}");
 }
 
 #[test]

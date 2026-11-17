@@ -1,4 +1,4 @@
-Render the deterministic pull request report from a report envelope
+Render the deterministic pull request report from a report envelope.
 
 Usage: provenance report render [OPTIONS] --input <INPUT>
 

@@ -271,14 +271,6 @@ impl Definition {
         self
     }
 
-    fn cli_default(mut self, field: &'static str, value: CliDefaultValue) -> Self {
-        self.registration
-            .cli
-            .defaults
-            .push(CliDefault { field, value });
-        self
-    }
-
     fn cli_defaults(mut self, defaults: &[CliDefault]) -> Self {
         self.registration.cli.defaults.extend_from_slice(defaults);
         self

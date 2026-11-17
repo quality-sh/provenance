@@ -20,6 +20,9 @@ mod adapter;
 mod answers;
 #[path = "read_operations_on_memory/catch_up.rs"]
 mod catch_up;
+#[cfg(feature = "host")]
+#[path = "read_operations_on_memory/git_history_pages.rs"]
+mod git_history_pages;
 #[path = "read_operations_on_memory/history.rs"]
 mod history;
 #[path = "support/history_cases.rs"]
@@ -31,6 +34,11 @@ mod history_fixture;
 #[cfg(feature = "host")]
 #[path = "support/history_folder.rs"]
 mod history_folder;
+#[path = "support/history_long.rs"]
+mod history_long;
+#[cfg(feature = "host")]
+#[path = "support/history_pages.rs"]
+mod history_pages;
 #[path = "support/memory.rs"]
 mod memory;
 #[path = "support/sqlite_database.rs"]

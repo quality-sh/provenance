@@ -114,6 +114,10 @@ impl GuardedStore<'_> {
     pub fn validate_graph_scope(&self, scope: &ScopeId) -> anyhow::Result<()> {
         self.store.validate_graph_scope(scope)
     }
+
+    pub(crate) fn validate_review_scope(&self, scope: &ScopeId) -> anyhow::Result<()> {
+        self.store.validate_review_scope(scope)
+    }
 }
 
 impl GuardedStore<'_> {

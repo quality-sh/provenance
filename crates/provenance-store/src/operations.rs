@@ -112,6 +112,19 @@ pub fn complete_verification(
 }
 
 #[cfg(feature = "host")]
+/// Completes one verification run as failed with `text`, cut to fit the read
+/// budget of its run row.
+pub fn fail_verification(
+    repository: &Repository,
+    run: &str,
+    text: &str,
+) -> anyhow::Result<provenance_core::VerificationRun> {
+    repository
+        .store()
+        .fail_verification(repository.scope(), run, text)
+}
+
+#[cfg(feature = "host")]
 /// Lists verification runs, optionally for one Rule.
 pub fn verification_runs(
     repository: &Repository,

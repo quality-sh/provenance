@@ -17,7 +17,10 @@ const engine = fileURLToPath(
   new URL("../../../target/debug/provenance", import.meta.url),
 );
 
-function repository(): string {
+/** The reviewer that `repository({ reviewer: true })` permits. */
+const REVIEWER = "reviewer";
+
+function repository({ reviewer = false } = {}): string {
   const repo = mkdtempSync(join(tmpdir(), "provenance-bound-sdk-"));
   execFileSync(engine, [
     "init",
@@ -27,6 +30,7 @@ function repository(): string {
     "default",
     "--path-prefix",
     ".",
+    ...(reviewer ? ["--disposition-actor-id", REVIEWER] : []),
   ]);
   return repo;
 }
@@ -74,6 +78,38 @@ function catalogWrite(
 /** The record type of one collection name, such as `rule` for `rules`. */
 function recordType(collection: string): string {
   return collection.replace(/s$/, "");
+}
+
+/** Reads one record with its edit and decision state. */
+function readRecord(repo: string, collection: string, id: string): any {
+  return JSON.parse(execFileSync(
+    engine,
+    ["api", `${collection}/${id}`, "--repo", repo, "--scope", "default", "--format", "json"],
+    { encoding: "utf8" },
+  )).data;
+}
+
+/** Accepts the pending status request of one record as the permitted reviewer.
+ *  A status change to active or archived waits for this decision. */
+function acceptStatusRequest(repo: string, collection: string, id: string): void {
+  const record = readRecord(repo, collection, id);
+  const proposal = record.decision.pending?.proposal_id;
+  assert.ok(record.decision.pending?.status_request, `no pending status request on ${id}`);
+  execFileSync(
+    engine,
+    [
+      "api", `${collection}/${id}/submissions/${proposal}/decide`, "--method", "post",
+      "--input", "-", "--repo", repo, "--scope", "default", "--format", "json",
+    ],
+    {
+      encoding: "utf8",
+      input: JSON.stringify({
+        actor: { identity_type: "human", id: REVIEWER },
+        decision: "accepted",
+        canonical_artifact: { artifact_type: recordType(collection), artifact_id: id },
+      }),
+    },
+  );
 }
 
 const requirementData = (id: string, statement: string) => ({
@@ -705,7 +741,7 @@ test("a spec Rule that cites a proposed Resolution is written as draft", async (
 
 // Implementation-aid test: checks the store refusal through the public SDK.
 test("an active spec Rule reports the store refusal for a proposed Resolution", async () => {
-  const repo = repository();
+  const repo = repository({ reviewer: true });
   const owner = "spec://typescript/refused-resolution";
   configure({ ...await fixtureSettings(repo), owner });
   const provenance = defineSpec("refused-resolution");
@@ -713,14 +749,11 @@ test("an active spec Rule reports the store refusal for a proposed Resolution", 
   const draft = provenance.rule("decision").statement("Access follows the seed decision");
   const result = await apply(provenance.build(parent.rules(draft)));
   const id = result.resources.find((resource) => resource.kind === "rule")!.id;
-  const current = JSON.parse(execFileSync(
-    engine,
-    ["api", `rules/${id}`, "--repo", repo, "--scope", "default", "--format", "json"],
-    { encoding: "utf8" },
-  ));
+  const current = readRecord(repo, "rules", id);
   catalogWrite(repo, ["rules", id, "update"], {
     declared_by: owner, status: "active",
-  }, ["--if-match", current.data.edit.etag]);
+  }, ["--if-match", current.edit.etag]);
+  acceptStatusRequest(repo, "rules", id);
   seedResolution(repo, "proposed");
   const decision = provenance.rule("decision")
     .statement("Access follows the seed decision").resolutions("res_seed");

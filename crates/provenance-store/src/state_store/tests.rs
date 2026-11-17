@@ -69,6 +69,15 @@ fn seeded_requirement_store() -> (tempfile::TempDir, StateStore, ScopeId) {
     (dir, store, scope)
 }
 
+/// A seeded store whose manifest names the reviewer, for the tests that
+/// accept a status request.
+#[cfg(feature = "host")]
+fn reviewed_requirement_store() -> (tempfile::TempDir, StateStore, ScopeId) {
+    let (dir, store, scope) = seeded_requirement_store();
+    crate::test_support::allow_reviewer(&store.layout);
+    (dir, store, scope)
+}
+
 #[cfg(feature = "host")]
 pub(super) fn seeded_source_requirement_store() -> (tempfile::TempDir, StateStore, ScopeId) {
     let (dir, store, scope) = seeded_requirement_store();
@@ -103,8 +112,6 @@ mod graph_validation;
 mod ideation;
 #[cfg(feature = "host")]
 mod ideation_duplicates;
-#[cfg(feature = "host")]
-mod ideation_overlay_order;
 #[cfg(feature = "host")]
 mod ideation_targets;
 #[cfg(feature = "host")]
@@ -147,6 +154,8 @@ mod shaping_archive_atomicity;
 mod source_requirements;
 #[cfg(feature = "host")]
 mod source_supersedes_concurrency;
+#[cfg(feature = "host")]
+mod swarm_landing_publication;
 #[cfg(feature = "host")]
 mod threads;
 #[cfg(feature = "host")]

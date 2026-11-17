@@ -56,3 +56,93 @@ where
         .map_err(frame_failure::<O>)?;
     Ok(serde_json::to_value(success).expect("encode the success"))
 }
+
+/// Accepts the pending submission of one record in `default` as the
+/// reviewer that [`allow_reviewer`] names. The manifest must name the
+/// reviewer.
+pub fn accept_pending(
+    store: &crate::state_store::StateStore,
+    kind: provenance_core::NodeType,
+    id: &str,
+) {
+    let scope = provenance_core::ScopeId::new("default").unwrap();
+    let record = provenance_core::StableId::new(id).unwrap();
+    let pending = store
+        .record_decision_state(&scope, kind, &record)
+        .unwrap()
+        .pending
+        .unwrap_or_else(|| panic!("{kind:?} {id} has no pending submission"));
+    store
+        .decide_record_review(
+            serde_json::from_value(serde_json::json!({
+                "scope_id": "default", "proposal_id": pending.proposal_id,
+                "actor": {"identity_type": "human", "id": "reviewer"},
+                "decision": "accepted", "rationale": null,
+                "canonical_artifact": {"artifact_type": kind.as_str(), "artifact_id": id},
+                "feedback": null, "declared_by": null
+            }))
+            .unwrap(),
+        )
+        .unwrap();
+}
+
+/// Runs `write`, which requests an active or archived status for one record
+/// in `default`, and accepts the request as the reviewer. A submission that
+/// is pending before the request is accepted first, so the request can open.
+pub fn set_status<T>(
+    store: &crate::state_store::StateStore,
+    kind: provenance_core::NodeType,
+    id: &str,
+    write: impl FnOnce(&crate::state_store::StateStore) -> anyhow::Result<T>,
+) -> T {
+    let scope = provenance_core::ScopeId::new("default").unwrap();
+    let record = provenance_core::StableId::new(id).unwrap();
+    let state = store.record_decision_state(&scope, kind, &record).unwrap();
+    if state.pending.is_some() {
+        accept_pending(store, kind, id);
+    }
+    let written = write(store).unwrap();
+    let state = store.record_decision_state(&scope, kind, &record).unwrap();
+    assert!(
+        state
+            .pending
+            .is_some_and(|pending| pending.status_request.is_some()),
+        "{kind:?} {id} has no status request"
+    );
+    accept_pending(store, kind, id);
+    written
+}
+
+/// Creates a Rule with the status of `input`. An active or archived Rule
+/// gets its status through an accepted status request.
+pub fn create_rule(
+    store: &crate::state_store::StateStore,
+    mut input: crate::state_store::CreateRuleInput,
+) {
+    use provenance_core::{review::RequestedStatus, NodeType, RuleStatus};
+    let id = input.id.as_str().to_owned();
+    match RequestedStatus::of_rule(&input.status) {
+        None => {
+            store.create_rule(input).unwrap();
+        }
+        Some(RequestedStatus::Active) => {
+            store.create_rule(input).unwrap();
+            accept_pending(store, NodeType::Rule, &id);
+        }
+        Some(RequestedStatus::Archived) => {
+            let archived_in_commit = input.archived_in_commit.take();
+            input.status = RuleStatus::Draft;
+            let scope_id = input.scope_id.clone();
+            store.create_rule(input).unwrap();
+            set_status(store, NodeType::Rule, &id, |store| {
+                store.update_rule(
+                    serde_json::from_value(serde_json::json!({
+                        "scope_id": scope_id, "id": id, "status": "archived",
+                        "archived_in_commit": archived_in_commit
+                    }))
+                    .unwrap(),
+                )
+            });
+        }
+    }
+}

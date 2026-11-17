@@ -12,10 +12,13 @@ mod support {
     #[path = "../support/asserted_proposal.rs"]
     pub mod asserted_proposal;
     pub mod catch_up_steps;
+    pub mod decisions;
+    pub mod depends_on_cycle;
     pub mod ideation;
     pub mod names;
     pub mod records;
     pub mod resource_http;
+    pub mod state_lines;
     pub mod transcript;
     pub mod views;
 }
@@ -37,6 +40,8 @@ mod disagreeing_records;
 mod discussion_parent_routes;
 #[path = "../discussion_write_refusals.rs"]
 mod discussion_write_refusals;
+#[path = "../document_catch_up_cause.rs"]
+mod document_catch_up_cause;
 #[path = "../document_review_characterization.rs"]
 mod document_review_characterization;
 #[path = "../document_visibility.rs"]
@@ -97,7 +102,11 @@ mod typed_spec_discussion_deletion;
 mod typed_spec_plan_refusals;
 #[path = "../unadvertised_route_refusals.rs"]
 mod unadvertised_route_refusals;
+#[path = "../verification_run_read_budget.rs"]
+mod verification_run_read_budget;
 #[path = "../verification_runs_cache_lines.rs"]
 mod verification_runs_cache_lines;
 #[path = "../wire.rs"]
 mod wire;
+#[path = "../write_actor_default.rs"]
+mod write_actor_default;

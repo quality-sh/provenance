@@ -5,6 +5,11 @@
 //! small. A support module that more than one file uses is declared here
 //! once, and those files import it.
 
+#[path = "../support"]
+mod support {
+    pub mod record_review;
+    pub mod review_paths;
+}
 #[path = "../support/bounded_process.rs"]
 mod bounded_process;
 #[path = "../cli_api_catalog_bounds.rs"]
@@ -17,14 +22,22 @@ mod cli_catalog;
 mod cli_catalog_structured_input;
 #[path = "../cli_catch_up_characterization.rs"]
 mod cli_catch_up_characterization;
+#[path = "../cli_document_catch_up_cause.rs"]
+mod cli_document_catch_up_cause;
 #[path = "../cli_get_damaged_state.rs"]
 mod cli_get_damaged_state;
 #[path = "../cli_get_edit_etag.rs"]
 mod cli_get_edit_etag;
+#[path = "../cli_get_review_row_fault.rs"]
+mod cli_get_review_row_fault;
 #[path = "../cli_get_trace.rs"]
 mod cli_get_trace;
+#[path = "../cli_linked_state_entry.rs"]
+mod cli_linked_state_entry;
 #[path = "../cli_mcp_api_catalog.rs"]
 mod cli_mcp_api_catalog;
+#[path = "../cli_mcp_optional_actor.rs"]
+mod cli_mcp_optional_actor;
 #[path = "../cli_mcp_read_parity.rs"]
 mod cli_mcp_read_parity;
 #[path = "../cli_mcp_record_actions.rs"]
@@ -33,6 +46,12 @@ mod cli_mcp_record_actions;
 mod cli_mcp_server;
 #[path = "../cli_mcp_shared_commands.rs"]
 mod cli_mcp_shared_commands;
+#[path = "../cli_mcp_write_actor.rs"]
+mod cli_mcp_write_actor;
+#[path = "../cli_mcp_write_actor_parity.rs"]
+mod cli_mcp_write_actor_parity;
+#[path = "../cli_state_shard_repeated_field.rs"]
+mod cli_state_shard_repeated_field;
 #[path = "../porcelain_api.rs"]
 mod porcelain_api;
 #[path = "../porcelain_authoring.rs"]
@@ -49,6 +68,8 @@ mod porcelain_dispatch;
 mod porcelain_search;
 #[path = "../porcelain_target_routing.rs"]
 mod porcelain_target_routing;
+#[path = "../support/review_row_findings.rs"]
+mod review_row_findings;
 #[path = "../search_lifecycle.rs"]
 mod search_lifecycle;
 #[path = "../support/search_repository.rs"]
@@ -57,3 +78,5 @@ mod search_repository;
 mod search_text_first_page;
 #[path = "../search_text_pages.rs"]
 mod search_text_pages;
+#[path = "../../../provenance-transport/tests/support/state_lines.rs"]
+mod state_lines;

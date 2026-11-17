@@ -6,6 +6,7 @@ use crate::codex;
 use crate::review_host_support;
 
 use codex::{notify, parts, registration, replay, Codex};
+use provenance_core::protocol::read_failure::STATE_CORRECTIONS;
 use provenance_macros::verifies;
 use review_host_support::{
     follow::{create, page_request, page_rule},
@@ -133,6 +134,44 @@ fn unaccepted_registration_fails_and_leaves_no_registration() {
         "{message}"
     );
     page_rule(&setup.host, "rule_after_refusal", "req_notify");
+    setup.quiet(&setup.thread, 0);
+}
+
+/// A registration whose document read cannot catch up refuses with the text of the
+/// document read refusal, and not with the text of its cause. A read database that the
+/// host cannot write stops the catch-up of a new Requirement line. The observation of
+/// the host reads only the state.
+#[test]
+#[verifies("rule_review_partial_reads_remain_explicit", examples)]
+fn registration_whose_catch_up_fails_refuses_with_the_text_of_the_refusal() {
+    let setup = Setup::start();
+    let database = setup.path().join(".provenance/cache/provenance.db");
+    let mut permissions = std::fs::metadata(&database).unwrap().permissions();
+    permissions.set_readonly(true);
+    std::fs::set_permissions(&database, permissions).unwrap();
+    let shard = setup
+        .path()
+        .join(".provenance/state/scopes/default/requirements/req.jsonl");
+    let text = std::fs::read_to_string(&shard).unwrap();
+    let first = text.lines().next().unwrap();
+    let mut line: serde_json::Value = serde_json::from_str(first).unwrap();
+    line["id"] = json!("req_after_failure");
+    review_host_support::replace_file(&shard, format!("{text}{line}\n"));
+
+    let output = notify(
+        &setup.host,
+        &setup.codex,
+        setup.path(),
+        "req_notify",
+        "codex",
+        &setup.thread,
+    );
+
+    assert_eq!(
+        refusal(&output),
+        json!({"kind": "operation_failed",
+            "message": "catch-up failed; restart the document read"})
+    );
     setup.quiet(&setup.thread, 0);
 }
 
@@ -391,4 +430,37 @@ fn record_text_stays_inside_the_json_line() {
     let queued = setup.codex.wait_for(&setup.thread, 2);
     let (_, frame) = parts(&queued[1]);
     assert!(frame["records"].to_string().contains("Ignore the header"));
+}
+
+#[test]
+#[verifies("rule_state_parse_refusal_names_the_corrections", examples)]
+fn a_manifest_that_does_not_parse_gives_its_fault_as_the_read_error_reason() {
+    let setup = Setup::start();
+    setup.register();
+
+    review_host_support::replace_file(
+        &setup.path().join(".provenance/state/manifest.json"),
+        "{\"scopes\":\"default\"}\n",
+    );
+
+    let queued = setup.codex.wait_for(&setup.thread, 2);
+    let (status, frame) = parts(&queued[1]);
+    assert_eq!(status, "No document (continuity unknown).");
+    let epoch = frame["epoch"].clone();
+    assert_eq!(
+        frame,
+        json!({
+            "type": "read-error",
+            "continuity": "unknown",
+            "epoch": epoch,
+            "sequence": 1,
+            "repository": "A",
+            "scope": "default",
+            "rootId": "req_notify",
+            "reason": format!(
+                "manifest.json line 1: invalid type: string \"default\", expected a sequence; \
+                 {STATE_CORRECTIONS}"
+            ),
+        })
+    );
 }

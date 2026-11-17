@@ -11,23 +11,23 @@ const WITHDRAWALS: &str = ".provenance/state/scopes/default/ideation/withdrawals
 const REVIEW_VIEW: &[&str] = &["req_a", "get", "--view", "review", "--format", "json"];
 
 /// How Git merges the two branches.
-#[derive(Clone, Copy, PartialEq, Eq)]
-enum Merge {
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub(super) enum Merge {
     /// The repository sets up the JSONL merge driver, and the merge is clean.
     Driver,
-    /// The repository has no merge driver. The two additions of the
-    /// Withdrawal file conflict, and the person keeps both sides.
+    /// The repository has no merge driver. The additions of each state file
+    /// that both branches change conflict, and the person keeps both sides.
     KeepBoth,
 }
 
 /// Runs one command on `repo` that must succeed and returns its JSON output.
-fn read(repo: &str, arguments: &[&str]) -> Value {
+pub(super) fn read(repo: &str, arguments: &[&str]) -> Value {
     let mut arguments = arguments.to_vec();
     arguments.extend(["--repo", repo]);
     json(&arguments)
 }
 
-fn create(repo: &str, id: &str) {
+pub(super) fn create(repo: &str, id: &str) {
     write(
         repo,
         "post",
@@ -39,7 +39,7 @@ fn create(repo: &str, id: &str) {
 }
 
 /// The pending review submission of one Requirement.
-fn pending(repo: &str, record: &str) -> String {
+pub(super) fn pending(repo: &str, record: &str) -> String {
     let path = format!("requirements/{record}");
     let decision = &read(repo, &["api", &path])["data"]["decision"];
     decision["pending"]["proposal_id"]
@@ -48,14 +48,14 @@ fn pending(repo: &str, record: &str) -> String {
         .to_owned()
 }
 
-fn withdraw(repo: &str, record: &str, submission: &str, actor: &str, reason: &str) {
+pub(super) fn withdraw(repo: &str, record: &str, submission: &str, actor: &str, reason: &str) {
     let path = format!("requirements/{record}/submissions/{submission}/withdraw");
     let body = json!({"actor":actor, "declared_by":null, "reason":reason});
     write(repo, "post", &path, &body, None);
 }
 
 /// A new repository with `req_a` and `req_b` committed.
-fn repository(merge: Merge) -> (tempfile::TempDir, String) {
+pub(super) fn repository(merge: Merge) -> (tempfile::TempDir, String) {
     let (directory, repo) = init_with_reviewer();
     if merge == Merge::Driver {
         let program = assert_cmd::cargo::cargo_bin!("provenance");
@@ -66,6 +66,15 @@ fn repository(merge: Merge) -> (tempfile::TempDir, String) {
         let attributes = ".provenance/state/**/*.jsonl merge=provenance-jsonl\n";
         directory_file(&repo, ".gitattributes", attributes);
         git(&repo, &["add", ".gitattributes"]);
+    } else {
+        // Init sets the merge driver in the clone; this case merges without it.
+        let unset = [
+            "config",
+            "--local",
+            "--unset",
+            "merge.provenance-jsonl.driver",
+        ];
+        git_output(&repo, &unset);
     }
     create(&repo, "req_a");
     create(&repo, "req_b");
@@ -73,25 +82,37 @@ fn repository(merge: Merge) -> (tempfile::TempDir, String) {
     (directory, repo)
 }
 
-/// Merges `side` into the first branch in the way `merge` names.
-fn merge_side(repo: &str, merge: Merge) {
+/// Merges `side` into the first branch in the way `merge` names, and gives
+/// the state files that conflict.
+pub(super) fn merge_side(repo: &str, merge: Merge) -> Vec<String> {
     let merged = git_output(repo, &["merge", "--no-edit", "side"]);
     match merge {
-        Merge::Driver => assert!(merged.status.success(), "{merged:?}"),
+        Merge::Driver => {
+            assert!(merged.status.success(), "{merged:?}");
+            Vec::new()
+        }
         Merge::KeepBoth => {
             assert!(!merged.status.success(), "{merged:?}");
             let conflicts = git(repo, &["diff", "--name-only", "--diff-filter=U"]);
-            assert_eq!(conflicts, WITHDRAWALS);
-            let ours = git(repo, &["show", &format!(":2:{WITHDRAWALS}")]);
-            let theirs = git(repo, &["show", &format!(":3:{WITHDRAWALS}")]);
-            directory_file(repo, WITHDRAWALS, &format!("{ours}\n{theirs}\n"));
+            let conflicts = conflicts.lines().map(str::to_owned).collect::<Vec<_>>();
+            for file in &conflicts {
+                // The person keeps the lines of the first branch, then the
+                // lines that only the side branch added.
+                let ours = git(repo, &["show", &format!(":2:{file}")]);
+                let theirs = git(repo, &["show", &format!(":3:{file}")]);
+                let first = ours.lines().collect::<Vec<_>>();
+                let mut lines = first.clone();
+                lines.extend(theirs.lines().filter(|line| !first.contains(line)));
+                directory_file(repo, file, &format!("{}\n", lines.join("\n")));
+            }
             commit(repo);
+            conflicts
         }
     }
 }
 
 /// `provenance check` passes on `repo`.
-fn check_passes(repo: &str) {
+pub(super) fn check_passes(repo: &str) {
     success(&["check", "--repo", repo]);
 }
 
@@ -118,7 +139,10 @@ fn two_withdrawals_read_as_one(merge: Merge) {
     commit(&repo);
     let one_withdrawal = review_reads(&repo);
 
-    merge_side(&repo, merge);
+    let conflicts = merge_side(&repo, merge);
+    if merge == Merge::KeepBoth {
+        assert_eq!(conflicts, [WITHDRAWALS]);
+    }
 
     let file = std::path::Path::new(&repo).join(WITHDRAWALS);
     let rows = std::fs::read_to_string(file).unwrap();

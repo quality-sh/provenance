@@ -206,7 +206,8 @@ provenance validate proposal --input proposal.json --format json
 ```
 
 The landing command reads extractor/refuter contributions plus merge outputs, validates the
-whole existing-plus-incoming lifecycle aggregate, and appends one atomic landing batch. A
+whole existing-plus-incoming lifecycle aggregate, and writes each record to the state file of
+its kind in one atomic write. A
 proposal-only follow-up may rely on already-landed contribution and synthesis evidence, but a
 qualifying proposal still requires its assertion. A late assertion, lineage,
 or disposition failure writes nothing:

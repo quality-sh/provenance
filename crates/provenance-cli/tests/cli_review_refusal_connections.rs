@@ -13,7 +13,7 @@ fn body_bearing_refusals_do_not_break_the_next_request() {
     let repo = repository();
     let host = start(repo.path());
     let agent = ureq::AgentBuilder::new()
-        .timeout(Duration::from_secs(5))
+        .timeout(review_host_support::waits::LIMIT)
         .build();
     let body = "invalid";
 

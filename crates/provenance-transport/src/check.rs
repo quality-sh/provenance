@@ -19,6 +19,7 @@ use std::sync::Arc;
 mod bindings;
 mod gaps;
 mod index;
+mod merge_driver;
 mod references;
 mod scope;
 mod statement_report;
@@ -94,7 +95,7 @@ impl RepositoryCheckPort {
                 Ok(findings)
             })
             .map_err(|error| initialization_hint(&self.context.repo, error));
-        let findings = match result {
+        let mut findings = match result {
             Ok(findings) => findings,
             Err(error) if refuses_graph_run(&error) => return Err(format!("{error:#}")),
             Err(error) => vec![Finding::new(format!("{error:#}"))],
@@ -104,6 +105,9 @@ impl RepositoryCheckPort {
         } else {
             Refusal::Findings
         };
+        // A clone without the driver command still has a valid graph, so this
+        // finding does not refuse.
+        findings.extend(merge_driver::missing_driver_finding(&self.context.repo));
         Ok(CategoryRun::Graph { findings, refusal })
     }
 
@@ -331,6 +335,7 @@ fn ensure_strict_dictionary_index(
     match resolve_project_dictionary(layout) {
         DictionaryResolution::NoReference | DictionaryResolution::Loaded(_) => Ok(()),
         DictionaryResolution::Unparsable(refusal) => Err(refusal.into()),
+        DictionaryResolution::Unreadable(problem) => Err(problem.into()),
         DictionaryResolution::Unavailable {
             directory, reason, ..
         } => {

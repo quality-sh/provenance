@@ -1,12 +1,11 @@
 //! Canonical staged writer for one or more native graph record changes.
 
 use crate::{
-    review::{automatic_submission::AUTHORING_ACTOR, publication::with_record_state},
+    review::{publication::with_record_state, write_actor::AUTHORING_ACTOR},
     state_store::{
         read_budget::ensure_slice_within_read_budget, record_stamps::GraphRecord, RecordStamp,
         StateStore,
     },
-    write_error::WriteFailure,
 };
 use camino::Utf8Path;
 use provenance_core::{review::ReviewRecord, StableId};
@@ -26,16 +25,24 @@ impl StateStore {
         })
     }
 
+    /// Writes one record in a staged copy, runs `check` on the written record
+    /// against that copy, and publishes the copy only when `check` passes.
+    /// `check` also gets `true` when the write changed a record, as the write
+    /// then has checked the graph of the scope of that copy.
     pub(crate) fn save_native_record<T: GraphRecord>(
         &self,
         path: &Utf8Path,
         expected_etag: Option<&str>,
         mutate: impl FnOnce(&Self, &mut Vec<T>) -> anyhow::Result<T>,
+        check: impl FnOnce(&Self, &T, bool) -> anyhow::Result<()>,
     ) -> anyhow::Result<T> {
         let relative = path.strip_prefix(self.layout.root())?.to_owned();
         self.with_native_record_batch(|batch| {
             let staged_path = batch.store.layout.root().join(relative);
-            batch.mutate_one_with_store(&staged_path, expected_etag, mutate)
+            let (record, changed) =
+                batch.mutate_one_with_store(&staged_path, expected_etag, mutate)?;
+            check(batch.store, &record, changed)?;
+            Ok(record)
         })
     }
 }
@@ -52,25 +59,29 @@ impl NativeRecordBatch<'_> {
         mutate: impl FnOnce(&mut Vec<T>) -> anyhow::Result<T>,
     ) -> anyhow::Result<T> {
         self.mutate_one_with_store(path, expected_etag, |_, records| mutate(records))
+            .map(|(record, _)| record)
     }
 
     /// Like [`Self::mutate_one`], but `mutate` also gets the store that holds
-    /// the staged section.
+    /// the staged section, and the result also tells if the write changed a
+    /// record.
     fn mutate_one_with_store<T: GraphRecord>(
         &self,
         path: &Utf8Path,
         expected_etag: Option<&str>,
         mutate: impl FnOnce(&StateStore, &mut Vec<T>) -> anyhow::Result<T>,
-    ) -> anyhow::Result<T> {
+    ) -> anyhow::Result<(T, bool)> {
         let (result, changes) = self.write(path, expected_etag, |held, records| {
             let result = mutate(held, records)?;
             Ok((result.clone(), Some(result.id().clone())))
         })?;
-        Ok(changes
+        let any_change = !changes.is_empty();
+        let record = changes
             .into_iter()
             .map(|(_, after)| after)
             .find(|record| record.id() == result.id())
-            .unwrap_or(result))
+            .unwrap_or(result);
+        Ok((record, any_change))
     }
 
     pub(crate) fn mutate_all<T: GraphRecord>(
@@ -143,16 +154,5 @@ fn check_etag<T: GraphRecord>(before: &[T], id: &StableId, expected: &str) -> an
                 "native update cannot create a graph record"
             )
         })?;
-    let record: ReviewRecord = record.clone().into();
-    let current_etag = super::save::etag(&record)?;
-    if expected != current_etag {
-        return Err(crate::refusal::refuse!(
-            (WriteFailure::RecordEditConflict {
-                record_kind: T::KIND,
-                current_etag,
-            }),
-            "stale native record edit etag"
-        ));
-    }
-    Ok(())
+    super::save::ensure_etag(&record.clone().into(), expected)
 }

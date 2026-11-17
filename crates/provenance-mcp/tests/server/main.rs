@@ -15,6 +15,7 @@ mod support {
     pub mod api_session;
     #[path = "../../../provenance-transport/tests/support/check_port.rs"]
     pub mod check_port;
+    pub mod first_calls;
     #[cfg(feature = "test-fixture")]
     pub mod fixture_host;
     #[cfg(feature = "test-fixture")]
@@ -30,6 +31,9 @@ mod support {
     pub mod resource_http;
     #[cfg(feature = "test-fixture")]
     pub mod schema_check;
+    #[cfg(feature = "test-fixture")]
+    #[path = "../../../provenance-transport/tests/support/state_lines.rs"]
+    pub mod state_lines;
 }
 #[path = "../change_refusal_kinds.rs"]
 mod change_refusal_kinds;
@@ -41,18 +45,30 @@ mod host_invocation;
 mod mcp_action_fields;
 #[path = "../mcp_change_results.rs"]
 mod mcp_change_results;
+#[path = "../mcp_discussions_grants.rs"]
+mod mcp_discussions_grants;
+#[path = "../mcp_document_catch_up_cause.rs"]
+mod mcp_document_catch_up_cause;
 #[path = "../mcp_error_envelopes.rs"]
 mod mcp_error_envelopes;
+#[path = "../mcp_first_steps.rs"]
+mod mcp_first_steps;
 #[path = "../mcp_guidance.rs"]
 mod mcp_guidance;
+#[path = "../mcp_instruction_names.rs"]
+mod mcp_instruction_names;
 #[path = "../mcp_instructions.rs"]
 mod mcp_instructions;
+#[path = "../mcp_manifest_fault.rs"]
+mod mcp_manifest_fault;
 #[path = "../mcp_plumbing_names.rs"]
 mod mcp_plumbing_names;
 #[path = "../mcp_read_tools_do_not_write.rs"]
 mod mcp_read_tools_do_not_write;
 #[path = "../mcp_schema_dialect.rs"]
 mod mcp_schema_dialect;
+#[path = "../mcp_status_requests.rs"]
+mod mcp_status_requests;
 #[path = "../mcp_tool_schema_size.rs"]
 mod mcp_tool_schema_size;
 #[path = "../mcp_unknown_field_names_fields.rs"]
@@ -99,5 +115,7 @@ mod review_write_transports;
 mod surface_names;
 #[path = "../typed_plan_refusals.rs"]
 mod typed_plan_refusals;
+#[path = "../verification_run_budget.rs"]
+mod verification_run_budget;
 #[path = "../wire.rs"]
 mod wire;

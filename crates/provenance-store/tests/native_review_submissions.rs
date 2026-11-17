@@ -54,7 +54,7 @@ fn content_change_to_a_never_submitted_rule_opens_one_submission() {
     assert_eq!(submissions(&store, &scope, NodeType::Rule, "rule_a"), 0);
 
     let owner = json!("spec://storage");
-    update_rule(&store, &json!({"declared_by":owner, "status":"active"})).unwrap();
+    update_rule(&store, &json!({"declared_by":owner, "status":"review"})).unwrap();
     assert_eq!(submissions(&store, &scope, NodeType::Rule, "rule_a"), 0);
 
     let guard = etag(&store, &scope, NodeType::Rule, "rule_a");
@@ -66,7 +66,7 @@ fn content_change_to_a_never_submitted_rule_opens_one_submission() {
     .unwrap();
     assert_eq!(submissions(&store, &scope, NodeType::Rule, "rule_a"), 1);
     assert_pending_at_current(&store, &scope, NodeType::Rule, "rule_a");
-    assert_eq!(status(&store, &scope, NodeType::Rule, "rule_a"), "active");
+    assert_eq!(status(&store, &scope, NodeType::Rule, "rule_a"), "review");
 
     update_rule(
         &store,
@@ -101,12 +101,16 @@ fn archive_parent_pruning_opens_one_submission_for_each_surviving_child() {
         ));
     }
 
+    // The archive is a status request; the cascade runs when the reviewer
+    // accepts it.
+    accept_current(&store, &scope, NodeType::Requirement, "req_left");
     store
         .update_requirement(input::<UpdateRequirementInput>(json!({
             "scope_id":"default", "id":"req_left", "status":"archived",
             "archived_in_commit":{"commit":COMMIT}
         })))
         .unwrap();
+    accept_current(&store, &scope, NodeType::Requirement, "req_left");
 
     for ((kind, record), (count, old_status)) in children.into_iter().take(3).zip(&before) {
         assert_eq!(

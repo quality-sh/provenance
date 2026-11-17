@@ -4,7 +4,6 @@ use std::{
     collections::BTreeMap,
     io::{Cursor, Read, Write},
     net::TcpStream,
-    time::Duration,
 };
 
 use provenance_macros::verifies;
@@ -115,10 +114,10 @@ fn request(
     let authority = endpoint.strip_prefix("http://").unwrap();
     let mut stream = TcpStream::connect(authority).unwrap();
     stream
-        .set_read_timeout(Some(Duration::from_secs(5)))
+        .set_read_timeout(Some(review_host_support::waits::LIMIT))
         .unwrap();
     stream
-        .set_write_timeout(Some(Duration::from_secs(5)))
+        .set_write_timeout(Some(review_host_support::waits::LIMIT))
         .unwrap();
 
     write!(stream, "{method} {path} HTTP/1.1\r\n").unwrap();

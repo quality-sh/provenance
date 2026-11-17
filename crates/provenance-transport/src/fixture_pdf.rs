@@ -1,5 +1,5 @@
-//! Builds the synthetic ASD-STE100 Issue 9 dictionary PDF the simulator
-//! serves to `init`.
+//! Builds the synthetic ASD-STE100 Issue 9 dictionary PDF that the simulator
+//! serves to `init` and that the init tests import.
 //!
 //! The page layout mirrors `tests/cli_dictionary/support.rs`: same furniture,
 //! column positions, fonts, and entry counts, so the real importer accepts
@@ -36,7 +36,7 @@ fn alpha_suffix(index: usize) -> String {
 }
 
 /// Returns the complete PDF for one simulated onboarding.
-pub(super) fn dictionary_pdf() -> Vec<u8> {
+pub fn dictionary_pdf() -> Vec<u8> {
     let page_count = (APPROVED_ROWS + UNAPPROVED_ROWS).div_ceil(ROWS_PER_PAGE);
     let pages: Vec<String> = (0..page_count).map(page_stream).collect();
     assemble(&pages)

@@ -94,7 +94,7 @@ mod tests {
     #[test]
     fn a_read_outside_the_fence_fails_the_body() {
         let scope = Utf8PathBuf::from("/repo/.provenance/state/scopes/default");
-        let inside = scope.join("ideation/landings.jsonl");
+        let inside = scope.join("ideation/contributions.jsonl");
         let outside = scope.join("rules/rule.jsonl");
         let fence = ReadFence::new(scope.clone(), vec!["ideation"]);
         assert!(fence.check(&inside).is_ok());

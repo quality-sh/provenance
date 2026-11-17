@@ -3,6 +3,8 @@ use provenance_macros::verifies;
 use serde_json::Value;
 use std::io::Write as _;
 
+use crate::support::record_review::accept_status_request;
+
 #[test]
 fn cli_check_selector_runs_and_renders_only_the_selected_category() {
     let directory = tempfile::tempdir().unwrap();
@@ -194,6 +196,8 @@ fn cli_binding_check_reports_absence_without_running_or_failing_project_tests() 
             "default",
             "--path-prefix",
             ".",
+            "--disposition-actor-id",
+            "reviewer",
         ])
         .assert()
         .success();
@@ -237,6 +241,8 @@ fn cli_binding_check_reports_absence_without_running_or_failing_project_tests() 
         ])
         .assert()
         .success();
+    let repo = directory.path().to_str().unwrap();
+    accept_status_request(repo, "rules", "rule", "rule_unbound");
 
     let output = Command::cargo_bin("provenance")
         .unwrap()

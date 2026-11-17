@@ -1,6 +1,5 @@
 use super::input::{CitesEdit, ListEdit, RequirementRelations, SaveRequirement, SingleEdit};
 use crate::{shards, state_store::StateStore};
-use provenance_core::model::relations::RelationOwner;
 use provenance_core::{Requirement, ScopeId, SourceReference, StableId};
 use provenance_macros::rule;
 
@@ -187,8 +186,9 @@ impl StateStore {
         relationships: &RequirementRelations,
     ) -> anyhow::Result<()> {
         let path = shards::requirements_path(&self.layout, scope);
-        self.mutate_graph_record_with_store(
+        self.mutate_graph_record_checked(
             &path,
+            scope,
             None,
             |held, records: &mut Vec<Requirement>| {
                 let position = records
@@ -205,15 +205,7 @@ impl StateStore {
                 record.source_refs = final_sets.cites;
                 Ok(record.clone())
             },
-        )?;
-        let record = self.requirement(scope, id)?;
-        for (name, target) in record.references() {
-            let decl = Requirement::relations()
-                .iter()
-                .find(|d| d.name == name)
-                .unwrap();
-            self.ensure_node_exists(scope, decl.target, target, name)?;
-        }
-        self.validate_graph_scope(scope)
+        )
+        .map(|_| ())
     }
 }

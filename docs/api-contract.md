@@ -145,7 +145,11 @@ A collection POST publishes the new graph record and its first review submission
 in one state write. A PATCH that changes review content publishes the new
 revision and a new submission in one state write. The prior pending submission
 becomes superseded; the client does not withdraw it. A PATCH that changes only
-lifecycle status keeps the current revision and submission. The current member
+lifecycle status keeps the current revision and submission, except a change of a
+Rule or a Requirement to active or archived. That change opens a status request
+at the current revision, and the status changes when an allowed reviewer accepts
+it. For a Requirement archive, the acceptance also runs the archive cascade. The
+current member
 read carries the current submission under `decision.pending`, including its
 server-created Proposal ID and revision. Each decision binds the exact submitted
 record revision. Superseded Proposals, decisions, feedback, and before and after
@@ -230,6 +234,29 @@ A write returns 409 with `state_changed` when the stored state changed after
 the write read it and before the write landed. The write saved nothing. The
 `message` field gives the next step: read the records again, then send the
 write again. The server does not repeat the write.
+
+A read or a write returns 500 with `invalid_state_file` when a file in the
+state directory does not parse, or when stored records do not agree. The
+refusal has `file`, the path below the state directory, `line`, from 1, and
+`message`, the cause without its location. It can also have the optional
+member `hint`, the step that corrects the state. When the reader of the file
+has a correction of its own, `hint` is that correction. Else `hint` gives the
+two procedures that give a state that reads, each with what it removes. A
+file that is not in the state directory has no `hint`.
+
+A document read whose catch-up fails returns 409 with
+`document_catch_up_failed`. The document read does not answer from the
+stored projection. With no stored revision, the read refuses with
+`no_projection` first. `message` is the cause as text, without its
+location. When a state line does not parse, the refusal also has the
+location fields of `invalid_state_file`: `file`, the path below the state
+directory, and `line`, from 1. The refusal has `file` and `line` together,
+or neither. A cause that has no file has only `message`, which says what
+the cause is. A state line that does not parse also gives `hint`, the step
+that corrects it, as `invalid_state_file` gives it. The client reads the
+document again after a temporary cause, such as a cache close that did not
+finish in time. It corrects a cause in the record files first. The client
+reads these fields and does not parse the text.
 
 ## 6. Compatibility tuple and gate
 

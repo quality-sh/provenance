@@ -1,0 +1,209 @@
+// @provenance rule: rule_class
+export class Token {}
+
+// @provenance rule: rule_interface
+export interface Shape {
+  area(): number;
+}
+
+// @provenance rule: rule_alias
+export type Hours = number;
+
+// @provenance rule: rule_default_class
+export default class Ledger {
+  // @provenance rule: rule_decorated_method
+  @memoize()
+  public async total(): Promise<number> {
+    return 0;
+  }
+
+  // @provenance rule: rule_arrow_property
+  total = () => {
+    return 1;
+  };
+}
+
+// @provenance verification: examples
+// @provenance rule: rule_describe
+describe("payroll", () => {
+  it("pays", () => {});
+});
+
+// @provenance rule: rule_async_function
+export async function paysOvertime(hours: number): Promise<boolean> {
+  return hours > 38;
+}
+
+// @provenance rule: rule_const_enum
+export const enum Shift {
+  Day,
+}
+
+// @provenance rule: rule_abstract_class
+export abstract class Base {}
+
+export class Clock {
+  // @provenance rule: rule_generator_method
+  *shifts() {
+    const first = 1;
+    yield first;
+  }
+
+  // @provenance rule: rule_getter
+  get total(): number {
+    return 0;
+  }
+
+  // @provenance rule: rule_setter
+  set total(value: number) {}
+
+  // @provenance rule: rule_optional_method
+  pays?(hours: number): boolean;
+
+  // @provenance rule: rule_parameter_properties
+  constructor(
+    private readonly first: number,
+    private readonly second: number,
+    private readonly third: number,
+    private readonly fourth: number,
+    private readonly fifth: number,
+  ) {}
+
+  run(): void {
+    // @provenance rule: rule_ternary
+    ready ? (start) : stop;
+    // @provenance rule: rule_call_then_block
+    start(1)
+    {
+      stop();
+    }
+  }
+}
+
+// @provenance rule: rule_internal_doc
+/** @internal */ export function hidden(): void {}
+export function visible(): void {}
+
+// @provenance rule: rule_export_decorated
+export @sealed class Sealed {}
+
+// @provenance rule: rule_default_decorated
+export default @sealed class SealedDefault {}
+
+app.get("/",
+  // @provenance rule: rule_handler_argument
+  async (req, res): Promise<void> => {
+    res.end();
+  });
+
+run(
+  // @provenance rule: rule_generic_async_argument
+  async <T>(x: T): Promise<T> => x);
+
+const handlers = [
+  // @provenance rule: rule_async_array_item
+  async (req): Promise<void> => {},
+];
+
+function body() {
+  // @provenance rule: rule_async_arrow_statement
+  async (x): Promise<void> => {};
+}
+
+// @provenance rule: rule_default_async_arrow
+export default async (req: Req): Promise<void> => {};
+
+const pick = ready ?
+  // @provenance rule: rule_multiline_ternary
+  foo(a) :
+  bar;
+
+// @provenance rule: rule_namespace
+export namespace Rates {
+}
+
+// @provenance rule: rule_declare_function
+declare function hoursOf(name: string): number;
+
+// @provenance rule: rule_declare_const
+declare const limit: number;
+
+// @provenance rule: rule_declare_class
+declare class Ambient {}
+
+class Shift {
+  // @provenance rule: rule_private_property
+  private count: number = 0;
+  // @provenance rule: rule_plain_property
+  total = 0;
+}
+
+// @provenance rule: rule_group_comment_first
+
+// @provenance rule: rule_group_comment_second
+function grouped() {}
+
+function* keywords() {
+  // @provenance rule: rule_keyword_if
+  if (ready) {
+  }
+  // @provenance rule: rule_keyword_for
+  for (const shift of shifts) {
+  }
+  // @provenance rule: rule_keyword_while
+  while (ready) {
+  }
+  // @provenance rule: rule_keyword_switch
+  switch (ready) {
+    // @provenance rule: rule_keyword_case
+    case (ready): {
+    }
+  }
+  try {
+  }
+  // @provenance rule: rule_keyword_catch
+  catch (error) {
+  }
+  // @provenance rule: rule_keyword_with
+  with (scope) {
+  }
+}
+
+// @provenance rule: rule_enum
+export enum Level {
+  Low,
+}
+
+// @provenance rule: rule_default_class_implements
+export default class implements Shape {}
+
+// @provenance rule: rule_above_decorator_with_site
+@Injectable({
+  // @provenance rule: rule_in_decorator_arguments
+  factory() { return new X(); },
+})
+export class Service {}
+
+import {
+  // @provenance rule: rule_import_type_specifier
+  type Foo,
+} from "./foo";
+
+export {
+  // @provenance rule: rule_export_type_specifier
+  type Bar,
+};
+
+const v = cond ? price
+  // @provenance rule: rule_operator_line_start
+  * rate(q) : 0;
+
+class Mixed extends
+  // @provenance rule: rule_after_extends
+  mixin(B) {
+}
+
+class Store {
+  // @provenance rule: rule_method_named_delete
+  delete(id: string): void {}
+}

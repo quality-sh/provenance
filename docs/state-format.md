@@ -123,9 +123,14 @@ Modern proposal definitions are immutable `proposed` rows. Assertions live in
 `ideation/assertions.jsonl`; dispositions use `ideation/dispositions.jsonl`. All top-level
 fields of an import are closed. Effective state is
 derived in the order
-`proposed`, `asserted`, then disposition. `ideation/landings.jsonl` stores one validated
-swarm batch per line so a run is published atomically. Import validates a staged complete
-state directory and renames it into place only after `check` succeeds.
+`proposed`, `asserted`, then disposition. A swarm landing writes each record of the run to
+the file of its kind: `ideation/contributions.jsonl`, `ideation/synthesis_packets.jsonl`,
+`ideation/proposal_cards.jsonl` or `ideation/assertions.jsonl`. A landing does not write
+dispositions. A landing and a write of one record put the complete file of each kind that they
+write in id order. `import` writes each of these files in the order of the export file, and the
+next landing or write of one record of that kind puts the file in id order. A landing publishes
+its files in one write, so a read gets each record of the run or no record of it. Import validates a staged complete state directory and renames it into place only after
+`check` succeeds.
 
 Pre-lifecycle terminal proposal rows are not rewritten. The compiled, versioned shipped-v1
 fingerprint policy freezes both the exact shipped terminal definitions and their historical
@@ -156,3 +161,12 @@ finished. Files and containing directories are synced where the platform support
 `fsync`. Portable filesystems do not provide an atomic directory exchange, so the guarantee is
 not overstated as crash-atomic: cooperating access never sees missing live state, interruption is
 recoverable on next access, and any import command that returns failure leaves the old live state.
+
+The cache and the state directory must be on one file system. A write of one state key at a
+time writes each key to a temporary file in `.provenance/cache` and renames it onto the key. A
+write that lands all of its keys or none renames a changed copy of the state from the cache onto
+`.provenance/state`. A rename cannot move a file from one file system to another, so with a mount
+at `.provenance/cache` or at `.provenance/state` each of these writes fails, and the error of a
+write of one key names both directories. The store does not support that layout. After a stopped
+write of one key, the temporary file stays in the cache, and the next entry to the publication
+section removes it.

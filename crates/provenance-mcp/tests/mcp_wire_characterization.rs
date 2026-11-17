@@ -14,10 +14,10 @@ use provenance_transport::{
 };
 use serde_json::{json, Value};
 use std::sync::Arc;
-use support::{check_port::FixtureCheckPort, records::Repository};
+use support::{check_port::FixtureCheckPort, first_calls, records::Repository};
 use tokio::io::{AsyncBufReadExt as _, AsyncWriteExt as _, BufReader, DuplexStream, Lines};
 
-const TOOL_LIST_FNV1A: u64 = 7_423_102_099_526_298_026;
+const TOOL_LIST_FNV1A: u64 = 7_664_500_741_809_655_526;
 
 /// The porcelain tools, in list order. The list has no plumbing tools.
 const PORCELAIN_TOOL_NAMES: &[&str] = &[
@@ -140,8 +140,8 @@ fn check_host() -> StatementHost {
     StatementHost::default().with_check_port(Arc::new(FixtureCheckPort))
 }
 
-/// The instructions of the full host: it shows each command and each record and
-/// Discussion write, and it has no notify port and no repository files.
+/// The instructions of the full host up to its first calls: it shows each command and each
+/// record and Discussion write, and it has no notify port and no repository files.
 const INSTRUCTIONS: &str = "# Provenance\n\n\
 Provenance records requirements, decisions, and the rules that connect them to code.\n\n\
 ## Records\n\n\
@@ -181,17 +181,17 @@ inputs and actions it supports.\n\n\
 - get: Read one repository record by its repository-local ID. Select its record view, \
 children view (records below this record), trace view (records above this record, up \
 to its Sources), impact view, or review view.\n\
-- trace: Read the records above this record, up to its Sources. The get trace view \
-gives the same records.\n\
 - search: Find records across the permitted kinds in the bound scope, or the Rules \
 bound to a source file and symbol.\n\
-- check: Check graph validity, statement quality, and binding coverage. Give a \
-statement to check that text with the project dictionary before a write.\n\
 - api: Call one public API path with an optional method, query, headers, and JSON \
 body. The body is the data object, without the HTTP {\"data\": ...} wrapper. Omit the \
 path to list the catalog routes with their methods and inputs. A filter that is the \
 method and path of one route, such as GET /rules, gives the request and response \
 schemas of that route.\n\
+- check: Check graph validity, statement quality, and binding coverage. Give a \
+statement to check that text with the project dictionary before a write.\n\
+- trace: Read the records above this record, up to its Sources. The get trace view \
+gives the same records.\n\
 - change: Write to the graph. The action argument selects the write: create, update, \
 answer, claim, release, or submit on the target record; or discuss or reply for a \
 Discussion. A call that lacks a field that the action and record kind need gets the \
@@ -203,12 +203,19 @@ schema of their fields.\n\
 - release: Release the target Topic claim.\n\
 - submit: Submit the target Source, Requirement, Resolution, Rule, Topic, or Question \
 for review.\n\
-- discussions: List addressed Discussions in a scope or under a record.\n\
-- discussion: Read the addressed Discussion.\n\
 - discuss: Start a Discussion under the target record.\n\
-- reply: Reply to the addressed Discussion.\n\n\
-For a focused start, call search with {\"text\":\"<text>\"}, then get with \
-{\"target\":\"<id>\",\"view\":\"children\",\"depth\":<N>}.";
+- reply: Reply to the addressed Discussion.\n\
+- discussions: List addressed Discussions in a scope or under a record.\n\
+- discussion: Read the addressed Discussion.\n\n\
+For a focused start, ";
+
+/// `result` with its instructions up to the end of the words before the first calls. The
+/// first calls are pinned in `mcp_instructions.rs`.
+fn without_first_calls(mut result: Value) -> Value {
+    let instructions = result["instructions"].as_str().unwrap_or_default();
+    result["instructions"] = Value::String(first_calls::without_first_calls(instructions));
+    result
+}
 
 fn server_info() -> Value {
     json!({"name":"provenance","version":env!("CARGO_PKG_VERSION")})
@@ -220,7 +227,7 @@ async fn discover_response_keeps_its_fields() {
     let mut wire = Wire::start(full_host(&repository));
     let response = wire.request("server/discover", json!({})).await;
     assert_eq!(
-        response["result"],
+        without_first_calls(response["result"].clone()),
         json!({
             "_meta":{"io.modelcontextprotocol/serverInfo":server_info()},
             "cacheScope":"private",
@@ -248,7 +255,7 @@ async fn initialize_negotiates_the_older_protocols() {
         let mut wire = Wire::bare(full_host(&repository));
         let result = wire.initialize(requested).await;
         assert_eq!(
-            result,
+            without_first_calls(result),
             json!({
                 "protocolVersion":agreed,
                 "capabilities":{"tools":{}},

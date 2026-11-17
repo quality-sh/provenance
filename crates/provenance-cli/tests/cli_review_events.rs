@@ -134,8 +134,13 @@ fn unrelated_scope_cache_and_equal_content_do_not_invalidate() {
     std::fs::write(&replacement, bytes).unwrap();
     std::fs::rename(replacement, shard).unwrap();
     socket.quiet();
-    std::fs::write(repo.path().join(".provenance/settings.json"), "{}\n").unwrap();
-    assert_eq!(socket.frame()["type"], "reset");
+    review_host_support::replace_file(&repo.path().join(".provenance/settings.json"), "{}\n");
+    let reset = socket.frame();
+    assert_eq!(
+        (&reset["type"], &reset["reason"]),
+        (&json!("reset"), &json!("configuration-changed")),
+        "{reset}"
+    );
 }
 
 #[tokio::test]

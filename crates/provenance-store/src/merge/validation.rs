@@ -17,10 +17,12 @@
 use anyhow::Context;
 use camino::Utf8Path;
 use provenance_core::model::relations::{missing_required, required_refusal, RelationOwner};
+use provenance_core::threads::Discussion;
 use provenance_core::{Question, Requirement, RequirementReview, Resolution, Rule, Source, Topic};
 use serde_json::Value;
 
 use super::CanonicalRecord;
+use crate::jsonl::{record_line_value, untyped_line_value};
 use crate::statement_analysis::{analyze_changed_statements, StatementDiagnostic};
 
 /// The record type a shard holds, read off the repository path of the file
@@ -34,8 +36,6 @@ use crate::statement_analysis::{analyze_changed_statements, StatementDiagnostic}
 /// they also match on the file name.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ShardFamily {
-    /// `.provenance/state/scopes/<scope>/ideation/landings.jsonl`
-    IdeationLandings,
     /// `.provenance/state/scopes/<scope>/threads/discussions.jsonl`
     Discussions,
     /// `.provenance/state/scopes/<scope>/sources/*.jsonl`
@@ -87,9 +87,6 @@ impl ShardFamily {
     /// resolve the same way.
     #[must_use]
     pub fn for_shard_path(path: &Utf8Path) -> Self {
-        let Some(directory) = path.parent() else {
-            return Self::Unrecognized;
-        };
         // The review rows are in the requirements directory, but they are not
         // Requirement records.
         if path.file_name() == Some("review.jsonl") && is_scoped_family(path, "requirements") {
@@ -104,21 +101,30 @@ impl ShardFamily {
         if path.file_name() == Some("discussions.jsonl") && is_scoped_family(path, "threads") {
             return Self::Discussions;
         }
-        if path.file_name() == Some("landings.jsonl")
-            && directory.file_name() == Some("ideation")
-            && directory
-                .parent()
-                .and_then(Utf8Path::parent)
-                .is_some_and(|directory| directory.file_name() == Some("scopes"))
-            && directory
-                .parent()
-                .and_then(Utf8Path::parent)
-                .and_then(Utf8Path::parent)
-                .is_some_and(|directory| directory.file_name() == Some("state"))
-        {
-            Self::IdeationLandings
-        } else {
-            Self::Unrecognized
+        Self::Unrecognized
+    }
+}
+
+/// The reader of one line of a merge input: the line, its number and the
+/// logical shard give the text and the JSON value of the line.
+pub(crate) type LineReader =
+    for<'a> fn(&Utf8Path, usize, &'a [u8]) -> anyhow::Result<(&'a str, Value)>;
+
+impl ShardFamily {
+    /// The line checks of the reads of this family: those of its record type,
+    /// or those of a line of no known record type for a file that no family
+    /// holds.
+    pub(crate) fn line_reader(self) -> LineReader {
+        match self {
+            Self::Discussions => record_line_value::<Discussion>,
+            Self::Sources => record_line_value::<Source>,
+            Self::RequirementReviews => record_line_value::<RequirementReview>,
+            Self::Requirements => record_line_value::<Requirement>,
+            Self::Resolutions => record_line_value::<Resolution>,
+            Self::Rules => record_line_value::<Rule>,
+            Self::Topics => record_line_value::<Topic>,
+            Self::Questions => record_line_value::<Question>,
+            Self::Unrecognized => untyped_line_value,
         }
     }
 }
@@ -147,9 +153,7 @@ pub fn validate_merged_records(
         ShardFamily::Rules => validate_typed_records::<Rule>(records, "rule"),
         ShardFamily::Topics => validate_typed_records::<Topic>(records, "topic"),
         ShardFamily::Questions => validate_typed_records::<Question>(records, "question"),
-        ShardFamily::IdeationLandings | ShardFamily::Discussions | ShardFamily::Unrecognized => {
-            Ok(())
-        }
+        ShardFamily::Discussions | ShardFamily::Unrecognized => Ok(()),
     }
 }
 
@@ -342,22 +346,6 @@ mod tests {
                 "{family:?} at {path}"
             );
         }
-    }
-
-    // No Rule binding: an aid to the implementation. The landings file is not
-    // in the store family table. The driver knows its path, but its rows have
-    // no `id`, so the driver cannot merge it (bead provenance-5mmu).
-    #[test]
-    fn cannot_merge_the_landings_file_because_its_rows_have_no_id() {
-        let path = Utf8Path::new(".provenance/state/scopes/default/ideation/landings.jsonl");
-        let kind = ShardFamily::for_shard_path(path);
-        assert_eq!(kind, ShardFamily::IdeationLandings);
-        assert_eq!(kind.record_key(), "id");
-
-        let batches = [serde_json::json!({ "contributions": [], "synthesis_packets": [] })];
-        let error =
-            super::super::merge_records(kind.record_key(), &[], &batches, &batches).unwrap_err();
-        assert_eq!(error.to_string(), "record is missing string id");
     }
 
     #[test]
