@@ -10,6 +10,7 @@ mod support {
     pub mod import_reviews;
     pub mod landing_runs;
     pub mod merge_driver;
+    pub mod record_budget;
     pub mod record_review;
     pub mod review_paths;
     pub mod stale_repo;
@@ -21,6 +22,8 @@ use support::review_paths;
 mod cli_approval_evidence;
 #[path = "../cli_archive_commit_plain_flag.rs"]
 mod cli_archive_commit_plain_flag;
+#[path = "../cli_binding_budget.rs"]
+mod cli_binding_budget;
 #[path = "../cli_cache_completion_deadline.rs"]
 mod cli_cache_completion_deadline;
 #[path = "../cli_closed_value_refusal.rs"]
@@ -79,6 +82,8 @@ mod cli_origin;
 mod cli_planning_first_rules;
 #[path = "../cli_read_freshness.rs"]
 mod cli_read_freshness;
+#[path = "../cli_record_budget.rs"]
+mod cli_record_budget;
 #[path = "../cli_record_format.rs"]
 mod cli_record_format;
 #[path = "../cli_record_updates.rs"]
