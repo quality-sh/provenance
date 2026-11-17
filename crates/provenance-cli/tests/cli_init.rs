@@ -241,9 +241,14 @@ fn init_recovers_interrupted_publication_before_classifying_the_repository() {
         transaction.join("staged/manifest.json"),
     )
     .unwrap();
+    let digest: [u8; 32] = <sha2::Sha256 as sha2::Digest>::digest(
+        std::fs::read(transaction.join("staged/manifest.json")).unwrap(),
+    )
+    .into();
     std::fs::write(
         transaction.join("changes.json"),
-        r#"{"puts":["manifest.json"],"deletes":[]}"#,
+        serde_json::json!({ "puts": [{ "key": "manifest.json", "sha256": digest }], "deletes": [] })
+            .to_string(),
     )
     .unwrap();
     std::fs::write(
