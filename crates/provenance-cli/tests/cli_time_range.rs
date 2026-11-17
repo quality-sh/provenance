@@ -162,8 +162,6 @@ fn masked(case: &Case, args: &[&str]) -> (Option<i32>, String, String, String) {
 /// the malformed record.
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Refusal {
-    /// `check` names the file and the value.
-    Check,
     /// `invalid_state_file` with the file and the value.
     Located,
     /// The kind `kind`, as over the malformed record.
@@ -179,7 +177,6 @@ fn fails_as_malformed(past: &Case, malformed: &Case, args: &[&str], refusal: Ref
     assert_eq!(past_code, Some(1), "{args:?}: {past_text}");
     let names_the_line = past_text.contains(file) && past_text.contains("9007199254740992");
     let holds = match refusal {
-        Refusal::Check => names_the_line && !past_text.contains("invalid_state_file"),
         Refusal::Located => names_the_line && past_text.contains("invalid_state_file"),
         Refusal::Kind(kind) => past_text.contains(&format!("\"kind\":\"{kind}\"")),
     };
@@ -248,12 +245,7 @@ fn a_committed_time_past_the_range_fails_as_a_malformed_field_fails() {
             "json",
         ][..],
     ] {
-        let refusal = if args[0] == "check" {
-            Refusal::Check
-        } else {
-            Refusal::Located
-        };
-        fails_as_malformed(&past, &malformed, args, refusal, "res.jsonl");
+        fails_as_malformed(&past, &malformed, args, Refusal::Located, "res.jsonl");
     }
 }
 
@@ -270,7 +262,7 @@ fn a_committed_discussion_version_past_the_range_fails_as_a_malformed_field_fail
         id: &malformed_id,
     };
     for (args, refusal) in [
-        (&["check", "--format", "json"][..], Refusal::Check),
+        (&["check", "--format", "json"][..], Refusal::Located),
         (
             &["<id>", "discussion", "--format", "json"][..],
             Refusal::Kind("resource_not_found"),
@@ -325,7 +317,7 @@ fn a_committed_review_time_past_the_range_fails_check_as_a_malformed_field_fails
             id: "requirement_review_a",
         },
         &["check", "--format", "json"],
-        Refusal::Check,
+        Refusal::Located,
         "review.jsonl",
     );
 }
