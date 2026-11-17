@@ -76,7 +76,9 @@ async fn terminal(session: &ApiSession, proposal: &str, action: &str) -> CallToo
             "decision":"accepted", "rationale":null,
             "canonical_artifact":{"artifact_type":"requirement","artifact_id":"req_shared"},
             "feedback":null, "declared_by":null}),
-        _ => json!({"actor":"agent","declared_by":null,"reason":null}),
+        _ => {
+            json!({"actor":{"identity_type":"agent","id":"agent"},"declared_by":null,"reason":null})
+        }
     };
     session
         .call(json!({"path":format!(

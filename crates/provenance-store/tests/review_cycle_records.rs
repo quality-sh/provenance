@@ -18,7 +18,7 @@ fn withdraw(store: &StateStore, proposal: &StableId) {
     store
         .withdraw_record_review(
             serde_json::from_value(json!({
-                "scope_id":"default", "actor":"ben", "proposal_id":proposal,
+                "scope_id":"default", "actor":{"identity_type":"agent","id":"ben"}, "proposal_id":proposal,
                 "declared_by":null, "reason":"The text needs more work."
             }))
             .unwrap(),

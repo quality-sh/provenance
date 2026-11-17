@@ -23,6 +23,16 @@ pub enum DispositionActorRefusal {
          decision. {NEXT_STEP}"
     )]
     ActorNotListed,
+    #[error(
+        "The actor of a withdrawal is not the author of the review submission, and the manifest \
+         field disposition_actor_ids is empty. {NEXT_STEP}"
+    )]
+    WithdrawalNoActorsConfigured,
+    #[error(
+        "The actor of a withdrawal is not the author of the review submission, and the manifest \
+         field disposition_actor_ids does not contain the actor. {NEXT_STEP}"
+    )]
+    WithdrawalActorNotListed,
 }
 
 /// The next step that each cause of a [`DispositionActorRefusal`] gives. The
@@ -58,6 +68,26 @@ impl DispositionActor {
             id: id.into(),
             name: None,
         }
+    }
+}
+
+/// Lets the author of a review submission or a listed actor withdraw it.
+///
+/// The submission records only the ID of its author, so the author check
+/// compares the ID. A submission with no recorded author has only the listed
+/// actors.
+#[provenance_macros::rule("rule_withdrawal_actor_is_author_or_reviewer")]
+pub fn check_withdrawal_actor(
+    actor: &DispositionActor,
+    author: Option<&str>,
+    entries: &[DispositionActor],
+) -> Result<(), DispositionActorRefusal> {
+    if author == Some(actor.id.as_str()) || actor.is_listed(entries) {
+        Ok(())
+    } else if entries.is_empty() {
+        Err(DispositionActorRefusal::WithdrawalNoActorsConfigured)
+    } else {
+        Err(DispositionActorRefusal::WithdrawalActorNotListed)
     }
 }
 

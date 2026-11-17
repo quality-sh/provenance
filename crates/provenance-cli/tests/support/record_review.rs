@@ -144,14 +144,15 @@ pub fn submissions(repo: &str, kind: &str, id: &str) -> usize {
         .count()
 }
 
-/// Withdraws one submission from review.
+/// Withdraws one submission from review as its author: `authoring`, the actor of a write
+/// that gives no actor.
 pub fn withdraw(repo: &str, collection: &str, id: &str, proposal: &str) {
     let path = format!("{collection}/{id}/submissions/{proposal}/withdraw");
     provenance()
         .args([
             "api", &path, "--method", "post", "--input", "-", "--repo", repo,
         ])
-        .write_stdin(json!({"actor":"agent","declared_by":null,"reason":null}).to_string())
+        .write_stdin(json!({"actor":{"identity_type":"agent","id":"authoring"},"declared_by":null,"reason":null}).to_string())
         .assert()
         .success();
 }

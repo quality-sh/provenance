@@ -124,7 +124,7 @@ fn cli_submit_conflicts_return_the_typed_envelope() {
     successful(&api(
         &repo,
         &format!("requirements/req_review/submissions/{automatic}/withdraw"),
-        &json!({"actor":"agent","declared_by":null,"reason":null}),
+        &json!({"actor":{"identity_type":"agent","id":"agent"},"declared_by":null,"reason":null}),
     ));
     let submitted = successful(&submit(&repo, &revision_2));
     let proposal = submitted["data"]["proposal_id"].as_str().unwrap();
@@ -141,7 +141,7 @@ fn terminal(repo: &str, proposal: &str, action: &str) -> Value {
             "canonical_artifact":{"artifact_type":"requirement","artifact_id":"req_review"},
             "feedback":null, "declared_by":null}),
         _ => {
-            json!({"actor":"agent","declared_by":null,"reason":null})
+            json!({"actor":{"identity_type":"agent","id":"agent"},"declared_by":null,"reason":null})
         }
     };
     refused(&api(
@@ -165,7 +165,7 @@ fn prepared(state: &str) -> (tempfile::TempDir, String, String, String, Option<S
         successful(&api(
             &repo,
             &format!("requirements/req_review/submissions/{proposal}/withdraw"),
-            &json!({"actor":"agent","declared_by":null,"reason":null}),
+            &json!({"actor":{"identity_type":"agent","id":"agent"},"declared_by":null,"reason":null}),
         ));
     } else {
         successful(&api(

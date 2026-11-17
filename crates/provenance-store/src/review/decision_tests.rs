@@ -82,7 +82,7 @@ fn feedback(body: &str) -> Value {
 fn withdraw(store: &StateStore, proposal: &StableId) -> anyhow::Result<CycleEntry> {
     store.withdraw_record_review(
         serde_json::from_value(
-            json!({"scope_id":"default","actor":"agent","proposal_id":proposal}),
+            json!({"scope_id":"default","actor":{"identity_type":"agent","id":"agent"},"proposal_id":proposal}),
         )
         .unwrap(),
     )

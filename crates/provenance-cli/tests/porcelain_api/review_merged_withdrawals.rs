@@ -50,7 +50,8 @@ pub(super) fn pending(repo: &str, record: &str) -> String {
 
 pub(super) fn withdraw(repo: &str, record: &str, submission: &str, actor: &str, reason: &str) {
     let path = format!("requirements/{record}/submissions/{submission}/withdraw");
-    let body = json!({"actor":actor, "declared_by":null, "reason":reason});
+    let body =
+        json!({"actor":{"identity_type":"human","id":actor}, "declared_by":null, "reason":reason});
     write(repo, "post", &path, &body, None);
 }
 
@@ -135,7 +136,13 @@ fn two_withdrawals_read_as_one(merge: Merge) {
     withdraw(&repo, "req_a", &submission, "agent", "Side branch.");
     commit(&repo);
     git(&repo, &["checkout", "-q", &first]);
-    withdraw(&repo, "req_a", &submission, "editor", "First branch.");
+    withdraw(
+        &repo,
+        "req_a",
+        &submission,
+        "reviewer_example_com",
+        "First branch.",
+    );
     commit(&repo);
     let one_withdrawal = review_reads(&repo);
 
@@ -157,7 +164,7 @@ fn two_withdrawals_read_as_one(merge: Merge) {
     assert_eq!(rows[1]["proposal_id"], json!(submission));
     assert_eq!(
         (&rows[0]["actor"], &rows[1]["actor"]),
-        (&json!("agent"), &json!("editor"))
+        (&json!("agent"), &json!("reviewer_example_com"))
     );
     assert_eq!(review_reads(&repo), one_withdrawal);
     assert_eq!(one_withdrawal[0]["withdrawn"], json!([submission]));
@@ -166,7 +173,7 @@ fn two_withdrawals_read_as_one(merge: Merge) {
     check_passes(&repo);
 
     let path = format!("requirements/req_a/submissions/{submission}/withdraw");
-    let body = json!({"actor":"agent", "declared_by":null, "reason":"Withdrawn again."});
+    let body = json!({"actor":{"identity_type":"agent","id":"agent"}, "declared_by":null, "reason":"Withdrawn again."});
     let input = directory_file(&repo, "withdrawal.json", &body.to_string());
     let mut arguments: Vec<&str> = vec!["api", &path, "--method", "post"];
     arguments.extend(["--input", &input, "--repo", &repo]);

@@ -11,6 +11,7 @@ use crate::{
     write_error::WriteFailure,
 };
 use provenance_core::{
+    check_withdrawal_actor,
     review::{CycleEntry, CycleFact},
     NodeType, StableId, Withdrawal,
 };
@@ -41,7 +42,7 @@ impl StateStore {
         addressed: Option<(NodeType, StableId)>,
         input: WithdrawRecordReview,
     ) -> anyhow::Result<CycleEntry> {
-        crate::write_error::ensure_actor(&input.actor)?;
+        crate::write_error::ensure_actor(&input.actor.id)?;
         if let Some(reason) = &input.reason {
             if reason.trim().is_empty() {
                 return Err(crate::refusal::refuse!(
@@ -88,6 +89,8 @@ impl StateStore {
                     "{reason}"
                 ));
             }
+            let reviewers = held.manifest()?.disposition_actor_ids;
+            check_withdrawal_actor(&input.actor, proposal.actor.as_deref(), &reviewers)?;
             with_record_state(held, RecordStamp::ResolveFromRepository, |staged| {
                 staged.commit_withdrawal(input)
             })
@@ -107,7 +110,7 @@ impl StateStore {
                 scope_id: input.scope_id.clone(),
                 id: new_id(&*store.ids()),
                 proposal_id: input.proposal_id.clone(),
-                actor: input.actor.clone(),
+                actor: input.actor.id.clone(),
                 reason: input.reason.clone(),
             })
         })?;
@@ -119,7 +122,7 @@ impl StateStore {
             fact: CycleFact::Withdrawn,
             disposition_id: None,
             feedback_message_id: None,
-            actor: input.actor,
+            actor: input.actor.id,
         }
         .entry())
     }

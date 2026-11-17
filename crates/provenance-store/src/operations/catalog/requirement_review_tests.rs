@@ -137,7 +137,7 @@ async fn content_update_replaces_or_opens_the_current_submission() {
     store
         .withdraw_record_review(
             serde_json::from_value(json!({
-                "scope_id":"default", "actor":"ben",
+                "scope_id":"default", "actor":{"identity_type":"agent","id":"ben"},
                 "proposal_id":second.proposal_id
             }))
             .unwrap(),

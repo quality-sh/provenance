@@ -138,7 +138,7 @@ fn target_first_requirement_submit_infers_kind_and_records_the_submission() {
             "--format",
             "json",
         ],
-        &serde_json::json!({"actor":"agent","declared_by":null,"reason":null}),
+        &serde_json::json!({"actor":{"identity_type":"agent","id":"authoring"},"declared_by":null,"reason":null}),
     );
     let submitted = json_stdin_output(
         &[

@@ -86,7 +86,7 @@ fn a_submission_id_on_lines_that_disagree_refuses_only_its_record() {
         refused_write(&repo, "post", &format!("{addressed}/decide"), &decision),
         expected(&repo)
     );
-    let withdrawal = json!({"actor":"agent", "declared_by":null, "reason":"Again."});
+    let withdrawal = json!({"actor":{"identity_type":"agent","id":"agent"}, "declared_by":null, "reason":"Again."});
     assert_eq!(
         refused_write(&repo, "post", &format!("{addressed}/withdraw"), &withdrawal),
         expected(&repo)

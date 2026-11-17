@@ -102,7 +102,7 @@ impl Task {
                 review(
                     "withdraw-record-review",
                     proposal,
-                    json!({"actor": "reviewer"}),
+                    json!({"actor": {"identity_type": "agent", "id": "reviewer"}}),
                 )
             }),
             Operation::DecideReview { .. } => self.proposal.as_ref().and_then(|proposal| {

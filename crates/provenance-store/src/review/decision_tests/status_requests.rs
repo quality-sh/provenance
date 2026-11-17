@@ -161,7 +161,10 @@ fn rejection_and_withdrawal_keep_the_status() {
 
     update(&store, &json!({"status":"active"})).unwrap();
     let (withdrawn, _) = pending_request(&store);
-    withdraw(&store, &withdrawn).unwrap();
+    let input = json!({"scope_id":"default","actor":reviewer("reviewer"),"proposal_id":withdrawn});
+    store
+        .withdraw_record_review(serde_json::from_value(input).unwrap())
+        .unwrap();
 
     assert_eq!(read_rule(&store).status, RuleStatus::Draft);
     assert!(rule_state(&store).pending.is_none());

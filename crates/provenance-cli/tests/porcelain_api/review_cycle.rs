@@ -111,7 +111,7 @@ fn review_cycle_reads_decisions_feedback_and_withdrawal() {
         &repo,
         "post",
         &format!("requirements/req_cycle/submissions/{second}/withdraw"),
-        &json!({"actor":"agent", "declared_by":null, "reason":"Resubmit as an answer."}),
+        &json!({"actor":{"identity_type":"agent","id":"agent"}, "declared_by":null, "reason":"Resubmit as an answer."}),
         None,
     );
     let resubmitted = write(

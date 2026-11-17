@@ -17,7 +17,7 @@ fn withdraw_pending_submission(repository: &Repository) {
         .requirement_decision_state(&scope, &requirement)
         .unwrap();
     let proposal = state.pending.unwrap().proposal_id;
-    let withdrawal = json!({"scope_id": "default", "actor": "agent", "proposal_id": proposal});
+    let withdrawal = json!({"scope_id": "default", "actor": {"identity_type":"agent","id":"authoring"}, "proposal_id": proposal});
     store
         .withdraw_record_review(serde_json::from_value(withdrawal).unwrap())
         .unwrap();

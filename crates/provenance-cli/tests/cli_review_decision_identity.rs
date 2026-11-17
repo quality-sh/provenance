@@ -1,7 +1,8 @@
-//! Who can decide a review submission, through the CLI api command, the HTTP
-//! host and MCP. An entry of the manifest field `disposition_actor_ids` names
-//! an identity type and an ID, and an actor matches it only when both are
-//! equal.
+//! Who can decide and who can withdraw a review submission, through the CLI
+//! api command, the HTTP host and MCP. An entry of the manifest field
+//! `disposition_actor_ids` names an identity type and an ID, and an actor
+//! matches it only when both are equal. The author of a submission or a
+//! matching actor can withdraw it; each other actor gets `access_denied`.
 
 use crate::review_host_support;
 
@@ -14,11 +15,19 @@ use std::process::{Command, Stdio};
 
 /// The one person in the field.
 const LEAD: &str = "lead_reviewer";
+/// An actor that is not the author and is not in the field.
+const STRANGER: &str = "stranger";
 /// The refusal of a decision by an actor that the field does not contain.
 const DECISION_REFUSAL: &str = "The manifest field disposition_actor_ids does not contain the \
     actor of a review decision. To change this field, use the command provenance init \
     --disposition-actor-id <DISPOSITION_ACTOR_ID>. Give --disposition-actor-id one time for each \
     actor that can make a review decision.";
+/// The refusal of a withdrawal by an actor that is not the author and is not in the field.
+const WITHDRAWAL_REFUSAL: &str = "The actor of a withdrawal is not the author of the review \
+    submission, and the manifest field disposition_actor_ids does not contain the actor. To \
+    change this field, use the command provenance init --disposition-actor-id \
+    <DISPOSITION_ACTOR_ID>. Give --disposition-actor-id one time for each actor that can make a \
+    review decision.";
 
 #[derive(Clone, Copy, Debug)]
 enum Surface {
@@ -61,6 +70,7 @@ struct Answer {
 struct Review {
     repo: tempfile::TempDir,
     proposal: String,
+    author: String,
 }
 
 impl Review {
@@ -83,7 +93,11 @@ impl Review {
             .as_str()
             .unwrap_or_else(|| panic!("no author: {}", card.body))
             .to_owned();
-        Self { repo, proposal }
+        Self {
+            repo,
+            proposal,
+            author,
+        }
     }
 
     fn root(&self) -> &Path {
@@ -118,6 +132,10 @@ fn decision(actor: &Value) -> Value {
         "actor": actor, "decision": "rejected", "rationale": "The statement needs a scope.",
         "canonical_artifact": null, "feedback": null, "declared_by": null
     })
+}
+
+fn withdrawal(actor: &Value) -> Value {
+    json!({"actor": actor, "declared_by": null, "reason": null})
 }
 
 fn cli(repo: &Path, method: &str, path: &str, input: Option<&Value>) -> Answer {
@@ -242,5 +260,84 @@ fn the_listed_person_decides() {
             answer.body
         );
         assert_eq!(review.decision()["pending"], Value::Null, "{surface:?}");
+    }
+}
+
+#[test]
+#[verifies("rule_withdrawal_actor_is_author_or_reviewer", examples)]
+fn the_author_withdraws() {
+    for surface in SURFACES {
+        let review = Review::new();
+        let author = actor("agent", &review.author);
+        let answer = review.post(surface, "withdraw", &withdrawal(&author));
+        assert_eq!(answer.code, surface.landed(), "{surface:?} {}", answer.body);
+        assert_eq!(
+            answer.body["fact"], "withdrawn",
+            "{surface:?} {}",
+            answer.body
+        );
+        let withdrawn = json!([review.proposal]);
+        assert_eq!(review.decision()["withdrawn"], withdrawn, "{surface:?}");
+    }
+}
+
+#[test]
+#[verifies("rule_withdrawal_actor_is_author_or_reviewer", examples)]
+fn the_listed_person_withdraws() {
+    for surface in SURFACES {
+        let review = Review::new();
+        let answer = review.post(surface, "withdraw", &withdrawal(&actor("human", LEAD)));
+        assert_eq!(answer.code, surface.landed(), "{surface:?} {}", answer.body);
+        assert_eq!(
+            answer.body["fact"], "withdrawn",
+            "{surface:?} {}",
+            answer.body
+        );
+        let withdrawn = json!([review.proposal]);
+        assert_eq!(review.decision()["withdrawn"], withdrawn, "{surface:?}");
+    }
+}
+
+#[test]
+#[verifies("rule_withdrawal_actor_is_author_or_reviewer", examples)]
+#[verifies("rule_withdrawal_refusal_is_access_denied", examples)]
+fn a_third_actor_cannot_withdraw() {
+    for surface in SURFACES {
+        let review = Review::new();
+        let before = review.decision();
+        let answer = review.post(surface, "withdraw", &withdrawal(&actor("agent", STRANGER)));
+        assert_eq!(
+            answer.code,
+            surface.refused(403),
+            "{surface:?} {}",
+            answer.body
+        );
+        let expected = json!({"kind": "access_denied", "message": WITHDRAWAL_REFUSAL});
+        assert_eq!(answer.body, expected, "{surface:?}");
+        assert_eq!(review.decision(), before, "{surface:?}");
+    }
+}
+
+#[test]
+#[verifies("rule_withdrawal_actor_is_author_or_reviewer", examples)]
+fn a_second_withdrawal_gets_the_submission_conflict() {
+    for surface in SURFACES {
+        let review = Review::new();
+        let author = withdrawal(&actor("agent", &review.author));
+        let first = review.post(surface, "withdraw", &author);
+        assert_eq!(first.code, surface.landed(), "{surface:?} {}", first.body);
+        let after = review.decision();
+        let second = review.post(surface, "withdraw", &author);
+        assert_eq!(
+            second.code,
+            surface.refused(409),
+            "{surface:?} {}",
+            second.body
+        );
+        assert_eq!(
+            second.body["kind"], "review_submission_conflict",
+            "{surface:?}"
+        );
+        assert_eq!(review.decision(), after, "{surface:?}");
     }
 }

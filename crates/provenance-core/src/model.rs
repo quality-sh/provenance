@@ -26,9 +26,9 @@ pub use ideation::contributions::{
     UnsupportedRecommendation,
 };
 pub use ideation::dispositions::{
-    disposition_requires_prior_assertion, validate_disposition_intrinsic, ApprovalEvidenceRequired,
-    CanonicalArtifact, DispositionActor, DispositionActorRefusal, DispositionRecord,
-    ExternalActionCorrelation,
+    check_withdrawal_actor, disposition_requires_prior_assertion, validate_disposition_intrinsic,
+    ApprovalEvidenceRequired, CanonicalArtifact, DispositionActor, DispositionActorRefusal,
+    DispositionRecord, ExternalActionCorrelation,
 };
 pub use ideation::lifecycle::{
     effective_proposal_state, packet_qualifies_proposal, validate_assertion_intrinsic,

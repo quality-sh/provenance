@@ -30,7 +30,9 @@ and an ID, in the same form as the actor of a review decision:
 `{"identity_type":"human","id":"reviewer-id"}`. The init command writes a
 `human` entry for each `--disposition-actor-id`. A review decision is recorded
 only when its actor has the identity type and the ID of one entry; the name of
-the actor has no effect.
+the actor has no effect. The author of a review submission, or an actor that
+matches an entry, can withdraw the submission. A withdrawal by each other actor
+gets 403 `access_denied`.
 
 ## Record commands and the api command
 

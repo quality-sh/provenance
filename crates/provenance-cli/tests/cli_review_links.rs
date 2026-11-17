@@ -195,7 +195,7 @@ fn update_payload() -> serde_json::Value {
 }
 
 fn withdraw_payload() -> serde_json::Value {
-    json!({"actor":"agent","declared_by":null,"reason":null})
+    json!({"actor":{"identity_type":"agent","id":"authoring"},"declared_by":null,"reason":null})
 }
 
 fn submission_payload() -> serde_json::Value {

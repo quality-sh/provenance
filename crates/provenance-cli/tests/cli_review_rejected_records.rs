@@ -244,7 +244,7 @@ fn rejected_candidate_can_be_withdrawn_with_feedback_and_history_intact() {
     post(
         &host,
         &format!("/resolutions/res_new/submissions/{proposal}/withdraw"),
-        &json!({"actor":"shaping_agent", "declared_by":"shaping_agent",
+        &json!({"actor":{"identity_type":"agent","id":"authoring"}, "declared_by":"shaping_agent",
             "reason":"The candidate needs a different approach."}),
     );
 
@@ -282,7 +282,7 @@ fn accepted_candidate_cannot_be_withdrawn() {
         )
         .set("Content-Type", "application/json")
         .send_string(
-            &json!({"data":{"actor":"shaping_agent",
+            &json!({"data":{"actor":{"identity_type":"agent","id":"shaping_agent"},
                 "declared_by":"shaping_agent", "reason":"Withdraw the candidate."}})
             .to_string(),
         ),
@@ -346,7 +346,7 @@ fn replaced_rejection(accepted: bool, revises: bool) {
         .set("Content-Type", "application/json")
         .send_string(
             &json!({"data":{
-                "actor":"shaping_agent", "declared_by":"shaping_agent",
+                "actor":{"identity_type":"agent","id":"shaping_agent"}, "declared_by":"shaping_agent",
                 "reason":"Withdraw the candidate."
             }})
             .to_string(),

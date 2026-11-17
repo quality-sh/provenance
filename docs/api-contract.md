@@ -93,7 +93,11 @@ Actions are POSTs on a resource path with one declared action name:
   Submit creates the Proposal ID and Proposal key and returns both values. A
   client uses the returned Proposal ID in a later decide or withdraw path.
   Decide creates and returns the Disposition ID. The separate submit and
-  withdraw operations remain available.
+  withdraw operations remain available. The `actor` of decide and of withdraw
+  is the object `{"identity_type":"human|agent|service","id":"..."}`. Decide
+  needs an actor whose identity type and ID equal one entry of the manifest
+  field `disposition_actor_ids`. Withdraw needs the author of the submission
+  or such an actor; each other actor gets 403 `access_denied`.
 - Verification: `POST /verification-runs/begin-verification`, and
   `POST /verification-runs/{run_id}/complete-verification`. Begin retains
   Rule-ID and declaration-reference targeting.

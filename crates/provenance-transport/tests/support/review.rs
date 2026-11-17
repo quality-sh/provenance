@@ -182,7 +182,7 @@ async fn review_withdraw_dispatches_for_a_real_submission() {
         &host,
         "POST",
         &format!("/requirements/req_shared/submissions/{proposal}/withdraw"),
-        Some(json!({"data":{"actor":"agent","declared_by":null,"reason":"Revise it."}})),
+        Some(json!({"data":{"actor":{"identity_type":"agent","id":"agent"},"declared_by":null,"reason":"Revise it."}})),
         &[],
     )
     .await;
@@ -232,7 +232,7 @@ async fn submit_conflicts_return_the_typed_http_envelope() {
             &host,
             "POST",
             &path,
-            Some(json!({"data":{"actor":"agent","declared_by":null,"reason":null}})),
+            Some(json!({"data":{"actor":{"identity_type":"agent","id":"agent"},"declared_by":null,"reason":null}})),
             &[],
         )
         .await
@@ -259,7 +259,7 @@ async fn assert_terminal_conflicts(
         ),
         (
             "withdraw",
-            json!({"data":{"actor":"agent","declared_by":null,"reason":null}}),
+            json!({"data":{"actor":{"identity_type":"agent","id":"agent"},"declared_by":null,"reason":null}}),
         ),
     ];
     for (action, body) in paths {
@@ -301,7 +301,7 @@ async fn terminal_review_conflicts_share_the_http_envelope() {
             "POST",
             &path,
             Some(json!({"data":{
-                "actor":"agent","declared_by":null,"reason":null
+                "actor":{"identity_type":"agent","id":"agent"},"declared_by":null,"reason":null
             }})),
             &[]
         )

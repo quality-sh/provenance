@@ -33,7 +33,7 @@ fn review_writes_change_only_record_shard_files() {
         &repo,
         "post",
         &format!("requirements/req_files/submissions/{automatic}/withdraw"),
-        &json!({"actor":"agent", "declared_by":null, "reason":"Submit with a summary."}),
+        &json!({"actor":{"identity_type":"agent","id":"agent"}, "declared_by":null, "reason":"Submit with a summary."}),
         None,
     );
     let submitted = write(

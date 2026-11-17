@@ -130,9 +130,10 @@ impl WriteFailure {
         Self::AccessDenied { message: None }
     }
 
-    /// Refuses a review decision by an actor that the manifest does not list,
-    /// with the text of the core refusal as the next step for the caller.
+    /// Refuses a review decision or a withdrawal by an actor that the manifest
+    /// does not list, with the text of the core refusal as the next step.
     #[provenance_macros::rule("rule_decision_refusal_names_reviewer_field")]
+    #[provenance_macros::rule("rule_withdrawal_refusal_is_access_denied")]
     fn disposition_actor_refused(refusal: provenance_core::DispositionActorRefusal) -> Self {
         Self::AccessDenied {
             message: Some(refusal.to_string()),

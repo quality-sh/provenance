@@ -225,7 +225,7 @@ fn second_records(store: &StateStore, scope: &ScopeId) {
         store
             .withdraw_record_review(
                 serde_json::from_value(json!({
-                    "scope_id": scope, "actor": "reviewer",
+                    "scope_id": scope, "actor": {"identity_type":"agent","id":"reviewer"},
                     "proposal_id": pending.proposal_id, "declared_by": null, "reason": null
                 }))
                 .unwrap(),
