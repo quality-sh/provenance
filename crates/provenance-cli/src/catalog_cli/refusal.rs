@@ -3,8 +3,9 @@
 //! A refusal from the local host reaches the CLI as a typed error. In text
 //! mode the error prints as before. In JSON mode the CLI prints one
 //! `{error,meta}` object with no `Error: ` prefix and puts the recovery hint
-//! in `error.hint`. An error of no known type gives `operation_failed` and its
-//! text in `error.message`.
+//! in `error.hint`. An error whose text is one JSON object prints as that
+//! object. Each other error gives `operation_failed` and its text in
+//! `error.message`.
 
 use provenance_core::protocol::failure::OperationFailure;
 use provenance_core::protocol::read_failure::UnparsableStateFile;
@@ -42,9 +43,14 @@ pub fn json_refusal(error: &anyhow::Error) -> Value {
     if let Some(state) = UnparsableStateFile::find(error.as_ref()) {
         return json!({"error": state.failure(), "meta": {}});
     }
+    let text = format!("{error:#}");
+    // The statement refusal of the store is an error whose text is its JSON report.
+    if let Ok(report @ Value::Object(_)) = serde_json::from_str::<Value>(&text) {
+        return report;
+    }
     let mut object = Map::new();
     object.insert("kind".into(), json!("operation_failed"));
-    envelope(object, &format!("{error:#}"))
+    envelope(object, &text)
 }
 
 /// Prints the refusal object as the only line on standard error, with no

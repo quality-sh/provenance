@@ -227,7 +227,7 @@ fn a_default_format_keeps_the_text_refusal_and_a_given_format_gives_the_object()
         .output()
         .unwrap();
     assert_eq!(output.status.code(), Some(1));
-    assert!(output.stdout.is_empty());
+    assert!(output.stdout.is_empty(), "{validate:?}");
     let text = String::from_utf8(output.stderr).unwrap();
     let error: Value = serde_json::from_str(&text).unwrap();
     assert_eq!(
