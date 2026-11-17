@@ -115,7 +115,7 @@ async fn an_api_discussion_start_with_no_actor_records_authoring() {
             "outcomes": [], "disposition_id": null,
         })
     );
-    let mut written = stored.clone();
+    let mut written = stored;
     written["message"] = json!({
         "scope_id": "default", "id": root, "thread_id": "thread_requirement_req_shared",
         "role": "user", "actor": "authoring", "body": "A concern.",
