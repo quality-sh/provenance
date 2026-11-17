@@ -14,6 +14,7 @@ use search_repository::{
     search_json, source, source_node, without_stamp,
 };
 use serde_json::Value;
+use std::path::Path;
 
 /// The complete first page of one search, with the stamp and the cursor as
 /// null, and whether the page has a cursor.
@@ -224,11 +225,14 @@ fn candidates_that_fail_the_piece_check_keep_a_continuation() {
 #[test]
 fn a_large_record_that_does_not_hold_the_text_does_not_stop_the_search() {
     let directory = tempfile::tempdir().unwrap();
-    let sources = vec![
-        source("source_large", &"x".repeat(70_000)),
-        source("source_needle", "Needle record"),
-    ];
+    let sources = vec![source("source_needle", "Needle record")];
     let repo = repository(directory.path(), sources, Vec::new());
+    // The writer refuses a row over the record budget, so the large row is a
+    // stored line that the write path did not check.
+    let shard = Path::new(&repo).join(".provenance/state/scopes/default/sources/source.jsonl");
+    let stored = std::fs::read_to_string(&shard).unwrap();
+    let large = source("source_large", &"x".repeat(70_000));
+    std::fs::write(&shard, format!("{large}\n{stored}")).unwrap();
 
     let (answer, has_cursor) = first_page(&repo, &["--text", "needle"]);
     assert!(!has_cursor);
