@@ -12,12 +12,10 @@ use provenance_core::{
 use provenance_macros::rule;
 
 pub(super) fn check_size(input: &WriteDiscussion) -> anyhow::Result<()> {
-    crate::write_error::ensure!(
-        RecordTooLarge,
-        canonical_digest::canonical_bytes(input)?.len() <= 1_048_576,
-        "Discussion request exceeds the operation byte budget"
-    );
-    Ok(())
+    crate::write_error::ensure_request_size(
+        canonical_digest::canonical_bytes(input)?.len(),
+        "Discussion",
+    )
 }
 
 /// The requested status already holds: the intent is met, so the write is a

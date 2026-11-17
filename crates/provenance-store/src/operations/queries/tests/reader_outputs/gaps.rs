@@ -92,10 +92,6 @@ pub(super) async fn ceilings(snapshot: &ReadSnapshot, lines: &mut Vec<String>) {
         rules.page_record("rule_wide").await.map(size),
     ));
     lines.push(line(
-        "wide resource_record",
-        rules.resource_record("rule_wide").await.map(size),
-    ));
-    lines.push(line(
         "wide record",
         rules.record(&sid("rule_wide")).await.map(size),
     ));

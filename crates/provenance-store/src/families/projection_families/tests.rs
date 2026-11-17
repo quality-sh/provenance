@@ -27,7 +27,7 @@ fn expected(
 #[test]
 #[allow(clippy::too_many_lines)]
 fn every_family_keeps_its_independent_descriptor() {
-    use BudgetKind::{NotImported, Record, Resource, Unchecked};
+    use BudgetKind::{NotImported, Record};
     use FamilyGroup::{Binding, Canonical, Export, Internal};
     let cases = [
         (
@@ -38,7 +38,7 @@ fn every_family_keeps_its_independent_descriptor() {
                 Some(NodeType::Source),
                 Some("sources"),
                 Some(10),
-                Resource,
+                Record,
                 &["list-sources", "page-sources", "get-source"],
             ),
         ),
@@ -50,7 +50,7 @@ fn every_family_keeps_its_independent_descriptor() {
                 Some(NodeType::Requirement),
                 Some("requirements"),
                 Some(20),
-                Resource,
+                Record,
                 &["list-requirements", "page-requirements"],
             ),
         ),
@@ -62,7 +62,7 @@ fn every_family_keeps_its_independent_descriptor() {
                 Some(NodeType::Topic),
                 Some("topics"),
                 Some(70),
-                Resource,
+                Record,
                 &["list-topics", "page-topics", "get-topic"],
             ),
         ),
@@ -74,7 +74,7 @@ fn every_family_keeps_its_independent_descriptor() {
                 Some(NodeType::Question),
                 Some("questions"),
                 Some(80),
-                Resource,
+                Record,
                 &["list-questions", "page-questions", "get-question"],
             ),
         ),
@@ -86,7 +86,7 @@ fn every_family_keeps_its_independent_descriptor() {
                 Some(NodeType::Resolution),
                 Some("resolutions"),
                 Some(30),
-                Resource,
+                Record,
                 &["list-resolutions", "page-resolutions", "get-resolution"],
             ),
         ),
@@ -98,7 +98,7 @@ fn every_family_keeps_its_independent_descriptor() {
                 Some(NodeType::Rule),
                 Some("rules"),
                 Some(40),
-                Resource,
+                Record,
                 &["list-rules", "page-rules", "get-rule"],
             ),
         ),
@@ -138,7 +138,7 @@ fn every_family_keeps_its_independent_descriptor() {
                 None,
                 None,
                 Some(90),
-                Resource,
+                Record,
                 &[
                     "list-contributions",
                     "page-contributions",
@@ -154,7 +154,7 @@ fn every_family_keeps_its_independent_descriptor() {
                 None,
                 None,
                 Some(100),
-                Resource,
+                Record,
                 &[
                     "list-synthesis-packets",
                     "page-synthesis-packets",
@@ -170,7 +170,7 @@ fn every_family_keeps_its_independent_descriptor() {
                 None,
                 None,
                 Some(110),
-                Resource,
+                Record,
                 &["list-proposals", "page-proposals", "get-proposal"],
             ),
         ),
@@ -182,7 +182,7 @@ fn every_family_keeps_its_independent_descriptor() {
                 None,
                 None,
                 Some(160),
-                Resource,
+                Record,
                 &["list-assertions", "page-assertions", "get-assertion"],
             ),
         ),
@@ -194,7 +194,7 @@ fn every_family_keeps_its_independent_descriptor() {
                 None,
                 None,
                 Some(170),
-                Resource,
+                Record,
                 &["list-dispositions", "page-dispositions", "get-disposition"],
             ),
         ),
@@ -206,7 +206,7 @@ fn every_family_keeps_its_independent_descriptor() {
                 None,
                 Some("implementation_bindings"),
                 None,
-                Unchecked,
+                Record,
                 &[],
             ),
         ),
@@ -218,7 +218,7 @@ fn every_family_keeps_its_independent_descriptor() {
                 None,
                 Some("verification_bindings"),
                 Some(130),
-                Resource,
+                Record,
                 &[
                     "list-verification-bindings",
                     "page-verification-bindings",

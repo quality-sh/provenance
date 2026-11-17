@@ -270,7 +270,9 @@ fn get_rule_query() -> GetQuery {
     }
 }
 
-async fn get_rule_member(root: camino::Utf8PathBuf) -> serde_json::Value {
+/// The member read of `rule_overtime`, or the status and the error of its
+/// refusal.
+async fn get_rule_member(root: camino::Utf8PathBuf) -> Result<serde_json::Value, (u16, String)> {
     crate::test_support::call::<crate::operations::family_operations::GetRule, _>(
         json!({
             "context": {"repository": "test", "scope": "default"},
@@ -279,13 +281,7 @@ async fn get_rule_member(root: camino::Utf8PathBuf) -> serde_json::Value {
         catalog::Direct(Arc::new(Target(root, true))),
     )
     .await
-    .unwrap_or_else(|failure| {
-        panic!(
-            "member read failed with {}: {}",
-            failure.status_code(),
-            failure.error
-        )
-    })
+    .map_err(|failure| (failure.status_code(), failure.error.to_string()))
 }
 
 #[tokio::test]
@@ -320,7 +316,7 @@ async fn stored_record_bytes_decide_query_eligibility_not_wrapper_bytes() {
         "the traversal wrapper must be larger than its stored row"
     );
     assert_eq!(
-        get_rule_member(root.clone()).await["result"]["id"],
+        get_rule_member(root.clone()).await.unwrap()["result"]["id"],
         "rule_overtime"
     );
 
@@ -337,5 +333,7 @@ async fn stored_record_bytes_decide_query_eligibility_not_wrapper_bytes() {
         error.downcast_ref::<ReadFailure>(),
         Some(&ReadFailure::PageRecordTooLarge)
     );
-    assert_eq!(get_rule_member(root).await["result"]["id"], "rule_overtime");
+    let (status, refusal) = get_rule_member(root).await.unwrap_err();
+    assert_eq!(status, 409, "{refusal}");
+    assert!(refusal.contains("page_record_too_large"), "{refusal}");
 }

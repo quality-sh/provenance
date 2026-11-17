@@ -1,6 +1,6 @@
 //! Typed canonical payload reads for collaboration projection tables.
 
-use super::page::{id_page_sql, page_ids, RESOURCE_RECORD_BYTES};
+use super::page::{id_page_sql, page_ids, RECORD_BYTES};
 use crate::operations::reader::ReadSnapshot;
 use crate::read_database::{SqlColumns, SqlValue};
 use provenance_core::protocol::read_failure::ReadFailure;
@@ -83,7 +83,7 @@ impl<T: PayloadRow> Payloads<'_, T> {
             crate::cache::quoted(T::TABLE)
         );
         let mut values = vec![
-            SqlValue::Integer(i64::try_from(RESOURCE_RECORD_BYTES)?),
+            SqlValue::Integer(i64::try_from(RECORD_BYTES)?),
             self.snapshot.scope_value(),
             id.into(),
         ];
@@ -94,7 +94,7 @@ impl<T: PayloadRow> Payloads<'_, T> {
         let Some(row) = rows.first() else {
             return Ok(None);
         };
-        if row.integer(0)? > i64::try_from(RESOURCE_RECORD_BYTES)? {
+        if row.integer(0)? > i64::try_from(RECORD_BYTES)? {
             return Err(ReadFailure::PageRecordTooLarge.into());
         }
         Ok(Some(serde_json::from_str(

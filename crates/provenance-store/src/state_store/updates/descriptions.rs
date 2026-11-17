@@ -25,6 +25,7 @@ impl StateStore {
             held.list_requirement_reviews(&input.scope_id)?;
             let path = shards::requirements_path(&held.layout, &input.scope_id);
             let mut before = String::new();
+            let mut reviews = Vec::new();
             let mut was_archived = false;
             let record = held.mutate_graph_record(&path, |records: &mut Vec<Requirement>| {
                 let record = records
@@ -35,6 +36,14 @@ impl StateStore {
                 before.clone_from(&record.statement);
                 was_archived = record.status == RequirementStatus::Archived;
                 set(&mut record.statement, input.statement);
+                if before != record.statement {
+                    let restatement = Restatement {
+                        requirement_id: record.id.clone(),
+                        before: before.clone(),
+                        after: record.statement.clone(),
+                    };
+                    reviews = held.restatement_reviews(&input.scope_id, vec![restatement])?;
+                }
                 set(&mut record.status, input.status);
                 set(
                     &mut record.archived_in_commit,
@@ -55,15 +64,8 @@ impl StateStore {
                 })?;
                 held.archive_dependents(&record.scope_id, &record.id, stamp)?;
             }
-            if before != record.statement {
-                let restatement = Restatement {
-                    requirement_id: record.id.clone(),
-                    before,
-                    after: record.statement.clone(),
-                };
-                held.record_restatements(&input.scope_id, vec![restatement])
-                    .map_err(crate::write_error::publication_started)?;
-            }
+            held.write_reviews(&input.scope_id, reviews)
+                .map_err(crate::write_error::publication_started)?;
             Ok(record)
         })
     }

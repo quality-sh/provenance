@@ -49,7 +49,10 @@ fn landing_refuses_oversized_records_of_every_kind_before_publication() {
         let batch: IdeationLandingBatch = serde_json::from_value(value.into()).unwrap();
         let error = store.land_ideation_batch(&scope, batch, false).unwrap_err();
         assert!(
-            matches!(WriteError(error).safe(), WriteFailure::RecordTooLarge),
+            matches!(
+                WriteError(error).safe(),
+                WriteFailure::RecordTooLarge { .. }
+            ),
             "oversized {kind} must receive the typed refusal"
         );
         assert!(
@@ -83,7 +86,7 @@ fn landed_contribution_and_synthesis_replacements_obey_read_budget() {
     };
     assert!(matches!(
         WriteError(contribution_error).safe(),
-        WriteFailure::RecordTooLarge
+        WriteFailure::RecordTooLarge { .. }
     ));
     let Err(synthesis_error) = store.upsert_synthesis_packet(synthesis_input(&scope, &oversized))
     else {
@@ -91,7 +94,7 @@ fn landed_contribution_and_synthesis_replacements_obey_read_budget() {
     };
     assert!(matches!(
         WriteError(synthesis_error).safe(),
-        WriteFailure::RecordTooLarge
+        WriteFailure::RecordTooLarge { .. }
     ));
     assert_eq!(
         store.list_contributions(&scope).unwrap()[0].strongest_finding,

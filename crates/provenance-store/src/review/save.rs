@@ -155,11 +155,7 @@ impl StateStore {
         complete: impl FnOnce(&Self, Requirement) -> anyhow::Result<R>,
     ) -> anyhow::Result<R> {
         crate::write_error::ensure_actor(&input.actor)?;
-        crate::write_error::ensure!(
-            RecordTooLarge,
-            serde_json::to_vec(&input)?.len() <= 1_048_576,
-            "review request exceeds the operation byte budget"
-        );
+        crate::write_error::ensure_request_size(serde_json::to_vec(&input)?.len(), "review")?;
         input.normalize();
         self.with_repository_publication(|held| {
             crate::test_probes::at("requirement_save_locked")?;

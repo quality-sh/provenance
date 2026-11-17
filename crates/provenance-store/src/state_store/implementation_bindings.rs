@@ -180,6 +180,7 @@ impl StateStore {
                 file: input.file,
                 symbol: input.symbol,
             };
+            super::read_budget::ensure_within_read_budget(&binding)?;
             let path = shards::implementation_bindings_path(&held.layout, &input.scope_id);
             held.mutate_jsonl_records(&path, |records: &mut Vec<ImplementationBinding>| {
                 if let Some(owner) = records.iter().find(|record| {

@@ -9,7 +9,7 @@ use provenance_core::protocol::failure::{InvalidInputReason, OperationFailure};
 use provenance_core::protocol::read_failure::ReadFailure;
 use provenance_macros::rule;
 
-pub const RECORD_BYTES: usize = 65_536;
+pub use crate::state_store::read_budget::RECORD_BYTES;
 pub const PAGE_BYTES: usize = 1_048_576;
 pub const RESOURCE_RECORD_BYTES: usize = PAGE_BYTES - 16_384;
 
@@ -78,14 +78,10 @@ pub fn id_page_sql(table: &str, filter: &str) -> String {
 }
 
 impl<K: ProjectionRow> Table<'_, K> {
-    /// Reads one canonical row only after its stored byte count passes the cap.
+    /// Reads one row only after its stored byte count is at most the record
+    /// budget, for the query reads and the resource reads alike.
     pub(crate) async fn page_record(&self, id: &str) -> anyhow::Result<Option<K>> {
         self.record_within(id, RECORD_BYTES).await
-    }
-
-    /// Reads one public resource within the resource-page byte ceiling.
-    pub(crate) async fn resource_record(&self, id: &str) -> anyhow::Result<Option<K>> {
-        self.record_within(id, RESOURCE_RECORD_BYTES).await
     }
 
     /// Reads one row by id only after its stored byte count is at most

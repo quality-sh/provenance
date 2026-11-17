@@ -20,8 +20,6 @@ kind_of rule_overtime_001: Some(Rule)
 kind_of topic_rates: Some(Topic)
 kind_of absent: None
 rule page_record: {"scope_id":"default","id":"rule_overtime_001","name":"Overtime threshold","description":"Pay overtime after the threshold","statement":"Overtime is paid after the threshold","status":"review","severity":"high","requirement_ids":["req_overtime"],"resolution_ids":["res_overtime"]}
-rule resource_record: {"scope_id":"default","id":"rule_penalty_001","statement":"rule_penalty_001 statement","status":"review","severity":"high","requirement_ids":["req_penalty"]}
-rule resource_record absent: null
 rule page_ids: ["rule_over_002","rule_over_003","rule_over_004"]
 rule page_ids after: ["rule_penalty_001","rule_twin_record","rule_wide"]
 verification ids: ["bind_ver_a","bind_ver_b","bind_ver_c","bind_ver_d"]
@@ -65,7 +63,6 @@ chunked front req_overtime: 1 out, 14 in
 chunked front req_pad_300: 0 out, 0 in
 wide statement bytes: 80000
 wide page_record: refused: canonical record exceeds the page record budget
-wide resource_record: ["rule_wide",80000]
 wide record: ["rule_wide",80000]
 wide checked_by_ids: refused: canonical record exceeds the page record budget
 wide checked_by_field: ""

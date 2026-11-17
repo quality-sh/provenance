@@ -72,6 +72,8 @@ mod porcelain_route_inventory;
 mod porcelain_target_registration;
 #[path = "../query_response_budgets.rs"]
 mod query_response_budgets;
+#[path = "../record_budget.rs"]
+mod record_budget;
 #[path = "../refusal_characterization.rs"]
 mod refusal_characterization;
 #[path = "../request_body_decode.rs"]

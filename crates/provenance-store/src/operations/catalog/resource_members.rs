@@ -88,7 +88,7 @@ async fn projection_member<K: ProjectionRow>(
 ) -> anyhow::Result<K> {
     ctx.snapshot()
         .table::<K>()
-        .resource_record(request.id.as_str())
+        .page_record(request.id.as_str())
         .await?
         .ok_or_else(|| ReadFailure::ResourceNotFound.into())
 }

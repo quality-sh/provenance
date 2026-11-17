@@ -1,7 +1,7 @@
 //! Boundaries shared by public resource pages and discussion documents.
 
 use super::initialized_store;
-use super::read_budget::{blank_source, list_read, member_read, source_of_stored_bytes};
+use super::read_budget::{list_read, member_read, source_of_stored_bytes};
 use crate::state_store::{read_budget::ReadBudget, PostMessageInput};
 use crate::write_error::{SourceFailure, WriteFailure};
 use provenance_core::{
@@ -9,16 +9,7 @@ use provenance_core::{
 };
 use provenance_macros::verifies;
 
-const RESOURCE_BYTES: usize = crate::cache::read::page::RESOURCE_RECORD_BYTES;
 const DOCUMENT_BYTES: usize = crate::cache::read::page::RECORD_BYTES;
-
-fn json_boundary_sql_bytes(scope: &ScopeId, id: &str) -> usize {
-    let blank = blank_source(scope, id);
-    let json = serde_json::to_vec(&blank).unwrap().len();
-    let sql = blank.read_bytes().unwrap();
-    assert!(json > sql);
-    RESOURCE_BYTES - (json - sql)
-}
 
 fn assert_too_large<T>(result: anyhow::Result<T>) {
     let Err(error) = result else {
@@ -27,22 +18,22 @@ fn assert_too_large<T>(result: anyhow::Result<T>) {
     let failure = error
         .downcast_ref::<SourceFailure>()
         .expect("typed refusal");
-    assert!(matches!(failure.failure, WriteFailure::RecordTooLarge));
+    assert!(matches!(
+        failure.failure,
+        WriteFailure::RecordTooLarge { .. }
+    ));
 }
 
 #[tokio::test]
-#[verifies("rule_accepted_writes_stay_readable", examples)]
-async fn source_at_json_page_boundary_is_accepted_and_readable() {
+#[verifies("rule_writer_refuses_a_row_over_the_record_budget", examples)]
+async fn source_at_the_record_budget_is_accepted_and_readable() {
     let (dir, store, scope) = initialized_store();
-    let id = "source_json_edge";
+    let id = "source_row_edge";
     let source = store
-        .create_source(source_of_stored_bytes(
-            &scope,
-            id,
-            json_boundary_sql_bytes(&scope, id),
-        ))
-        .expect("exact JSON page boundary is accepted");
-    assert_eq!(serde_json::to_vec(&source).unwrap().len(), RESOURCE_BYTES);
+        .create_source(source_of_stored_bytes(&scope, id, DOCUMENT_BYTES))
+        .expect("a row at the record budget is accepted");
+    assert_eq!(source.read_bytes().unwrap(), DOCUMENT_BYTES);
+    assert!(serde_json::to_vec(&source).unwrap().len() > DOCUMENT_BYTES);
     let root = camino::Utf8PathBuf::from_path_buf(dir.path().to_path_buf()).unwrap();
     assert_eq!(member_read(&root, id).await.unwrap()["result"]["id"], id);
     assert_eq!(
@@ -52,16 +43,11 @@ async fn source_at_json_page_boundary_is_accepted_and_readable() {
 }
 
 #[tokio::test]
-#[verifies("rule_accepted_writes_stay_readable", examples)]
-async fn source_above_json_page_boundary_is_refused_before_publication() {
+#[verifies("rule_writer_refuses_a_row_over_the_record_budget", examples)]
+async fn source_over_the_record_budget_is_refused_before_publication() {
     let (dir, store, scope) = initialized_store();
-    let id = "source_json_over";
-    let target = json_boundary_sql_bytes(&scope, id) + 1;
-    assert!(
-        target <= RESOURCE_BYTES,
-        "SQLite budget still accepts this row"
-    );
-    assert_too_large(store.create_source(source_of_stored_bytes(&scope, id, target)));
+    let id = "source_row_over";
+    assert_too_large(store.create_source(source_of_stored_bytes(&scope, id, DOCUMENT_BYTES + 1)));
     let root = camino::Utf8PathBuf::from_path_buf(dir.path().to_path_buf()).unwrap();
     assert_eq!(
         member_read(&root, id).await.unwrap_err(),

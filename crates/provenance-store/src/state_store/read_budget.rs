@@ -7,23 +7,23 @@ use provenance_core::model::ProjectionRow;
 use provenance_macros::rule;
 use serde::Serialize;
 
-const RECORD_BYTES: usize = 65_536;
+/// The bytes of one stored row of a record or a binding. The writer refuses a
+/// larger row, and each read of a record or a binding takes this budget.
+pub const RECORD_BYTES: usize = 65_536;
 const RESOURCE_RECORD_BYTES: usize = 1_048_576 - 16_384;
+const ID_BYTES: usize = 1024;
 
-// The projection pages read with the same budgets.
+// The projection pages read with the same resource page budget.
 #[cfg(feature = "host")]
-const _: () = assert!(
-    RECORD_BYTES == crate::cache::read::page::RECORD_BYTES
-        && RESOURCE_RECORD_BYTES == crate::cache::read::page::RESOURCE_RECORD_BYTES
-);
+const _: () = assert!(RESOURCE_RECORD_BYTES == crate::cache::read::page::RESOURCE_RECORD_BYTES);
 
 /// The shared resource row and serialized page-item budget.
 pub const fn resource_record_bytes() -> usize {
     RESOURCE_RECORD_BYTES
 }
 
-/// The canonical row budget the shared query engine enforces, which the
-/// discussion page readers also apply to messages.
+/// The row budget of a record or a binding, which the writer and each read
+/// apply.
 pub const fn record_bytes() -> usize {
     RECORD_BYTES
 }
@@ -33,12 +33,12 @@ pub trait ReadBudget: Serialize {
     /// The stored bytes the supported reads account for this record.
     fn read_bytes(&self) -> anyhow::Result<usize>;
 
-    /// The key bytes that a supported page scan must return.
-    fn read_id_bytes(&self) -> usize;
+    /// The key that a supported page scan must return.
+    fn read_id(&self) -> &str;
 
-    /// The read budget this record kind's supported reads enforce.
+    /// The row budget of this kind.
     fn read_budget() -> usize {
-        resource_record_bytes()
+        record_bytes()
     }
 }
 
@@ -121,28 +121,42 @@ fn sqlite_real_bytes(real: f64) -> anyhow::Result<usize> {
 /// refuse the key, row, or serialized page item.
 #[rule("rule_accepted_writes_stay_readable")]
 pub fn ensure_within_read_budget<T: ReadBudget>(record: &T) -> anyhow::Result<()> {
-    for (size, budget) in [
-        (record.read_id_bytes(), 1024),
-        (record.read_bytes()?, T::read_budget()),
-        (serde_json::to_vec(record)?.len(), resource_record_bytes()),
-    ] {
-        ensure_within(size, budget)?;
-    }
-    Ok(())
+    let id = record.read_id();
+    ensure_within(id, id.len(), ID_BYTES)?;
+    ensure_row_within(id, record.read_bytes()?, T::read_budget())?;
+    ensure_within(
+        id,
+        serde_json::to_vec(record)?.len(),
+        resource_record_bytes(),
+    )
+}
+
+/// Refuses a stored row over the budget of its kind, with the record, the
+/// size of its row and the budget.
+#[rule("rule_writer_refuses_a_row_over_the_record_budget")]
+fn ensure_row_within(id: &str, size: usize, budget: usize) -> anyhow::Result<()> {
+    ensure_within(id, size, budget)
 }
 
 /// Refuses a stored line of more than `budget` bytes before it is written, for
 /// a file whose reads measure each stored line.
 #[cfg(feature = "host")]
 pub fn ensure_line_within(line: &str, budget: usize) -> anyhow::Result<()> {
-    ensure_within(line.len(), budget)
+    if line.len() > budget {
+        return Err(crate::refusal::refuse!(
+            (crate::write_error::WriteFailure::record_too_large(None, line.len(), budget)),
+            "a stored line uses {} bytes; the line may use at most {budget} bytes",
+            line.len()
+        ));
+    }
+    Ok(())
 }
 
-fn ensure_within(size: usize, budget: usize) -> anyhow::Result<()> {
+fn ensure_within(id: &str, size: usize, budget: usize) -> anyhow::Result<()> {
     if size > budget {
         return Err(crate::refusal::refuse!(
-            RecordTooLarge,
-            "record uses {size} bytes; the supported read allows at most {budget} bytes"
+            (crate::write_error::WriteFailure::record_too_large(Some(id), size, budget)),
+            "record `{id}` uses {size} bytes; the supported read allows at most {budget} bytes"
         ));
     }
     Ok(())
@@ -192,8 +206,8 @@ macro_rules! projection_budget {
                     self.row()?.iter().map(column_bytes).sum()
                 }
 
-                fn read_id_bytes(&self) -> usize {
-                    self.id.as_str().len()
+                fn read_id(&self) -> &str {
+                    self.id.as_str()
                 }
             }
         )+
@@ -208,8 +222,8 @@ macro_rules! payload_budget {
                     Ok(serde_json::to_vec(self)?.len())
                 }
 
-                fn read_id_bytes(&self) -> usize {
-                    self.id.as_str().len()
+                fn read_id(&self) -> &str {
+                    self.id.as_str()
                 }
             }
         )+
@@ -251,9 +265,24 @@ macro_rules! define_family_budgets {
 
 crate::families::record_families!(define_family_budgets);
 
-// A row of the runs cache is one serialized run, and the page read, the
-// member read, and the evidence read of the runs count the bytes of that line.
-payload_budget!(provenance_core::VerificationRun);
+projection_budget!(provenance_core::RequirementReview);
+
+/// A run row keeps the resource budget: no read of a record or a binding
+/// gives a run, and the page read, the member read and the evidence read of
+/// the runs take the resource budget for the one serialized run of each row.
+impl ReadBudget for provenance_core::VerificationRun {
+    fn read_bytes(&self) -> anyhow::Result<usize> {
+        Ok(serde_json::to_vec(self)?.len())
+    }
+
+    fn read_id(&self) -> &str {
+        self.id.as_str()
+    }
+
+    fn read_budget() -> usize {
+        resource_record_bytes()
+    }
+}
 
 impl ReadBudget for provenance_core::Thread {
     fn read_bytes(&self) -> anyhow::Result<usize> {
@@ -265,12 +294,8 @@ impl ReadBudget for provenance_core::Thread {
             + self.created_at.to_string().len())
     }
 
-    fn read_id_bytes(&self) -> usize {
-        self.id.as_str().len()
-    }
-
-    fn read_budget() -> usize {
-        record_bytes()
+    fn read_id(&self) -> &str {
+        self.id.as_str()
     }
 }
 
@@ -279,12 +304,7 @@ impl ReadBudget for provenance_core::Message {
         Ok(serde_json::to_vec(self)?.len())
     }
 
-    fn read_id_bytes(&self) -> usize {
-        self.id.as_str().len()
-    }
-    /// The discussion and document page readers enforce the smaller
-    /// canonical row budget on messages, so a message write honors it.
-    fn read_budget() -> usize {
-        record_bytes()
+    fn read_id(&self) -> &str {
+        self.id.as_str()
     }
 }

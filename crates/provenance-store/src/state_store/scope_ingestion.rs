@@ -1,9 +1,9 @@
-use super::read_budget::{ensure_slice_within_read_budget, ReadBudget};
+use super::read_budget::ensure_slice_within_read_budget;
 use super::{
     ensure_new_ids_assignable, read_jsonl_held, read_message_shards_held, serde_name, Access,
     StateStore,
 };
-use crate::families::{BudgetKind, ProjectionFamily, RecordFamily};
+use crate::families::ProjectionFamily;
 use provenance_core::{NodeType, ScopeId, Thread, ThreadStatus};
 use provenance_macros::rule;
 
@@ -18,13 +18,6 @@ macro_rules! collect_node_ids {
         );
     };
     ($records:ident, $kinds:ident, $shards:ident, $field:ident, []) => {};
-}
-
-fn ensure_family_budget<T: ReadBudget + RecordFamily>(records: &[T]) -> anyhow::Result<()> {
-    if T::META.budget != BudgetKind::Unchecked {
-        ensure_slice_within_read_budget(records)?;
-    }
-    Ok(())
 }
 
 macro_rules! ensure_assignable {
@@ -90,19 +83,6 @@ macro_rules! write_binding {
         implementation, $store:ident, $scope:ident, $shards:ident, $written:ident,
         $variant:ident, $field:ident,
         verification
-    ) => {};
-}
-
-macro_rules! ensure_binding_budget {
-    (
-        $shards:ident, verification,
-        verification, $field:ident
-    ) => {
-        ensure_family_budget($shards.$field)?;
-    };
-    (
-        $shards:ident, $phase:ident,
-        $other:ident, $field:ident
     ) => {};
 }
 
@@ -230,11 +210,9 @@ macro_rules! define_imported_scope_shards {
                 self.ensure_writable()?;
                 self.with_staged_import(|store| {
                     validate_threads(shards.threads)?;
-                    $(ensure_family_budget(shards.$export_field)?;)*
-                    $(ensure_binding_budget!(
-                        shards, verification, $($binding_graph)+, $binding_field
-                    );)*
-                    $(ensure_family_budget(shards.$canonical_field)?;)*
+                    $(ensure_slice_within_read_budget(shards.$export_field)?;)*
+                    $(ensure_slice_within_read_budget(shards.$binding_field)?;)*
+                    $(ensure_slice_within_read_budget(shards.$canonical_field)?;)*
 
                     let mut records = Vec::new();
                     let mut kinds = Vec::new();

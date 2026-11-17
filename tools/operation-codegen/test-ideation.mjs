@@ -31,8 +31,10 @@ async function seedEvidence(root) {
 }
 
 async function seedLargeProposals(root) {
-  const summary = 'x'.repeat(850_000);
-  const records = Array.from({ length: 20 }, (_, index) => ({
+  // Each row stays inside the record budget of 65 536 bytes, and the rows
+  // together need more than one page of 1 MiB.
+  const summary = 'x'.repeat(60_000);
+  const records = Array.from({ length: 40 }, (_, index) => ({
     scope_id: 'default', id: `proposal_large_${String(index).padStart(2, '0')}`,
     proposal_key: `large-${index}`, proposal_type: 'requirement_candidate',
     title: `Large proposal ${index}`, summary,
