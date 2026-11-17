@@ -77,10 +77,11 @@ fn hint_detail(hint: Option<&str>) -> String {
 
 /// The hint of a state file that does not parse and has no correction of its own.
 ///
-/// It names first the correction of the line that the answer names, then the
-/// two procedures that give a state that reads, each with what it removes.
+/// It names first the correction of the line that the answer names and the
+/// operation to do again, then the two procedures that give a state that
+/// reads, each with what it removes.
 pub const STATE_CORRECTIONS: &str = "To correct this fault, correct the line of the file that \
-    this answer names, and then do the command again. If you cannot correct that line, use one \
+    this answer names. Then do the operation again. If you cannot correct that line, use one \
     of these two procedures. \
     Procedure 1: get .provenance/state from a commit where Provenance can read it. \
     This can remove records and changes that are not in that commit. \
