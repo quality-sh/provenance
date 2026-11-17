@@ -1,11 +1,11 @@
 use super::{DiscussionAction, WriteDiscussion};
+use crate::state_store::MessageWrite;
 use crate::{
     canonical_digest,
     review::publication::with_record_state,
     shards,
     state_store::{PostMessageInput, RecordStamp, StateStore},
 };
-use crate::state_store::MessageWrite;
 use provenance_core::{
     threads::{Discussion, DiscussionReceipt, DiscussionStatus},
     Thread, ThreadStatus,

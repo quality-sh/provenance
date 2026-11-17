@@ -84,8 +84,7 @@ async fn message(
             ))
         })
         .transpose()?;
-    let (thread, role, actor, body, created_at, size) =
-        row.ok_or(ReadFailure::ResourceNotFound)?;
+    let (thread, role, actor, body, created_at, size) = row.ok_or(ReadFailure::ResourceNotFound)?;
     check_stored_size(size)?;
     Ok(Message {
         scope_id: ctx.snapshot().scope().clone(),
