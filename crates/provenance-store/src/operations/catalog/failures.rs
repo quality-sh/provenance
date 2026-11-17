@@ -11,7 +11,7 @@ use crate::write_error::{
 };
 use provenance_core::protocol::{
     failure::OperationFailure,
-    read_failure::{MovedUnit, ReadFailure, UnparsableStateFile},
+    read_failure::{MovedUnit, ReadFailure, UnparsableStateFile, MATERIALIZE},
 };
 use provenance_macros::rule;
 
@@ -210,7 +210,10 @@ const fn completion_failure(error: &CompletionTimedOut) -> ReadFailure {
 
 fn refusal_failure(refusal: &ReadRefusal) -> ReadFailure {
     match refusal {
-        ReadRefusal::NoProjection { .. } => ReadFailure::NoProjection,
+        ReadRefusal::NoProjection { cause, .. } => ReadFailure::NoProjection {
+            message: cause.clone(),
+            hint: MATERIALIZE.to_owned(),
+        },
         ReadRefusal::Stale {
             serial,
             digest,

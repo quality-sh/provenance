@@ -1,4 +1,4 @@
-use super::{failure_cause, in_repository};
+use super::{failure_cause, in_repository, repository_cause};
 use provenance_macros::verifies;
 use std::path::Path;
 
@@ -93,4 +93,23 @@ fn a_path_outside_the_repository_is_only_its_file_name() {
     ] {
         assert_eq!(cause(root, native), expected, "{native}");
     }
+}
+
+/// The cause of a refusal with no stored revision gives its paths as an
+/// unclassified refusal does: a path below the repository is relative to it,
+/// and any other absolute path is only its file name.
+#[test]
+#[verifies("rule_unclassified_refusal_gives_cause", examples)]
+fn a_cause_in_a_repository_gives_no_absolute_path() {
+    let native =
+        "open /home/u/r/.provenance/cache/provenance.db: denied; lock /var/lock/close.lock: denied";
+    let error = anyhow::anyhow!("{native}");
+    assert_eq!(
+        repository_cause(Path::new("/home/u/r"), &error),
+        "open .provenance/cache/provenance.db: denied; lock close.lock: denied"
+    );
+    assert_eq!(
+        repository_cause(Path::new("/home/u/r"), &error),
+        cause(Some("/home/u/r"), native)
+    );
 }

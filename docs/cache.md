@@ -180,6 +180,8 @@ is the exception: after the read at the stored serial, it refuses with
 `document_catch_up_failed`, and the refusal gives the file, the line, the
 message and the hint of a state line that does not parse. With no stored
 revision, it refuses with `no_projection`, as each other read does.
+That refusal gives the cause, when the read has one, and names
+`provenance materialize`. The CLI, MCP and HTTP give the same cause text.
 
 The settings in `.provenance/settings.json` survive a cache delete. The
 file is tracked beside `state/` and `cache/`. Each query loads

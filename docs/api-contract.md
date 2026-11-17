@@ -258,6 +258,14 @@ document again after a temporary cause, such as a cache close that did not
 finish in time. It corrects a cause in the record files first. The client
 reads these fields and does not parse the text.
 
+A read with no stored revision returns 409 with `no_projection`. The
+refusal has `hint`, the step that corrects it: run `provenance materialize`.
+When the read has a cause, the refusal also has `message`, the cause as
+text: `catch-up failed: ` and the error of a failed catch-up, or the error of
+a read database that did not open. The CLI and MCP give the same cause text.
+A path below the repository in the cause is relative to the repository. Any
+other absolute path is only its file name.
+
 ## 6. Compatibility tuple and gate
 
 One authoritative compatibility tuple contains `wire` and `read_derivation`.

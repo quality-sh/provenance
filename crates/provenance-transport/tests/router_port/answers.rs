@@ -10,6 +10,7 @@ use crate::failures::{host, kind, Pair, Step};
 use crate::support::memory_host::{bound, in_process, Counted};
 use crate::support::router_answer::Answer;
 use provenance_core::protocol::failure::{ErasedFailure, InvalidInputReason, OperationFailure};
+use provenance_core::protocol::read_failure::MATERIALIZE;
 use provenance_store::operations::read_operations::{ReadAnswer, ReadOperations, READ_OPERATIONS};
 use provenance_store::repository::Repository as Opened;
 use serde_json::{json, Value};
@@ -89,10 +90,10 @@ async fn an_answer_that_the_operation_does_not_give_is_internal() {
         Fixed::Success(with(success.clone(), "", "extra")),
         Fixed::Success(with(success.clone(), "/stamp", "debug")),
         Fixed::Failure(json!({"kind": "stale"}), 409),
-        Fixed::Failure(json!({"kind": "no_projection", "extra": 1}), 409),
-        Fixed::Failure(json!({"kind": "no_projection"}), 1000),
-        Fixed::Failure(json!({"kind": "no_projection"}), 200),
-        Fixed::Failure(json!({"kind": "no_projection"}), 503),
+        Fixed::Failure(with(no_projection(), "", "extra"), 409),
+        Fixed::Failure(no_projection(), 1000),
+        Fixed::Failure(no_projection(), 200),
+        Fixed::Failure(no_projection(), 503),
         Fixed::Failure(invalid, 500),
     ];
     for answer in undeclared {
@@ -100,6 +101,11 @@ async fn an_answer_that_the_operation_does_not_give_is_internal() {
         assert_eq!(kind(&given), (500, json!("internal")), "{answer:?}");
         assert_eq!(given.json()["error"], json!({"kind": "internal"}));
     }
+}
+
+/// The failure body of a read with no stored revision and no cause.
+fn no_projection() -> Value {
+    json!({"kind": "no_projection", "hint": MATERIALIZE})
 }
 
 #[tokio::test]
@@ -111,11 +117,7 @@ async fn an_answer_that_the_operation_gives_passes_unchanged() {
     assert_eq!(given.status, 200, "{}", given.json());
     assert_eq!(given.json()["data"]["items"], success["result"]["items"]);
 
-    let declared = through(
-        &pair.memory,
-        &Fixed::Failure(json!({"kind": "no_projection"}), 409),
-    )
-    .await;
+    let declared = through(&pair.memory, &Fixed::Failure(no_projection(), 409)).await;
     assert_eq!(kind(&declared), (409, json!("no_projection")));
 }
 

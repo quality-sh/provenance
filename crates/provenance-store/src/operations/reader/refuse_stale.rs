@@ -83,7 +83,7 @@ pub(super) async fn check(
         .await?
         .ok_or_else(|| ReadRefusal::NoProjection {
             database: layout.cache_db_path(),
-            because: String::new(),
+            cause: None,
         })?;
     let stored: BTreeMap<String, String> = snapshot
         .transaction()

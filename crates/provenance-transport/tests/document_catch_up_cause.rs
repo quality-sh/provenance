@@ -2,7 +2,8 @@
 //! the file, the line, the parse message and the steps that correct the state
 //! for a state line that does not parse, and the text of a cause that has no
 //! file, with no hint. A read with no stored revision refuses with
-//! `no_projection` first. A link where a record file must be refuses the read
+//! `no_projection` first, with the cause as its message and
+//! `provenance materialize` as its hint. A link where a record file must be refuses the read
 //! before its catch-up, with `read_failed` and a cause with no absolute path.
 #![cfg(feature = "test-fixture")]
 

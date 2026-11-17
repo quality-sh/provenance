@@ -184,7 +184,9 @@ impl Freshness {
             failure,
         } = self;
         let repository = reading.repository;
-        let because = failure.as_ref().map(|failure| format!("{failure:#}"));
+        let because = failure
+            .as_ref()
+            .map(|failure| format!("catch-up failed: {}", cause(repository.layout(), failure)));
         if let Err(outcome) = database
             .read(reading.work(check, policy, because.as_deref()))
             .await
@@ -227,7 +229,7 @@ async fn open_snapshot(
         .ok_or_else(|| {
             ReadRefusal::NoProjection {
                 database: layout.cache_db_path(),
-                because: because.map_or_default(|error| format!(" (catch-up failed: {error})")),
+                cause: because.map(str::to_owned),
             }
             .into()
         })
@@ -248,7 +250,7 @@ fn unopened(
     match (policy, because) {
         (StampPolicy::CatchUpFailed, Some(text)) => ReadRefusal::NoProjection {
             database: layout.cache_db_path(),
-            because: format!(" (catch-up failed: {text})"),
+            cause: Some(text.to_owned()),
         }
         .into(),
         (StampPolicy::AnnotateOnly | StampPolicy::RefuseStale, _) => no_projection(layout, &cause),
@@ -384,7 +386,14 @@ pub(super) async fn ensure_current_schema(
 pub(super) fn no_projection(layout: &ProvenanceLayout, error: &anyhow::Error) -> anyhow::Error {
     ReadRefusal::NoProjection {
         database: layout.cache_db_path(),
-        because: format!(" ({error:#})"),
+        cause: Some(cause(layout, error)),
     }
     .into()
+}
+
+/// The cause of a refusal with no stored revision: the display chain of
+/// `error`, with each path below the repository of `layout` relative to it
+/// and each other absolute path only its file name.
+fn cause(layout: &ProvenanceLayout, error: &anyhow::Error) -> String {
+    crate::write_error::repository_cause(layout.root().as_std_path(), error)
 }

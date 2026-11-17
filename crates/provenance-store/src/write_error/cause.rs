@@ -50,8 +50,19 @@ pub fn failure_cause(error: &anyhow::Error, cause: &anyhow::Error) -> String {
     let roots = error
         .downcast_ref::<InRepository>()
         .map_or(&[][..], |located| &located.roots);
-    let text = format!("{cause:#}");
-    file_names_only(&relative_to(&text, roots))
+    shown_cause(cause, roots)
+}
+
+/// The display chain of `cause`, an error of an operation on the repository
+/// at `root`, as [`failure_cause`] gives it.
+pub fn repository_cause(root: &Path, cause: &anyhow::Error) -> String {
+    shown_cause(cause, &root_spellings(root))
+}
+
+/// The display chain of `cause` with each path below one of `roots` relative
+/// to that root and each other absolute path only its file name.
+fn shown_cause(cause: &anyhow::Error, roots: &[String]) -> String {
+    file_names_only(&relative_to(&format!("{cause:#}"), roots))
 }
 
 /// Each spelling of `root` that an error can hold: as given, canonical, with

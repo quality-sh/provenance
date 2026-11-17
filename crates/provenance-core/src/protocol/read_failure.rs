@@ -38,8 +38,15 @@ pub enum ReadFailure {
     GitRevisionNotFound,
     #[error("the addressed resource does not exist")]
     ResourceNotFound,
-    #[error("no projection; run provenance materialize")]
-    NoProjection,
+    /// A read with no stored revision. `message` is the cause, when the read
+    /// has one, with no absolute path. `hint` names the command that builds
+    /// the read database.
+    #[error("no projection; {hint}")]
+    NoProjection {
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        message: Option<String>,
+        hint: String,
+    },
     #[error("projection differs from canonical state")]
     Stale {
         serial: i64,
@@ -74,6 +81,9 @@ pub enum ReadFailure {
 fn hint_detail(hint: Option<&str>) -> String {
     hint.map_or_else(String::new, |hint| format!("; {hint}"))
 }
+
+/// The step that corrects a read with no stored revision.
+pub const MATERIALIZE: &str = "run `provenance materialize`";
 
 /// The hint of a file below `.provenance/state` that does not parse and that
 /// has no correction of its own: the two procedures that give a state that

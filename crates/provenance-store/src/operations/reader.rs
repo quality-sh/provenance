@@ -44,7 +44,7 @@ pub use crate::cache::read::{kind_of, SqlFront};
 use super::read_policy::ReadPolicy;
 use crate::repository::Repository;
 use camino::{Utf8Path, Utf8PathBuf};
-use provenance_core::protocol::{StampPolicy, Stamped};
+use provenance_core::protocol::{read_failure::MATERIALIZE, StampPolicy, Stamped};
 use provenance_macros::rule;
 use std::collections::BTreeSet;
 use std::future::Future;
@@ -59,10 +59,12 @@ pub type ReadFuture<'c, R> = Pin<Box<dyn Future<Output = anyhow::Result<R>> + Se
 #[derive(Debug, thiserror::Error)]
 #[rule("rule_no_revision_refuses_and_names_materialize")]
 pub enum ReadRefusal {
-    #[error("no projection revision in {database}; run `provenance materialize`{because}")]
+    /// `cause` is the cause of the refusal, when the read has one, with no
+    /// absolute path. Each surface gives this same text.
+    #[error("no projection revision in {database}; {MATERIALIZE}{}", cause_detail(.cause.as_deref()))]
     NoProjection {
         database: Utf8PathBuf,
-        because: String,
+        cause: Option<String>,
     },
     #[error("refuse_stale: the projection in {} at serial {serial} (digest {digest}, instance {instance_id}) is behind canonical state; moved: {}. Read under catch_up or run `provenance materialize`.", one_line(.database.as_str()), refuse_stale::describe_moved(.moved))]
     Stale {
@@ -91,6 +93,11 @@ pub enum ReadRefusal {
 #[derive(Debug, thiserror::Error)]
 #[error("catch-up failed; restart the document read")]
 pub struct CatchUpFailed(pub anyhow::Error);
+
+/// The part of the `NoProjection` display text that gives its cause.
+fn cause_detail(cause: Option<&str>) -> String {
+    cause.map_or_else(String::new, |cause| format!(" ({cause})"))
+}
 
 fn one_line(text: &str) -> String {
     text.replace('\r', "\\r").replace('\n', "\\n")
