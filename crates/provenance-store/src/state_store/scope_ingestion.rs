@@ -3,7 +3,7 @@ use super::{
     ensure_new_ids_assignable, read_jsonl_held, read_message_shards_held, serde_name, Access,
     StateStore,
 };
-use crate::families::{ProjectionFamily, RecordFamily};
+use crate::families::ProjectionFamily;
 use provenance_core::{NodeType, ScopeId, Thread, ThreadStatus};
 use provenance_macros::rule;
 
