@@ -7,7 +7,7 @@ use provenance_core::protocol::read_failure::UnparsableStateFile;
 use serde::Serialize;
 
 mod cause;
-pub(crate) use cause::{failure_cause, in_repository, native, repository_cause};
+pub(crate) use cause::{failure_cause, in_repository, native};
 
 #[derive(Debug, Clone, Serialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]

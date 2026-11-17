@@ -45,8 +45,9 @@ async fn a_withdrawal_that_names_no_submission_is_located() {
 
 /// With no stored revision, the catch-up that builds the read database
 /// refuses the Withdrawal, so the record read refuses with `no_projection`.
-/// The refusal gives the Withdrawal as the cause and names
-/// `provenance materialize`.
+/// The refusal gives the file and the line of the Withdrawal, and its repair
+/// as the hint, not `provenance materialize`, which refuses with the same
+/// Withdrawal.
 #[tokio::test]
 #[verifies("rule_no_revision_refuses_and_names_materialize", examples)]
 async fn a_withdrawal_that_names_no_submission_with_no_stored_revision_refuses() {
@@ -58,11 +59,10 @@ async fn a_withdrawal_that_names_no_submission_with_no_stored_revision_refuses()
         (status, failure),
         (
             409,
-            json!({"error":{"kind":"no_projection",
-                "message":format!("catch-up failed: {WITHDRAWALS} line 1: \
-                    withdrawal withdrawal_lost names no review submission: proposal_missing; \
-                    To repair, remove ideation/withdrawals.jsonl line 1, then commit."),
-                "hint":"run `provenance materialize`"},"meta":{}})
+            json!({"error":{"kind":"no_projection", "file":WITHDRAWALS, "line":1,
+                "message":"withdrawal withdrawal_lost names no review submission: proposal_missing",
+                "hint":"To repair, remove ideation/withdrawals.jsonl line 1, then commit."},
+                "meta":{}})
         )
     );
 }

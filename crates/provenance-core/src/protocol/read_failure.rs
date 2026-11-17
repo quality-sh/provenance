@@ -38,14 +38,19 @@ pub enum ReadFailure {
     GitRevisionNotFound,
     #[error("the addressed resource does not exist")]
     ResourceNotFound,
-    /// A read with no stored revision. `message` is the cause, when the read
-    /// has one, with no absolute path. `hint` names the command that builds
-    /// the read database.
-    #[error("no projection; {hint}")]
+    /// A read with no stored revision. The location, `message` and `hint`
+    /// have the meaning that they have in `document_catch_up_failed`: the
+    /// refusal gives the cause of a failed catch-up as that refusal gives it.
+    /// A read database that did not open gives its error as `message`. With
+    /// no cause, `hint` names the command that builds the read database.
+    #[error("no projection{}", no_projection_detail(location.as_ref(), message.as_deref(), hint.as_deref()))]
     NoProjection {
+        #[serde(flatten, deserialize_with = "file_and_line")]
+        location: Option<FileLine>,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         message: Option<String>,
-        hint: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        hint: Option<String>,
     },
     #[error("projection differs from canonical state")]
     Stale {
@@ -82,7 +87,19 @@ fn hint_detail(hint: Option<&str>) -> String {
     hint.map_or_else(String::new, |hint| format!("; {hint}"))
 }
 
-/// The step that corrects a read with no stored revision.
+/// The part of the `no_projection` display text that gives its cause and its
+/// hint.
+fn no_projection_detail(
+    location: Option<&FileLine>,
+    message: Option<&str>,
+    hint: Option<&str>,
+) -> String {
+    let at = location.map_or_else(String::new, |at| format!("{} line {}: ", at.file, at.line));
+    let message = message.map_or_else(String::new, |message| format!(": {at}{message}"));
+    format!("{message}{}", hint_detail(hint))
+}
+
+/// The step that corrects a read with no stored revision and no cause.
 pub const MATERIALIZE: &str = "run `provenance materialize`";
 
 /// The hint of a file below `.provenance/state` that does not parse and that

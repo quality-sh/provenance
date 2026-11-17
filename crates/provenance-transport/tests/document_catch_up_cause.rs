@@ -2,14 +2,14 @@
 //! the file, the line, the parse message and the steps that correct the state
 //! for a state line that does not parse, and the text of a cause that has no
 //! file, with no hint. A read with no stored revision refuses with
-//! `no_projection` first, with the cause as its message and
-//! `provenance materialize` as its hint. A link where a record file must be refuses the read
-//! before its catch-up, with `read_failed` and a cause with no absolute path.
+//! `no_projection` first, and gives the cause in the same members. A link
+//! where a record file must be refuses the read before its catch-up, with
+//! `read_failed` and a cause with no absolute path.
 #![cfg(feature = "test-fixture")]
 
 use crate::support;
 
-use provenance_core::protocol::read_failure::STATE_CORRECTIONS;
+use provenance_core::protocol::read_failure::{MATERIALIZE, STATE_CORRECTIONS};
 use provenance_macros::verifies;
 use serde_json::{json, Value};
 use support::depends_on_cycle::add_a_depends_on_cycle;
@@ -103,12 +103,11 @@ async fn a_document_read_gives_no_absolute_path_in_the_cause() {
 }
 
 /// The refusal of a read with no stored revision whose catch-up failed with
-/// `cause`: the cause as the message, and `provenance materialize` as the
-/// step that corrects it.
-fn no_projection(cause: &str) -> Value {
-    json!({"error": {"kind": "no_projection",
-        "message": format!("catch-up failed: {cause}"),
-        "hint": "run `provenance materialize`"}, "meta": {}})
+/// the cause `cause`, in the members of `document_catch_up_failed`.
+fn no_projection(cause: &Value) -> Value {
+    let mut error = cause.as_object().unwrap().clone();
+    error.insert("kind".to_owned(), json!("no_projection"));
+    json!({"error": error, "meta": {}})
 }
 
 /// A repository with no read database.
@@ -120,7 +119,9 @@ fn no_stored_revision(repo: &Repository) {
 
 /// With no stored revision, a document read whose catch-up stops at a state
 /// line refuses with `no_projection`, as every other read does. The refusal
-/// gives the line as the cause and names `provenance materialize`.
+/// gives the line as `document_catch_up_failed` gives it, and the steps that
+/// correct the state as the hint, not `provenance materialize`, which refuses
+/// with the same line.
 #[tokio::test]
 #[verifies("rule_no_revision_refuses_and_names_materialize", examples)]
 async fn a_document_read_with_no_stored_revision_refuses_with_no_projection() {
@@ -132,15 +133,20 @@ async fn a_document_read_with_no_stored_revision_refuses_with_no_projection() {
     let (status, refused) = call(&host, "GET", DOCUMENT, None).await;
 
     assert_eq!(status, 409);
-    let cause = format!(
-        "scopes/default/requirements/req.jsonl line 1: invalid type: string \"req_parent\", \
-        expected a sequence; {STATE_CORRECTIONS}"
+    assert_eq!(
+        refused,
+        no_projection(&json!({
+            "file": "scopes/default/requirements/req.jsonl",
+            "line": 1,
+            "message": "invalid type: string \"req_parent\", expected a sequence",
+            "hint": STATE_CORRECTIONS
+        }))
     );
-    assert_eq!(refused, no_projection(&cause));
 }
 
 /// With no stored revision, a record read whose catch-up stops at a cycle
-/// refuses with `no_projection`, and gives the cycle as the cause.
+/// refuses with `no_projection`. The cycle has no file and no correction of
+/// its own, so the refusal gives only the message, which names the records.
 #[tokio::test]
 #[verifies("rule_no_revision_refuses_and_names_materialize", examples)]
 async fn a_record_read_with_no_stored_revision_gives_the_fault_with_no_file() {
@@ -154,6 +160,41 @@ async fn a_record_read_with_no_stored_revision_gives_the_fault_with_no_file() {
     assert_eq!(status, 409);
     assert_eq!(
         refused,
-        no_projection("depends_on forms a cycle: req_c -> req_d -> req_c")
+        no_projection(&json!({"message": "depends_on forms a cycle: req_c -> req_d -> req_c"}))
+    );
+}
+
+/// Sets the freshness policy of each read of `repo` to `policy`.
+fn read_policy(repo: &Repository, policy: &str) {
+    let path = repo.dir.path().join(".provenance/settings.json");
+    let mut settings: Value = std::fs::read(&path).map_or_else(
+        |_| json!({}),
+        |bytes| serde_json::from_slice(&bytes).unwrap(),
+    );
+    settings["read"] = json!({ "freshness_policy": policy });
+    std::fs::write(&path, settings.to_string()).unwrap();
+}
+
+/// An `annotate_only` read whose read database does not open refuses with
+/// `no_projection`. The error of the database is the message, and
+/// `provenance materialize`, which builds the database, is the hint.
+#[tokio::test]
+#[verifies("rule_no_revision_refuses_and_names_materialize", examples)]
+async fn a_read_whose_database_does_not_open_gives_its_error_and_materialize() {
+    let repo = Repository::new("The shared graph is readable.");
+    read_policy(&repo, "annotate_only");
+    no_stored_revision(&repo);
+    let host = host(&repo, false);
+
+    let (status, refused) = call(&host, "GET", "/requirements/req_shared", None).await;
+
+    assert_eq!(status, 409);
+    let unopened = "(code: 14) unable to open database file";
+    assert_eq!(
+        refused,
+        no_projection(&json!({
+            "message": format!("error returned from database: {unopened}: {unopened}"),
+            "hint": MATERIALIZE
+        }))
     );
 }

@@ -18,7 +18,7 @@
 //!
 //! [`catch_up_in_publish`]: crate::cache::catch_up_in_publish
 
-use super::{CatchUpFailed, ReadContext, ReadFuture, ReadRefusal, ReadSnapshot};
+use super::{CatchUpFailed, NoRevisionCause, ReadContext, ReadFuture, ReadRefusal, ReadSnapshot};
 #[cfg(feature = "host")]
 use crate::cache::catch_up_work;
 use crate::current_schema::{self, Compatibility};
@@ -102,19 +102,14 @@ where
 {
     /// The work of the read: the check, the pinned snapshot, the operation
     /// and the stamp.
-    fn work<'a>(
-        &'a mut self,
-        check: Check,
-        policy: StampPolicy,
-        because: Option<&'a str>,
-    ) -> ReadWork<'a> {
+    fn work<'a>(&'a mut self, check: Check, policy: StampPolicy) -> ReadWork<'a> {
         Box::new(move |transaction| {
             Box::pin(async move {
                 let run = self
                     .run
                     .take()
                     .ok_or_else(|| crate::refusal::fault!("a read runs its operation once"))?;
-                let snapshot = open_snapshot(transaction, check, self.repository, because).await?;
+                let snapshot = open_snapshot(transaction, check, self.repository).await?;
                 let context =
                     ReadContext::new(snapshot, self.repository.clone(), self.scan_limit, policy);
                 let result = run(&context).await;
@@ -184,21 +179,10 @@ impl Freshness {
             failure,
         } = self;
         let repository = reading.repository;
-        let because = failure
-            .as_ref()
-            .map(|failure| format!("catch-up failed: {}", cause(repository.layout(), failure)));
-        if let Err(outcome) = database
-            .read(reading.work(check, policy, because.as_deref()))
-            .await
-        {
-            return Err(unopened(
-                repository.layout(),
-                policy,
-                because.as_deref(),
-                outcome,
-            ));
+        match database.read(reading.work(check, policy)).await {
+            Ok(()) => Ok(failure),
+            Err(outcome) => Err(unopened(repository.layout(), policy, failure, outcome)),
         }
-        Ok(failure)
     }
 }
 
@@ -207,7 +191,6 @@ async fn open_snapshot(
     mut transaction: Transaction,
     check: Check,
     repository: &Repository,
-    because: Option<&str>,
 ) -> anyhow::Result<ReadSnapshot> {
     let layout = repository.layout();
     match check {
@@ -229,31 +212,39 @@ async fn open_snapshot(
         .ok_or_else(|| {
             ReadRefusal::NoProjection {
                 database: layout.cache_db_path(),
-                cause: because.map(str::to_owned),
+                cause: None,
             }
             .into()
         })
 }
 
-/// The refusal of a read whose database did not open. Any other failure,
-/// such as a transaction that did not begin, is the failure of the read.
+/// The refusal of a read that found no stored revision or whose database did
+/// not open. The error `caught_up` of a failed catch-up is the cause of each
+/// such refusal. Any other failure, such as a transaction that did not begin,
+/// is the failure of the read.
 fn unopened(
     layout: &ProvenanceLayout,
     policy: StampPolicy,
-    because: Option<&str>,
-    failure: anyhow::Error,
+    caught_up: Option<anyhow::Error>,
+    outcome: anyhow::Error,
 ) -> anyhow::Error {
-    let cause = match Unopened::cause(failure) {
+    let caught_up = caught_up.map(|error| NoRevisionCause::CatchUp(located(layout, error)));
+    let cause = match Unopened::cause(outcome) {
         Ok(cause) => cause,
-        Err(failure) => return failure,
+        Err(mut outcome) => {
+            if let Some(ReadRefusal::NoProjection { cause, .. }) = outcome.downcast_mut() {
+                *cause = caught_up;
+            }
+            return outcome;
+        }
     };
-    match (policy, because) {
-        (StampPolicy::CatchUpFailed, Some(text)) => ReadRefusal::NoProjection {
+    match (policy, caught_up) {
+        (StampPolicy::CatchUpFailed, Some(caught_up)) => ReadRefusal::NoProjection {
             database: layout.cache_db_path(),
-            cause: Some(text.to_owned()),
+            cause: Some(caught_up),
         }
         .into(),
-        (StampPolicy::AnnotateOnly | StampPolicy::RefuseStale, _) => no_projection(layout, &cause),
+        (StampPolicy::AnnotateOnly | StampPolicy::RefuseStale, _) => no_projection(layout, cause),
         _ => cause,
     }
 }
@@ -383,17 +374,16 @@ pub(super) async fn ensure_current_schema(
     Ok(())
 }
 
-pub(super) fn no_projection(layout: &ProvenanceLayout, error: &anyhow::Error) -> anyhow::Error {
+fn no_projection(layout: &ProvenanceLayout, error: anyhow::Error) -> anyhow::Error {
     ReadRefusal::NoProjection {
         database: layout.cache_db_path(),
-        cause: Some(cause(layout, error)),
+        cause: Some(NoRevisionCause::Unopened(located(layout, error))),
     }
     .into()
 }
 
-/// The cause of a refusal with no stored revision: the display chain of
-/// `error`, with each path below the repository of `layout` relative to it
-/// and each other absolute path only its file name.
-fn cause(layout: &ProvenanceLayout, error: &anyhow::Error) -> String {
-    crate::write_error::repository_cause(layout.root().as_std_path(), error)
+/// `error` with the root of the repository of `layout`, so that its text
+/// gives each path relative to the repository.
+fn located(layout: &ProvenanceLayout, error: anyhow::Error) -> anyhow::Error {
+    crate::write_error::in_repository(layout.root().as_std_path(), error)
 }

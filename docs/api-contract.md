@@ -258,13 +258,26 @@ document again after a temporary cause, such as a cache close that did not
 finish in time. It corrects a cause in the record files first. The client
 reads these fields and does not parse the text.
 
-A read with no stored revision returns 409 with `no_projection`. The
-refusal has `hint`, the step that corrects it: run `provenance materialize`.
-When the read has a cause, the refusal also has `message`, the cause as
-text: `catch-up failed: ` and the error of a failed catch-up, or the error of
-a read database that did not open. The CLI and MCP give the same cause text.
-A path below the repository in the cause is relative to the repository. Any
-other absolute path is only its file name.
+A read with no stored revision returns 409 with `no_projection`. Its
+members `file`, `line`, `message` and `hint` have the meaning that they have
+in `document_catch_up_failed`, and each of them is optional:
+
+- When the catch-up of the read failed, the refusal gives the cause as
+  `document_catch_up_failed` gives it. A state line that does not parse
+  gives `file`, `line`, `message` and `hint`, the correction of that line.
+  A cause with no file, such as a `depends_on` cycle, gives only `message`,
+  which names the records. Such a refusal does not name
+  `provenance materialize`, because that command refuses with the same cause.
+- When the read database did not open, `message` is the error of the
+  database, and `hint` is `` run `provenance materialize` ``.
+- When the read has no cause, the refusal has only `hint`:
+  `` run `provenance materialize` ``.
+
+`file` is the path below the state directory, as `invalid_state_file` gives
+it. A path in `hint` that the reader of a record file gives is relative to
+the directory of the scope. In `message`, a path below the repository is
+relative to the repository root, and any other absolute path is only its file
+name.
 
 ## 6. Compatibility tuple and gate
 

@@ -1,7 +1,7 @@
 //! A get of a record over state that does not parse gives the same result on the CLI and
 //! on a spawned `provenance mcp`. When the read database holds a stored revision, the get
 //! gives the record at that serial with its edit field and the freshness warning. When it
-//! holds no revision, the get refuses and names `provenance materialize`. When the record
+//! holds no revision, the get refuses with the line and its correction. When the record
 //! changed after the stored serial, an update with the `ETag` of the get refuses.
 
 use provenance_core::protocol::read_failure::STATE_CORRECTIONS;
@@ -62,16 +62,13 @@ pub async fn mcp_refusal(server: &Server, tool: &str, arguments: Value) -> Value
 }
 
 /// `refusal` is the refusal of a read with no stored revision whose catch-up failed with
-/// `cause`: its message names the read database, `provenance materialize` and the cause.
+/// `cause`: its message names the read database and the cause. It does not name
+/// `provenance materialize`, which refuses with the same cause.
 pub fn assert_no_revision_refusal(refusal: &Value, cause: &str) {
     let message = refusal["error"]["message"].as_str().unwrap();
     let database = message
         .strip_prefix("no projection revision in ")
-        .and_then(|rest| {
-            rest.strip_suffix(&format!(
-                "; run `provenance materialize` (catch-up failed: {cause})"
-            ))
-        })
+        .and_then(|rest| rest.strip_suffix(&format!(" (catch-up failed: {cause})")))
         .unwrap_or_else(|| panic!("{message}"));
     assert!(database.ends_with("provenance.db"), "{message}");
     assert_eq!(

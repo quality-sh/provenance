@@ -43,6 +43,7 @@ pub use crate::cache::read::{kind_of, SqlFront};
 
 use super::read_policy::ReadPolicy;
 use crate::repository::Repository;
+use crate::write_error::{failure_cause, native};
 use camino::{Utf8Path, Utf8PathBuf};
 use provenance_core::protocol::{read_failure::MATERIALIZE, StampPolicy, Stamped};
 use provenance_macros::rule;
@@ -54,17 +55,16 @@ use std::sync::Mutex;
 /// The future one read runs over its context.
 pub type ReadFuture<'c, R> = Pin<Box<dyn Future<Output = anyhow::Result<R>> + Send + 'c>>;
 
-/// Why a read refused. A read with no stored revision refuses here and
-/// names `provenance materialize`, under every freshness policy.
+/// Why a read refused. A read with no stored revision refuses here under
+/// every freshness policy, and names `provenance materialize` when no cause
+/// with a correction of its own stops the read.
 #[derive(Debug, thiserror::Error)]
 #[rule("rule_no_revision_refuses_and_names_materialize")]
 pub enum ReadRefusal {
-    /// `cause` is the cause of the refusal, when the read has one, with no
-    /// absolute path. Each surface gives this same text.
-    #[error("no projection revision in {database}; {MATERIALIZE}{}", cause_detail(.cause.as_deref()))]
+    #[error("no projection revision in {database}{}", no_revision_detail(.cause.as_ref()))]
     NoProjection {
         database: Utf8PathBuf,
-        cause: Option<String>,
+        cause: Option<NoRevisionCause>,
     },
     #[error("refuse_stale: the projection in {} at serial {serial} (digest {digest}, instance {instance_id}) is behind canonical state; moved: {}. Read under catch_up or run `provenance materialize`.", one_line(.database.as_str()), refuse_stale::describe_moved(.moved))]
     Stale {
@@ -94,9 +94,36 @@ pub enum ReadRefusal {
 #[error("catch-up failed; restart the document read")]
 pub struct CatchUpFailed(pub anyhow::Error);
 
-/// The part of the `NoProjection` display text that gives its cause.
-fn cause_detail(cause: Option<&str>) -> String {
-    cause.map_or_else(String::new, |cause| format!(" ({cause})"))
+/// The cause of a read with no stored revision. Each error holds the root
+/// of its repository, so that its text gives each path relative to it.
+#[derive(Debug)]
+pub enum NoRevisionCause {
+    /// The catch-up that builds the read database failed.
+    CatchUp(anyhow::Error),
+    /// The read database did not open.
+    Unopened(anyhow::Error),
+}
+
+impl NoRevisionCause {
+    /// The text of the cause, with no absolute path.
+    fn text(error: &anyhow::Error) -> String {
+        failure_cause(error, native(error))
+    }
+}
+
+/// The part of the `NoProjection` display text after the database: the step
+/// that corrects the read, and the cause. A failed catch-up has its own
+/// correction or none, so its text does not name `provenance materialize`.
+fn no_revision_detail(cause: Option<&NoRevisionCause>) -> String {
+    match cause {
+        None => format!("; {MATERIALIZE}"),
+        Some(NoRevisionCause::CatchUp(error)) => {
+            format!(" (catch-up failed: {})", NoRevisionCause::text(error))
+        }
+        Some(NoRevisionCause::Unopened(error)) => {
+            format!("; {MATERIALIZE} ({})", NoRevisionCause::text(error))
+        }
+    }
 }
 
 fn one_line(text: &str) -> String {

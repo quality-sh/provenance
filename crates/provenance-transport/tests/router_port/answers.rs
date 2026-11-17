@@ -11,6 +11,7 @@ use crate::support::memory_host::{bound, in_process, Counted};
 use crate::support::router_answer::Answer;
 use provenance_core::protocol::failure::{ErasedFailure, InvalidInputReason, OperationFailure};
 use provenance_core::protocol::read_failure::MATERIALIZE;
+use provenance_macros::verifies;
 use provenance_store::operations::read_operations::{ReadAnswer, ReadOperations, READ_OPERATIONS};
 use provenance_store::repository::Repository as Opened;
 use serde_json::{json, Value};
@@ -106,6 +107,30 @@ async fn an_answer_that_the_operation_does_not_give_is_internal() {
 /// The failure body of a read with no stored revision and no cause.
 fn no_projection() -> Value {
     json!({"kind": "no_projection", "hint": MATERIALIZE})
+}
+
+/// An `annotate_only` read of a repository over memory storage that no
+/// catch-up has built has no stored revision and no cause. Through the port,
+/// the refusal names `provenance materialize` as its hint.
+#[tokio::test]
+#[verifies("rule_no_revision_refuses_and_names_materialize", examples)]
+async fn a_read_with_no_revision_and_no_cause_names_materialize() {
+    let _alone = crate::one_at_a_time().await;
+    let pair = Pair::new(Some("annotate_only")).await;
+    let port = in_process(&pair.memory);
+    let answer = host(bound(pair.memory.clone(), port), Step::Open)
+        .call(
+            "GET",
+            "/requirements",
+            None,
+            &[],
+            "GET /requirements".to_owned(),
+        )
+        .await;
+    assert_eq!(
+        (answer.status, answer.json()),
+        (409, json!({"error": no_projection(), "meta": {}}))
+    );
 }
 
 #[tokio::test]

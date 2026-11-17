@@ -62,11 +62,12 @@ fn a_native_refusal_publishes_its_closed_failure_and_status() {
         (
             read_error(ReadRefusal::NoProjection {
                 database: database(),
-                cause: Some("catch-up failed: depends_on forms a cycle".into()),
+                cause: None,
             }),
             ReadFailure::NoProjection {
-                message: Some("catch-up failed: depends_on forms a cycle".into()),
-                hint: MATERIALIZE.into(),
+                location: None,
+                message: None,
+                hint: Some(MATERIALIZE.into()),
             },
             409,
         ),

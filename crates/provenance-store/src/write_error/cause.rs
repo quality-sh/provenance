@@ -22,7 +22,6 @@ impl std::error::Error for InRepository {
 
 /// Puts the repository root on `error`, so that its cause can give each path
 /// relative to the repository.
-#[cfg_attr(not(feature = "host"), allow(dead_code))]
 pub fn in_repository(root: &Path, error: anyhow::Error) -> anyhow::Error {
     if error.downcast_ref::<InRepository>().is_some() {
         return error;
@@ -53,12 +52,6 @@ pub fn failure_cause(error: &anyhow::Error, cause: &anyhow::Error) -> String {
     shown_cause(cause, roots)
 }
 
-/// The display chain of `cause`, an error of an operation on the repository
-/// at `root`, as [`failure_cause`] gives it.
-pub fn repository_cause(root: &Path, cause: &anyhow::Error) -> String {
-    shown_cause(cause, &root_spellings(root))
-}
-
 /// The display chain of `cause` with each path below one of `roots` relative
 /// to that root and each other absolute path only its file name.
 fn shown_cause(cause: &anyhow::Error, roots: &[String]) -> String {
@@ -68,7 +61,6 @@ fn shown_cause(cause: &anyhow::Error, roots: &[String]) -> String {
 /// Each spelling of `root` that an error can hold: as given, canonical, with
 /// and without the `\\?\` prefix, and with either separator. The longest
 /// spelling is first.
-#[cfg_attr(not(feature = "host"), allow(dead_code))]
 fn root_spellings(root: &Path) -> Vec<String> {
     let mut given = vec![root.to_string_lossy().into_owned()];
     if let Ok(canonical) = std::fs::canonicalize(root) {
@@ -140,7 +132,7 @@ fn file_names_only(text: &str) -> String {
     let mut index = 0;
     while index < text.len() {
         let rest = &text[index..];
-        if previous.is_none_or(opens_path) && is_absolute(rest) {
+        if starts_path(&text[..index], previous, rest) && is_absolute(rest) {
             let end = path_end(rest);
             let path = &rest[..end];
             let name = path.rsplit(['/', '\\']).find(|part| !part.is_empty());
@@ -168,11 +160,13 @@ fn is_absolute(text: &str) -> bool {
 }
 
 /// The end of the path at the start of `text`: before a character that ends
-/// a path, or before a `:` that ends the text or comes before a space.
+/// a path, or before a `:` that ends the text or comes before a space. A
+/// space goes on the path when a name and a separator follow it, as in a
+/// directory name with a space.
 fn path_end(text: &str) -> usize {
     text.char_indices()
         .find(|&(at, character)| {
-            ends_path(character)
+            (ends_path(character) && !(character == ' ' && continues_path(&text[at + 1..])))
                 || (character == ':'
                     && text[at + 1..]
                         .chars()
@@ -180,6 +174,27 @@ fn path_end(text: &str) -> usize {
                         .is_none_or(char::is_whitespace))
         })
         .map_or(text.len(), |(at, _)| at)
+}
+
+/// Whether `text`, the text after a space in a path, starts with a name and
+/// a separator.
+fn continues_path(text: &str) -> bool {
+    let name = text
+        .find(|character: char| !in_path(character) || matches!(character, '/' | '\\'))
+        .unwrap_or(text.len());
+    name > 0 && text[name..].starts_with(['/', '\\'])
+}
+
+/// Whether a path can start in `text` after `before`, whose last character
+/// is `previous`: at the start of the text, after a character that opens a
+/// path, after the scheme `file:`, or after another `:` that is not the `//`
+/// of a URL.
+fn starts_path(before: &str, previous: Option<char>, text: &str) -> bool {
+    match previous {
+        None => true,
+        Some(':') => before.ends_with("file:") || !text.starts_with("//"),
+        Some(character) => opens_path(character),
+    }
 }
 
 const fn has_drive(text: &str) -> bool {
