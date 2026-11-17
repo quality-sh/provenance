@@ -96,7 +96,7 @@ pub(super) fn check_reports_all(repo: &str, expected: &[Value]) {
         )
     });
     assert_eq!(
-        crate::review_row_findings::review_row_findings(&result),
+        crate::review_row_findings::review_row_findings(&result, false),
         findings.collect::<Vec<_>>()
     );
 }

@@ -61,25 +61,36 @@ pub struct StatementDiagnostic {
     pub message: String,
 }
 
-#[derive(Debug, Serialize)]
-pub struct StatementViolationReport<'a> {
-    pub error: &'static str,
-    pub diagnostics: &'a [StatementDiagnostic],
+#[derive(Serialize)]
+struct StatementViolationReport<'a> {
+    error: &'static str,
+    diagnostics: &'a [StatementDiagnostic],
 }
 
-/// Statements that the analyzer refuses. The text is the JSON of a
-/// [`StatementViolationReport`], which the CLI prints as it is.
-#[derive(Debug, thiserror::Error)]
-#[error("{0}")]
-pub(crate) struct StatementViolations(String);
+/// Changed statements that the analyzer refuses. The text is the JSON of the
+/// statement report, so a text caller reads each diagnostic.
+#[derive(Debug)]
+pub struct StatementViolations {
+    pub diagnostics: Vec<StatementDiagnostic>,
+}
+
+impl std::fmt::Display for StatementViolations {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let report = StatementViolationReport {
+            error: "asd_ste100_violations",
+            diagnostics: &self.diagnostics,
+        };
+        formatter.write_str(&serde_json::to_string(&report).map_err(|_| std::fmt::Error)?)
+    }
+}
+
+impl std::error::Error for StatementViolations {}
 
 pub fn violation_error(diagnostics: &[StatementDiagnostic]) -> anyhow::Error {
-    let report = StatementViolationReport {
-        error: "asd_ste100_violations",
-        diagnostics,
-    };
-    StatementViolations(serde_json::to_string(&report).expect("statement report is serializable"))
-        .into()
+    StatementViolations {
+        diagnostics: diagnostics.to_vec(),
+    }
+    .into()
 }
 
 /// Checks only added records and records whose statement bytes changed.
