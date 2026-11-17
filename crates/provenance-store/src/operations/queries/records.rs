@@ -43,8 +43,8 @@ pub(super) async fn search(
         .map_err(crate::operations::reader::page_error)
 }
 
-/// Intersects optional text, kind, and lifecycle search predicates, and
-/// reads candidates until a page holds a record or the kinds end.
+/// Intersects optional text, kind, and lifecycle search predicates. A page
+/// reads candidates until it is full or no kind has more.
 #[rule("rule_search_page_with_more_holds_a_record")]
 #[rule("rule_porcelain_search_text_optional")]
 #[rule("rule_porcelain_search_predicates_intersect")]
