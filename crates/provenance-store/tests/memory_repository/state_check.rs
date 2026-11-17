@@ -311,45 +311,41 @@ fn holding(classes: &[Class]) -> StateFindings {
     }
 }
 
-/// Each pair of finding classes, the line that `provenance check` reports,
-/// and the classes that the check reached. A scope-ownership finding stops
-/// the check before the review rows and the references; a review-row finding
-/// stops it before the references.
+/// The text that `provenance check` reports when `class` wins.
+fn reported(class: Class) -> String {
+    let (title, line) = match class {
+        Class::ScopeOwnership => ("scope ownership finding(s)", SCOPE_OWNERSHIP),
+        Class::ReviewRow => ("review row finding(s)", REVIEW_ROW),
+        Class::ScopeDirectory => ("scope directory finding(s)", SCOPE_DIRECTORY),
+        Class::Dangling => ("dangling reference(s)", DANGLING),
+    };
+    format!("{title}:\n- {line}")
+}
+
+/// Each pair of finding classes, in the order in which `provenance check`
+/// reports them, and the classes that the check reached. The first class of
+/// the pair wins. A scope-ownership finding stops the check before the review
+/// rows and the references; a review-row finding stops it before the
+/// references.
 #[test]
 #[verifies("rule_state_check_without_host", examples)]
 fn each_pair_of_finding_classes_gives_the_class_of_provenance_check() {
     use Class::{Dangling, ReviewRow, ScopeDirectory, ScopeOwnership};
-    let ownership = ("scope ownership finding(s)", SCOPE_OWNERSHIP);
-    let review = ("review row finding(s)", REVIEW_ROW);
-    let directory = ("scope directory finding(s)", SCOPE_DIRECTORY);
-    let cases: [([Class; 2], (&str, &str), &[Class]); 6] = [
-        ([ScopeOwnership, ReviewRow], ownership, &[ScopeOwnership]),
+    let cases: [([Class; 2], &[Class]); 6] = [
+        ([ScopeOwnership, ReviewRow], &[ScopeOwnership]),
         (
             [ScopeOwnership, ScopeDirectory],
-            ownership,
             &[ScopeOwnership, ScopeDirectory],
         ),
-        ([ScopeOwnership, Dangling], ownership, &[ScopeOwnership]),
-        (
-            [ReviewRow, ScopeDirectory],
-            review,
-            &[ReviewRow, ScopeDirectory],
-        ),
-        ([ReviewRow, Dangling], review, &[ReviewRow]),
-        (
-            [ScopeDirectory, Dangling],
-            directory,
-            &[ScopeDirectory, Dangling],
-        ),
+        ([ScopeOwnership, Dangling], &[ScopeOwnership]),
+        ([ReviewRow, ScopeDirectory], &[ReviewRow, ScopeDirectory]),
+        ([ReviewRow, Dangling], &[ReviewRow]),
+        ([ScopeDirectory, Dangling], &[ScopeDirectory, Dangling]),
     ];
-    for (pair, (title, line), reached) in cases {
+    for (pair, reached) in cases {
         let found = findings(&pair.map(class_rows));
 
         assert_eq!(found, holding(reached), "{pair:?}");
-        assert_eq!(
-            found.message(),
-            Some(format!("{title}:\n- {line}")),
-            "{pair:?}"
-        );
+        assert_eq!(found.message(), Some(reported(pair[0])), "{pair:?}");
     }
 }
