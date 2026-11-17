@@ -19,11 +19,15 @@ mod discussion_support;
 mod entry_edges;
 #[path = "support/history_pages.rs"]
 mod history_pages;
+#[path = "history_text_calls/index_rewrites.rs"]
+mod index_rewrites;
+#[path = "history_text_calls/index_writes.rs"]
+mod index_writes;
 #[path = "history_text_calls/page_edges.rs"]
 mod page_edges;
 use camino::Utf8Path;
 use discussion_support::*;
-use provenance_core::review::{ReviewHistoryPage, ReviewHistoryQuery};
+use provenance_core::review::{RecordVersion, ReviewHistoryPage, ReviewHistoryQuery};
 use provenance_core::{NodeType, StableId};
 use provenance_macros::verifies;
 use provenance_store::layout::ProvenanceLayout;
@@ -122,13 +126,14 @@ impl FileVersions for Counted {
     }
 }
 
-/// The path of the Requirement records file below the working tree, and its
-/// saved text.
-fn records(temp: &tempfile::TempDir) -> (String, String) {
-    let layout = ProvenanceLayout::new(Utf8Path::from_path(temp.path()).unwrap());
+/// The path of the Requirement records file below the working tree at
+/// `root`, and its saved text.
+fn records(root: impl AsRef<std::path::Path>) -> (String, String) {
+    let root = Utf8Path::from_path(root.as_ref()).unwrap();
+    let layout = ProvenanceLayout::new(root);
     let shard = shards::path_for(&layout, &scope(), NodeType::Requirement);
     let relative = shard
-        .strip_prefix(Utf8Path::from_path(temp.path()).unwrap())
+        .strip_prefix(root)
         .unwrap()
         .as_str()
         .replace('\\', "/");
@@ -263,24 +268,29 @@ async fn a_read_of_an_indexed_record_file_reads_no_text() {
 }
 
 /// `count` commits, each the child of the one before, that each give
-/// `req_a` in the saved records file a new statement.
-fn statement_edits(temp: &tempfile::TempDir, count: usize) -> Vec<Commit> {
-    let (relative, text) = records(temp);
+/// `req_a` in the saved records file below `root` a new statement.
+fn statement_edits(root: impl AsRef<std::path::Path>, count: usize) -> Vec<Commit> {
+    let (relative, _) = records(&root);
     let entries = (0..count)
-        .map(|index| {
-            let mut file = String::new();
-            for line in text.lines() {
-                let mut record: Value = serde_json::from_str(line).unwrap();
-                if record["id"] == json!("req_a") {
-                    record["statement"] = json!(format!("Edit {index} of the statement."));
-                }
-                file.push_str(&serde_json::to_string(&record).unwrap());
-                file.push('\n');
-            }
-            Entry::text(&file)
-        })
+        .map(|index| Entry::text(&statement_text(&root, index)))
         .collect();
     chain(&relative, entries)
+}
+
+/// The saved records file below `root`, where `req_a` has the statement of
+/// edit `index`.
+fn statement_text(root: impl AsRef<std::path::Path>, index: usize) -> String {
+    let (_, text) = records(root);
+    let mut file = String::new();
+    for line in text.lines() {
+        let mut record: Value = serde_json::from_str(line).unwrap();
+        if record["id"] == json!("req_a") {
+            record["statement"] = json!(format!("Edit {index} of the statement."));
+        }
+        file.push_str(&serde_json::to_string(&record).unwrap());
+        file.push('\n');
+    }
+    file
 }
 
 /// The answer of the read operation `name` for `request`, or the error of
@@ -311,8 +321,10 @@ async fn history_entry(repository: &Repository, entry: &str) -> Result<Value, Va
 /// The entry operation reads the history of the record once, also when the
 /// entry is after the first page of 200 versions and the adapter gives a
 /// new version list on each call: one text of the records file and one of
-/// the Discussions file for each committed version.
+/// the Discussions file for each committed version. At 1,000 versions the
+/// read answers in one call.
 #[tokio::test]
+#[verifies("rule_history_reads_bound_file_versions", examples)]
 async fn an_entry_read_reads_the_history_once() {
     let _one = ONE_READER.lock().await;
     let mut counts = Vec::new();
@@ -368,10 +380,63 @@ async fn a_read_indexes_at_most_1000_versions_and_refuses_while_more_wait() {
             ("review-evidence", None, 1_000),
         ]
     );
-    let page = history(&repository, "req_a").await.unwrap();
-    assert_eq!(page.entries[49].id.as_str(), "c49");
-    let last = history_entry(&repository, "c2499").await.unwrap();
-    assert_eq!(last["before"], json!("c2498"));
-    assert_eq!(last["changed_fields"], json!(["statement"]));
+    let entries = all_entries(&repository).await;
     assert_eq!(versions.calls(), 0, "the file is indexed");
+    assert_eq!(entries.len(), 2_501);
+    let shape = |entry: &RecordVersion| {
+        let mut entry = serde_json::to_value(entry).unwrap();
+        for name in ["id", "commit", "before", "revision"] {
+            entry[name] = Value::Null;
+        }
+        entry
+    };
+    for (index, entry) in entries[..2_500].iter().enumerate() {
+        let name = format!("c{index}");
+        assert_eq!(entry.id.as_str(), name);
+        assert_eq!(entry.commit.as_deref(), Some(name.as_str()));
+        let before = index.checked_sub(1).map(|before| format!("c{before}"));
+        assert_eq!(
+            entry.before.as_ref().map(StableId::as_str),
+            before.as_deref()
+        );
+        if index > 0 {
+            assert_eq!(shape(entry), shape(&entries[1]), "{name}");
+        }
+    }
+    assert_eq!(entries[1].changed_fields, ["statement"]);
+    assert_eq!(entries[1].author.as_deref(), Some("ann"));
+    assert_eq!(entries[1].committed_at, Some(1_700_000_000));
+    assert_eq!(entries[2_500].id.as_str(), "working");
+    assert_eq!(entries[2_500].before.as_ref().unwrap().as_str(), "c2499");
+    let revisions = entries
+        .iter()
+        .map(|entry| entry.revision.as_str())
+        .collect::<std::collections::BTreeSet<_>>();
+    assert_eq!(revisions.len(), 2_501, "each statement has its revision");
+    let last = history_entry(&repository, "c2499").await.unwrap();
+    assert_eq!(last, serde_json::to_value(&entries[2_499]).unwrap());
+    assert_eq!(versions.calls(), 0, "the file is indexed");
+}
+
+/// Each entry of the history of `req_a`, page by page to the end.
+async fn all_entries(repository: &Repository) -> Vec<RecordVersion> {
+    let mut entries = Vec::new();
+    let mut cursor = None;
+    loop {
+        let query = ReviewHistoryQuery {
+            record_kind: NodeType::Requirement,
+            record_id: StableId::new("req_a").unwrap(),
+            limit: 200,
+            cursor,
+        };
+        let page = read_history(repository, ReadPolicy::default(), query)
+            .await
+            .unwrap()
+            .result;
+        entries.extend(page.entries);
+        cursor = page.next_cursor;
+        if cursor.is_none() {
+            return entries;
+        }
+    }
 }
