@@ -61,17 +61,36 @@ pub fn api(repo: &Path, path: &str, input: Option<&Value>) -> Output {
     command.output().unwrap()
 }
 
+/// Runs the write `args` on `repo` in the scope `default` with `fields` on
+/// standard input. A long value goes on standard input, because Windows
+/// limits a command line to 32 767 characters.
+pub fn write(repo: &Path, args: &[&str], fields: &Value) -> Output {
+    let mut command = provenance();
+    command
+        .args(args)
+        .args([
+            "--repo",
+            repo.to_str().unwrap(),
+            "--scope",
+            "default",
+            "--stdin",
+        ])
+        .current_dir(repo)
+        .write_stdin(fields.to_string());
+    command.output().unwrap()
+}
+
 /// Creates the Rule `id` of `req_data` with `description`.
 pub fn create_rule(repo: &Path, id: &str, description: &str) -> Output {
-    cli(
+    write(
         repo,
         &[id, "create", "--type", "rule"],
-        &[
-            ("--statement", "The system shows the data"),
-            ("--requirement-id", "req_data"),
-            ("--severity", "high"),
-            ("--description", description),
-        ],
+        &json!({
+            "statement": "The system shows the data",
+            "requirement_ids": ["req_data"],
+            "severity": "high",
+            "description": description
+        }),
     )
 }
 

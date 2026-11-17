@@ -2,11 +2,11 @@
 //! writes, and a record at the budget lands and reads back through get,
 //! trace, search and evidence.
 use provenance_macros::verifies;
-use serde_json::Value;
+use serde_json::{json, Value};
 use std::path::Path;
 
 use crate::support::record_budget::{
-    api, cli, create_rule, refusal, repository, success, too_large, BUDGET,
+    api, cli, create_rule, refusal, repository, success, too_large, write, BUDGET,
 };
 use crate::support::state_files::state_files;
 
@@ -27,10 +27,10 @@ fn a_rule_with_a_long_description_is_refused_at_create_and_at_update() {
     let before = state_files(repo);
 
     let created = refusal(&create_rule(repo, "rule_long", &description));
-    let updated = refusal(&cli(
+    let updated = refusal(&write(
         repo,
         &["rule_one", "update"],
-        &[("--description", &description)],
+        &json!({"description": description}),
     ));
 
     let created_bytes = created["bytes"].as_u64().unwrap();
@@ -53,13 +53,10 @@ fn a_requirement_with_a_long_description_is_refused() {
     let repo = directory.path();
     let before = state_files(repo);
 
-    let refused = refusal(&cli(
+    let refused = refusal(&write(
         repo,
         &["req_long", "create", "--type", "requirement"],
-        &[
-            ("--statement", "The system keeps the data"),
-            ("--description", &"x".repeat(70_000)),
-        ],
+        &json!({"statement": "The system keeps the data", "description": "x".repeat(70_000)}),
     ));
 
     assert_eq!(refused["record_id"], "req_long", "{refused}");

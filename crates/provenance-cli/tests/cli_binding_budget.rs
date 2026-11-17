@@ -4,7 +4,7 @@
 use provenance_macros::verifies;
 use serde_json::json;
 
-use crate::support::record_budget::{api, cli, refusal, repository, success, BUDGET};
+use crate::support::record_budget::{api, cli, refusal, repository, success, write, BUDGET};
 use crate::support::review_paths::provenance;
 use crate::support::state_files::state_files;
 
@@ -19,10 +19,10 @@ fn statement(paragraphs: usize, verb: &str) -> String {
 fn restate(repo: &std::path::Path, text: &str) -> std::process::Output {
     let view = success(&cli(repo, &["req_data", "get"], &[("--format", "json")]));
     let etag = view["edit"]["etag"].as_str().unwrap().to_owned();
-    cli(
+    write(
         repo,
-        &["req_data", "update"],
-        &[("--if-match", &etag), ("--statement", text)],
+        &["req_data", "update", "--if-match", &etag],
+        &json!({"statement": text}),
     )
 }
 
