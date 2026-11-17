@@ -344,7 +344,8 @@ fn import_rejects_external_file_symlink_without_changing_live_state() {
 
 /// An import with an error of its own, in a repository whose state
 /// directory has a link, gives the error of the import: the check of the
-/// state directory runs when the import writes.
+/// state directory runs when the import writes. The Rule of the import
+/// names a Requirement that the scope does not have.
 #[cfg(unix)]
 #[test]
 #[provenance_macros::verifies("rule_whole_set_refuses_a_link_in_the_state_directory", examples)]
@@ -358,24 +359,19 @@ fn an_import_error_comes_before_the_refusal_of_a_link_in_the_state() {
     std::os::unix::fs::symlink(&external, repo.join(".provenance/state/external-link")).unwrap();
     let baseline = dir.path().join("baseline.json");
     export_scope(&repo, &baseline).success();
-    let mut forged: serde_json::Value =
+    let mut invalid: serde_json::Value =
         serde_json::from_slice(&std::fs::read(&baseline).unwrap()).unwrap();
-    forged["proposal_cards"] = serde_json::json!([{
-        "scope_id": "default", "id": "proposal_forged",
-        "proposal_key": "forged", "proposal_type": "requirement_candidate",
-        "title": "Forged", "summary": "Forged terminal ingress",
-        "traceability": {
-            "target": {"artifact_type": "requirement", "artifact_id": "req_missing"},
-            "source_ids": [], "evidence_references": [], "supporting_claim_ids": []
-        },
-        "promotion_state": "accepted"
+    invalid["rules"] = serde_json::json!([{
+        "scope_id": "default", "id": "rule_invalid",
+        "statement": "A rule naming a requirement that is not there.", "status": "active",
+        "severity": "high", "requirement_ids": ["req_missing"]
     }]);
-    let input = dir.path().join("forged.json");
-    write_json(&input, &forged);
+    let input = dir.path().join("invalid.json");
+    write_json(&input, &invalid);
 
     import_scope(&repo, &input)
         .failure()
-        .stderr(predicates::str::contains("frozen shipped-v1 fingerprint"))
+        .stderr(predicates::str::contains("req_missing"))
         .stderr(predicates::str::contains("unsupported state entry").not());
 }
 
