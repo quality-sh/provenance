@@ -327,7 +327,7 @@ fn oversized_post_refuses_before_creating_or_archiving_threads() {
         .expect_err("an oversized message is refused before thread creation");
     assert!(matches!(
         WriteError(error).safe(),
-        WriteFailure::RecordTooLarge
+        WriteFailure::RecordTooLarge { .. }
     ));
     assert_eq!(
         store.list_threads(&scope).unwrap(),
@@ -357,7 +357,7 @@ fn oversized_post_refuses_before_creating_or_archiving_threads() {
         .expect_err("an oversized message is refused before changing an existing thread");
     assert!(matches!(
         WriteError(error).safe(),
-        WriteFailure::RecordTooLarge
+        WriteFailure::RecordTooLarge { .. }
     ));
     assert_eq!(
         std::fs::read(crate::shards::threads_path(&store.layout, &scope)).unwrap(),
@@ -428,7 +428,7 @@ async fn resolution_accounting_matches_sqlite_and_refuses_boundary_overflow() {
         .expect_err("the SQLite byte count exceeds the resource read budget");
     assert!(matches!(
         WriteError(error).safe(),
-        WriteFailure::RecordTooLarge
+        WriteFailure::RecordTooLarge { .. }
     ));
     assert!(store
         .list_resolutions(&scope)

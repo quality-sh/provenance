@@ -83,7 +83,7 @@ fn landed_contribution_and_synthesis_replacements_obey_read_budget() {
     };
     assert!(matches!(
         WriteError(contribution_error).safe(),
-        WriteFailure::RecordTooLarge
+        WriteFailure::RecordTooLarge { .. }
     ));
     let Err(synthesis_error) = store.upsert_synthesis_packet(synthesis_input(&scope, &oversized))
     else {
@@ -91,7 +91,7 @@ fn landed_contribution_and_synthesis_replacements_obey_read_budget() {
     };
     assert!(matches!(
         WriteError(synthesis_error).safe(),
-        WriteFailure::RecordTooLarge
+        WriteFailure::RecordTooLarge { .. }
     ));
     assert_eq!(
         store.list_contributions(&scope).unwrap()[0].strongest_finding,
