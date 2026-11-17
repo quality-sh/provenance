@@ -45,9 +45,10 @@ async fn a_withdrawal_that_names_no_submission_is_located() {
 
 /// With no stored revision, the catch-up that builds the read database
 /// refuses the Withdrawal, so the record read refuses with `no_projection`.
-/// The host gives no cause text over HTTP, so no Rule about a located refusal
-/// binds this test.
+/// The refusal gives the Withdrawal as the cause and names
+/// `provenance materialize`.
 #[tokio::test]
+#[verifies("rule_no_revision_refuses_and_names_materialize", examples)]
 async fn a_withdrawal_that_names_no_submission_with_no_stored_revision_refuses() {
     let repo = Repository::new("The shared graph is readable.");
     write_withdrawals(&repo, &[withdrawal("withdrawal_lost", "proposal_missing")]);
@@ -55,7 +56,14 @@ async fn a_withdrawal_that_names_no_submission_with_no_stored_revision_refuses()
     let (status, failure) = call(&host, "GET", "/requirements/req_shared", None).await;
     assert_eq!(
         (status, failure),
-        (409, json!({"error":{"kind":"no_projection"},"meta":{}}))
+        (
+            409,
+            json!({"error":{"kind":"no_projection",
+                "message":format!("catch-up failed: {WITHDRAWALS} line 1: \
+                    withdrawal withdrawal_lost names no review submission: proposal_missing; \
+                    To repair, remove ideation/withdrawals.jsonl line 1, then commit."),
+                "hint":"run `provenance materialize`"},"meta":{}})
+        )
     );
 }
 

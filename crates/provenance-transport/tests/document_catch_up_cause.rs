@@ -101,23 +101,58 @@ async fn a_document_read_gives_no_absolute_path_in_the_cause() {
     );
 }
 
-/// With no stored revision, a document read whose catch-up fails refuses
-/// with `no_projection`, as every other read does.
+/// The refusal of a read with no stored revision whose catch-up failed with
+/// `cause`: the cause as the message, and `provenance materialize` as the
+/// step that corrects it.
+fn no_projection(cause: &str) -> Value {
+    json!({"error": {"kind": "no_projection",
+        "message": format!("catch-up failed: {cause}"),
+        "hint": "run `provenance materialize`"}, "meta": {}})
+}
+
+/// A repository with no read database.
+fn no_stored_revision(repo: &Repository) {
+    // The writes of the fixture leave a read database; the test removes it.
+    let cache = repo.dir.path().join(".provenance/cache");
+    std::fs::remove_dir_all(&cache).unwrap();
+}
+
+/// With no stored revision, a document read whose catch-up stops at a state
+/// line refuses with `no_projection`, as every other read does. The refusal
+/// gives the line as the cause and names `provenance materialize`.
 #[tokio::test]
 #[verifies("rule_no_revision_refuses_and_names_materialize", examples)]
 async fn a_document_read_with_no_stored_revision_refuses_with_no_projection() {
     let repo = Repository::new("The shared graph is readable.");
     let host = host(&repo, false);
     give_refines_a_string(repo.dir.path(), "req_shared");
-    // The writes of the fixture leave a read database; the test removes it.
-    let cache = repo.dir.path().join(".provenance/cache");
-    std::fs::remove_dir_all(&cache).unwrap();
+    no_stored_revision(&repo);
 
     let (status, refused) = call(&host, "GET", DOCUMENT, None).await;
 
     assert_eq!(status, 409);
+    let cause = format!(
+        "scopes/default/requirements/req.jsonl line 1: invalid type: string \"req_parent\", \
+        expected a sequence; {STATE_CORRECTIONS}"
+    );
+    assert_eq!(refused, no_projection(&cause));
+}
+
+/// With no stored revision, a record read whose catch-up stops at a cycle
+/// refuses with `no_projection`, and gives the cycle as the cause.
+#[tokio::test]
+#[verifies("rule_no_revision_refuses_and_names_materialize", examples)]
+async fn a_record_read_with_no_stored_revision_gives_the_fault_with_no_file() {
+    let repo = Repository::new("The shared graph is readable.");
+    let host = host(&repo, false);
+    add_a_depends_on_cycle(repo.dir.path());
+    no_stored_revision(&repo);
+
+    let (status, refused) = call(&host, "GET", "/requirements/req_shared", None).await;
+
+    assert_eq!(status, 409);
     assert_eq!(
         refused,
-        json!({"error": {"kind": "no_projection"}, "meta": {}})
+        no_projection("depends_on forms a cycle: req_c -> req_d -> req_c")
     );
 }
