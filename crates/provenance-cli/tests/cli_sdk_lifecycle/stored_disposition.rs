@@ -86,14 +86,12 @@ fn each_read_refuses_a_stored_disposition_of_a_missing_record_at_its_line() {
 
     let message = "disposition disposition_a names requirement req_missing, \
                    which the scope does not have";
-    let check = json!({"kind": "operation_failed",
-        "message": format!("{DISPOSITIONS} line 1: {message}; {STATE_CORRECTIONS}")});
     let fault = json!({"kind": "invalid_state_file", "file": DISPOSITIONS, "line": 1,
         "message": message, "hint": STATE_CORRECTIONS});
     assert_eq!(
         answers.map(|(surface, answer)| (surface, refusal(&answer))),
         [
-            ("check", check),
+            ("check", fault.clone()),
             ("materialize", fault.clone()),
             ("plan", fault.clone()),
             ("apply", fault),

@@ -196,10 +196,29 @@ fn check_rejects_missing_wrong_kind_and_wrong_scope_canonical_artifacts() {
             ),
         );
 
-        provenance(dir.path()).failure().stderr(contains(format!(
-            "scopes/default/ideation/dispositions.jsonl line 1: disposition disposition_a \
-                 names {artifact_type} {artifact_id}, which the scope does not have"
-        )));
+        let refused = provenance(dir.path()).failure();
+        let stderr = String::from_utf8(refused.get_output().stderr.clone()).unwrap();
+        let refusal: serde_json::Value = serde_json::from_str(&stderr).unwrap();
+        let error = &refusal["error"];
+        let message = format!(
+            "disposition disposition_a names {artifact_type} {artifact_id}, \
+             which the scope does not have"
+        );
+        assert_eq!(
+            (
+                &error["kind"],
+                &error["file"],
+                &error["line"],
+                &error["message"]
+            ),
+            (
+                &serde_json::json!("invalid_state_file"),
+                &serde_json::json!("scopes/default/ideation/dispositions.jsonl"),
+                &serde_json::json!(1),
+                &serde_json::json!(message),
+            ),
+            "{refusal}"
+        );
     }
 }
 
