@@ -1,4 +1,5 @@
 use super::initialized_store;
+use crate::state_store::MessageWrite;
 use provenance_core::{MessageRole, StableId};
 use provenance_macros::verifies;
 
@@ -136,8 +137,11 @@ fn duplicate_message_rows_name_both_lines_and_refuse_a_write() {
             .append_discussion_message(
                 &scope,
                 &first.thread_id,
-                MessageRole::User,
-                "refused".into(),
+                MessageWrite {
+                    role: MessageRole::User,
+                    actor: "agent".into(),
+                    body: "refused".into(),
+                },
             )
             .unwrap_err(),
     ] {

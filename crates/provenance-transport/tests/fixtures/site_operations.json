@@ -69,6 +69,15 @@
         "actor": "reviewer",
         "discussion_id": "<generated>",
         "disposition_id": null,
+        "message": {
+          "actor": "reviewer",
+          "body": "Discussion of source_shared.",
+          "created_at": "<time>",
+          "id": "<generated>",
+          "role": "user",
+          "scope_id": "default",
+          "thread_id": "thread_source_source_shared"
+        },
         "message_ids": [
           "<generated>"
         ],
@@ -139,6 +148,15 @@
         "actor": "reviewer",
         "discussion_id": "<generated>",
         "disposition_id": null,
+        "message": {
+          "actor": "agent",
+          "body": "Reply on source_shared.",
+          "created_at": "<time>",
+          "id": "<generated>",
+          "role": "assistant",
+          "scope_id": "default",
+          "thread_id": "thread_source_source_shared"
+        },
         "message_ids": [
           "<generated>",
           "<generated>"
@@ -168,18 +186,20 @@
       "data": {
         "items": [
           {
-            "body": "Discussion of source_shared.",
-            "created_at": "<time>",
-            "id": "<generated>",
-            "role": "user",
-            "scope_id": "default",
-            "thread_id": "thread_source_source_shared"
-          },
-          {
+            "actor": "agent",
             "body": "Reply on source_shared.",
             "created_at": "<time>",
             "id": "<generated>",
             "role": "assistant",
+            "scope_id": "default",
+            "thread_id": "thread_source_source_shared"
+          },
+          {
+            "actor": "reviewer",
+            "body": "Discussion of source_shared.",
+            "created_at": "<time>",
+            "id": "<generated>",
+            "role": "user",
             "scope_id": "default",
             "thread_id": "thread_source_source_shared"
           }
@@ -204,6 +224,7 @@
         "actor": "reviewer",
         "discussion_id": "<generated>",
         "disposition_id": null,
+        "message": null,
         "message_ids": [
           "<generated>",
           "<generated>"
@@ -330,6 +351,15 @@
         "actor": "reviewer",
         "discussion_id": "<generated>",
         "disposition_id": null,
+        "message": {
+          "actor": "reviewer",
+          "body": "Discussion of req_shared.",
+          "created_at": "<time>",
+          "id": "<generated>",
+          "role": "user",
+          "scope_id": "default",
+          "thread_id": "thread_requirement_req_shared"
+        },
         "message_ids": [
           "<generated>"
         ],
@@ -400,6 +430,15 @@
         "actor": "reviewer",
         "discussion_id": "<generated>",
         "disposition_id": null,
+        "message": {
+          "actor": "agent",
+          "body": "Reply on req_shared.",
+          "created_at": "<time>",
+          "id": "<generated>",
+          "role": "assistant",
+          "scope_id": "default",
+          "thread_id": "thread_requirement_req_shared"
+        },
         "message_ids": [
           "<generated>",
           "<generated>"
@@ -429,18 +468,20 @@
       "data": {
         "items": [
           {
-            "body": "Discussion of req_shared.",
-            "created_at": "<time>",
-            "id": "<generated>",
-            "role": "user",
-            "scope_id": "default",
-            "thread_id": "thread_requirement_req_shared"
-          },
-          {
+            "actor": "agent",
             "body": "Reply on req_shared.",
             "created_at": "<time>",
             "id": "<generated>",
             "role": "assistant",
+            "scope_id": "default",
+            "thread_id": "thread_requirement_req_shared"
+          },
+          {
+            "actor": "reviewer",
+            "body": "Discussion of req_shared.",
+            "created_at": "<time>",
+            "id": "<generated>",
+            "role": "user",
             "scope_id": "default",
             "thread_id": "thread_requirement_req_shared"
           }
@@ -465,6 +506,7 @@
         "actor": "reviewer",
         "discussion_id": "<generated>",
         "disposition_id": null,
+        "message": null,
         "message_ids": [
           "<generated>",
           "<generated>"
@@ -603,6 +645,15 @@
         "actor": "reviewer",
         "discussion_id": "<generated>",
         "disposition_id": null,
+        "message": {
+          "actor": "reviewer",
+          "body": "Discussion of resolution_shared.",
+          "created_at": "<time>",
+          "id": "<generated>",
+          "role": "user",
+          "scope_id": "default",
+          "thread_id": "thread_resolution_resolution_shared"
+        },
         "message_ids": [
           "<generated>"
         ],
@@ -673,6 +724,15 @@
         "actor": "reviewer",
         "discussion_id": "<generated>",
         "disposition_id": null,
+        "message": {
+          "actor": "agent",
+          "body": "Reply on resolution_shared.",
+          "created_at": "<time>",
+          "id": "<generated>",
+          "role": "assistant",
+          "scope_id": "default",
+          "thread_id": "thread_resolution_resolution_shared"
+        },
         "message_ids": [
           "<generated>",
           "<generated>"
@@ -702,18 +762,20 @@
       "data": {
         "items": [
           {
-            "body": "Discussion of resolution_shared.",
-            "created_at": "<time>",
-            "id": "<generated>",
-            "role": "user",
-            "scope_id": "default",
-            "thread_id": "thread_resolution_resolution_shared"
-          },
-          {
+            "actor": "agent",
             "body": "Reply on resolution_shared.",
             "created_at": "<time>",
             "id": "<generated>",
             "role": "assistant",
+            "scope_id": "default",
+            "thread_id": "thread_resolution_resolution_shared"
+          },
+          {
+            "actor": "reviewer",
+            "body": "Discussion of resolution_shared.",
+            "created_at": "<time>",
+            "id": "<generated>",
+            "role": "user",
             "scope_id": "default",
             "thread_id": "thread_resolution_resolution_shared"
           }
@@ -738,6 +800,7 @@
         "actor": "reviewer",
         "discussion_id": "<generated>",
         "disposition_id": null,
+        "message": null,
         "message_ids": [
           "<generated>",
           "<generated>"
@@ -876,6 +939,15 @@
         "actor": "reviewer",
         "discussion_id": "<generated>",
         "disposition_id": null,
+        "message": {
+          "actor": "reviewer",
+          "body": "Discussion of rule_shared.",
+          "created_at": "<time>",
+          "id": "<generated>",
+          "role": "user",
+          "scope_id": "default",
+          "thread_id": "thread_rule_rule_shared"
+        },
         "message_ids": [
           "<generated>"
         ],
@@ -946,6 +1018,15 @@
         "actor": "reviewer",
         "discussion_id": "<generated>",
         "disposition_id": null,
+        "message": {
+          "actor": "agent",
+          "body": "Reply on rule_shared.",
+          "created_at": "<time>",
+          "id": "<generated>",
+          "role": "assistant",
+          "scope_id": "default",
+          "thread_id": "thread_rule_rule_shared"
+        },
         "message_ids": [
           "<generated>",
           "<generated>"
@@ -975,18 +1056,20 @@
       "data": {
         "items": [
           {
-            "body": "Discussion of rule_shared.",
-            "created_at": "<time>",
-            "id": "<generated>",
-            "role": "user",
-            "scope_id": "default",
-            "thread_id": "thread_rule_rule_shared"
-          },
-          {
+            "actor": "agent",
             "body": "Reply on rule_shared.",
             "created_at": "<time>",
             "id": "<generated>",
             "role": "assistant",
+            "scope_id": "default",
+            "thread_id": "thread_rule_rule_shared"
+          },
+          {
+            "actor": "reviewer",
+            "body": "Discussion of rule_shared.",
+            "created_at": "<time>",
+            "id": "<generated>",
+            "role": "user",
             "scope_id": "default",
             "thread_id": "thread_rule_rule_shared"
           }
@@ -1011,6 +1094,7 @@
         "actor": "reviewer",
         "discussion_id": "<generated>",
         "disposition_id": null,
+        "message": null,
         "message_ids": [
           "<generated>",
           "<generated>"
@@ -1142,6 +1226,15 @@
         "actor": "reviewer",
         "discussion_id": "<generated>",
         "disposition_id": null,
+        "message": {
+          "actor": "reviewer",
+          "body": "Discussion of topic_shared.",
+          "created_at": "<time>",
+          "id": "<generated>",
+          "role": "user",
+          "scope_id": "default",
+          "thread_id": "thread_topic_topic_shared"
+        },
         "message_ids": [
           "<generated>"
         ],
@@ -1212,6 +1305,15 @@
         "actor": "reviewer",
         "discussion_id": "<generated>",
         "disposition_id": null,
+        "message": {
+          "actor": "agent",
+          "body": "Reply on topic_shared.",
+          "created_at": "<time>",
+          "id": "<generated>",
+          "role": "assistant",
+          "scope_id": "default",
+          "thread_id": "thread_topic_topic_shared"
+        },
         "message_ids": [
           "<generated>",
           "<generated>"
@@ -1241,18 +1343,20 @@
       "data": {
         "items": [
           {
-            "body": "Discussion of topic_shared.",
-            "created_at": "<time>",
-            "id": "<generated>",
-            "role": "user",
-            "scope_id": "default",
-            "thread_id": "thread_topic_topic_shared"
-          },
-          {
+            "actor": "agent",
             "body": "Reply on topic_shared.",
             "created_at": "<time>",
             "id": "<generated>",
             "role": "assistant",
+            "scope_id": "default",
+            "thread_id": "thread_topic_topic_shared"
+          },
+          {
+            "actor": "reviewer",
+            "body": "Discussion of topic_shared.",
+            "created_at": "<time>",
+            "id": "<generated>",
+            "role": "user",
             "scope_id": "default",
             "thread_id": "thread_topic_topic_shared"
           }
@@ -1277,6 +1381,7 @@
         "actor": "reviewer",
         "discussion_id": "<generated>",
         "disposition_id": null,
+        "message": null,
         "message_ids": [
           "<generated>",
           "<generated>"
@@ -1414,6 +1519,15 @@
         "actor": "reviewer",
         "discussion_id": "<generated>",
         "disposition_id": null,
+        "message": {
+          "actor": "reviewer",
+          "body": "Discussion of question_shared.",
+          "created_at": "<time>",
+          "id": "<generated>",
+          "role": "user",
+          "scope_id": "default",
+          "thread_id": "thread_question_question_shared"
+        },
         "message_ids": [
           "<generated>"
         ],
@@ -1484,6 +1598,15 @@
         "actor": "reviewer",
         "discussion_id": "<generated>",
         "disposition_id": null,
+        "message": {
+          "actor": "agent",
+          "body": "Reply on question_shared.",
+          "created_at": "<time>",
+          "id": "<generated>",
+          "role": "assistant",
+          "scope_id": "default",
+          "thread_id": "thread_question_question_shared"
+        },
         "message_ids": [
           "<generated>",
           "<generated>"
@@ -1513,18 +1636,20 @@
       "data": {
         "items": [
           {
-            "body": "Discussion of question_shared.",
-            "created_at": "<time>",
-            "id": "<generated>",
-            "role": "user",
-            "scope_id": "default",
-            "thread_id": "thread_question_question_shared"
-          },
-          {
+            "actor": "agent",
             "body": "Reply on question_shared.",
             "created_at": "<time>",
             "id": "<generated>",
             "role": "assistant",
+            "scope_id": "default",
+            "thread_id": "thread_question_question_shared"
+          },
+          {
+            "actor": "reviewer",
+            "body": "Discussion of question_shared.",
+            "created_at": "<time>",
+            "id": "<generated>",
+            "role": "user",
             "scope_id": "default",
             "thread_id": "thread_question_question_shared"
           }
@@ -1549,6 +1674,7 @@
         "actor": "reviewer",
         "discussion_id": "<generated>",
         "disposition_id": null,
+        "message": null,
         "message_ids": [
           "<generated>",
           "<generated>"
@@ -1941,6 +2067,7 @@
           {
             "kind": "message",
             "message": {
+              "actor": "reviewer",
               "body": "Discussion of req_shared.",
               "created_at": "<time>",
               "id": "<generated>",
@@ -1952,6 +2079,7 @@
           {
             "kind": "message",
             "message": {
+              "actor": "agent",
               "body": "Reply on req_shared.",
               "created_at": "<time>",
               "id": "<generated>",
@@ -1963,6 +2091,7 @@
           {
             "kind": "message",
             "message": {
+              "actor": "reviewer",
               "body": "Discussion of resolution_shared.",
               "created_at": "<time>",
               "id": "<generated>",
@@ -1974,6 +2103,7 @@
           {
             "kind": "message",
             "message": {
+              "actor": "agent",
               "body": "Reply on resolution_shared.",
               "created_at": "<time>",
               "id": "<generated>",
@@ -1985,6 +2115,7 @@
           {
             "kind": "message",
             "message": {
+              "actor": "reviewer",
               "body": "Discussion of rule_shared.",
               "created_at": "<time>",
               "id": "<generated>",
@@ -1996,6 +2127,7 @@
           {
             "kind": "message",
             "message": {
+              "actor": "agent",
               "body": "Reply on rule_shared.",
               "created_at": "<time>",
               "id": "<generated>",
@@ -2007,6 +2139,7 @@
           {
             "kind": "message",
             "message": {
+              "actor": "reviewer",
               "body": "Discussion of topic_shared.",
               "created_at": "<time>",
               "id": "<generated>",
@@ -2018,6 +2151,7 @@
           {
             "kind": "message",
             "message": {
+              "actor": "agent",
               "body": "Reply on topic_shared.",
               "created_at": "<time>",
               "id": "<generated>",
@@ -2029,6 +2163,7 @@
           {
             "kind": "message",
             "message": {
+              "actor": "reviewer",
               "body": "Discussion of question_shared.",
               "created_at": "<time>",
               "id": "<generated>",
@@ -2040,6 +2175,7 @@
           {
             "kind": "message",
             "message": {
+              "actor": "agent",
               "body": "Reply on question_shared.",
               "created_at": "<time>",
               "id": "<generated>",
