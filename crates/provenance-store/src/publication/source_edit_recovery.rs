@@ -59,8 +59,9 @@ fn recover_marked_source_edit(
             contained_transaction(layout, TransactionKind::SourceEdit, &marker.transaction_dir)?;
         validate_recovery_tree(&transaction)?;
         let replacement = read_replacement(&transaction, marker.after_digest)?;
-        let held = recover_target(layout, marker)?;
-        let current = require_known_target(layout, &held, marker)?;
+        let (current, held) = recover_target(layout, marker)
+            .and_then(|held| Ok((require_known_target(layout, &held, marker)?, held)))
+            .map_err(|refusal| refuse_with_live_state(layout, &transaction, marker, refusal))?;
         complete_state(layout, &transaction, marker)?;
         if current == marker.before_digest {
             install_replacement(layout, &held, marker, &replacement)?;
@@ -69,6 +70,27 @@ fn recover_marked_source_edit(
         crate::test_probes::at("source_edit_file_installed")?;
     }
     end_marked_write(layout, TransactionKind::SourceEdit, &marker.transaction_dir)
+}
+
+/// Gives the refusal for the target with a state at the live path. A stop in
+/// the roll back of a failed file install can leave no live state, and the
+/// refusal holds until a person acts on the target, so the recovery first
+/// puts the state after the edit at an empty live path. That is the
+/// direction of each recovery before `FileInstalled`. A failure of that step
+/// is the error, because the next entry gives the refusal again.
+fn refuse_with_live_state(
+    layout: &ProvenanceLayout,
+    transaction: &Utf8Path,
+    marker: &mut SourceEditMarker,
+    refusal: anyhow::Error,
+) -> anyhow::Error {
+    if layout.state_dir().exists() {
+        return refusal;
+    }
+    match complete_state(layout, transaction, marker) {
+        Ok(()) => refusal,
+        Err(error) => error,
+    }
 }
 
 fn read_replacement(transaction: &Utf8Path, expected: [u8; 32]) -> anyhow::Result<Vec<u8>> {
@@ -176,19 +198,24 @@ fn complete_state(
     marker: &mut SourceEditMarker,
 ) -> anyhow::Result<()> {
     let staged = ProvenanceLayout::new(transaction.join("staged-repo"));
-    complete_backup_phase(layout, transaction, marker)?;
+    complete_backup_phase(layout, transaction, &staged, marker)?;
     complete_install_phase(layout, &staged, marker)
 }
 
-/// Moves the live state to the backup when no backup exists.
+/// Moves the live state to the backup when no backup exists and a staged
+/// state can take its place, so that the move never leaves the live path
+/// with no state to install.
 fn complete_backup_phase(
     layout: &ProvenanceLayout,
     transaction: &Utf8Path,
+    staged: &ProvenanceLayout,
     marker: &mut SourceEditMarker,
 ) -> anyhow::Result<()> {
     let backup = transaction.join("backup-state");
-    if layout.state_dir().exists() && !backup.exists() {
-        std::fs::rename(layout.state_dir(), &backup)?;
+    if layout.state_dir().exists() && !backup.exists() && staged.state_dir().exists() {
+        std::fs::rename(layout.state_dir(), &backup).map_err(|error| {
+            crate::refusal::fault!("move live state {} to backup: {error}", layout.state_dir())
+        })?;
         crate::test_probes::at("state_after_backup_rename")?;
         sync_directory(transaction)?;
         sync_directory(&layout.provenance_dir())?;
