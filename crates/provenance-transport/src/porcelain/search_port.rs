@@ -3,7 +3,7 @@ use provenance_core::{
     NodeType,
 };
 use provenance_porcelain::search::{PortFuture, SearchError, SearchPort, SymbolFuture};
-use provenance_store::operations::catalog::{self, Operation as _};
+use provenance_store::operations::catalog::{self, CallFailure, Operation as _};
 
 /// The canonical typed search operation with host kind grants applied.
 #[derive(Clone)]
@@ -75,9 +75,9 @@ fn permitted_node_types(host: &crate::StatementHost) -> Vec<NodeType> {
 
 fn operation_error<F>(error: &OperationError<F>) -> SearchError
 where
-    OperationError<F>: std::fmt::Display + serde::Serialize,
+    OperationError<F>: CallFailure,
 {
-    let message = error.to_string();
+    let message = error.message();
     let detail =
         serde_json::to_value(error).unwrap_or_else(|_| serde_json::json!({"kind":"internal"}));
     SearchError::Operation { message, detail }

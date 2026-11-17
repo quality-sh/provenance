@@ -2,7 +2,9 @@
 //! `--kebab-case` flag and each target field as a positional argument; the options here
 //! are the CLI's, not fields of a command.
 
-use provenance_porcelain::registry::{json_format, Declaration, Field, Relation, REPO, SCOPE};
+use provenance_porcelain::registry::{
+    json_format, Declaration, Field, Relation, REPO, SCOPE, VIEW,
+};
 
 /// The repository options that the porcelain commands and the commands after them take.
 pub const GLOBAL_OPTIONS: &[Field] = &[
@@ -41,7 +43,7 @@ pub fn field_help(field: &Field) -> Option<&'static str> {
 
 /// The relations of the get options with each other and with the get fields.
 pub const GET_OPTION_RELATIONS: &[Relation] = &[
-    Relation::Requires("follow", "view"),
+    Relation::Requires("follow", VIEW.name),
     Relation::Conflicts("follow", "review_link"),
     Relation::Conflicts("follow", "notify"),
     Relation::Requires("no_open", "review_link"),
@@ -58,23 +60,26 @@ pub fn command_options(declaration: &Declaration) -> (&'static [Field], &'static
 
 /// The description of each CLI command group that has one, by its words.
 pub const GROUP_DESCRIPTIONS: &[(&str, &str)] = &[
-    ("schema", "Show the JSON Schema of one artifact type"),
+    ("schema", "Show the JSON Schema of one artifact type."),
     (
         "dictionary",
-        "Import and report the ASD-STE100 dictionary that the statement check uses",
+        "Import and report the ASD-STE100 dictionary that the statement check uses.",
     ),
     (
         "swarm-backtrace",
-        "Add the results of one swarm backtrace run to the graph as proposals",
+        "Add the results of one swarm backtrace run to the graph as proposals.",
     ),
-    ("skills", "List, show, and install the bundled agent skills"),
+    (
+        "skills",
+        "List, show, and install the bundled agent skills.",
+    ),
     (
         "report",
-        "Deterministic report rendering from a versioned report envelope",
+        "Make a deterministic report from a report envelope that has a version.",
     ),
     (
         "dogfood",
-        "Dev-build-only: record pain-point notes about provenance itself",
+        "Dev-build-only: record pain-point notes about provenance itself.",
     ),
     (
         "dogfood triage",

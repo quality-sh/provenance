@@ -66,6 +66,15 @@ pub(super) fn repository(merge: Merge) -> (tempfile::TempDir, String) {
         let attributes = ".provenance/state/**/*.jsonl merge=provenance-jsonl\n";
         directory_file(&repo, ".gitattributes", attributes);
         git(&repo, &["add", ".gitattributes"]);
+    } else {
+        // Init sets the merge driver in the clone; this case merges without it.
+        let unset = [
+            "config",
+            "--local",
+            "--unset",
+            "merge.provenance-jsonl.driver",
+        ];
+        git_output(&repo, &unset);
     }
     create(&repo, "req_a");
     create(&repo, "req_b");

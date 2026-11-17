@@ -3,28 +3,24 @@
 //! This test has no Rule binding. It is an implementation aid that keeps the host usable
 //! without the CLI; the CLI tests bind the review host Rules.
 
-use provenance_porcelain::check::{Category, CheckPort, PortFuture};
+#[path = "support"]
+mod support {
+    pub mod no_checks;
+    pub mod user_cache;
+}
+
+use support::no_checks::NoChecks;
+use support::user_cache::use_user_cache;
+
 use provenance_review::{
     bundle, launch_key, HostOptions, RepositoryScope, LAUNCH_CODE_ROUTE, LAUNCH_SESSION_ROUTE,
 };
 use provenance_transport::fixture::records::Repository;
 use serde_json::{json, Value};
-use std::{
-    path::Path,
-    sync::{
-        atomic::{AtomicUsize, Ordering},
-        Arc,
-    },
+use std::sync::{
+    atomic::{AtomicUsize, Ordering},
+    Arc,
 };
-
-/// A check port for a host whose test never runs a check.
-struct NoChecks;
-
-impl CheckPort for NoChecks {
-    fn run<'a>(&'a self, _: Category, _: Option<&'a str>) -> PortFuture<'a> {
-        Box::pin(async { Err("this host runs no checks".to_owned()) })
-    }
-}
 
 #[tokio::test(flavor = "multi_thread")]
 async fn a_started_host_signs_a_page_in_serves_assets_and_leaves_no_record_after_stop() {
@@ -130,12 +126,4 @@ fn post(endpoint: &str, route: &str, body: &Value) -> Value {
         .into_string()
         .unwrap();
     serde_json::from_str(&reply).unwrap()
-}
-
-/// Points every platform's per-user cache at one isolated directory.
-fn use_user_cache(root: &Path) {
-    let cache = root.join("cache");
-    std::env::set_var("HOME", root);
-    std::env::set_var("XDG_CACHE_HOME", &cache);
-    std::env::set_var("LOCALAPPDATA", &cache);
 }

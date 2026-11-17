@@ -7,6 +7,7 @@
 
 #[path = "../support"]
 mod support {
+    pub mod comment_sites;
     pub mod record_review;
     pub mod review_paths;
     pub mod review_row_findings;
@@ -23,12 +24,16 @@ mod cli_binding_policy;
 mod cli_check;
 #[path = "../cli_check_gaps.rs"]
 mod cli_check_gaps;
+#[path = "../cli_check_merge_driver.rs"]
+mod cli_check_merge_driver;
 #[path = "../cli_check_porcelain.rs"]
 mod cli_check_porcelain;
 #[path = "../cli_check_threads.rs"]
 mod cli_check_threads;
 #[path = "../cli_comment_binding.rs"]
 mod cli_comment_binding;
+#[path = "../cli_comment_extent.rs"]
+mod cli_comment_extent;
 #[path = "../cli_coverage.rs"]
 mod cli_coverage;
 #[path = "../cli_coverage_anchors.rs"]
@@ -55,8 +60,12 @@ mod cli_stale_answers;
 mod cli_stale_typed_implementations;
 #[path = "../cli_stale_typed_verifications.rs"]
 mod cli_stale_typed_verifications;
+#[path = "../cli_verification_run_budget.rs"]
+mod cli_verification_run_budget;
 #[path = "../report_build.rs"]
 mod report_build;
+#[path = "../report_inactive_binding_roles.rs"]
+mod report_inactive_binding_roles;
 #[path = "../report_render_cli.rs"]
 mod report_render_cli;
 #[path = "../report_source_integrity.rs"]

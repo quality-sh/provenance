@@ -4,9 +4,8 @@ use provenance_macros::rule;
 use provenance_porcelain::merge_jsonl::{MergeJsonlInput, MergeJsonlPort, MergeReport};
 use provenance_porcelain::WorkFuture;
 use provenance_store::merge::{
-    changed_statement_diagnostics, ensure_unique_ids, merge_records, read_jsonl_rows,
-    read_jsonl_rows_for_shard, validate_merged_records, MergeOutcome, MergeSide, ShardFamily,
-    StoredRow,
+    changed_statement_diagnostics, ensure_unique_ids, merge_records, read_jsonl_rows_for_shard,
+    validate_merged_records, MergeOutcome, MergeSide, ShardFamily, StoredRow,
 };
 use provenance_store::statement_analysis::violation_error;
 
@@ -59,15 +58,12 @@ fn merge(
     shard_path: Option<&Utf8Path>,
 ) -> anyhow::Result<Result<MergeReport, MergeFailure>> {
     let target_path = shard_path.or(output_path.as_deref());
-    let read_rows = |path: &Utf8PathBuf| {
-        target_path.map_or_else(
-            || read_jsonl_rows(path),
-            |target| read_jsonl_rows_for_shard(path, target),
-        )
+    let read_rows = |side, path: &Utf8PathBuf| {
+        read_jsonl_rows_for_shard(path, target_path.unwrap_or(path), side)
     };
-    let base_rows = read_rows(base)?;
-    let our_rows = read_rows(ours)?;
-    let their_rows = read_rows(theirs)?;
+    let base_rows = read_rows(MergeSide::Base, base)?;
+    let our_rows = read_rows(MergeSide::Ours, ours)?;
+    let their_rows = read_rows(MergeSide::Theirs, theirs)?;
     let record_values = |rows: &[StoredRow]| {
         rows.iter()
             .map(|row| row.record().clone())

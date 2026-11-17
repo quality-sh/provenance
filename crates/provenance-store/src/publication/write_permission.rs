@@ -3,6 +3,8 @@
 //! A permission belongs to one staged store. A review writer gets a store
 //! with the added permission from `StateStore::permitting`, and a write
 //! through any other store carries none.
+use crate::jsonl::numbered_lines;
+use crate::merge::ShardFamily;
 use crate::state_store::StateStore;
 use camino::{Utf8Path, Utf8PathBuf};
 use provenance_macros::rule;
@@ -125,17 +127,21 @@ pub fn protect_rows<T: Serialize>(
     Ok(())
 }
 
-/// The rows of the shard at `path`, or none when it does not exist.
+/// The rows of the shard at `path`, or none when it does not exist. Each
+/// line goes through the line reader of the shard.
 fn rows(store: &StateStore, path: &Utf8Path) -> anyhow::Result<Vec<Value>> {
     let Some(text) = store.state_text(path)? else {
         return Ok(Vec::new());
     };
-    Ok(text
-        .lines()
-        .map(serde_json::from_str)
-        .collect::<Result<_, _>>()?)
+    let read_line = ShardFamily::for_shard_path(path).line_reader();
+    numbered_lines(text.as_bytes())
+        .map(|(number, line)| read_line(path, number, line).map(|(_, value)| value))
+        .collect()
 }
 
+/// The ids of the records of `kind` with a submitted review in the proposal
+/// cards of the scope of `path`. Each line that is not blank goes through
+/// the line reader of the proposal card file.
 fn submitted_ids(
     store: &StateStore,
     path: &Utf8Path,
@@ -144,12 +150,17 @@ fn submitted_ids(
     let Some(scope) = path.parent().and_then(Utf8Path::parent) else {
         return Ok(std::collections::BTreeSet::new());
     };
-    let Some(text) = store.state_text(&scope.join("ideation").join("proposal_cards.jsonl"))? else {
+    let cards = scope.join("ideation").join("proposal_cards.jsonl");
+    let Some(text) = store.state_text(&cards)? else {
         return Ok(std::collections::BTreeSet::new());
     };
+    let read_line = ShardFamily::for_shard_path(&cards).line_reader();
     let mut ids = std::collections::BTreeSet::new();
-    for line in text.lines().filter(|line| !line.trim().is_empty()) {
-        let proposal: Value = serde_json::from_str(line)?;
+    for (number, line) in numbered_lines(text.as_bytes()) {
+        if line.trim_ascii().is_empty() {
+            continue;
+        }
+        let (_, proposal) = read_line(&cards, number, line)?;
         let target = &proposal["traceability"]["target"];
         if proposal["proposal_type"] == "record_revision"
             && target["artifact_type"] == kind.as_str()

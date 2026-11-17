@@ -1,13 +1,17 @@
-//! The reader of one stored line of a JSONL file. A write that loads a JSONL
-//! file and each read of the verification runs cache give the bytes of one
-//! line and its number here, so that a fault of a line gets the same refusal
-//! from each of them.
+//! The reader of one stored line of a JSONL file. Each read of a state shard,
+//! each write that loads a JSONL file and each read of the verification runs
+//! cache give the bytes of one line and its number here, so that a fault of a
+//! line gets the same refusal from each of them. The record history reads
+//! each line of a record file through [`committed_line_value`].
 
 use crate::refusal::state_fault;
 use crate::state_store::message_ids::ShardLine;
-use crate::state_store::readers::{ensure_no_legacy_retirement, located, parse_line};
+use crate::state_store::readers::located;
 use camino::Utf8Path;
 use serde::de::DeserializeOwned;
+
+/// The removed member that a stored record must not hold.
+const RETIRED: &str = "retired";
 
 /// A stored line that passed the line checks, with its record.
 pub(super) struct CheckedLine<'a, T> {
@@ -31,7 +35,7 @@ pub fn without_terminator(line: &[u8]) -> &[u8] {
 
 /// The lines of the file `contents`, each with its number from 1 and without
 /// its terminator, in the split of [`without_terminator`].
-pub(super) fn numbered_lines(contents: &[u8]) -> impl Iterator<Item = (usize, &[u8])> {
+pub fn numbered_lines(contents: &[u8]) -> impl Iterator<Item = (usize, &[u8])> {
     contents
         .split_inclusive(|byte| *byte == b'\n')
         .enumerate()
@@ -40,7 +44,6 @@ pub(super) fn numbered_lines(contents: &[u8]) -> impl Iterator<Item = (usize, &[
 
 /// The record of the stored line `bytes`, line `number` of `path`, after
 /// the checks of [`checked_line`].
-#[cfg(feature = "host")]
 pub fn record_of_line<T: DeserializeOwned>(
     path: &Utf8Path,
     number: usize,
@@ -49,44 +52,44 @@ pub fn record_of_line<T: DeserializeOwned>(
     checked_line(path, number, bytes).map(|line| line.record)
 }
 
-/// The line checks of a stored line of a JSONL file: the line is UTF-8, it
-/// is one JSON value that [`ensure_no_legacy_retirement`] accepts, and it is
-/// one record of `T` whose member names can be read back. A refusal is
-/// `invalid_state_file` at the line. Each write that loads a JSONL file and
-/// each read of the verification runs cache make these checks. The reads of
-/// the state shards do not use them.
+/// The line checks of a stored line of a JSONL file, in this order: the line
+/// is UTF-8, it is one JSON value, it holds no `retired` member, it is one
+/// record of `T` that holds each field of `T` one time, it holds each member
+/// that `T` does not own one time, and the names of those members can be read
+/// back. A refusal is `invalid_state_file` at the line.
+///
+/// `T` is a record type: it gives each member that it does not own as
+/// unknown. A JSON value or a map takes each member, so a line of no known
+/// record type goes through [`untyped_line_value`] and not through this
+/// reader.
+///
+/// The line is parsed one time, as `T`. Only a line that fails that parse or
+/// can hold a member `retired` is parsed again, as a JSON value, so that a
+/// syntax fault and then the `retired` member win over a fault of the record
+/// for each `T`.
 pub(super) fn checked_line<'a, T: DeserializeOwned>(
     path: &Utf8Path,
     number: usize,
     bytes: &'a [u8],
 ) -> anyhow::Result<CheckedLine<'a, T>> {
-    let text = std::str::from_utf8(bytes)
-        .map_err(|error| state_fault(&ShardLine::new(path, number), error.to_string()))?;
-    // The JSON value gives a syntax fault before a fault of the record, and
-    // the `retired` check reads it. The typed parse then reads the text again,
-    // because a JSON value keeps only the last of two members with one name.
-    let value = parse_line(path, number, text)?;
-    ensure_no_legacy_retirement(path, number, &value)?;
+    let text = utf8_text(path, number, bytes)?;
     let at = |error: serde_json::Error| located(path, number, &error);
     let mut unknown = Vec::new();
     let mut nested_unknown = None;
-    let mut deserializer = serde_json::Deserializer::from_str(text);
-    let record = serde_ignored::deserialize(&mut deserializer, |ignored| match ignored {
-        serde_ignored::Path::Map {
-            parent: serde_ignored::Path::Root,
-            key,
-        } => unknown.push(key),
-        other => {
-            if nested_unknown.is_none() {
-                nested_unknown = Some(other.to_string());
-            }
+    let record = match typed_record(text, &mut unknown, &mut nested_unknown) {
+        Ok(record) => record,
+        Err(error) => {
+            value_checks(path, number, text)?;
+            return Err(at(error));
         }
-    })
-    .map_err(at)?;
+    };
+    if can_hold_retired(text) {
+        value_checks(path, number, text)?;
+    }
     let members = if unknown.is_empty() {
         None
     } else {
-        let scan = top_level_members(text).map_err(at)?;
+        let scan = members_once(path, number, text)?;
         let missing = unknown
             .iter()
             .filter(|name| !scan.members.iter().any(|member| &member.name == *name))
@@ -107,6 +110,141 @@ pub(super) fn checked_line<'a, T: DeserializeOwned>(
         nested_unknown,
         members,
     })
+}
+
+/// The record of `text` with no trailing data. Each top-level member that the
+/// record does not own goes to `unknown`, and the first nested one goes to
+/// `nested_unknown`.
+fn typed_record<T: DeserializeOwned>(
+    text: &str,
+    unknown: &mut Vec<String>,
+    nested_unknown: &mut Option<String>,
+) -> Result<T, serde_json::Error> {
+    let mut deserializer = serde_json::Deserializer::from_str(text);
+    let record = serde_ignored::deserialize(&mut deserializer, |ignored| match ignored {
+        serde_ignored::Path::Map {
+            parent: serde_ignored::Path::Root,
+            key,
+        } => unknown.push(key),
+        other => {
+            if nested_unknown.is_none() {
+                *nested_unknown = Some(other.to_string());
+            }
+        }
+    })?;
+    deserializer.end()?;
+    Ok(record)
+}
+
+/// Whether `text` can hold a member named `retired`. A JSON string gives the
+/// name `retired` only with those bytes or with a `\u` escape, because no other
+/// escape gives a letter.
+fn can_hold_retired(text: &str) -> bool {
+    text.contains(RETIRED) || text.contains("\\u")
+}
+
+/// The text and the JSON value of the stored line `bytes`, line `number` of
+/// `path`, after the line checks of [`checked_line`] for a record of `T`.
+pub fn record_line_value<'a, T: DeserializeOwned>(
+    path: &Utf8Path,
+    number: usize,
+    bytes: &'a [u8],
+) -> anyhow::Result<(&'a str, serde_json::Value)> {
+    let text = checked_line::<T>(path, number, bytes)?.text;
+    Ok((text, json_value(path, number, text)?))
+}
+
+/// The text and the JSON value of the stored line `bytes`, line `number` of
+/// `path`, of no known record type. The line checks are those of
+/// [`checked_line`] that do not need a record type, in the same order: the
+/// line is UTF-8, it is one JSON value, it holds no `retired` member, and it
+/// holds each top-level member one time. A refusal is `invalid_state_file` at
+/// the line.
+pub fn untyped_line_value<'a>(
+    path: &Utf8Path,
+    number: usize,
+    bytes: &'a [u8],
+) -> anyhow::Result<(&'a str, serde_json::Value)> {
+    let text = utf8_text(path, number, bytes)?;
+    let value = value_checks(path, number, text)?;
+    members_once(path, number, text)?;
+    Ok((text, value))
+}
+
+/// The JSON value of the line `bytes` of a record file, for the record
+/// history. The line is of a past commit or of the saved working copy, and
+/// the history reads it as data of its own time: the checks of a record type
+/// and of the `retired` member do not apply. A line that is not UTF-8, that
+/// is not one JSON value, or that holds a top-level member two times holds
+/// no record, so it gives none.
+pub fn committed_line_value(bytes: &[u8]) -> Option<serde_json::Value> {
+    let text = std::str::from_utf8(bytes).ok()?;
+    let value = serde_json::from_str(text).ok()?;
+    top_level_members(text)
+        .ok()?
+        .repeated
+        .is_none()
+        .then_some(value)
+}
+
+/// The line `bytes` as text, or `invalid_state_file` at the line when it is
+/// not UTF-8.
+fn utf8_text<'a>(path: &Utf8Path, number: usize, bytes: &'a [u8]) -> anyhow::Result<&'a str> {
+    std::str::from_utf8(bytes)
+        .map_err(|error| state_fault(&ShardLine::new(path, number), error.to_string()))
+}
+
+/// The top-level members of `text`, or `invalid_state_file` at the line when
+/// it holds a member two times.
+fn members_once(path: &Utf8Path, number: usize, text: &str) -> anyhow::Result<Scan> {
+    let scan = top_level_members(text).map_err(|error| located(path, number, &error))?;
+    if let Some(name) = &scan.repeated {
+        return Err(state_fault(
+            &ShardLine::new(path, number),
+            format!("duplicate field `{name}`"),
+        ));
+    }
+    Ok(scan)
+}
+
+/// `text` as one JSON value, after the checks that it parses and that it
+/// holds no `retired` member.
+fn value_checks(path: &Utf8Path, number: usize, text: &str) -> anyhow::Result<serde_json::Value> {
+    let value = json_value(path, number, text)?;
+    ensure_no_legacy_retirement(path, number, &value)?;
+    Ok(value)
+}
+
+/// `text` as one JSON value, or `invalid_state_file` at the line when it is
+/// not one JSON value.
+fn json_value(path: &Utf8Path, number: usize, text: &str) -> anyhow::Result<serde_json::Value> {
+    serde_json::from_str(text).map_err(|error| located(path, number, &error))
+}
+
+/// Refuses a stored record that still holds the removed `retired` field, as
+/// `invalid_state_file` at its line.
+fn ensure_no_legacy_retirement(
+    path: &Utf8Path,
+    line_number: usize,
+    value: &serde_json::Value,
+) -> anyhow::Result<()> {
+    let Some(record) = value.as_object() else {
+        return Ok(());
+    };
+    if !record.contains_key(RETIRED) {
+        return Ok(());
+    }
+    let name = record
+        .get("id")
+        .and_then(serde_json::Value::as_str)
+        .map_or_else(|| "record".to_string(), |id| format!("record {id}"));
+    Err(state_fault(
+        &ShardLine::new(path, line_number),
+        format!(
+            "{name} contains legacy field `retired`; canonical JSONL requires \
+             record-deletion migration 026 before this build can read it"
+        ),
+    ))
 }
 
 pub(super) struct Member {
@@ -199,44 +337,4 @@ pub(super) fn top_level_members(line: &str) -> Result<Scan, serde_json::Error> {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::top_level_members;
-
-    #[test]
-    fn collects_members_in_written_order_with_raw_bytes() {
-        let scan =
-            top_level_members(r#"{"id" : "one","note":"a,b:c}{[#","detail":{"known":1}}"#).unwrap();
-        let names = scan
-            .members
-            .iter()
-            .map(|member| member.name.as_str())
-            .collect::<Vec<_>>();
-        assert_eq!(names, vec!["id", "note", "detail"]);
-        assert!(scan.repeated.is_none());
-        assert_eq!(scan.members[0].raw, r#""id" : "one""#);
-        assert_eq!(scan.members[1].raw, r#""note":"a,b:c}{[#""#);
-    }
-
-    #[test]
-    fn detects_a_repeat_written_with_escapes() {
-        let scan =
-            top_level_members(r#"{"a":1,"extension":2,"\u0061":3,"a\"b":4,"a\"b":5}"#).unwrap();
-        assert_eq!(scan.repeated.as_deref(), Some("a"));
-        assert_eq!(scan.members.len(), 5);
-    }
-
-    #[test]
-    fn escaped_quotes_do_not_end_a_key() {
-        let scan = top_level_members(r#"{"a\"b":1,"c":2}"#).unwrap();
-        assert_eq!(scan.members[0].name, "a\"b");
-        assert_eq!(scan.members[0].raw, r#""a\"b":1"#);
-        assert!(scan.repeated.is_none());
-    }
-
-    #[test]
-    fn an_array_root_has_no_members() {
-        let scan = top_level_members(r#"[{"a":1},{"a":2}]"#).unwrap();
-        assert!(scan.members.is_empty());
-        assert!(scan.repeated.is_none());
-    }
-}
+mod tests;

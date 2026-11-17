@@ -1,8 +1,9 @@
 //! Stamp changed record content while the canonical publication lock is held.
 use camino::Utf8Path;
 use provenance_core::{
+    model::relations::RelationOwner,
     review::{ReviewRecord, ReviewRecordKind},
-    NodeType, Stamp,
+    NodeType, ScopeId, Stamp,
 };
 use serde::{de::DeserializeOwned, Serialize};
 use time::format_description::well_known::Rfc3339;
@@ -195,10 +196,43 @@ impl StateStore {
         mutate: impl FnOnce(&Self, &mut Vec<T>) -> anyhow::Result<T>,
     ) -> anyhow::Result<T> {
         if T::KIND != NodeType::Requirement && !self.permits_path(path) {
-            return self.save_native_record(path, expected_etag, mutate);
+            return self.save_native_record(path, expected_etag, mutate, |_, _, _| Ok(()));
         }
         self.mutate_graph_record_guarded(path, mutate)
             .map(|(_, record)| record)
+    }
+
+    /// Like `mutate_graph_record_with_store`, then checks the final relations
+    /// of the written record against the store that holds the write: each
+    /// target exists, and the graph of `scope` holds. On the native path that
+    /// store is the staged copy, so a refusal publishes nothing.
+    pub(crate) fn mutate_graph_record_checked<T: GraphRecord + RelationOwner>(
+        &self,
+        path: &Utf8Path,
+        scope: &ScopeId,
+        expected_etag: Option<&str>,
+        mutate: impl FnOnce(&Self, &mut Vec<T>) -> anyhow::Result<T>,
+    ) -> anyhow::Result<T> {
+        if T::KIND != NodeType::Requirement && !self.permits_path(path) {
+            return self.save_native_record(
+                path,
+                expected_etag,
+                mutate,
+                |staged, record, graph_checked| {
+                    ensure_references(staged, scope, record)?;
+                    // A staged write that changes a record checks the graph
+                    // of the scope after the change.
+                    if graph_checked {
+                        return Ok(());
+                    }
+                    staged.validate_graph_scope(scope)
+                },
+            );
+        }
+        let (_, record) = self.mutate_graph_record_guarded(path, mutate)?;
+        ensure_references(self, scope, &record)?;
+        self.validate_graph_scope(scope)?;
+        Ok(record)
     }
 
     pub(crate) fn mutate_graph_record_guarded<T: GraphRecord>(
@@ -251,4 +285,20 @@ impl StateStore {
             Ok(before)
         })
     }
+}
+
+/// Refuses a record that names a record that does not exist in `scope`.
+fn ensure_references<T: RelationOwner>(
+    store: &StateStore,
+    scope: &ScopeId,
+    record: &T,
+) -> anyhow::Result<()> {
+    for (name, target) in record.references() {
+        let declaration = T::relations()
+            .iter()
+            .find(|declaration| declaration.name == name)
+            .expect("a record reference has a relation declaration");
+        store.ensure_node_exists(scope, declaration.target, target, name)?;
+    }
+    Ok(())
 }

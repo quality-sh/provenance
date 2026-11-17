@@ -18,12 +18,15 @@ pub enum ReadFailure {
     DocumentRootMissing,
     /// The document read did not catch up the document. `message` is the
     /// cause as text, without its location. A state line that does not parse
-    /// also gives its location, as `invalid_state_file` gives it.
+    /// also gives its location and its hint, as `invalid_state_file` gives
+    /// them.
     #[error("catch-up failed; restart the document read")]
     DocumentCatchUpFailed {
         #[serde(flatten, deserialize_with = "file_and_line")]
         location: Option<FileLine>,
         message: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        hint: Option<String>,
     },
     #[error("repository file access denied")]
     FileAccessDenied,
@@ -52,11 +55,13 @@ pub enum ReadFailure {
     HalfMigrated,
     #[error("the cache close did not finish in time; retry the read")]
     CacheCloseTimedOut { stage: CacheCloseStage },
-    #[error("{file} line {line}: {message}")]
+    #[error("{file} line {line}: {message}{}", hint_detail(hint.as_deref()))]
     InvalidStateFile {
         file: String,
         line: u64,
         message: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        hint: Option<String>,
     },
     /// A read failure of no known kind. `cause` is the display chain of the
     /// native error. A path below a state directory in it is relative to that
@@ -64,6 +69,21 @@ pub enum ReadFailure {
     #[error("read failed: {cause}")]
     ReadFailed { cause: String },
 }
+
+/// The part of the `invalid_state_file` display text that gives its hint.
+fn hint_detail(hint: Option<&str>) -> String {
+    hint.map_or_else(String::new, |hint| format!("; {hint}"))
+}
+
+/// The hint of a file below `.provenance/state` that does not parse and that
+/// has no correction of its own: the two procedures that give a state that
+/// reads, each with what it removes.
+pub const STATE_CORRECTIONS: &str = "To correct this fault, use one of these two procedures. \
+    Procedure 1: get .provenance/state from a commit where Provenance can read it. \
+    This can remove records and changes that are not in that commit. \
+    Procedure 2: remove .provenance/state and then do the command provenance init. \
+    This removes all records, the scopes, the disposition actors and the technical names of \
+    the dictionary.";
 
 /// The location of a state line that does not parse.
 ///
@@ -98,36 +118,40 @@ fn file_and_line<'de, D: serde::Deserializer<'de>>(
     }
 }
 
-/// A line of a record file, or the dictionary reference, that does not parse.
+/// A line of a file of the state, such as a record file, the manifest or the
+/// dictionary reference, that does not parse.
 ///
 /// The fields are private, so a refusal gets its file only from [`Self::new`],
-/// which never gives an absolute path.
+/// which never gives an absolute path, and its next step only from
+/// [`Self::hint`].
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub struct UnparsableStateFile {
     file: String,
     line: u64,
     message: String,
-    hint: Option<String>,
+    correction: Option<String>,
+    in_state: bool,
 }
 
 impl UnparsableStateFile {
     /// The file at `path` does not parse at `line`. `repository` is the root
     /// of the repository that holds the file, when one holds it. `message` is
-    /// the parse message with no position, and `hint` is the step that repairs
-    /// the file, when the reader knows one.
+    /// the parse message with no position, and `correction` is the step that
+    /// corrects the file, when the reader knows one.
     #[provenance_macros::rule("rule_state_parse_refusal_names_the_line")]
     pub fn new(
         path: &Utf8Path,
         repository: Option<&Utf8Path>,
         line: u64,
         message: String,
-        hint: Option<String>,
+        correction: Option<String>,
     ) -> Self {
         Self {
             file: shown_file(path, repository),
             line,
             message,
-            hint,
+            correction,
+            in_state: below_state(path).is_some(),
         }
     }
 
@@ -146,20 +170,31 @@ impl UnparsableStateFile {
         &self.message
     }
 
-    /// The `invalid_state_file` read failure of the file. The failure has no
-    /// hint.
+    /// The next step of each refusal for this line: the correction of the
+    /// reader when it knows one, else [`STATE_CORRECTIONS`] for a file below a
+    /// `.provenance/state` directory. A file outside the state with no
+    /// correction of its own gets no hint.
+    #[provenance_macros::rule("rule_state_parse_refusal_names_the_corrections")]
+    pub fn hint(&self) -> Option<&str> {
+        self.correction
+            .as_deref()
+            .or_else(|| self.in_state.then_some(STATE_CORRECTIONS))
+    }
+
+    /// The `invalid_state_file` read failure of the file, with its next step.
     pub fn failure(&self) -> ReadFailure {
         ReadFailure::InvalidStateFile {
             file: self.file.clone(),
             line: self.line,
             message: self.message.clone(),
+            hint: self.hint().map(str::to_owned),
         }
     }
 
     /// The `document_catch_up_failed` read failure of this line.
     ///
     /// It is the refusal of a document read whose catch-up stopped at this
-    /// line. The failure has no hint.
+    /// line, with the same hint as [`Self::failure`].
     pub fn catch_up_failure(&self) -> ReadFailure {
         ReadFailure::DocumentCatchUpFailed {
             location: Some(FileLine {
@@ -167,21 +202,8 @@ impl UnparsableStateFile {
                 line: self.line,
             }),
             message: self.message.clone(),
+            hint: self.hint().map(str::to_owned),
         }
-    }
-
-    /// The `invalid_state_file` failure as a JSON object, with the hint as its
-    /// `hint` member when the file has one.
-    pub fn failure_object(&self) -> serde_json::Map<String, serde_json::Value> {
-        let mut object = serde_json::Map::new();
-        object.insert("kind".to_owned(), "invalid_state_file".into());
-        object.insert("file".to_owned(), self.file.clone().into());
-        object.insert("line".to_owned(), self.line.into());
-        object.insert("message".to_owned(), self.message.clone().into());
-        if let Some(hint) = &self.hint {
-            object.insert("hint".to_owned(), hint.clone().into());
-        }
-        object
     }
 
     /// The first state file that does not parse in the cause chain of `error`.
@@ -193,17 +215,7 @@ impl UnparsableStateFile {
 
 impl std::fmt::Display for UnparsableStateFile {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let Self {
-            file,
-            line,
-            message,
-            hint,
-        } = self;
-        write!(formatter, "{file} line {line}: {message}")?;
-        if let Some(hint) = hint {
-            write!(formatter, "; {hint}")?;
-        }
-        Ok(())
+        std::fmt::Display::fmt(&self.failure(), formatter)
     }
 }
 
@@ -211,12 +223,8 @@ impl std::fmt::Display for UnparsableStateFile {
 /// path below the `.provenance/state` directory that holds the file, else the
 /// path below `repository`, else the file name.
 pub fn shown_file(path: &Utf8Path, repository: Option<&Utf8Path>) -> String {
-    let parts: Vec<&str> = path.iter().collect();
-    if let Some(at) = parts
-        .windows(2)
-        .rposition(|pair| pair == [".provenance", "state"])
-    {
-        return parts[at + 2..].join("/");
+    if let Some(below) = below_state(path) {
+        return below;
     }
     repository
         .and_then(|repository| path.strip_prefix(repository).ok())
@@ -229,6 +237,16 @@ pub fn shown_file(path: &Utf8Path, repository: Option<&Utf8Path>) -> String {
         .map(|below| below.iter().collect::<Vec<_>>().join("/"))
         .or_else(|| path.file_name().map(str::to_owned))
         .unwrap_or_default()
+}
+
+/// The path below the nearest `.provenance/state` directory above `path`, with
+/// `/` between its parts, when such a directory is above it.
+fn below_state(path: &Utf8Path) -> Option<String> {
+    let parts: Vec<&str> = path.iter().collect();
+    parts
+        .windows(2)
+        .rposition(|pair| pair == [".provenance", "state"])
+        .map(|at| parts[at + 2..].join("/"))
 }
 
 impl ReadFailure {

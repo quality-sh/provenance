@@ -12,8 +12,11 @@ mod support {
     pub mod merge_driver;
     pub mod record_review;
     pub mod review_paths;
+    pub mod stale_repo;
+    pub mod state_faults;
     pub mod state_files;
 }
+use support::review_paths;
 #[path = "../cli_approval_evidence.rs"]
 mod cli_approval_evidence;
 #[path = "../cli_archive_commit_plain_flag.rs"]
@@ -88,6 +91,8 @@ mod cli_refusal_discussions_word;
 mod cli_refusal_guidance;
 #[path = "../cli_refusal_next_step.rs"]
 mod cli_refusal_next_step;
+#[path = "../cli_refused_update_state.rs"]
+mod cli_refused_update_state;
 #[path = "../cli_registration.rs"]
 mod cli_registration;
 #[path = "../cli_resolution_decision_guard.rs"]
@@ -114,6 +119,10 @@ mod cli_shaping_turn_state;
 mod cli_shard_parse_errors;
 #[path = "../cli_source_requirement.rs"]
 mod cli_source_requirement;
+#[path = "../cli_state_corrections.rs"]
+mod cli_state_corrections;
+#[path = "../cli_state_procedures.rs"]
+mod cli_state_procedures;
 #[path = "../cli_statement_write_gate.rs"]
 mod cli_statement_write_gate;
 #[path = "../cli_status_request.rs"]

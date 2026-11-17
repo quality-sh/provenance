@@ -24,7 +24,7 @@ pub fn unparsable(
     path: &Utf8Path,
     line: u64,
     message: String,
-    hint: Option<String>,
+    correction: Option<String>,
 ) -> UnparsableStateFile {
     let absolute = std::path::absolute(path)
         .ok()
@@ -33,7 +33,7 @@ pub fn unparsable(
     let repository = store_root(path)
         .map(Utf8Path::to_path_buf)
         .or_else(working_project);
-    UnparsableStateFile::new(path, repository.as_deref(), line, message, hint)
+    UnparsableStateFile::new(path, repository.as_deref(), line, message, correction)
 }
 
 /// The root of the store that holds `path`: the parent of the nearest
@@ -65,58 +65,6 @@ pub fn parse_message(error: &serde_json::Error) -> String {
         .to_owned()
 }
 
-pub fn parse_line(
-    path: &Utf8Path,
-    line_number: usize,
-    line: &str,
-) -> anyhow::Result<serde_json::Value> {
-    serde_json::from_str(line).map_err(|error| located(path, line_number, &error))
-}
-
-/// The one place a stored line becomes a record.
-///
-/// Every reader in this module lands here: [`read_records`] carries the
-/// families, and [`read_message_shard_lines`] carries messages. A field that
-/// the record type does not know is ignored. A family that does not pass
-/// through this function is not read at all.
-///
-/// The caller has already turned the line into a [`serde_json::Value`],
-/// because some of them look at it first.
-fn record_from_line<T: DeserializeOwned>(
-    path: &Utf8Path,
-    line_number: usize,
-    value: serde_json::Value,
-) -> anyhow::Result<T> {
-    ensure_no_legacy_retirement(path, line_number, &value)?;
-    serde_json::from_value(value).map_err(|error| located(path, line_number, &error))
-}
-
-/// Refuses a stored record that still holds the removed `retired` field, as
-/// `invalid_state_file` at its line.
-pub fn ensure_no_legacy_retirement(
-    path: &Utf8Path,
-    line_number: usize,
-    value: &serde_json::Value,
-) -> anyhow::Result<()> {
-    let Some(record) = value.as_object() else {
-        return Ok(());
-    };
-    if !record.contains_key("retired") {
-        return Ok(());
-    }
-    let name = record
-        .get("id")
-        .and_then(serde_json::Value::as_str)
-        .map_or_else(|| "record".to_string(), |id| format!("record {id}"));
-    Err(crate::refusal::state_fault(
-        &ShardLine::new(path, line_number),
-        format!(
-            "{name} contains legacy field `retired`; canonical JSONL requires \
-             record-deletion migration 026 before this build can read it"
-        ),
-    ))
-}
-
 /// The records of the shard at `path`, read through `store`; no records
 /// when the shard does not exist.
 fn read_records<T: DeserializeOwned>(
@@ -134,19 +82,17 @@ fn read_records<T: DeserializeOwned>(
 }
 
 /// The one loop over the lines of a shard: each line becomes a record with
-/// its line.
+/// its line, through the line reader that the writes also use. A line that
+/// the reader refuses refuses the read.
 fn records_of<T: DeserializeOwned>(
     path: &Utf8Path,
     contents: &str,
 ) -> anyhow::Result<Vec<(T, ShardLine)>> {
-    contents
-        .lines()
-        .enumerate()
-        .map(|(index, line)| {
-            let value = parse_line(path, index + 1, line)?;
+    crate::jsonl::numbered_lines(contents.as_bytes())
+        .map(|(number, line)| {
             Ok((
-                record_from_line(path, index + 1, value)?,
-                ShardLine::new(path, index + 1),
+                crate::jsonl::record_of_line(path, number, line)?,
+                ShardLine::new(path, number),
             ))
         })
         .collect()
@@ -164,6 +110,12 @@ pub fn read_jsonl_located<T: DeserializeOwned>(
     })
 }
 
+/// The `id` member of a stored line, of any JSON type.
+#[derive(serde::Deserialize)]
+struct Identified {
+    id: Option<serde_json::Value>,
+}
+
 /// A stored record of the shard at `path` that does not agree with itself or
 /// with another record. The refusal is `invalid_state_file` at the second
 /// line with the id `id` when the shard holds it twice, else at its only
@@ -178,10 +130,10 @@ pub fn record_fault(
     message: String,
 ) -> anyhow::Error {
     // An error of the second read is not given: it would replace the fault.
-    let rows = read_jsonl_located::<serde_json::Value>(store, path).unwrap_or_default();
+    let rows = read_jsonl_located::<Identified>(store, path).unwrap_or_default();
     let mut lines = rows
         .into_iter()
-        .filter(|(row, _)| row.get("id").and_then(serde_json::Value::as_str) == Some(id))
+        .filter(|(row, _)| row.id.as_ref().and_then(serde_json::Value::as_str) == Some(id))
         .map(|(_, line)| line);
     let first = lines.next();
     match lines.next().or(first) {

@@ -103,7 +103,7 @@ fn corrected(command: &Command, arguments: &[String]) -> Option<String> {
             }
             _ => None,
         };
-        if name == "text" {
+        if declaration.get_id().as_str() == registry::SEARCH_TEXT.name {
             text.extend(inline.or(value));
             continue;
         }

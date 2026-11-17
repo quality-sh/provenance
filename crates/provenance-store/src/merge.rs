@@ -1,4 +1,5 @@
-use crate::state_store::readers::ensure_no_legacy_retirement;
+use crate::jsonl::numbered_lines;
+use provenance_core::protocol::read_failure::UnparsableStateFile;
 use provenance_macros::rule;
 use serde_json::Value;
 use std::collections::{BTreeMap, BTreeSet};
@@ -85,35 +86,60 @@ impl StoredRow {
     }
 }
 
-/// Reads one JSONL merge input, keeping each stored row beside its record.
+/// Reads the merge input of `side`, keeping each stored row beside its record.
+///
+/// An input is a version of the state file `shard_path`, so each line that is
+/// not blank goes through the line checks that a read of that file makes:
+/// those of its record type when [`ShardFamily::for_shard_path`] knows it,
+/// else those of a line of no known record type. A refusal is
+/// `invalid_state_file` at `shard_path` and the line of the input, and its
+/// message starts with the side, as the refusal of [`ensure_unique_ids`] does.
 pub fn read_jsonl_rows_for_shard(
     path: &camino::Utf8Path,
     shard_path: &camino::Utf8Path,
+    side: MergeSide,
 ) -> anyhow::Result<Vec<StoredRow>> {
     if !path.exists() {
         return Ok(Vec::new());
     }
-    let contents = std::fs::read_to_string(path)?;
+    let contents = std::fs::read(path)?;
+    let read_line = ShardFamily::for_shard_path(shard_path).line_reader();
     let mut rows = Vec::new();
-    for (index, line) in contents.lines().enumerate() {
-        if line.trim().is_empty() {
+    for (line_number, bytes) in numbered_lines(&contents) {
+        if std::str::from_utf8(bytes).is_ok_and(|line| line.trim().is_empty()) {
             continue;
         }
-        let record = serde_json::from_str(line)?;
-        // Errors name the logical shard, but line numbers come from Git's temporary input file.
-        ensure_no_legacy_retirement(shard_path, index + 1, &record)?;
+        let (line, record) = read_line(shard_path, line_number, bytes)
+            .map_err(|error| with_side(error, shard_path, line_number, side))?;
         rows.push(StoredRow {
             line: line.to_owned(),
             record,
-            line_number: index + 1,
+            line_number,
         });
     }
     Ok(rows)
 }
 
-/// Reads one JSONL merge input with no shard type known.
-pub fn read_jsonl_rows(path: &camino::Utf8Path) -> anyhow::Result<Vec<StoredRow>> {
-    read_jsonl_rows_for_shard(path, path)
+/// The refusal `error` of line `line_number` with `side` at the start of its
+/// message.
+fn with_side(
+    error: anyhow::Error,
+    shard_path: &camino::Utf8Path,
+    line_number: usize,
+    side: MergeSide,
+) -> anyhow::Error {
+    let Some(fault) = UnparsableStateFile::find(error.as_ref()) else {
+        return error;
+    };
+    crate::refusal::state_fault(
+        &crate::state_store::message_ids::ShardLine::new(shard_path, line_number),
+        format!("{side}: {}", fault.message()),
+    )
+}
+
+/// Reads the merge input of `side` at `path`, a file of no known record type.
+pub fn read_jsonl_rows(path: &camino::Utf8Path, side: MergeSide) -> anyhow::Result<Vec<StoredRow>> {
+    read_jsonl_rows_for_shard(path, path, side)
 }
 
 /// Chooses the stored line each merged record keeps.
@@ -281,23 +307,6 @@ fn string_id<'a>(key: &str, record: &'a CanonicalRecord) -> anyhow::Result<&'a s
         .get(key)
         .and_then(Value::as_str)
         .ok_or_else(|| crate::refusal::fault!("record is missing string {key}"))
-}
-
-pub fn read_jsonl_records(path: &camino::Utf8Path) -> anyhow::Result<Vec<CanonicalRecord>> {
-    Ok(read_jsonl_rows(path)?
-        .into_iter()
-        .map(|row| row.record)
-        .collect())
-}
-
-pub fn read_jsonl_records_for_shard(
-    path: &camino::Utf8Path,
-    shard_path: &camino::Utf8Path,
-) -> anyhow::Result<Vec<CanonicalRecord>> {
-    Ok(read_jsonl_rows_for_shard(path, shard_path)?
-        .into_iter()
-        .map(|row| row.record)
-        .collect())
 }
 
 fn index_by_id(

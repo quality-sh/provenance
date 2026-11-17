@@ -31,6 +31,10 @@ mod execution;
 mod failure;
 #[cfg(feature = "test-fixture")]
 pub mod fixture;
+#[cfg(all(feature = "host", any(test, feature = "dogfood")))]
+mod fixture_pdf;
+#[cfg(feature = "host")]
+mod gitattributes;
 #[cfg_attr(not(feature = "host"), allow(dead_code))]
 mod gitignore;
 #[cfg(feature = "host")]
@@ -45,6 +49,8 @@ mod legacy_cleanup;
 mod local;
 #[cfg(feature = "host")]
 pub mod local_host;
+#[cfg(feature = "host")]
+mod merge_driver;
 #[cfg(feature = "host")]
 mod onboarding;
 #[cfg(feature = "host")]

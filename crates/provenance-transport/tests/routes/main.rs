@@ -102,6 +102,8 @@ mod typed_spec_discussion_deletion;
 mod typed_spec_plan_refusals;
 #[path = "../unadvertised_route_refusals.rs"]
 mod unadvertised_route_refusals;
+#[path = "../verification_run_read_budget.rs"]
+mod verification_run_read_budget;
 #[path = "../verification_runs_cache_lines.rs"]
 mod verification_runs_cache_lines;
 #[path = "../wire.rs"]

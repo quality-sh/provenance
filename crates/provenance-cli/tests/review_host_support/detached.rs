@@ -88,7 +88,7 @@ pub fn started_pid(output: &Value) -> u32 {
 /// The host's public identity, or `None` when nothing answers at the endpoint.
 pub fn identity(endpoint: &str) -> Option<Value> {
     let response = ureq::AgentBuilder::new()
-        .timeout(Duration::from_secs(2))
+        .timeout(waits::LIMIT)
         .build()
         .get(&format!("{endpoint}/local-host-identity"))
         .call()

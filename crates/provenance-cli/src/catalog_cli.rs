@@ -3,6 +3,7 @@ use crate::invocation::{grammar, GlobalContext};
 use clap::{parser::ValueSource, ArgMatches, Command};
 use provenance_contract::TargetAction;
 use provenance_porcelain::action::Action;
+use provenance_porcelain::registry;
 use provenance_transport::porcelain::ReplacementError;
 
 mod field_schema;
@@ -32,8 +33,8 @@ pub fn target_command() -> anyhow::Result<Command> {
             .copied()
             .chain([
                 "type",
-                "view",
-                "depth",
+                registry::VIEW.name,
+                registry::DEPTH.name,
                 "kind",
                 "limit",
                 "review_link",

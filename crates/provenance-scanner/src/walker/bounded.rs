@@ -10,7 +10,8 @@ use anyhow::Context;
 use camino::{Utf8Path, Utf8PathBuf};
 use provenance_macros::rule;
 
-use super::{repository_walk, scan_file, FileScan, Language};
+use super::{repository_walk, scan_file, FileScan};
+use crate::Language;
 
 /// Scans at most `max_files` language files under `path`, the first that
 /// many in sorted walk order, so two runs cut the same set, and says

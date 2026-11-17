@@ -106,11 +106,10 @@ async fn notify_without_a_notify_port_answers_as_the_shared_operation() {
     assert_eq!(not_found, refused(&shared(&host(), &unknown).await));
 }
 
-/// No Rule binds this test: the Rule that states which writes the instructions name waits
-/// for the approval of the owner. This test pins that a host with no notify port names
-/// notify in no action value, change description, or instruction line, and that the shared
-/// operation still answers a notify call.
+/// A host with no notify port names notify in no action value, change description, or
+/// instruction line, and the shared operation still answers a notify call.
 #[tokio::test]
+#[provenance_macros::verifies("rule_guidance_names_accepted_commands", examples)]
 async fn notify_without_a_notify_port_is_answered_and_not_named() {
     let repository = Repository::new("The shared graph is readable.");
     repository.all_kinds();

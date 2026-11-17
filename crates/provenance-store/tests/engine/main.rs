@@ -26,6 +26,10 @@ mod coverage_binding_settings;
 #[path = "../discussion_support.rs"]
 mod discussion_support;
 use discussion_support::base as review_support;
+#[path = "../evidence_run_budget.rs"]
+mod evidence_run_budget;
+#[path = "../fail_verification_clock.rs"]
+mod fail_verification_clock;
 #[path = "../history_git_failures.rs"]
 mod history_git_failures;
 #[path = "../history_versions_contract.rs"]

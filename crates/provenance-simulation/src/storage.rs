@@ -90,8 +90,9 @@ struct State {
     stopped: bool,
     /// The planted fault met its first chance.
     planted: bool,
-    /// A key whose landing fails, as the storage contract suite asks.
-    broken: Option<StateKey>,
+    /// Keys whose writes fail, whichever set makes them, as the storage
+    /// contract suite asks.
+    broken: BTreeSet<StateKey>,
     publishes: Vec<Publish>,
     outside_writes: usize,
     /// The entries that an engine read before its last moved base (planted
@@ -189,10 +190,13 @@ impl World {
         });
     }
 
-    /// Makes each later landing of `key` fail: a per-key set lands the keys
-    /// before it, a whole set lands no key, and the outcome is unknown.
+    /// Makes each later write of `key` fail, whichever set makes it.
+    ///
+    /// A per-key set lands the keys before it, and its outcome is unknown;
+    /// a per-key set that fails at its first key is refused. A whole set
+    /// lands no key, and its outcome is unknown.
     pub fn break_key(&self, key: StateKey) {
-        self.lock().broken = Some(key);
+        self.lock().broken.insert(key);
     }
 
     /// Notes that an engine of the case stopped.

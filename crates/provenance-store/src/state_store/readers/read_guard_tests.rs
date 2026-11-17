@@ -1,6 +1,6 @@
-use super::record_from_line;
 use camino::Utf8Path;
-use serde_json::{json, Value};
+use provenance_core::Requirement;
+use serde_json::json;
 
 type Loader = fn(&str) -> anyhow::Result<()>;
 
@@ -16,8 +16,7 @@ fn path() -> &'static Utf8Path {
 }
 
 fn load_read(line: &str) -> anyhow::Result<()> {
-    let value = serde_json::from_str(line)?;
-    record_from_line::<Value>(path(), 7, value).map(drop)
+    crate::jsonl::record_of_line::<Requirement>(path(), 7, line.as_bytes()).map(drop)
 }
 
 #[cfg(feature = "host")]
@@ -29,7 +28,8 @@ fn load_through_a_write(line: &str) -> anyhow::Result<()> {
     crate::jsonl::mutate_jsonl_locked(
         &shard,
         &shard.with_extension("lock"),
-        |records: &mut Vec<Value>| {
+        usize::MAX,
+        |records: &mut Vec<Requirement>| {
             records.clear();
             Ok(())
         },

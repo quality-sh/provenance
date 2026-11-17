@@ -5,6 +5,7 @@
 
 use crate::support;
 
+use provenance_core::protocol::read_failure::STATE_CORRECTIONS;
 use provenance_macros::verifies;
 use serde_json::json;
 use support::records::Repository;
@@ -23,19 +24,38 @@ fn write_withdrawals(repo: &Repository, lines: &[String]) {
     std::fs::write(path, lines.join("\n") + "\n").unwrap();
 }
 
+/// The record read over a stored revision refuses with the Withdrawal.
 #[tokio::test]
 #[verifies("rule_inconsistent_records_refusal_names_records", examples)]
 async fn a_withdrawal_that_names_no_submission_is_located() {
     let repo = Repository::new("The shared graph is readable.");
-    write_withdrawals(&repo, &[withdrawal("withdrawal_lost", "proposal_missing")]);
     let host = host(&repo, false);
+    let (status, read) = call(&host, "GET", "/requirements/req_shared", None).await;
+    assert_eq!(status, 200, "{read}");
+    write_withdrawals(&repo, &[withdrawal("withdrawal_lost", "proposal_missing")]);
     let (status, failure) = call(&host, "GET", "/requirements/req_shared", None).await;
     assert_eq!(status, 500, "{failure}");
     assert_eq!(
         failure["error"],
         json!({"kind":"invalid_state_file", "file":WITHDRAWALS, "line":1,
-            "message":"withdrawal withdrawal_lost names no review submission: proposal_missing. \
-                To repair, remove ideation/withdrawals.jsonl line 1, then commit."}),
+            "message":"withdrawal withdrawal_lost names no review submission: proposal_missing",
+            "hint":"To repair, remove ideation/withdrawals.jsonl line 1, then commit."}),
+    );
+}
+
+/// With no stored revision, the catch-up that builds the read database
+/// refuses the Withdrawal, so the record read refuses with `no_projection`.
+/// The host gives no cause text over HTTP, so no Rule about a located refusal
+/// binds this test.
+#[tokio::test]
+async fn a_withdrawal_that_names_no_submission_with_no_stored_revision_refuses() {
+    let repo = Repository::new("The shared graph is readable.");
+    write_withdrawals(&repo, &[withdrawal("withdrawal_lost", "proposal_missing")]);
+    let host = host(&repo, false);
+    let (status, failure) = call(&host, "GET", "/requirements/req_shared", None).await;
+    assert_eq!(
+        (status, failure),
+        (409, json!({"error":{"kind":"no_projection"},"meta":{}}))
     );
 }
 
@@ -97,8 +117,8 @@ async fn a_withdrawal_id_on_two_lines_is_located_at_the_second_line() {
         failure["error"],
         json!({"kind":"invalid_state_file", "file":WITHDRAWALS, "line":2,
             "message":"withdrawal withdrawal_a is on lines 1 and 2 of ideation/withdrawals.jsonl \
-                with different contents. To repair, keep one of these lines and remove the \
-                others, then commit."}),
+                with different contents",
+            "hint":"To repair, keep one of these lines and remove the others, then commit."}),
     );
 }
 
@@ -123,8 +143,8 @@ async fn a_withdrawal_that_names_no_submission_after_two_withdrawals_is_located(
     assert_eq!(
         failure["error"],
         json!({"kind":"invalid_state_file", "file":WITHDRAWALS, "line":3,
-            "message":"withdrawal withdrawal_lost names no review submission: proposal_missing. \
-                To repair, remove ideation/withdrawals.jsonl line 3, then commit."}),
+            "message":"withdrawal withdrawal_lost names no review submission: proposal_missing",
+            "hint":"To repair, remove ideation/withdrawals.jsonl line 3, then commit."}),
     );
 }
 
@@ -155,12 +175,16 @@ async fn a_requirement_stored_on_two_lines_is_located_at_the_second_line() {
     assert_eq!(
         failure["error"],
         json!({"kind":"invalid_state_file", "file":REQUIREMENTS, "line":second,
-            "message":format!("requirement req_shared is stored again; line {first} stores it first")}),
+            "message":format!("requirement req_shared is stored again; line {first} stores it first"),
+            "hint":STATE_CORRECTIONS}),
     );
 }
 
+/// The refusal of a duplicate Message ID has a correction of its own: its
+/// hint names the hand repair and not the two corrections of the state.
 #[tokio::test]
 #[verifies("rule_inconsistent_records_refusal_names_records", examples)]
+#[verifies("rule_state_parse_refusal_names_the_corrections", examples)]
 async fn a_message_id_on_two_lines_is_located_at_the_second_line() {
     let repo = Repository::new("The shared graph is readable.");
     let (status, started) = call(
@@ -204,10 +228,8 @@ async fn a_message_id_on_two_lines_is_located_at_the_second_line() {
     assert_eq!(
         failure["error"],
         json!({"kind":"invalid_state_file", "file":file, "line":2,
-        "message":format!(
-            "Message ID {id} appears more than once: {file}:1, {file}:2; \
-             see docs/cli.md#repairing-a-duplicate-message-id"
-        )}),
+        "message":format!("Message ID {id} appears more than once: {file}:1, {file}:2"),
+        "hint":"see docs/cli.md#repairing-a-duplicate-message-id"}),
     );
 }
 
@@ -251,8 +273,9 @@ async fn decisions_with_different_results_refuse_only_their_record() {
         json!({"kind":"invalid_state_file", "file":DISPOSITIONS, "line":2,
             "message":format!("review submission {proposal} of requirement req_shared has \
                 decisions with different results in ideation/dispositions.jsonl: deferred \
-                decision_a at line 1 and rejected decision_b at line 2. To repair, remove each of \
-                these lines that has a result that you do not keep, then commit.")}),
+                decision_a at line 1 and rejected decision_b at line 2"),
+            "hint":"To repair, remove each of these lines that has a result that you do not keep, \
+                then commit."}),
     );
     let (status, other) = call(&reader, "GET", "/requirements/req_other", None).await;
     assert_eq!(status, 200, "{other}");
@@ -320,7 +343,7 @@ async fn a_decision_on_a_submission_on_lines_that_disagree_refuses_only_its_reco
         failure["error"],
         json!({"kind":"invalid_state_file", "file":PROPOSALS, "line":second,
             "message":format!("review submission {proposal} is on lines {first} and {second} of \
-                ideation/proposal_cards.jsonl with different contents. To repair, keep one of \
-                these lines and remove the others, then commit.")}),
+                ideation/proposal_cards.jsonl with different contents"),
+            "hint":"To repair, keep one of these lines and remove the others, then commit."}),
     );
 }

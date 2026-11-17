@@ -1,4 +1,4 @@
-List the bundled agent skills
+List the bundled agent skills.
 
 Usage: provenance skills list [OPTIONS]
 

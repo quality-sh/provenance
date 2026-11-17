@@ -1,13 +1,31 @@
+use crate::layout::ProvenanceLayout;
 use camino::{Utf8Path, Utf8PathBuf};
+use provenance_macros::rule;
 use std::io::Write;
+use std::path::{Path, PathBuf};
 
-/// A failure of [`replace_file`]. It has the text of a `tempfile` persist
-/// failure, and its source is the I/O error.
+mod checked;
+#[cfg(test)]
+mod state_file_tests;
+pub(in crate::storage::local) mod temporary_name;
+pub use checked::{remove_synced_file_checked, write_synced_file_checked};
+
+/// The prefix of the name of the temporary file of a write of one state key,
+/// in the cache.
+const STATE_TEMPORARY_PREFIX: &str = ".state-key.provenance-";
+
+/// A failure of [`replace_file`]. Its text is the start of the text of a
+/// `tempfile` persist failure. Its source is the I/O error, so that the
+/// chain of the error gives the I/O error one time.
 #[derive(Debug, thiserror::Error)]
-#[error("failed to persist temporary file: {0}")]
+#[error("failed to persist temporary file")]
 pub struct ReplaceFailed(#[source] std::io::Error);
 
 /// A failure after the file at the path changed: a sync of its directory.
+///
+/// [`write_synced_file`] and [`remove_synced_file`] give it in the chain of
+/// their error. [`write_synced_file_checked`] and
+/// [`remove_synced_file_checked`] give it in their inner result.
 #[derive(Debug, thiserror::Error)]
 #[error(transparent)]
 pub struct ChangedUnsynced(pub anyhow::Error);
@@ -41,11 +59,108 @@ pub(in crate::storage::local) fn write_synced_file_named(
     bytes: &[u8],
     builder: &tempfile::Builder<'_, '_>,
 ) -> anyhow::Result<()> {
-    let (temporary, parent, first_made) = write_temporary(path, bytes, builder)?;
-    temporary.as_file().sync_all().map_err(sync_failure(path))?;
-    crate::test_probes::at("synced_file_before_rename")?;
+    let (temporary, parent, first_made) = write_temporary(path.as_std_path(), bytes, builder)?;
+    sync_temporary(&temporary, path)?;
     replace_file(temporary, path)?;
     sync_directories(parent, first_made)
+}
+
+/// Tells if `name` is the name of the temporary file of a write of one
+/// state key. That file is directly in the cache, and the section entry
+/// removes each file of this name.
+pub fn is_state_temporary_name(name: &str) -> bool {
+    temporary_name::is_temporary_name(name, STATE_TEMPORARY_PREFIX)
+}
+
+/// Writes `bytes` to the state file at `path` as [`write_synced_file`] does,
+/// with a temporary file in the cache of `layout` and not in the state
+/// directory. The state directory is in git, so a stopped write must leave
+/// no file there. [`is_state_temporary_name`] tells the name of the
+/// temporary file, and the rename moves it from the cache onto `path`. The
+/// cache and the state directory must be on one file system: if not, the
+/// rename fails and the error names both directories.
+///
+/// The caller holds the section lock of `layout`. The section entry removes
+/// each temporary file of this name form, so with no lock it can remove the
+/// file of this write before the rename.
+///
+/// The steps, in order: write the temporary file, sync it, make the
+/// directory of `path` and each directory above it that does not exist,
+/// rename the temporary file onto `path`, and sync the directory of `path`
+/// and each directory that the call made. The cache has no sync. A stop or a
+/// power loss before the rename leaves `path` with its old bytes, can leave
+/// the temporary file in the cache, and can leave a new empty directory in
+/// the state directory if the stop came after the directory step. A power
+/// loss after the rename can also leave the temporary file in the cache,
+/// because the removal of its name from the cache has no sync. The next
+/// section entry removes such a file.
+pub fn write_synced_state_file(
+    layout: &ProvenanceLayout,
+    path: &Utf8Path,
+    bytes: &[u8],
+) -> anyhow::Result<()> {
+    let temporary = write_state_temporary(layout, bytes)?;
+    sync_temporary(&temporary, path)?;
+    let (parent, first_made) = make_parent(path.as_std_path())?;
+    replace_file(temporary, path).map_err(|error| match error.downcast::<ReplaceFailed>() {
+        Ok(ReplaceFailed(error)) => rename_failure(layout, path, error),
+        Err(error) => error,
+    })?;
+    sync_directories(parent, first_made)
+}
+
+/// A temporary file with `bytes` in the cache of `layout`, so that a write
+/// of a state key adds no file to the state directory. An error names the
+/// cache.
+#[rule("rule_one_key_write_adds_no_other_state_file")]
+fn write_state_temporary(
+    layout: &ProvenanceLayout,
+    bytes: &[u8],
+) -> anyhow::Result<tempfile::NamedTempFile> {
+    let cache = layout.cache_dir();
+    let cache = cache.as_std_path();
+    std::fs::create_dir_all(cache).map_err(step_failure("make directory", cache))?;
+    let mut temporary = crate::long_path::extended(cache)
+        .and_then(|directory| {
+            temporary_name::builder(STATE_TEMPORARY_PREFIX).tempfile_in(directory)
+        })
+        .map_err(step_failure("make a temporary file in", cache))?;
+    temporary
+        .write_all(bytes)
+        .map_err(step_failure("write a temporary file in", cache))?;
+    Ok(temporary)
+}
+
+/// The error of a rename of the temporary file of a write of one state key
+/// onto `path` that failed with `error`. When the cache and the state
+/// directory are on two file systems, the text says so and names both.
+fn rename_failure(
+    layout: &ProvenanceLayout,
+    path: &Utf8Path,
+    error: std::io::Error,
+) -> anyhow::Error {
+    let context = if error.kind() == std::io::ErrorKind::CrossesDevices {
+        format!(
+            "rename a temporary file from the cache {} to {path}: the cache and the state \
+             directory {} are on two file systems, and the store writes the state only when \
+             they are on one file system",
+            layout.cache_dir(),
+            layout.state_dir()
+        )
+    } else {
+        format!("rename a temporary file to {path}")
+    };
+    crate::refusal::caused(error, context)
+}
+
+/// Syncs `temporary`, the temporary file of a write of `path`. A failure
+/// gives `sync <path>` and the I/O error.
+fn sync_temporary(temporary: &tempfile::NamedTempFile, path: &Utf8Path) -> anyhow::Result<()> {
+    temporary
+        .as_file()
+        .sync_all()
+        .map_err(sync_failure(path.as_std_path()))?;
+    crate::test_probes::at("synced_file_before_rename")
 }
 
 /// Syncs the file at `path`, which already has the bytes of a write, and then
@@ -57,14 +172,14 @@ pub(in crate::storage::local) fn write_synced_file_named(
 pub fn sync_written_file(path: &Utf8Path) -> anyhow::Result<()> {
     open_to_sync(path)
         .and_then(|file| file.sync_all())
-        .map_err(sync_failure(path))?;
-    sync_directories(parent_of(path)?, None)
+        .map_err(sync_failure(path.as_std_path()))?;
+    sync_directories(parent_of(path.as_std_path())?, None)
 }
 
 /// Syncs `parent`, and then each directory above it up to the parent of
 /// `first_made`, the highest directory that a write made, deepest first.
-fn sync_directories(parent: &Utf8Path, first_made: Option<&Utf8Path>) -> anyhow::Result<()> {
-    let last = first_made.and_then(Utf8Path::parent).unwrap_or(parent);
+fn sync_directories(parent: &Path, first_made: Option<&Path>) -> anyhow::Result<()> {
+    let last = first_made.and_then(Path::parent).unwrap_or(parent);
     for directory in parent.ancestors() {
         sync_parent(directory).map_err(ChangedUnsynced)?;
         if directory == last {
@@ -74,25 +189,19 @@ fn sync_directories(parent: &Utf8Path, first_made: Option<&Utf8Path>) -> anyhow:
     Ok(())
 }
 
-/// Removes the file at `path` and then syncs its directory. On Unix, after
-/// the call returns, a power loss cannot bring the file back. On Windows, a
-/// power loss can bring the file back. A file that does not exist is a
-/// success with no sync. A failed remove gives `remove <path>` and the I/O
-/// error, and a failed sync gives `sync <path>` and the I/O error. If the
-/// sync fails, the file is removed, but a power loss can bring it back: the
-/// error is a [`ChangedUnsynced`].
+/// Removes the file at `path` and then syncs its directory, as
+/// [`remove_synced_file_checked`] does with no check.
+///
+/// On Unix, after the call returns, a power loss cannot bring the file back.
+/// On Windows, a power loss can bring the file back. A file that does not
+/// exist is a success with no sync. A failed remove gives `remove <path>` and
+/// the I/O error, and a failed sync gives `sync <path>` and the I/O error. If
+/// the sync fails, the file is removed, but a power loss can bring it back:
+/// the error is a [`ChangedUnsynced`].
 ///
 /// True when it removed a file.
 pub fn remove_synced_file(path: &Utf8Path) -> anyhow::Result<bool> {
-    let parent = parent_of(path)?;
-    match std::fs::remove_file(crate::long_path::extended(path)?) {
-        Ok(()) => {
-            sync_parent(parent).map_err(ChangedUnsynced)?;
-            Ok(true)
-        }
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(false),
-        Err(error) => Err(crate::refusal::caused(error, format!("remove {path}"))),
-    }
+    remove_synced_file_checked(path.as_std_path(), || Ok(()))?.map_err(anyhow::Error::from)
 }
 
 /// Writes `bytes` to the file at `path` in a staged tree, with a temporary
@@ -103,7 +212,7 @@ pub(in crate::storage::local) fn write_staged_file(
     path: &Utf8Path,
     bytes: &[u8],
 ) -> anyhow::Result<()> {
-    let (temporary, _, _) = write_temporary(path, bytes, &tempfile::Builder::new())?;
+    let (temporary, _, _) = write_temporary(path.as_std_path(), bytes, &tempfile::Builder::new())?;
     replace_file(temporary, path)
 }
 
@@ -112,49 +221,54 @@ pub(in crate::storage::local) fn write_staged_file(
 /// this function made, if it made one. The function makes the directory of
 /// `path` and each directory above it that does not exist.
 fn write_temporary<'a>(
-    path: &'a Utf8Path,
+    path: &'a Path,
     bytes: &[u8],
     builder: &tempfile::Builder<'_, '_>,
-) -> anyhow::Result<(tempfile::NamedTempFile, &'a Utf8Path, Option<&'a Utf8Path>)> {
+) -> anyhow::Result<(tempfile::NamedTempFile, &'a Path, Option<&'a Path>)> {
+    let (parent, first_made) = make_parent(path)?;
+    let mut temporary = crate::long_path::extended(parent)
+        .and_then(|directory| builder.tempfile_in(directory))
+        .map_err(step_failure("make a temporary file for", path))?;
+    temporary
+        .write_all(bytes)
+        .map_err(step_failure("write a temporary file for", path))?;
+    Ok((temporary, parent, first_made))
+}
+
+/// Makes the directory of `path` and each directory above it that does not
+/// exist. Gives that directory and the highest directory that the call made,
+/// if it made one.
+fn make_parent(path: &Path) -> anyhow::Result<(&Path, Option<&Path>)> {
     let parent = parent_of(path)?;
     let mut first_made = None;
     for directory in parent.ancestors() {
-        if directory.as_str().is_empty() || directory_exists(directory)? {
+        if directory.as_os_str().is_empty() || directory_exists(directory)? {
             break;
         }
         first_made = Some(directory);
     }
-    std::fs::create_dir_all(parent)
-        .map_err(|error| crate::refusal::caused(error, format!("make directory {parent}")))?;
-    let mut temporary = crate::long_path::extended(parent)
-        .and_then(|directory| builder.tempfile_in(directory))
-        .map_err(|error| {
-            crate::refusal::caused(error, format!("make a temporary file for {path}"))
-        })?;
-    temporary.write_all(bytes).map_err(|error| {
-        crate::refusal::caused(error, format!("write a temporary file for {path}"))
-    })?;
-    Ok((temporary, parent, first_made))
+    std::fs::create_dir_all(parent).map_err(step_failure("make directory", parent))?;
+    Ok((parent, first_made))
 }
 
 /// Tells if `directory` exists. A failure gives `find directory <path>` and
 /// the I/O error.
-fn directory_exists(directory: &Utf8Path) -> anyhow::Result<bool> {
+fn directory_exists(directory: &Path) -> anyhow::Result<bool> {
     crate::long_path::extended(directory)
         .and_then(|extended| extended.try_exists())
-        .map_err(|error| crate::refusal::caused(error, format!("find directory {directory}")))
+        .map_err(step_failure("find directory", directory))
 }
 
-fn parent_of(path: &Utf8Path) -> anyhow::Result<&Utf8Path> {
+fn parent_of(path: &Path) -> anyhow::Result<&Path> {
     path.parent()
-        .ok_or_else(|| crate::refusal::fault!("{path} has no parent directory"))
+        .ok_or_else(|| crate::refusal::fault!("{} has no parent directory", path.display()))
 }
 
 /// Syncs `directory`. A relative path of one name, such as the file that git
 /// gives to a merge driver, has an empty parent: the current directory.
-fn sync_parent(directory: &Utf8Path) -> anyhow::Result<()> {
-    let directory = if directory.as_str().is_empty() {
-        Utf8Path::new(".")
+fn sync_parent(directory: &Path) -> anyhow::Result<()> {
+    let directory = if directory.as_os_str().is_empty() {
+        Path::new(".")
     } else {
         directory
     };
@@ -178,12 +292,20 @@ fn open_to_sync(path: &Utf8Path) -> std::io::Result<std::fs::File> {
 }
 
 /// A failed sync of `path`, with the path and the I/O error.
-fn sync_failure(path: &Utf8Path) -> impl FnOnce(std::io::Error) -> anyhow::Error + '_ {
-    move |error| crate::refusal::caused(error, format!("sync {path}"))
+fn sync_failure(path: &Path) -> impl FnOnce(std::io::Error) -> anyhow::Error + '_ {
+    step_failure("sync", path)
 }
 
-/// Replaces the file at `target` with `temporary`, a file in the same
-/// directory. The target has all of the new bytes or keeps its old bytes. A
+/// A failed `step` on `path`, with the step, the path and the I/O error.
+fn step_failure<'a>(
+    step: &'a str,
+    path: &'a Path,
+) -> impl FnOnce(std::io::Error) -> anyhow::Error + 'a {
+    move |error| crate::refusal::caused(error, format!("{step} {}", path.display()))
+}
+
+/// Replaces the file at `target` with `temporary`, a file on the same file
+/// system. The target has all of the new bytes or keeps its old bytes. A
 /// handle that a reader has open on the target does not make the replace fail
 /// when that handle lets other handles delete the file, as `std::fs` handles
 /// do. The temporary file stays open until the rename returns. After a
@@ -194,19 +316,32 @@ fn sync_failure(path: &Utf8Path) -> impl FnOnce(std::io::Error) -> anyhow::Error
 /// does not sync: its caller syncs the staged tree after all of its writes.
 fn replace_file(temporary: tempfile::NamedTempFile, target: &Utf8Path) -> anyhow::Result<()> {
     let target = crate::long_path::extended(target)?;
-    // On Windows, `keep` clears the temporary attribute that `tempfile` sets.
-    // A rename keeps the attributes of the file, and with that attribute the
-    // system can keep the bytes in memory and not write them to the disk.
-    let (file, path) = temporary
+    let (file, path) = keep(temporary)?;
+    rename_kept(file, &path, &target)?;
+    Ok(())
+}
+
+/// Keeps `temporary` after its handle drops, and gives the open file and
+/// its path. On Windows, `keep` clears the temporary attribute that
+/// `tempfile` sets. A rename keeps the attributes of the file, and with that
+/// attribute the system can keep the bytes in memory and not write them to
+/// the disk. After a failure, the temporary file is deleted.
+fn keep(temporary: tempfile::NamedTempFile) -> Result<(std::fs::File, PathBuf), ReplaceFailed> {
+    temporary
         .keep()
-        .map_err(|failure| ReplaceFailed(failure.error))?;
-    let renamed = std::fs::rename(&path, target);
+        .map_err(|failure| ReplaceFailed(failure.error))
+}
+
+/// Renames the kept temporary file `path` onto `target`, as
+/// [`replace_file`] does, and closes `file`, the open temporary file, after
+/// the rename returns.
+fn rename_kept(file: std::fs::File, path: &Path, target: &Path) -> Result<(), ReplaceFailed> {
+    let renamed = std::fs::rename(path, target);
     drop(file);
     renamed.map_err(|error| {
-        let _ = std::fs::remove_file(&path);
+        let _ = std::fs::remove_file(path);
         ReplaceFailed(error)
-    })?;
-    Ok(())
+    })
 }
 
 /// Flushes directory metadata where the platform supports it.

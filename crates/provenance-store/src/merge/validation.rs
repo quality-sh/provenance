@@ -17,10 +17,12 @@
 use anyhow::Context;
 use camino::Utf8Path;
 use provenance_core::model::relations::{missing_required, required_refusal, RelationOwner};
+use provenance_core::threads::Discussion;
 use provenance_core::{Question, Requirement, RequirementReview, Resolution, Rule, Source, Topic};
 use serde_json::Value;
 
 use super::CanonicalRecord;
+use crate::jsonl::{record_line_value, untyped_line_value};
 use crate::statement_analysis::{analyze_changed_statements, StatementDiagnostic};
 
 /// The record type a shard holds, read off the repository path of the file
@@ -100,6 +102,30 @@ impl ShardFamily {
             return Self::Discussions;
         }
         Self::Unrecognized
+    }
+}
+
+/// The reader of one line of a merge input: the line, its number and the
+/// logical shard give the text and the JSON value of the line.
+pub(crate) type LineReader =
+    for<'a> fn(&Utf8Path, usize, &'a [u8]) -> anyhow::Result<(&'a str, Value)>;
+
+impl ShardFamily {
+    /// The line checks of the reads of this family: those of its record type,
+    /// or those of a line of no known record type for a file that no family
+    /// holds.
+    pub(crate) fn line_reader(self) -> LineReader {
+        match self {
+            Self::Discussions => record_line_value::<Discussion>,
+            Self::Sources => record_line_value::<Source>,
+            Self::RequirementReviews => record_line_value::<RequirementReview>,
+            Self::Requirements => record_line_value::<Requirement>,
+            Self::Resolutions => record_line_value::<Resolution>,
+            Self::Rules => record_line_value::<Rule>,
+            Self::Topics => record_line_value::<Topic>,
+            Self::Questions => record_line_value::<Question>,
+            Self::Unrecognized => untyped_line_value,
+        }
     }
 }
 

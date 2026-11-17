@@ -64,15 +64,14 @@ fn retried(mut attempt: impl FnMut() -> Option<()>) {
     );
 }
 
-/// The process of an adapter is gone after the drop of the adapter.
+/// The process of an adapter has ended when the drop of the adapter returns.
 ///
 /// On Unix a process that ended stays in the process list until its parent
 /// waits for it, so the test fails when the drop does not stop the process
-/// and wait for it. On Windows a process is gone from the list when it ends,
-/// and Git ends soon after its standard input closes. So on Windows the test
-/// shows that the process is gone soon after the drop, not that the drop
-/// stopped it. A leaked adapter fails the test on each platform, except when
-/// the runner stalls for two seconds or more and the idle stop comes first.
+/// and wait for it. On Windows the list of Git children holds only processes
+/// that run, so the test fails when the process runs after the drop. A
+/// leaked adapter fails the test on each platform, except when the runner
+/// stalls for two seconds or more and the idle stop comes first.
 #[test]
 fn a_dropped_adapter_stops_its_process() {
     let _serial = serial();

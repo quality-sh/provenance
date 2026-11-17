@@ -10,6 +10,7 @@
 mod support {
     pub mod help_text;
     pub mod review_paths;
+    pub mod search_repository;
     pub mod state_files;
     pub mod surface;
 }
@@ -49,6 +50,8 @@ mod cli_help_guidance;
 mod cli_init;
 #[path = "../cli_init_long_path.rs"]
 mod cli_init_long_path;
+#[path = "../cli_init_merge_driver.rs"]
+mod cli_init_merge_driver;
 #[path = "../cli_init_review_guidance.rs"]
 mod cli_init_review_guidance;
 #[path = "../cli_init_reviewer.rs"]
@@ -59,6 +62,8 @@ mod cli_init_scope_guidance;
 mod cli_init_skill_guidance;
 #[path = "../cli_init_state.rs"]
 mod cli_init_state;
+#[path = "../cli_init_stopped_replacement.rs"]
+mod cli_init_stopped_replacement;
 #[path = "../cli_init_typescript_commands.rs"]
 mod cli_init_typescript_commands;
 #[path = "../cli_init_typescript_missing_package.rs"]
@@ -66,6 +71,8 @@ mod cli_init_typescript_missing_package;
 #[allow(dead_code)]
 #[path = "../cli_init_typescript/support.rs"]
 mod cli_init_typescript_support;
+#[path = "../cli_prime_first_steps.rs"]
+mod cli_prime_first_steps;
 #[path = "../cli_prime_guidance.rs"]
 mod cli_prime_guidance;
 #[path = "../cli_removed_commands.rs"]
@@ -78,6 +85,8 @@ mod cli_repo_context_help;
 mod cli_routing;
 #[path = "../cli_sdk_lifecycle.rs"]
 mod cli_sdk_lifecycle;
+#[path = "../cli_skills_non_utf8_folder.rs"]
+mod cli_skills_non_utf8_folder;
 #[path = "../command_surface.rs"]
 mod command_surface;
 #[allow(dead_code)]

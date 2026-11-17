@@ -1,4 +1,4 @@
-Import the ASD-STE100 Issue 9 dictionary from one local PDF file
+Import the ASD-STE100 Issue 9 dictionary from one local PDF file.
 
 Usage: provenance dictionary import [OPTIONS] --pdf <PDF>
 

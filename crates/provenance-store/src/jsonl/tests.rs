@@ -33,7 +33,7 @@ fn a_merged_record_without_a_stored_row_cannot_replace_the_target() {
     let original = b"{\"id\":\"original\"}\n";
     std::fs::write(&path, original).unwrap();
     std::fs::write(&side, "{\"id\":\"stored\"}\n").unwrap();
-    let rows = crate::merge::read_jsonl_rows(&side).unwrap();
+    let rows = crate::merge::read_jsonl_rows(&side, crate::merge::MergeSide::Ours).unwrap();
     let records = [serde_json::json!({
         "id": "not-stored"
     })];
@@ -75,6 +75,7 @@ fn persistence_failure_after_mutation_reports_a_write_failure() {
     let error = mutate_jsonl_locked(
         &path,
         &root.join("records.lock"),
+        usize::MAX,
         |records: &mut Vec<serde_json::Value>| {
             records.push(serde_json::json!({"id":"one"}));
             // A directory at the destination makes the real atomic replacement fail.
@@ -109,6 +110,7 @@ fn mutation_refusal_keeps_its_type_and_does_not_publish_in_memory_changes() {
     let error = mutate_jsonl_locked(
         &path,
         &root.join("records.lock"),
+        usize::MAX,
         |records: &mut Vec<serde_json::Value>| -> anyhow::Result<()> {
             records.clear();
             Err(SourceFailure::wrap(
@@ -138,6 +140,7 @@ fn unrelated_mutation_keeps_a_nested_unknown_row_exactly() {
     mutate_jsonl_locked(
         &path,
         &root.join("records.lock"),
+        usize::MAX,
         |records: &mut Vec<NestedRecord>| {
             records.push(NestedRecord {
                 id: "two".into(),
@@ -170,6 +173,7 @@ fn mutation_keeps_a_changed_row_with_top_level_unknown_data() {
     mutate_jsonl_locked(
         &path,
         &root.join("records.lock"),
+        usize::MAX,
         |records: &mut Vec<NestedRecord>| {
             records[0].detail.known = "changed".into();
             Ok(())
@@ -197,6 +201,7 @@ fn mutation_refuses_a_changed_row_with_nested_unknown_data() {
     let message = mutate_jsonl_locked(
         &path,
         &root.join("records.lock"),
+        usize::MAX,
         |records: &mut Vec<NestedRecord>| {
             records[0].detail.known = "changed".into();
             Ok(())
@@ -229,6 +234,7 @@ fn mutation_refuses_a_changed_row_with_a_repeated_unknown_field() {
     let message = mutate_jsonl_locked(
         &path,
         &root.join("records.lock"),
+        usize::MAX,
         |records: &mut Vec<NestedRecord>| {
             records[0].detail.known = "changed".into();
             Ok(())
@@ -238,10 +244,7 @@ fn mutation_refuses_a_changed_row_with_a_repeated_unknown_field() {
     let state = UnparsableStateFile::find(message.as_ref()).unwrap();
     assert_eq!(
         (state.line(), state.message()),
-        (
-            1,
-            "repeated top-level member `extension` cannot survive a typed record change"
-        )
+        (1, "duplicate field `extension`")
     );
     assert_eq!(std::fs::read(path).unwrap(), before);
 }

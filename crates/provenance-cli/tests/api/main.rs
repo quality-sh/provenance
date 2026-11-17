@@ -28,8 +28,12 @@ mod cli_document_catch_up_cause;
 mod cli_get_damaged_state;
 #[path = "../cli_get_edit_etag.rs"]
 mod cli_get_edit_etag;
+#[path = "../cli_get_review_row_fault.rs"]
+mod cli_get_review_row_fault;
 #[path = "../cli_get_trace.rs"]
 mod cli_get_trace;
+#[path = "../cli_linked_state_entry.rs"]
+mod cli_linked_state_entry;
 #[path = "../cli_mcp_api_catalog.rs"]
 mod cli_mcp_api_catalog;
 #[path = "../cli_mcp_optional_actor.rs"]
@@ -46,6 +50,8 @@ mod cli_mcp_shared_commands;
 mod cli_mcp_write_actor;
 #[path = "../cli_mcp_write_actor_parity.rs"]
 mod cli_mcp_write_actor_parity;
+#[path = "../cli_state_shard_repeated_field.rs"]
+mod cli_state_shard_repeated_field;
 #[path = "../porcelain_api.rs"]
 mod porcelain_api;
 #[path = "../porcelain_authoring.rs"]
