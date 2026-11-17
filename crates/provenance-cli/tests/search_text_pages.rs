@@ -198,8 +198,8 @@ fn text_across_two_pieces_finds_no_record() {
 }
 
 /// Candidates that hold the text only across two pieces fail the check of
-/// each piece. The search reads past 512 of them and gives one empty page
-/// with no continuation.
+/// each piece. The search reads past them and gives one empty page with no
+/// continuation.
 #[test]
 #[verifies("rule_search_page_with_more_holds_a_record", examples)]
 fn a_separator_needle_that_matches_no_piece_gives_one_empty_page() {

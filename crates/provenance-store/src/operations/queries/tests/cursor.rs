@@ -1,4 +1,4 @@
-use super::{repository_at, root_of, seeded_store};
+use super::{append_separator_requirements, repository_at, root_of, seeded_store, SEPARATOR_TEXT};
 use crate::operations::{queries, read_policy::ReadPolicy};
 use provenance_core::protocol::{QueryResponse, SearchQuery};
 use provenance_macros::verifies;
@@ -116,38 +116,70 @@ async fn search_refuses_a_record_larger_than_the_engine_budget() {
     );
 }
 
-#[tokio::test]
-#[verifies("rule_query_pages_bound_shared_reads", examples)]
-#[verifies("rule_search_page_with_more_holds_a_record", examples)]
-async fn a_separator_search_page_reads_past_512_candidates_to_its_match() {
-    let (dir, store, scope) = seeded_store();
-    let path = crate::shards::requirements_path(&store.layout, &scope);
-    let mut record = json!(store.list_requirements(&scope).unwrap()[0]);
-    // Each record before the last holds the text only across two pieces: the
-    // SQL test selects it and the check of each piece refuses it.
-    for i in 0..700 {
-        record["id"] = json!(format!("req_{i:03}"));
-        record["description"] = if i == 699 {
-            json!("the \u{1}plain needle")
-        } else {
-            json!("plain")
-        };
-        crate::cache::tests::fixtures::append_record(&path, &record);
+/// The ids and the continuation flag of each page of a separator search.
+async fn separator_pages(root: &camino::Utf8Path) -> Vec<(Vec<String>, bool)> {
+    let request = json!({"text":SEPARATOR_TEXT,"node_types":["requirement"],"limit":50});
+    let mut pages = vec![search(root, request.clone()).await.unwrap()];
+    while let Some(cursor) = pages.last().unwrap()["next_cursor"].as_str() {
+        let mut next = request.clone();
+        next["cursor"] = json!(cursor);
+        pages.push(search(root, next).await.unwrap());
     }
-    let first = search(
-        &root_of(&dir),
-        json!({"text":"\u{1}plain","node_types":["requirement"]}),
-    )
-    .await
-    .unwrap();
-    let ids: Vec<_> = first["nodes"]
-        .as_array()
-        .unwrap()
+    pages
         .iter()
-        .map(|node| node["id"].as_str().unwrap())
-        .collect();
-    assert_eq!(ids, ["req_699"]);
-    assert_eq!(first["has_more"], false);
+        .map(|page| {
+            let ids = page["nodes"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|node| node["id"].as_str().unwrap().to_owned())
+                .collect();
+            (ids, page["has_more"].as_bool().unwrap())
+        })
+        .collect()
+}
+
+/// The separator requirement ids of the given numbers.
+fn separator_ids(ids: impl Iterator<Item = usize>) -> Vec<String> {
+    ids.map(|i| format!("req_{i:05}")).collect()
+}
+
+#[tokio::test]
+#[verifies("rule_search_page_with_more_holds_a_record", examples)]
+async fn a_separator_search_page_reads_past_failing_candidates_to_its_match() {
+    let (dir, store, scope) = seeded_store();
+    append_separator_requirements(&store, &scope, 700, |i| i == 699);
+    assert_eq!(
+        separator_pages(&root_of(&dir)).await,
+        [(separator_ids(std::iter::once(699)), false)]
+    );
+}
+
+#[tokio::test]
+#[verifies("rule_search_page_with_more_holds_a_record", examples)]
+async fn a_full_separator_page_with_more_matches_holds_its_records() {
+    let (dir, store, scope) = seeded_store();
+    // Each of the 60 matches comes before 600 candidates that fail the check
+    // of each piece.
+    append_separator_requirements(&store, &scope, 60 * 601, |i| i % 601 == 0);
+    assert_eq!(
+        separator_pages(&root_of(&dir)).await,
+        [
+            (separator_ids((0..50).map(|k| k * 601)), true),
+            (separator_ids((50..60).map(|k| k * 601)), false),
+        ]
+    );
+}
+
+#[tokio::test]
+#[verifies("rule_search_page_with_more_holds_a_record", examples)]
+async fn a_full_separator_page_before_only_failing_candidates_has_no_continuation() {
+    let (dir, store, scope) = seeded_store();
+    append_separator_requirements(&store, &scope, 650, |i| i < 50);
+    assert_eq!(
+        separator_pages(&root_of(&dir)).await,
+        [(separator_ids(0..50), false)]
+    );
 }
 
 #[tokio::test]
@@ -175,15 +207,23 @@ async fn a_page_stopped_by_the_byte_cap_holds_its_first_record() {
         .iter()
         .map(|page| page["nodes"].as_array().unwrap().len())
         .collect();
-    assert!(sizes.len() > 1, "{sizes:?}");
-    assert!(sizes.iter().all(|size| *size > 0), "{sizes:?}");
+    assert_eq!(sizes, [2, 2, 2]);
     let ids: Vec<_> = pages
         .iter()
         .flat_map(|page| page["nodes"].as_array().unwrap())
-        .map(|node| node["id"].as_str().unwrap().to_owned())
+        .map(|node| node["id"].as_str().unwrap())
         .collect();
-    assert_eq!(ids.len(), 6, "{ids:?}");
-    assert!(ids.windows(2).all(|pair| pair[0] < pair[1]), "{ids:?}");
+    assert_eq!(
+        ids,
+        [
+            "req_large_0",
+            "req_large_1",
+            "req_large_2",
+            "req_large_3",
+            "req_large_4",
+            "req_overtime"
+        ]
+    );
 }
 
 #[tokio::test]

@@ -109,7 +109,9 @@ async fn search_page(ctx: &ReadContext, request: SearchQuery) -> anyhow::Result<
                 });
                 if contains_text {
                     let size = serde_json::to_vec(&node)?.len();
-                    if matched.len() == request.limit || bytes + size > PAGE_BYTES {
+                    if matched.len() == request.limit
+                        || (!matched.is_empty() && bytes + size > PAGE_BYTES)
+                    {
                         has_more = true;
                         break 'kinds;
                     }
