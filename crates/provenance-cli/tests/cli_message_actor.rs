@@ -2,7 +2,7 @@
 //! Discussion list and the receipt of a write show that actor on the CLI, on the HTTP API
 //! through the api command, and on a spawned `provenance mcp`.
 
-use crate::bounded_process::{provenance, Bounded as _};
+use crate::bounded_process::{output_with_input, provenance};
 use crate::cli_mcp_read_parity::cli_json;
 use crate::cli_mcp_record_actions::Server;
 use crate::cli_mcp_write_actor::{repository, requirement, run};
@@ -84,12 +84,12 @@ fn api_read(repo: &Path, path: &str) -> Value {
 
 /// The JSON answer of one `provenance api` POST of `body` to `path` with an If-Match header.
 fn api_post(repo: &Path, path: &str, body: &Value, etag: &str) -> Value {
-    let output = provenance()
+    let mut command = provenance();
+    command
         .args(["api", path, "--repo", repo.to_str().unwrap()])
         .args(["--method", "post", "--input", "-"])
-        .args(["--header", &format!("If-Match: {etag}")])
-        .write_stdin(body.to_string())
-        .bounded_output();
+        .args(["--header", &format!("If-Match: {etag}")]);
+    let output = output_with_input(&mut command, body.to_string());
     assert!(
         output.status.success(),
         "{}",
