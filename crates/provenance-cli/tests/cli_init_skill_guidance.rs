@@ -107,3 +107,39 @@ fn global_copy_conflict_guidance_keeps_the_install_mode() {
     assert_eq!(std::fs::read(&skill).unwrap(), original);
     assert!(!caller.join(".agents").exists());
 }
+
+/// A session handoff or a status note is not graph content, so no installed
+/// skill tells an agent to write a tagged status body such as `HANDOFF:` into
+/// a thread or a Discussion.
+#[test]
+fn installed_skills_write_no_status_note_into_a_thread() {
+    let project = tempfile::tempdir().unwrap();
+    Command::cargo_bin("provenance")
+        .unwrap()
+        .args(["init", "--path"])
+        .arg(project.path())
+        .args(["--scope", "default", "--path-prefix", "."])
+        .assert()
+        .success();
+
+    let mut status_notes = Vec::new();
+    let skills = project.path().join(".agents/skills");
+    for entry in std::fs::read_dir(skills).unwrap() {
+        let path = entry.unwrap().path().join("SKILL.md");
+        let text = std::fs::read_to_string(&path).unwrap();
+        for argument in text.split("--body \"").skip(1) {
+            let body = argument.split('"').next().unwrap_or_default();
+            let Some((tag, _)) = body.split_once(':') else {
+                continue;
+            };
+            if !tag.is_empty() && tag.chars().all(|c| c.is_ascii_uppercase() || c == '-') {
+                status_notes.push(format!("{}: {body}", path.display()));
+            }
+        }
+    }
+    assert!(
+        status_notes.is_empty(),
+        "installed skills post status notes:\n{}",
+        status_notes.join("\n")
+    );
+}
