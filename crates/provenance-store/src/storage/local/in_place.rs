@@ -80,14 +80,54 @@ pub fn install(live: &ProvenanceLayout, transaction: &Utf8Path) -> anyhow::Resul
     let staged = transaction.join(STAGED);
     for key in &changes.puts {
         if let Some(source) = staged_file(&staged, key)? {
-            install_staged_file(&source, &state.join(key.as_str()))?;
+            install_staged_file(&source, &state.join(key.as_str()))
+                .map_err(|error| in_use(live, key, error))?;
             crate::test_probes::at("state_file_installed")?;
         }
     }
     for key in &changes.deletes {
-        remove_synced_file(&state.join(key.as_str()))?;
+        remove_synced_file(&state.join(key.as_str())).map_err(|error| in_use(live, key, error))?;
     }
     crate::test_probes::at("state_installed")
+}
+
+/// A live state file that a different process has open with no delete
+/// sharing, so that the store cannot replace or remove it.
+#[derive(Debug, thiserror::Error)]
+#[error(
+    "a different process has the state file {path} open and does not let other processes \
+     replace it: close the file in that process, and then send the call again"
+)]
+pub struct StateFileInUse {
+    /// The absolute path of the file.
+    pub path: Utf8PathBuf,
+    /// The path of the file relative to the repository, with `/` between
+    /// its parts.
+    pub file: String,
+    #[source]
+    pub source: std::io::Error,
+}
+
+/// The error of an install or a removal of the live file of `key`. On
+/// Windows, `ERROR_ACCESS_DENIED` (5) and `ERROR_SHARING_VIOLATION` (32) on
+/// that step mean that a different process holds the file with no delete
+/// sharing: the error is a [`StateFileInUse`]. Each other error stays as it
+/// is.
+#[rule("rule_held_record_file_refusal_names_the_file")]
+fn in_use(live: &ProvenanceLayout, key: &str, error: anyhow::Error) -> anyhow::Error {
+    let code = error
+        .chain()
+        .find_map(|cause| cause.downcast_ref::<std::io::Error>())
+        .and_then(std::io::Error::raw_os_error);
+    match code {
+        Some(code @ (5 | 32)) if cfg!(windows) => StateFileInUse {
+            path: live.state_dir().join(key),
+            file: format!(".provenance/state/{key}"),
+            source: std::io::Error::from_raw_os_error(code),
+        }
+        .into(),
+        _ => error,
+    }
 }
 
 /// Completes the write that a marker names after a stop: it runs the

@@ -141,6 +141,15 @@ impl ReadError {
         if let Some(refusal) = error.downcast_ref::<SourceFailure>() {
             return store_refusal(&refusal.failure).unwrap_or_else(|| self.read_failed(error));
         }
+        #[cfg(feature = "host")]
+        if let Some(held) = error
+            .chain()
+            .find_map(|cause| cause.downcast_ref::<crate::storage::local::StateFileInUse>())
+        {
+            return ReadFailure::StateFileInUse {
+                file: held.file.clone(),
+            };
+        }
         UnparsableStateFile::find(error.as_ref())
             .map_or_else(|| self.read_failed(error), state_line)
     }
