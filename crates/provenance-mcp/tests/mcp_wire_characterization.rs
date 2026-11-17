@@ -17,7 +17,7 @@ use std::sync::Arc;
 use support::{check_port::FixtureCheckPort, first_calls, records::Repository};
 use tokio::io::{AsyncBufReadExt as _, AsyncWriteExt as _, BufReader, DuplexStream, Lines};
 
-const TOOL_LIST_FNV1A: u64 = 7_664_500_741_809_655_526;
+const TOOL_LIST_FNV1A: u64 = 15_029_246_460_884_666_020;
 
 /// The porcelain tools, in list order. The list has no plumbing tools.
 const PORCELAIN_TOOL_NAMES: &[&str] = &[
