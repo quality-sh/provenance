@@ -11,6 +11,7 @@
 
 #[path = "support/memory.rs"]
 mod memory;
+#[path = "memory_repository/state_check.rs"]
 mod state_check;
 
 use memory::{id, imported, initial_state, memory_repository, scope, MemoryRepository};
