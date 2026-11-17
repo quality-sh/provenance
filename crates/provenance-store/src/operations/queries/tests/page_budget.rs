@@ -2,12 +2,14 @@
 //! budget refusal, at the same count as before the bound went through the
 //! port, on the file and on another transaction type over the file. The
 //! page mapping also gives the page budget refusal for an `OverBudget`
-//! whose cause is not an error of the file.
+//! whose cause is not an error of the file. A search page with no scan
+//! limit of its own stops at the work bound.
 //!
-//! No Rule: this is an implementation aid. The count is a characterization
-//! of the bundled `SQLite` engine, recorded before the bound moved onto the
-//! port, and the test reads private surfaces. The Rule's examples are the
-//! page operation tests in `page_interrupt.rs`.
+//! The count test and the mapping test have no Rule: they are
+//! implementation aids. The count is a characterization of the bundled
+//! `SQLite` engine, recorded before the bound moved onto the port, and the
+//! tests read private surfaces. The Rule's other examples are the page
+//! operation tests in `page_interrupt.rs`.
 
 use super::comparison::test_stores::TestStore;
 use crate::cache::{catch_up_state, open_cache};
@@ -19,6 +21,7 @@ use crate::read_database::{
 };
 use provenance_core::protocol::read_failure::ReadFailure;
 use provenance_core::Requirement;
+use provenance_macros::verifies;
 use sqlx::SqlitePool;
 
 /// The smallest count that the bound of one page stops, found by the
@@ -161,6 +164,59 @@ async fn the_page_mapping_refuses_any_over_budget_error() {
         .unwrap_err();
     drop(snapshot);
     cache.close().await.unwrap();
+    assert_eq!(
+        refused.downcast_ref::<ReadFailure>(),
+        Some(&ReadFailure::PageBudgetExceeded),
+        "{refused:#}"
+    );
+}
+
+/// The work bound of the search test: about twice the work of a search page
+/// that reads 512 candidates, and less than half the work of a page that
+/// reads [`SEPARATOR_CANDIDATES`].
+const SEARCH_WORK_STEPS: u64 = 150_000;
+
+/// The candidates that hold the search text only across two pieces.
+const SEPARATOR_CANDIDATES: usize = 3_000;
+
+#[tokio::test]
+#[verifies("rule_query_pages_bound_shared_reads", examples)]
+async fn a_separator_search_stops_at_the_work_bound() {
+    use super::{repository_at, root_of, seeded_store};
+    use crate::operations::{queries, read_policy::ReadPolicy};
+    use crate::test_probes::set_page_work_steps;
+    use serde_json::json;
+    let (dir, store, scope) = seeded_store();
+    let path = crate::shards::requirements_path(&store.layout, &scope);
+    let mut record = json!(store.list_requirements(&scope).unwrap()[0]);
+    record["description"] = json!("plain");
+    for i in 0..SEPARATOR_CANDIDATES {
+        record["id"] = json!(format!("req_{i:04}"));
+        crate::cache::tests::fixtures::append_record(&path, &record);
+    }
+    let root = root_of(&dir);
+    let search = |text: &'static str, steps| {
+        let root = root.clone();
+        async move {
+            set_page_work_steps(steps);
+            let result = queries::search(
+                &repository_at(&root),
+                ReadPolicy::default(),
+                serde_json::from_value(json!({"text":text,"node_types":["requirement"]})).unwrap(),
+            )
+            .await;
+            set_page_work_steps(None);
+            result
+        }
+    };
+    search("req_overtime", None).await.unwrap();
+    let plain = search("req_overtime", Some(SEARCH_WORK_STEPS))
+        .await
+        .unwrap();
+    assert_eq!(plain.result.nodes.len(), 1);
+    let Err(refused) = search("\u{1}plain", Some(SEARCH_WORK_STEPS)).await else {
+        panic!("the separator search answered within the work bound");
+    };
     assert_eq!(
         refused.downcast_ref::<ReadFailure>(),
         Some(&ReadFailure::PageBudgetExceeded),

@@ -118,7 +118,8 @@ async fn search_refuses_a_record_larger_than_the_engine_budget() {
 
 #[tokio::test]
 #[verifies("rule_query_pages_bound_shared_reads", examples)]
-async fn a_bounded_empty_search_page_can_continue_to_an_unloaded_match() {
+#[verifies("rule_search_page_with_more_holds_a_record", examples)]
+async fn a_separator_search_page_reads_past_512_candidates_to_its_match() {
     let (dir, store, scope) = seeded_store();
     let path = crate::shards::requirements_path(&store.layout, &scope);
     let mut record = json!(store.list_requirements(&scope).unwrap()[0]);
@@ -139,20 +140,50 @@ async fn a_bounded_empty_search_page_can_continue_to_an_unloaded_match() {
     )
     .await
     .unwrap();
-    assert_eq!(
-        first["nodes"].as_array().unwrap().as_slice(),
-        [] as [serde_json::Value; 0]
-    );
-    assert_eq!(first["has_more"], true);
-    let second = search(
-        &root_of(&dir),
-        json!({"text":"\u{1}plain","node_types":["requirement"],"cursor":first["next_cursor"]}),
-    )
-    .await
-    .unwrap();
-    assert_eq!(second["nodes"].as_array().unwrap().len(), 1);
-    assert_eq!(second["nodes"][0]["id"], "req_699");
-    assert_eq!(second["has_more"], false);
+    let ids: Vec<_> = first["nodes"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|node| node["id"].as_str().unwrap())
+        .collect();
+    assert_eq!(ids, ["req_699"]);
+    assert_eq!(first["has_more"], false);
+}
+
+#[tokio::test]
+#[verifies("rule_search_page_with_more_holds_a_record", examples)]
+async fn a_page_stopped_by_the_byte_cap_holds_its_first_record() {
+    let (dir, store, scope) = seeded_store();
+    let root = root_of(&dir);
+    let path = crate::shards::requirements_path(&store.layout, &scope);
+    let mut record = json!(store.list_requirements(&scope).unwrap()[0]);
+    // JSON writes each character of this text as six bytes, so two such
+    // records fit in the page byte cap and three do not.
+    record["description"] = json!("\u{2}".repeat(60_000));
+    for i in 0..5 {
+        record["id"] = json!(format!("req_large_{i}"));
+        crate::cache::tests::fixtures::append_record(&path, &record);
+    }
+    let request = json!({"node_types":["requirement"]});
+    let mut pages = vec![search(&root, request.clone()).await.unwrap()];
+    while let Some(cursor) = pages.last().unwrap()["next_cursor"].as_str() {
+        let mut next = request.clone();
+        next["cursor"] = json!(cursor);
+        pages.push(search(&root, next).await.unwrap());
+    }
+    let sizes: Vec<_> = pages
+        .iter()
+        .map(|page| page["nodes"].as_array().unwrap().len())
+        .collect();
+    assert!(sizes.len() > 1, "{sizes:?}");
+    assert!(sizes.iter().all(|size| *size > 0), "{sizes:?}");
+    let ids: Vec<_> = pages
+        .iter()
+        .flat_map(|page| page["nodes"].as_array().unwrap())
+        .map(|node| node["id"].as_str().unwrap().to_owned())
+        .collect();
+    assert_eq!(ids.len(), 6, "{ids:?}");
+    assert!(ids.windows(2).all(|pair| pair[0] < pair[1]), "{ids:?}");
 }
 
 #[tokio::test]

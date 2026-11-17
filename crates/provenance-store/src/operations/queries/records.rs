@@ -43,7 +43,9 @@ pub(super) async fn search(
         .map_err(crate::operations::reader::page_error)
 }
 
-/// Intersects optional text, kind, and lifecycle search predicates.
+/// Intersects optional text, kind, and lifecycle search predicates, and
+/// reads candidates until a page holds a record or the kinds end.
+#[rule("rule_search_page_with_more_holds_a_record")]
 #[rule("rule_porcelain_search_text_optional")]
 #[rule("rule_porcelain_search_predicates_intersect")]
 async fn search_page(ctx: &ReadContext, request: SearchQuery) -> anyhow::Result<SearchResult> {
@@ -72,7 +74,6 @@ async fn search_page(ctx: &ReadContext, request: SearchQuery) -> anyhow::Result<
     )?;
     let mut matched = Vec::new();
     let mut bytes = 0;
-    let mut scanned = 0;
     let mut has_more = false;
     'kinds: for kind in wanted {
         if kind.rank() < position.rank {
@@ -84,7 +85,7 @@ async fn search_page(ctx: &ReadContext, request: SearchQuery) -> anyhow::Result<
             String::new()
         };
         loop {
-            let count = (request.limit + 1 - matched.len()).min(512 - scanned);
+            let count = request.limit + 1 - matched.len();
             let ids = nodes::search_ids(
                 ctx.snapshot(),
                 kind,
@@ -115,17 +116,12 @@ async fn search_page(ctx: &ReadContext, request: SearchQuery) -> anyhow::Result<
                     bytes += size;
                     matched.push(node);
                 }
-                scanned += 1;
                 after.clone_from(&id);
                 position = Position {
                     rank: kind.rank(),
                     id,
                     ..Position::default()
                 };
-                if scanned == 512 {
-                    has_more = true;
-                    break 'kinds;
-                }
             }
             if exhausted {
                 break;
