@@ -24,6 +24,11 @@ mod file_install;
 mod in_place;
 #[cfg(test)]
 mod in_place_tests;
+#[cfg(test)]
+mod install_guard_tests;
+mod live_entry;
+#[cfg(test)]
+mod marked_write_tests;
 mod recovery;
 mod section;
 mod transactions;
@@ -31,7 +36,8 @@ pub(crate) mod whole_set;
 pub use durability::is_state_temporary_name;
 #[cfg(any(unix, windows))]
 pub(crate) use file_install::FileInstall;
-pub(crate) use in_place::{roll_forward, StateFileInUse};
+pub(crate) use in_place::{install as install_in_place, StateFileInUse};
+pub(crate) use live_entry::ensure_plain_state_tree;
 #[cfg(all(test, unix))]
 pub(crate) use recovery::validated_transaction_dir;
 pub use recovery::{write_publication_marker, PublicationPhase};
@@ -78,6 +84,7 @@ impl LocalStateStorage {
 
 impl StateStorage for LocalStateStorage {
     fn read_view(&self) -> Result<StateView, StorageError> {
+        self.complete_marked_write().map_err(StorageError::Read)?;
         crate::test_probes::at("state_tree_read").map_err(StorageError::Read)?;
         let mut entries = BTreeMap::new();
         let state = self.layout.state_dir();
@@ -122,11 +129,31 @@ impl LocalStateStorage {
     /// nothing.
     fn ensure_publishable(&self, writes: &WriteSet) -> Result<(), PublishFailure> {
         writes.ensure_disjoint()?;
+        self.complete_marked_write()
+            .map_err(PublishFailure::Refused)?;
         if writes.base_view().is_some() {
             let view = self
                 .read_view()
                 .map_err(|error| PublishFailure::Refused(error.into()))?;
             writes.ensure_base(view.entries())?;
+        }
+        Ok(())
+    }
+
+    /// Completes a write whose marker stays after its install failed, when
+    /// this thread holds the section. Thus no read or write through the
+    /// port in the section sees a set that landed in part: the call
+    /// completes the set first, or fails with the error of the install, such
+    /// as a state file that a different process holds. With no marker, it
+    /// reads nothing more. Out of the section it does nothing, because a
+    /// write of a different process can own the marker.
+    #[rule("rule_section_reads_no_partial_whole_set")]
+    fn complete_marked_write(&self) -> anyhow::Result<()> {
+        let marked = [TransactionKind::Import, TransactionKind::SourceEdit]
+            .into_iter()
+            .any(|kind| kind.marker(&self.layout).exists());
+        if marked && crate::publication::holds_live_section(&self.layout)? {
+            section::recover_pending(&self.layout)?;
         }
         Ok(())
     }

@@ -37,4 +37,8 @@ impl Harness for WholeLanding {
     fn break_key(&mut self, key: &str) {
         self.storage.fail_on(StateKey::new(key).unwrap());
     }
+
+    fn repair_key(&mut self, key: &str) {
+        self.storage.repair(&StateKey::new(key).unwrap());
+    }
 }

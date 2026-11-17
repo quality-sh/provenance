@@ -76,11 +76,9 @@ where
     let context = match step {
         RemovalStep::List => format!("list {path}"),
         RemovalStep::Read => format!("read {path}"),
-        RemovalStep::ReadMarker => format!(
-            "read {path} (the marker is not in the format of this release: open the \
-             repository one time with the release that wrote the marker, so that its write \
-             completes)"
-        ),
+        RemovalStep::ReadMarker => {
+            format!("read marker {path}: this program cannot read the content of the marker")
+        }
         RemovalStep::Transaction => format!("remove transaction directory {path}"),
         RemovalStep::Unpublished => format!(
             "remove transaction directory {path} (no marker names this directory, thus the \
@@ -112,9 +110,8 @@ pub fn write_marker(
 }
 
 /// The marker of `kind`, or `None` when it does not exist. A read that fails
-/// gives the path of the marker. A marker that is JSON with a shape that
-/// this release does not know is one that an earlier release wrote: its
-/// error gives the path and the repair.
+/// gives the path of the marker. A marker that does not parse as a marker
+/// gives its path and states that the program cannot read it.
 pub fn read_marker<T: serde::de::DeserializeOwned>(
     layout: &ProvenanceLayout,
     kind: TransactionKind,
@@ -124,14 +121,9 @@ pub fn read_marker<T: serde::de::DeserializeOwned>(
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
         bytes => bytes.map_err(|error| removal_failure(RemovalStep::Read, &marker, error))?,
     };
-    serde_json::from_slice(&bytes).map(Some).map_err(|error| {
-        let step = if error.is_data() {
-            RemovalStep::ReadMarker
-        } else {
-            RemovalStep::Read
-        };
-        removal_failure(step, &marker, error)
-    })
+    serde_json::from_slice(&bytes)
+        .map(Some)
+        .map_err(|error| removal_failure(RemovalStep::ReadMarker, &marker, error))
 }
 
 fn marker_temporary_prefix(marker: &Utf8Path) -> String {

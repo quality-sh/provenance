@@ -58,6 +58,12 @@ impl MemoryStateStorage {
         self.state().entries.break_key(key);
     }
 
+    /// Lets later writes of `key` land again.
+    #[cfg(test)]
+    pub(crate) fn repair(&self, key: &StateKey) {
+        self.state().entries.repair_key(key);
+    }
+
     /// Gives `writes` to the persistence, if there is one.
     fn persist(&self, writes: &WriteSet) -> Result<(), PublishFailure> {
         self.persistence

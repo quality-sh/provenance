@@ -6,13 +6,14 @@ use crate::publication::{with_repository_publication, write_publication_marker, 
 use crate::test_support::directory::utf8;
 use camino::Utf8PathBuf;
 use provenance_macros::verifies;
+use sha2::Digest as _;
 
-const RULES: &str = "scopes/default/rules/rule.jsonl";
-const REQUIREMENTS: &str = "scopes/default/requirements/req.jsonl";
-const QUESTIONS: &str = "scopes/default/questions/question.jsonl";
+pub(super) const RULES: &str = "scopes/default/rules/rule.jsonl";
+pub(super) const REQUIREMENTS: &str = "scopes/default/requirements/req.jsonl";
+pub(super) const QUESTIONS: &str = "scopes/default/questions/question.jsonl";
 
 /// A layout with two live shards, `RULES` and `QUESTIONS`, at `old`.
-fn live() -> (tempfile::TempDir, ProvenanceLayout) {
+pub(super) fn live() -> (tempfile::TempDir, ProvenanceLayout) {
     let temp = tempfile::tempdir().unwrap();
     // The canonical root, so that a path in an error has the spelling
     // that the store gives on macOS, where the temporary directory is
@@ -28,8 +29,9 @@ fn live() -> (tempfile::TempDir, ProvenanceLayout) {
 }
 
 /// A transaction as a write leaves it when it stops after its marker: the
-/// staged puts that `staged` names, the change list, and the marker.
-fn stopped_write(
+/// staged puts that `staged` names, the change list, in which each put has
+/// the digest of `new`, and the marker.
+pub(super) fn stopped_write(
     layout: &ProvenanceLayout,
     puts: &[&str],
     staged: &[&str],
@@ -42,6 +44,11 @@ fn stopped_write(
         std::fs::write(path, "new").unwrap();
     }
     std::fs::create_dir_all(&transaction).unwrap();
+    let digest: [u8; 32] = sha2::Sha256::digest(b"new").into();
+    let puts: Vec<_> = puts
+        .iter()
+        .map(|key| serde_json::json!({ "key": key, "sha256": digest }))
+        .collect();
     std::fs::write(
         transaction.join("changes.json"),
         serde_json::json!({ "puts": puts, "deletes": deletes }).to_string(),
@@ -51,11 +58,11 @@ fn stopped_write(
     transaction
 }
 
-fn read(layout: &ProvenanceLayout, key: &str) -> Option<String> {
+pub(super) fn read(layout: &ProvenanceLayout, key: &str) -> Option<String> {
     std::fs::read_to_string(layout.state_dir().join(key)).ok()
 }
 
-fn enter(layout: &ProvenanceLayout) -> anyhow::Result<()> {
+pub(super) fn enter(layout: &ProvenanceLayout) -> anyhow::Result<()> {
     with_repository_publication(layout, |_| Ok(()))
 }
 
@@ -126,14 +133,14 @@ fn the_install_refuses_a_change_list_with_a_path_outside_the_state() {
     }
 }
 
-/// A marker that an earlier release wrote names a phase that this store
-/// does not have. The section entry refuses it with the path of the marker
-/// and changes no file. This test is an implementation aid with no Rule.
+/// A marker that names a phase that the store does not know does not parse.
+/// The section entry refuses it with the path of the marker and changes no
+/// file. This test is an implementation aid with no Rule.
 #[test]
-fn the_section_entry_refuses_a_marker_of_an_earlier_format() {
+fn the_section_entry_refuses_a_marker_that_it_cannot_read() {
     for phase in ["prepared", "backup_created"] {
         let (_temp, layout) = live();
-        let transaction = layout.import_transactions_dir().join("earlier");
+        let transaction = layout.import_transactions_dir().join("unknown");
         std::fs::create_dir_all(&transaction).unwrap();
         let marker = layout.publication_marker_path();
         std::fs::write(
@@ -144,12 +151,9 @@ fn the_section_entry_refuses_a_marker_of_an_earlier_format() {
 
         let error = format!("{:#}", enter(&layout).unwrap_err());
 
-        let repair = "the marker is not in the format of this release: open the repository \
-                      one time with the release that wrote the marker, so that its write \
-                      completes";
         assert!(
             error.starts_with(&format!(
-                "read {marker} ({repair}): unknown variant `{phase}`"
+                "read marker {marker}: this program cannot read the content of the marker"
             )),
             "{error}"
         );
@@ -178,7 +182,7 @@ fn the_install_replaces_a_live_file_that_a_reader_holds() {
 }
 
 /// A reader keeps the live file open with a share mode that lets other
-/// handles only read. The roll forward cannot replace the file, so the
+/// handles only read. The install cannot replace the file, so the
 /// section entry answers `state_file_in_use` with the file, and the marker
 /// stays. When the reader closes the file, the next entry completes the
 /// write.

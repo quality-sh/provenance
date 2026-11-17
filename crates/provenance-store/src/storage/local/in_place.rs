@@ -13,10 +13,12 @@
 use super::durability::{
     install_staged_file, remove_synced_file, sync_tree, write_staged_file, write_synced_file,
 };
+use super::live_entry::{ensure_one_file_system, held_by_another_process, live_file};
 use crate::layout::ProvenanceLayout;
 use crate::storage::{StateKey, WriteSet};
 use camino::{Utf8Path, Utf8PathBuf};
 use provenance_macros::rule;
+use sha2::{Digest as _, Sha256};
 
 /// The name of the change list in a transaction.
 const CHANGES: &str = "changes.json";
@@ -27,21 +29,30 @@ const STAGED: &str = "staged";
 #[derive(serde::Deserialize, serde::Serialize)]
 #[serde(deny_unknown_fields)]
 struct ChangeList {
-    puts: Vec<String>,
+    puts: Vec<Put>,
     deletes: Vec<String>,
+}
+
+/// One put of a change list: the key and the SHA-256 digest of its bytes.
+#[derive(serde::Deserialize, serde::Serialize)]
+#[serde(deny_unknown_fields)]
+struct Put {
+    key: String,
+    sha256: [u8; 32],
 }
 
 /// Writes each put of `writes` below the staged directory of `transaction`
 /// and then the change list, and syncs them. When it returns, the
 /// transaction holds all data that the install needs. It first refuses a set
-/// whose live key is not a regular file, so that no install fails for a
-/// cause that the write can see before its marker.
+/// that an install cannot complete for a cause that the write can see before
+/// its marker: a live entry of a key that is not a regular file, a link in
+/// the path of a key, or a cache on a different file system.
 pub fn stage(
     live: &ProvenanceLayout,
     transaction: &Utf8Path,
     writes: &WriteSet,
 ) -> anyhow::Result<()> {
-    ensure_installable(live, writes)?;
+    ensure_installable(live, transaction, writes)?;
     let staged = transaction.join(STAGED);
     std::fs::create_dir(&staged)
         .map_err(|error| crate::refusal::caused(error, format!("make directory {staged}")))?;
@@ -52,8 +63,11 @@ pub fn stage(
     let changes = ChangeList {
         puts: writes
             .puts()
-            .keys()
-            .map(|key| key.as_str().to_owned())
+            .iter()
+            .map(|(key, bytes)| Put {
+                key: key.as_str().to_owned(),
+                sha256: Sha256::digest(bytes).into(),
+            })
             .collect(),
         deletes: writes
             .deletes()
@@ -65,30 +79,71 @@ pub fn stage(
 }
 
 /// Installs the write of `transaction` on the state directory of `live`:
-/// each staged put that is still in the transaction replaces its live key,
-/// and then each delete removes its live key. A staged put that is not in
-/// the transaction is installed, because an install moves it. Thus the call
-/// completes a write that an earlier call did in part.
+/// each staged put replaces its live key, and then each delete removes its
+/// live key. A put whose staged file is gone is installed only when its live
+/// file has the digest of the change list, because an install moves the
+/// staged file. Thus the call completes a write that an earlier call did in
+/// part, and refuses a transaction that lost a staged file.
 ///
 /// A replace is a rename of one file onto one file, so a reader that has a
 /// live file open with delete sharing, as each `std::fs` handle has, does
-/// not make it fail.
+/// not make it fail. No step follows a link in the path of a live key.
 #[rule("rule_write_passes_while_a_record_file_is_held")]
 pub fn install(live: &ProvenanceLayout, transaction: &Utf8Path) -> anyhow::Result<()> {
     let changes = read_change_list(transaction)?;
     let state = live.state_dir();
     let staged = transaction.join(STAGED);
-    for key in &changes.puts {
-        if let Some(source) = staged_file(&staged, key)? {
-            install_staged_file(&source, &state.join(key.as_str()))
-                .map_err(|error| in_use(live, key, error))?;
-            crate::test_probes::at("state_file_installed")?;
+    for put in &changes.puts {
+        let target = live_file(&state, &put.key)?;
+        match staged_file(&staged, &put.key)? {
+            Some(source) => {
+                require_digest(&source, put, "staged file")?;
+                install_staged_file(&source, &target)
+                    .map_err(|error| in_use(live, &target, &put.key, error))?;
+                crate::test_probes::at("state_file_installed")?;
+            }
+            None => require_installed(&staged, &target, put)?,
         }
     }
     for key in &changes.deletes {
-        remove_synced_file(&state.join(key.as_str())).map_err(|error| in_use(live, key, error))?;
+        let target = live_file(&state, key)?;
+        remove_synced_file(&target).map_err(|error| in_use(live, &target, key, error))?;
     }
     crate::test_probes::at("state_installed")
+}
+
+/// Refuses `put` when the file at `path` does not have its digest, with the
+/// path of the file.
+fn require_digest(path: &Utf8Path, put: &Put, what: &str) -> anyhow::Result<()> {
+    let bytes = std::fs::read(crate::long_path::extended(path)?)
+        .map_err(|error| crate::refusal::caused(error, format!("read {path}")))?;
+    crate::write_error::ensure!(
+        Fault,
+        <[u8; 32]>::from(Sha256::digest(&bytes)) == put.sha256,
+        "{what} {path} does not have the bytes that the change list names for {}",
+        put.key
+    );
+    Ok(())
+}
+
+/// Refuses a put whose staged file is gone when its live file `target` does
+/// not have the bytes of the put: the transaction lost the staged file
+/// before its install.
+fn require_installed(staged: &Utf8Path, target: &Utf8Path, put: &Put) -> anyhow::Result<()> {
+    let missing = staged.join(&put.key);
+    let installed = match std::fs::read(crate::long_path::extended(target)?) {
+        Ok(bytes) => <[u8; 32]>::from(Sha256::digest(&bytes)) == put.sha256,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => false,
+        Err(error) => return Err(crate::refusal::caused(error, format!("read {target}"))),
+    };
+    crate::write_error::ensure!(
+        Fault,
+        installed,
+        "staged file {missing} is missing, and {target} does not have the bytes that the \
+         change list names for {}",
+        put.key
+    );
+    Ok(())
 }
 
 /// A live state file that a different process has open with no delete
@@ -108,19 +163,23 @@ pub struct StateFileInUse {
     pub source: std::io::Error,
 }
 
-/// The error of an install or a removal of the live file of `key`. On
-/// Windows, `ERROR_ACCESS_DENIED` (5) and `ERROR_SHARING_VIOLATION` (32) on
-/// that step mean that a different process holds the file with no delete
-/// sharing: the error is a [`StateFileInUse`]. Each other error stays as it
-/// is.
+/// The error of an install or a removal of the live file `target` of
+/// `key`. When a different process holds the file with no delete sharing
+/// (see [`held_by_another_process`]), the error is a [`StateFileInUse`].
+/// Each other error stays as it is.
 #[rule("rule_held_record_file_refusal_names_the_file")]
-fn in_use(live: &ProvenanceLayout, key: &str, error: anyhow::Error) -> anyhow::Error {
+fn in_use(
+    live: &ProvenanceLayout,
+    target: &Utf8Path,
+    key: &str,
+    error: anyhow::Error,
+) -> anyhow::Error {
     let code = error
         .chain()
         .find_map(|cause| cause.downcast_ref::<std::io::Error>())
         .and_then(std::io::Error::raw_os_error);
     match code {
-        Some(code @ (5 | 32)) if cfg!(windows) => StateFileInUse {
+        Some(code) if held_by_another_process(target, code) => StateFileInUse {
             path: key
                 .split('/')
                 .fold(live.state_dir(), |path, part| path.join(part)),
@@ -132,14 +191,6 @@ fn in_use(live: &ProvenanceLayout, key: &str, error: anyhow::Error) -> anyhow::E
     }
 }
 
-/// Completes the write that a marker names after a stop: it runs the
-/// install of `transaction` again. The caller holds the section lock and
-/// then records the write as published.
-#[rule("rule_stopped_write_completes_after_its_marker")]
-pub fn roll_forward(live: &ProvenanceLayout, transaction: &Utf8Path) -> anyhow::Result<()> {
-    install(live, transaction)
-}
-
 /// The change list of `transaction`. Each key must be a state key, so that
 /// the install changes no file outside the state directory.
 fn read_change_list(transaction: &Utf8Path) -> anyhow::Result<ChangeList> {
@@ -148,7 +199,8 @@ fn read_change_list(transaction: &Utf8Path) -> anyhow::Result<ChangeList> {
         .map_err(|error| crate::refusal::caused(error, format!("read {path}")))?;
     let changes: ChangeList = serde_json::from_slice(&bytes)
         .map_err(|error| crate::refusal::caused(error, format!("read {path}")))?;
-    for key in changes.puts.iter().chain(&changes.deletes) {
+    let puts = changes.puts.iter().map(|put| &put.key);
+    for key in puts.chain(&changes.deletes) {
         // A `:` can start a drive prefix on Windows, and a join with a
         // prefix leaves the state directory.
         let valid = StateKey::new(key.as_str()).is_ok() && !key.contains(':');
@@ -161,27 +213,24 @@ fn read_change_list(transaction: &Utf8Path) -> anyhow::Result<ChangeList> {
     Ok(changes)
 }
 
-/// Refuses `writes` when the live entry of a key that it changes is there and
-/// is not a regular file: a rename or a removal of a file cannot replace it.
-fn ensure_installable(live: &ProvenanceLayout, writes: &WriteSet) -> anyhow::Result<()> {
+/// Refuses `writes` when the install of a key that it changes cannot
+/// complete: the transaction and the state directory are on two file
+/// systems, a part of the path of the key is a link or not a directory, or
+/// the live entry of the key is not a regular file.
+fn ensure_installable(
+    live: &ProvenanceLayout,
+    transaction: &Utf8Path,
+    writes: &WriteSet,
+) -> anyhow::Result<()> {
     let state = live.state_dir();
+    ensure_one_file_system(transaction, &state)?;
     for key in writes.puts().keys().chain(writes.deletes()) {
-        let path = state.join(key.as_str());
-        match std::fs::symlink_metadata(crate::long_path::extended(&path)?) {
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
-            Err(error) => return Err(crate::refusal::caused(error, format!("read {path}"))),
-            Ok(metadata) => crate::write_error::ensure!(
-                Fault,
-                metadata.is_file(),
-                "unsupported state entry: {path}"
-            ),
-        }
+        live_file(&state, key.as_str())?;
     }
     Ok(())
 }
 
-/// The staged file of `key` below `staged`, or `None` when the install
-/// moved it. Each directory on the way is a real directory and the file is
+/// The staged file of `key` below `staged`, or `None` when it is not there. Each directory on the way is a real directory and the file is
 /// a regular file, so that the install does not follow a link out of the
 /// transaction. A failure gives the path.
 fn staged_file(staged: &Utf8Path, key: &str) -> anyhow::Result<Option<Utf8PathBuf>> {

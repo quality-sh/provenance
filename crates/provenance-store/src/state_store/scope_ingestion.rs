@@ -309,7 +309,11 @@ impl StateStore {
             "a scope import needs a staged store of {}",
             self.layout.root()
         );
-        self.with_repository_publication(operation)
+        self.with_repository_publication(|store| {
+            #[cfg(feature = "host")]
+            crate::storage::local::ensure_plain_state_tree(&store.layout.state_dir())?;
+            operation(store)
+        })
     }
 }
 

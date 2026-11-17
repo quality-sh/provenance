@@ -77,6 +77,10 @@ impl Harness for Misreporting {
     fn break_key(&mut self, key: &str) {
         self.whole.break_key(key);
     }
+
+    fn repair_key(&mut self, key: &str) {
+        self.whole.repair_key(key);
+    }
 }
 
 #[test]

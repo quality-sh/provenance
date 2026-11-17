@@ -1,4 +1,4 @@
-use super::in_place::roll_forward;
+use super::in_place;
 use super::transactions::{
     contained_transaction, end_marked_write, read_marker, remove_leftovers, remove_unpublished,
     write_marker, TransactionKind,
@@ -6,6 +6,7 @@ use super::transactions::{
 use crate::layout::ProvenanceLayout;
 use anyhow::Context;
 use camino::{Utf8Path, Utf8PathBuf};
+use provenance_macros::rule;
 use serde::Serialize;
 
 #[derive(Clone, Copy, Debug, serde::Deserialize, Serialize)]
@@ -55,13 +56,14 @@ pub(super) fn recover_pending_publication(layout: &ProvenanceLayout) -> anyhow::
 
 /// Completes the install of a write that stopped after its marker, records
 /// it as published, and then ends the write that the marker names.
+#[rule("rule_stopped_write_completes_after_its_marker")]
 fn recover_marked_publication(
     layout: &ProvenanceLayout,
     marker: &PublicationMarker,
 ) -> anyhow::Result<()> {
     if matches!(marker.phase, PublicationPhase::Installing) {
         let transaction = validated_transaction_dir(layout, &marker.transaction_dir)?;
-        roll_forward(layout, &transaction)?;
+        in_place::install(layout, &transaction)?;
         write_publication_marker(layout, &transaction, PublicationPhase::Published)?;
     }
     end_marked_write(layout, TransactionKind::Import, &marker.transaction_dir)

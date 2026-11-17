@@ -62,15 +62,15 @@ fn relative_repository_access_completes_an_interrupted_install() {
     assert_eq!(source_ids(&repo), ["source_a"], "the install is complete");
 }
 
-/// A marker of an earlier release names a phase that this release does not
-/// have. The command refuses it with the path of the marker and changes no
-/// file.
+/// A marker that names a phase that the program does not know does not
+/// parse. The command refuses it with the path of the marker, states that
+/// the program cannot read it, and changes no file.
 #[test]
-fn repository_access_refuses_a_marker_of_an_earlier_format() {
+fn repository_access_refuses_a_marker_that_it_cannot_read() {
     let dir = tempfile::tempdir().unwrap();
     let repo = dir.path().join("repo");
     init_repo(&repo, None);
-    let transaction = repo.join(".provenance/cache/import-transactions/earlier");
+    let transaction = repo.join(".provenance/cache/import-transactions/unknown");
     std::fs::create_dir_all(&transaction).unwrap();
     write_publication_marker(&repo, &transaction, "backup_created");
 
@@ -83,16 +83,14 @@ fn repository_access_refuses_a_marker_of_an_earlier_format() {
     assert_eq!(output.status.code(), Some(1), "{stderr}");
     // The path of the marker has the separators of the platform, so the
     // test checks the text around it.
-    assert!(stderr.starts_with("Error: read "), "{stderr}");
+    assert!(stderr.starts_with("Error: read marker "), "{stderr}");
     assert!(
-        stderr.ends_with(
-            "import-publication.json (the marker is not in the format of this release: open \
-             the repository one time with the release that wrote the marker, so that its \
-             write completes): unknown variant `backup_created`, expected `installing` or \
-             `published` at line 1 column 25\n"
+        stderr.contains(
+            "import-publication.json: this program cannot read the content of the marker"
         ),
         "{stderr}"
     );
+    assert!(!stderr.contains("release"), "{stderr}");
     assert!(transaction.is_dir());
     assert!(repo.join(".provenance/state/manifest.json").is_file());
 }

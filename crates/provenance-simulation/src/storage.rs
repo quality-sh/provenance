@@ -199,6 +199,11 @@ impl World {
         self.lock().broken.insert(key);
     }
 
+    /// Lets later writes of `key` land again.
+    pub fn repair_key(&self, key: &StateKey) {
+        self.lock().broken.remove(key);
+    }
+
     /// Notes that an engine of the case stopped.
     pub fn note_stop(&self) {
         self.lock().stopped = true;

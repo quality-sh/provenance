@@ -8,11 +8,12 @@ use crate::{
         validate_recovery_artifact_leaf, HeldRepositoryFile, RepositoryFileRefusal, RepositoryFiles,
     },
     storage::local::{
-        contained_transaction, end_marked_write, read_marker, removal_failure, remove_leftovers,
-        remove_unpublished, roll_forward, RemovalStep, TransactionKind,
+        contained_transaction, end_marked_write, install_in_place, read_marker, removal_failure,
+        remove_leftovers, remove_unpublished, RemovalStep, TransactionKind,
     },
 };
 use camino::Utf8Path;
+use provenance_macros::rule;
 use sha2::{Digest as _, Sha256};
 
 /// Completes the source edit that the marker names, and then removes the
@@ -55,8 +56,10 @@ fn recover_marked_source_edit(
         let transaction =
             contained_transaction(layout, TransactionKind::SourceEdit, &marker.transaction_dir)?;
         let replacement = read_replacement(&transaction, marker.after_digest)?;
-        let held = recover_target(layout, marker)?;
-        let current = require_known_target(layout, &held, marker)?;
+        let held = recover_target(layout, marker)
+            .map_err(|refusal| refuse_with_state(layout, &transaction, marker, refusal))?;
+        let current = require_known_target(layout, &held, marker)
+            .map_err(|refusal| refuse_with_state(layout, &transaction, marker, refusal))?;
         complete_state(layout, &transaction, marker)?;
         if current == marker.before_digest {
             install_replacement(layout, &held, marker, &replacement)?;
@@ -65,6 +68,25 @@ fn recover_marked_source_edit(
         crate::test_probes::at("source_edit_file_installed")?;
     }
     end_marked_write(layout, TransactionKind::SourceEdit, &marker.transaction_dir)
+}
+
+/// Gives the refusal for a target that a person changed, after the state
+/// install completes. The state does not depend on the working-tree file,
+/// so the recovery completes it in the direction of each recovery before
+/// `FileInstalled`: thus the refusal, which holds until a person acts on
+/// the target, never stands on a state that is installed in part. A failure
+/// of that install is the error, and the next entry tries it again.
+#[rule("rule_changed_source_refusal_keeps_a_whole_state")]
+fn refuse_with_state(
+    layout: &ProvenanceLayout,
+    transaction: &Utf8Path,
+    marker: &mut SourceEditMarker,
+    refusal: anyhow::Error,
+) -> anyhow::Error {
+    match complete_state(layout, transaction, marker) {
+        Ok(()) => refusal,
+        Err(error) => error,
+    }
 }
 
 fn read_replacement(transaction: &Utf8Path, expected: [u8; 32]) -> anyhow::Result<Vec<u8>> {
@@ -169,7 +191,7 @@ fn complete_state(
     marker: &mut SourceEditMarker,
 ) -> anyhow::Result<()> {
     if marker.phase == SourceEditPhase::Installing {
-        roll_forward(layout, transaction)?;
+        install_in_place(layout, transaction)?;
         marker.phase = SourceEditPhase::StateInstalled;
         write_source_edit_marker(layout, marker)?;
         crate::test_probes::at("source_edit_state_installed")?;

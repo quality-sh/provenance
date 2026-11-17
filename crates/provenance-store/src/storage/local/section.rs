@@ -40,10 +40,17 @@ impl LocalSectionLock {
         let lock = LockedPublicationFile::acquire(&self.layout.publication_lock_path())?;
         check()?;
         prepare_transaction_dirs(&self.layout)?;
-        recover_pending_source_edit(&self.layout)?;
-        recover_pending_publication(&self.layout)?;
+        recover_pending(&self.layout)?;
         Ok(lock)
     }
+}
+
+/// Completes the source edit and then the whole set that a marker names, and
+/// removes the data of each write that stopped before its marker. The caller
+/// holds the section lock.
+pub(super) fn recover_pending(layout: &ProvenanceLayout) -> anyhow::Result<()> {
+    recover_pending_source_edit(layout)?;
+    recover_pending_publication(layout)
 }
 
 impl SectionLock for LocalSectionLock {

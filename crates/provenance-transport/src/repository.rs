@@ -29,7 +29,9 @@ pub fn open(repo: &Utf8Path, scope: &str) -> anyhow::Result<StatementHost> {
 /// so its open error is the one to report.
 pub fn utf8_root(path: std::path::PathBuf, scope: &str) -> anyhow::Result<Utf8PathBuf> {
     Utf8PathBuf::from_path_buf(path).map_err(|path| match Repository::open(&path, scope) {
-        Err(error) => anyhow::Error::new(error),
+        Err(error) => error
+            .read_refusal()
+            .map_or_else(|| anyhow::Error::new(error), anyhow::Error::new),
         Ok(_) => anyhow::anyhow!("repository path {} is not UTF-8", path.display()),
     })
 }
@@ -74,9 +76,13 @@ impl RepoContext {
     }
 }
 
-/// The open failure in the shape the command refusals downcast: a missing
-/// graph keeps its marker and a gate failure keeps its cause.
+/// The open failure in the shape the command refusals downcast: a state
+/// file that a different process holds is the typed read refusal, a
+/// missing graph keeps its marker, and a gate failure keeps its cause.
 fn open_failure(error: OpenFailure) -> anyhow::Error {
+    if let Some(refusal) = error.read_refusal() {
+        return refusal.into();
+    }
     match error {
         OpenFailure::NotInitialized => provenance_store::layout::GraphNotInitialized.into(),
         OpenFailure::Io(error) => error,

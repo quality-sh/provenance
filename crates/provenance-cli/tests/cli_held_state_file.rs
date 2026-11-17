@@ -106,13 +106,15 @@ fn refused(repo: &Path, words: &[&str]) -> String {
 /// The test keeps the Message shard open with a share mode that lets other
 /// handles only read, as a program that locks a file it reads does. The
 /// write of a second Discussion succeeds, because its marker names all of
-/// its changes. A read cannot complete the install while the file is held,
-/// so it names the file and the next step. When the holder closes
-/// the file, the next read completes the write and shows the message one
-/// time. The read enters the section when it opens the repository, so the
-/// CLI gives the refusal as the text of an open failure.
+/// its changes. Each later command enters the section when it opens the
+/// repository, and the install cannot complete while the file is held: a
+/// JSON read gives the `state_file_in_use` object with the file below the
+/// repository, and the text of a command that opens the repository for its
+/// call names the same file. When the holder closes the file, the next read
+/// completes the write and shows the message one time.
 #[cfg(windows)]
 #[test]
+#[verifies("rule_held_record_file_refusal_names_the_file", examples)]
 fn a_read_names_the_state_file_that_a_holder_with_no_delete_sharing_keeps() {
     use std::os::windows::fs::OpenOptionsExt;
     const FILE_SHARE_READ: u32 = 0x1;
@@ -131,20 +133,26 @@ fn a_read_names_the_state_file_that_a_holder_with_no_delete_sharing_keeps() {
         .unwrap();
 
     let id = discuss(repo, "Second text");
-    let text = refused(repo, &["api", "/requirements/req_a"]);
+    let json = refused(repo, &["api", "/requirements/req_a", "--format", "json"]);
+    let text = refused(repo, &["materialize"]);
     drop(held);
 
-    let file = format!(".provenance\\state\\scopes\\default\\threads\\{shard}");
-    assert!(
-        text.starts_with("Error: a different process has the state file "),
-        "{text}"
+    let file = format!(".provenance/state/scopes/default/threads/{shard}");
+    let refusal: serde_json::Value = serde_json::from_str(json.trim_end()).unwrap();
+    assert_eq!(
+        refusal,
+        serde_json::json!({
+            "error": {"kind": "state_file_in_use", "file": file},
+            "meta": {}
+        })
     );
-    assert!(
-        text.contains(&format!(
-            "{file} open and does not let other processes replace it: close the file in that \
-             process, and then send the call again"
-        )),
-        "{text}"
+    assert_eq!(
+        text,
+        format!(
+            "Error: a different process has the state file {file} open and does not let other \
+             processes replace it: close the file in that process, and then send the call \
+             again\n"
+        )
     );
     let read = success(repo, &[&id, "discussion"]);
     assert_eq!(read.matches("Second text").count(), 1, "{read}");

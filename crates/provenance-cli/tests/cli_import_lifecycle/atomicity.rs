@@ -322,7 +322,7 @@ fn concurrent_first_imports_share_pristine_transaction_directory_setup() {
 
 #[cfg(unix)]
 #[test]
-fn import_keeps_an_external_file_symlink_and_does_not_read_its_target() {
+fn import_rejects_external_file_symlink_without_changing_live_state() {
     let dir = tempfile::tempdir().unwrap();
     let repo = dir.path().join("repo");
     init_repo(&repo, None);
@@ -333,9 +333,9 @@ fn import_keeps_an_external_file_symlink_and_does_not_read_its_target() {
     let input = dir.path().join("input.json");
     export_scope(&repo, &input).success();
 
-    // The import changes only the files of its records, so it does not
-    // open the link.
-    import_scope(&repo, &input).success();
+    import_scope(&repo, &input)
+        .failure()
+        .stderr(predicates::str::contains("unsupported state entry"));
 
     let metadata = std::fs::symlink_metadata(&link).unwrap();
     assert!(metadata.file_type().is_symlink());

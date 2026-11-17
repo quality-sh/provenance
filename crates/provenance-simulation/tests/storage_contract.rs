@@ -39,6 +39,10 @@ impl Harness for Simulated {
     fn break_key(&mut self, key: &str) {
         self.world.break_key(StateKey::new(key).unwrap());
     }
+
+    fn repair_key(&mut self, key: &str) {
+        self.world.repair_key(&StateKey::new(key).unwrap());
+    }
 }
 
 // No Rule: the store's tests verify the contract on the real adapters; this
@@ -59,7 +63,7 @@ fn the_simulated_storage_keeps_the_storage_contract() {
     contract::a_failed_one_key_set_lands_nothing(Simulated::default());
     contract::a_failed_per_key_set_leaves_a_landed_prefix(Simulated::default());
     contract::a_two_key_whole_set_lands_both_keys(Simulated::default());
-    contract::a_failed_whole_set_lands_no_key(Simulated::default());
+    contract::a_failed_whole_set_is_never_seen_in_part(Simulated::default());
     contract::an_empty_set_changes_nothing(Simulated::default());
     contract::an_empty_set_on_a_moved_base_is_refused(Simulated::default());
     contract::an_empty_set_lands_while_each_stored_key_is_broken(Simulated::default());

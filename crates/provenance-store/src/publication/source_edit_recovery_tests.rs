@@ -217,7 +217,10 @@ fn a_stopped_source_edit_leaves_no_transaction_after_the_next_section_entry() {
     }
 }
 
+/// The marker names the edit, so the entry completes the state before it
+/// refuses for the changed file.
 #[test]
+#[verifies("rule_changed_source_refusal_keeps_a_whole_state", examples)]
 fn recovery_refuses_third_file_bytes_without_overwriting_them() {
     let temp = fixture();
     let root_path = canonical_root(&temp);
@@ -238,7 +241,7 @@ fn recovery_refuses_third_file_bytes_without_overwriting_them() {
     );
     assert_eq!(
         std::fs::read(layout.state_dir().join("value")).unwrap(),
-        BEFORE
+        AFTER
     );
     assert!(layout.source_edit_marker_path().exists());
 }
