@@ -156,7 +156,7 @@ pub fn schema_input(
         .map(|name| cli_name(name))
         .collect::<Vec<_>>();
     let allowed = allowed.iter().map(String::as_str).collect::<Vec<_>>();
-    super::ensure_only_fields(matches, &allowed);
+    super::ensure_only_fields(matches, &allowed)?;
     let mut input = Map::new();
     for (field, declaration) in properties {
         if bound.contains(&field.as_str()) {

@@ -3,20 +3,17 @@
 //! A refusal from the local host reaches the CLI as a typed error. In text
 //! mode the error prints as before. In JSON mode the CLI prints one
 //! `{error,meta}` object with no `Error: ` prefix and puts the recovery hint
-//! in `error.hint`.
+//! in `error.hint`. An error of no type that the CLI knows gets the failure
+//! object that the MCP tools also give.
 
-use provenance_core::protocol::failure::OperationFailure;
-use provenance_core::protocol::read_failure::UnparsableStateFile;
 use provenance_porcelain::action::ActionError;
 use provenance_porcelain::get::ReadError;
 use serde_json::{json, Map, Value};
 
-pub use provenance_cli::refusal::HostRefusal;
+pub use provenance_cli::refusal::{CommandRefusal, HostRefusal};
 
-/// The `{error,meta}` object for an error that a JSON caller can parse, or
-/// `None` when the error is not a host refusal and has no state file that does
-/// not parse in its cause chain.
-pub fn json_refusal(error: &anyhow::Error) -> Option<Value> {
+/// The `{error,meta}` object of an error for a JSON caller.
+pub fn json_refusal(error: &anyhow::Error) -> Value {
     if let Some(refusal) = error.downcast_ref::<HostRefusal>() {
         let mut failure = refusal.failure.clone();
         if let Some(hint) = &refusal.hint {
@@ -24,24 +21,34 @@ pub fn json_refusal(error: &anyhow::Error) -> Option<Value> {
                 object.insert("hint".into(), json!(hint));
             }
         }
-        return Some(failure);
+        return failure;
     }
-    if let Some(failure) = error.downcast_ref::<OperationFailure>() {
-        let mut object = match serde_json::to_value(failure) {
-            Ok(Value::Object(object)) => object,
-            _ => Map::new(),
-        };
-        object.insert("message".into(), json!(failure.to_string()));
-        return Some(json!({"error": object, "meta": {}}));
+    if let Some(refusal) = error.downcast_ref::<CommandRefusal>() {
+        return json!({"error": refusal.failure, "meta": {}});
     }
     if let Some(read) = error.downcast_ref::<ReadError>() {
-        return Some(read.failure());
+        return read.failure();
     }
     if let Some(action) = error.downcast_ref::<ActionError>() {
-        return Some(envelope(action_error(action), &action.to_string()));
+        return envelope(action_error(action), &action.to_string());
     }
-    UnparsableStateFile::find(error.as_ref())
-        .map(|state| json!({"error": state.failure(), "meta": {}}))
+    json!({"error": provenance_transport::refusal::failure(error.as_ref()), "meta": {}})
+}
+
+/// A usage refusal of an input that the parser accepted. With `--format json` it
+/// is an `invalid_input` object; in text mode it is a usage error with exit code 2.
+pub fn usage(error: impl std::fmt::Display) -> anyhow::Error {
+    CommandRefusal::usage(error).into()
+}
+
+/// Exits as the parser does for a usage refusal: the text after `error: `,
+/// which ends with a newline, and exit code 2.
+pub fn exit_with_usage(refusal: &CommandRefusal) -> ! {
+    let mut text = refusal.text().to_owned();
+    if !text.ends_with('\n') {
+        text.push('\n');
+    }
+    clap::Error::raw(clap::error::ErrorKind::InvalidValue, text).exit()
 }
 
 /// Prints the refusal object as the only line on standard error, with no

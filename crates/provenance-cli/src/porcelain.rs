@@ -104,7 +104,18 @@ pub async fn dispatch_check(repo: &str, json: bool, input: CheckInput) -> anyhow
                 details.push(detail);
             }
         }
-        anyhow::bail!(details.join("; "));
+        let text = details.join("; ");
+        // A state file that does not parse keeps its typed failure, as a read gives it.
+        let state = report
+            .categories
+            .iter()
+            .flat_map(|category| &category.findings)
+            .filter_map(|finding| finding.detail.as_ref())
+            .find(|detail| detail["kind"] == "invalid_state_file");
+        return Err(match state {
+            Some(failure) => crate::refusal::CommandRefusal::new(text, failure.clone()).into(),
+            None => anyhow::anyhow!(text),
+        });
     }
     Ok(())
 }

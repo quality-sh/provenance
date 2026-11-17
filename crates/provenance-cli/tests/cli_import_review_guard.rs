@@ -19,6 +19,17 @@ const REVIEW_HISTORY_REFUSAL: &str = "Error: scope `default` holds a review subm
      scope and an export of it are not possible; read and change the Requirements, Rules and \
      other records of this scope with the routes that `provenance api --scope default` lists\n";
 
+/// The standard error of an export with `--format json` that refuses with the
+/// text refusal `text`: one object that holds the text as its message.
+fn json_refusal(text: &str) -> String {
+    let message = text.strip_prefix("Error: ").unwrap().trim_end();
+    let refusal = serde_json::json!({
+        "error": {"kind": "operation_failed", "message": message},
+        "meta": {},
+    });
+    format!("{refusal}\n")
+}
+
 #[test]
 #[verifies("rule_import_export_refuse_review_data", examples)]
 fn an_import_on_a_scope_with_a_requirement_review_record_is_refused_and_changes_no_file() {
@@ -57,7 +68,7 @@ fn an_export_of_a_scope_with_a_requirement_review_record_is_refused() {
 
     let refused = refusal(export(&repo));
 
-    assert_eq!(refused, (Some(1), REQUIREMENT_REVIEW_REFUSAL.to_owned()));
+    assert_eq!(refused, (Some(1), json_refusal(REQUIREMENT_REVIEW_REFUSAL)));
 }
 
 #[test]
@@ -92,7 +103,7 @@ fn an_export_of_a_scope_with_a_submission_and_a_review_record_names_the_submissi
 
     let refused = refusal(export(&repo));
 
-    assert_eq!(refused, (Some(1), REVIEW_HISTORY_REFUSAL.to_owned()));
+    assert_eq!(refused, (Some(1), json_refusal(REVIEW_HISTORY_REFUSAL)));
 }
 
 #[test]

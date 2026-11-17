@@ -18,12 +18,13 @@ async fn main() -> anyhow::Result<()> {
     let invocation = invocation::Invocation::parse(arguments)?;
     let json = invocation.json_output();
     match invocation.dispatch().await {
-        Ok(()) => Ok(()),
-        Err(error) => json
-            .then(|| catalog_cli::refusal::json_refusal(&error))
-            .flatten()
-            .map_or(Err(error), |refusal| {
-                catalog_cli::refusal::exit_with_json(&refusal)
-            }),
+        Err(error) if json => {
+            catalog_cli::refusal::exit_with_json(&catalog_cli::refusal::json_refusal(&error))
+        }
+        Err(error) => match error.downcast_ref::<catalog_cli::refusal::CommandRefusal>() {
+            Some(refusal) if refusal.usage => catalog_cli::refusal::exit_with_usage(refusal),
+            _ => Err(error),
+        },
+        result => result,
     }
 }
