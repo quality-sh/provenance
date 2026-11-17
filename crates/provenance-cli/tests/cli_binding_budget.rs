@@ -84,16 +84,25 @@ fn an_import_with_a_long_implementation_symbol_is_refused_and_writes_nothing() {
     std::fs::write(&seed, scope.to_string()).unwrap();
     let before = state_files(repo);
 
-    let refused = refusal(&cli(
+    let refused = cli(
         repo,
         &["import"],
         &[("--input", seed.to_str().unwrap()), ("--format", "json")],
-    ));
+    );
 
-    assert_eq!(refused["kind"], "record_too_large", "{refused}");
-    assert_eq!(refused["record_id"], "implementation_binding_one");
-    assert!(refused["bytes"].as_u64().unwrap() > 70_000);
-    assert_eq!(refused["limit"], BUDGET);
+    // The import command prints the native text of a refusal.
+    assert_eq!(refused.status.code(), Some(1));
+    assert_eq!(String::from_utf8_lossy(&refused.stdout), "");
+    let stderr = String::from_utf8(refused.stderr).unwrap();
+    let text = stderr
+        .trim_end()
+        .strip_prefix("Error: record `implementation_binding_one` uses ");
+    let (bytes, limit) = text
+        .unwrap()
+        .split_once(" bytes; the supported read allows at most ")
+        .unwrap();
+    assert!(bytes.parse::<usize>().unwrap() > 70_000, "{stderr}");
+    assert_eq!(limit, format!("{BUDGET} bytes"));
     assert_eq!(state_files(repo), before);
 }
 
