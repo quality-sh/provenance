@@ -27,7 +27,6 @@ use crate::{
     shards,
     state_store::StateStore,
 };
-use camino::Utf8Path;
 use provenance_core::review::{RecordVersion, SaveOutcome};
 use provenance_core::{NodeType, ScopeId, StableId};
 use provenance_macros::rule;
@@ -96,7 +95,7 @@ impl StateStore {
         };
         let committed = found::committed(history.as_ref(), &files, paths, kind, id).await?;
         let mut versions = committed.versions.clone();
-        let working = working.as_deref().and_then(|text| find(&path, text, id));
+        let working = working.as_deref().and_then(|text| find(text, id));
         if let Some(record) = working {
             if committed
                 .head
@@ -162,15 +161,12 @@ fn lineage(files: &[FileVersion], records: &[Option<Value>]) -> Vec<usize> {
     chain
 }
 
-/// The record with `id` in the text of the JSONL record file at `path`. A
-/// line that is not one JSON value, such as a committed conflict marker, or
-/// that holds a top-level member two times holds no record. The text can be
-/// of a past commit, so a record of another shape than the current record
-/// type is a record.
-fn find(path: &Utf8Path, text: &str, id: &StableId) -> Option<Value> {
+/// The record with `id` in the text of one JSONL record file. A line that
+/// [`committed_line_value`] does not read, such as a committed conflict marker
+/// or a line that holds a top-level member two times, holds no record.
+fn find(text: &str, id: &StableId) -> Option<Value> {
     numbered_lines(text.as_bytes())
-        .filter_map(|(number, line)| committed_line_value(path, number, line).ok())
-        .map(|(_, value)| value)
+        .filter_map(|(_, line)| committed_line_value(line))
         .find(|value| value.get("id").and_then(Value::as_str) == Some(id.as_str()))
 }
 

@@ -3,7 +3,7 @@
 //! A permission belongs to one staged store. A review writer gets a store
 //! with the added permission from `StateStore::permitting`, and a write
 //! through any other store carries none.
-use crate::jsonl::{numbered_lines, untyped_line_value};
+use crate::jsonl::numbered_lines;
 use crate::merge::ShardFamily;
 use crate::state_store::StateStore;
 use camino::{Utf8Path, Utf8PathBuf};
@@ -139,6 +139,9 @@ fn rows(store: &StateStore, path: &Utf8Path) -> anyhow::Result<Vec<Value>> {
         .collect()
 }
 
+/// The ids of the records of `kind` with a submitted review in the proposal
+/// cards of the scope of `path`. Each line that is not blank goes through
+/// the line reader of the proposal card file.
 fn submitted_ids(
     store: &StateStore,
     path: &Utf8Path,
@@ -151,14 +154,13 @@ fn submitted_ids(
     let Some(text) = store.state_text(&cards)? else {
         return Ok(std::collections::BTreeSet::new());
     };
+    let read_line = ShardFamily::for_shard_path(&cards).line_reader();
     let mut ids = std::collections::BTreeSet::new();
     for (number, line) in numbered_lines(text.as_bytes()) {
         if line.trim_ascii().is_empty() {
             continue;
         }
-        // The file also holds frozen legacy proposals that are not of the
-        // proposal card type, so its lines have no known record type.
-        let (_, proposal) = untyped_line_value(&cards, number, line)?;
+        let (_, proposal) = read_line(&cards, number, line)?;
         let target = &proposal["traceability"]["target"];
         if proposal["proposal_type"] == "record_revision"
             && target["artifact_type"] == kind.as_str()

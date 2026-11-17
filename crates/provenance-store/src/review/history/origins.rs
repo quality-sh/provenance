@@ -1,12 +1,9 @@
 //! Assigns an outcome to the first record version that contains it. A
-//! committed Discussion line that is not one Discussion, or that holds a
-//! top-level member two times, holds no outcome.
+//! committed Discussion line that does not parse holds no outcome.
 
 use super::texts::each_text;
 use super::versions::FileVersions;
 use super::VersionedRecord;
-use crate::jsonl::{committed_line_value, numbered_lines};
-use camino::Utf8Path;
 use provenance_core::{
     threads::{Discussion, DiscussionOrigin},
     NodeType, StableId,
@@ -33,12 +30,10 @@ pub(super) async fn committed(
     let commits = commits.iter().map(String::as_str).collect::<Vec<_>>();
     let mut versions = versions.iter_mut();
     each_text(history, path, &commits, |text| {
-        let text = text.unwrap_or_default();
-        let discussions = numbered_lines(text.as_bytes())
-            .filter_map(|(number, line)| {
-                let (text, _) = committed_line_value(Utf8Path::new(path), number, line).ok()?;
-                serde_json::from_str::<Discussion>(text).ok()
-            })
+        let discussions = text
+            .unwrap_or_default()
+            .lines()
+            .filter_map(|line| serde_json::from_str::<Discussion>(line).ok())
             .collect();
         if let Some(version) = versions.next() {
             assign(discussions, kind, id, seen, version);

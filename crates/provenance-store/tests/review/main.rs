@@ -40,3 +40,5 @@ mod review_revision_kernel;
 mod review_saves;
 #[path = "../review_validation.rs"]
 mod review_validation;
+#[path = "../write_permission_stored_lines.rs"]
+mod write_permission_stored_lines;
