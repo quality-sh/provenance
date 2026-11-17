@@ -191,6 +191,7 @@ async fn legacy_message_lists_paginate_and_refuse_changed_limits() {
                 node_id: sid("req_shared"),
             },
             role: MessageRole::User,
+            actor: "agent".into(),
             body: "Legacy one".into(),
         })
         .unwrap();
@@ -202,6 +203,7 @@ async fn legacy_message_lists_paginate_and_refuse_changed_limits() {
                 node_id: sid("req_shared"),
             },
             role: MessageRole::Assistant,
+            actor: "agent".into(),
             body: "Legacy two".into(),
         })
         .unwrap();

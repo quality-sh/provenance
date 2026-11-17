@@ -78,6 +78,7 @@ fn message(scope: &str, id: &str, thread_id: &str) -> Value {
         "id": id,
         "thread_id": thread_id,
         "role": "user",
+        "actor": "agent",
         "body": "A message",
         "created_at": 1,
     })

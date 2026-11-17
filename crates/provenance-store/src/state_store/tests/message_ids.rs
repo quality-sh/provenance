@@ -1,4 +1,5 @@
 use super::initialized_store;
+use crate::state_store::MessageWrite;
 use provenance_core::{MessageRole, StableId};
 use provenance_macros::verifies;
 
@@ -24,6 +25,7 @@ fn independent_stores_write_distinct_uuid_messages_at_the_write_clock() {
                     node_id: StableId::new("req_overtime").unwrap(),
                 },
                 role: MessageRole::User,
+                actor: "agent".into(),
                 body: body.into(),
             })
             .unwrap()
@@ -112,6 +114,7 @@ fn posted_store() -> (
                 node_id: StableId::new("req_overtime").unwrap(),
             },
             role: MessageRole::User,
+            actor: "agent".into(),
             body: "first".into(),
         })
         .unwrap()
@@ -134,8 +137,11 @@ fn duplicate_message_rows_name_both_lines_and_refuse_a_write() {
             .append_discussion_message(
                 &scope,
                 &first.thread_id,
-                MessageRole::User,
-                "refused".into(),
+                MessageWrite {
+                    role: MessageRole::User,
+                    actor: "agent".into(),
+                    body: "refused".into(),
+                },
             )
             .unwrap_err(),
     ] {

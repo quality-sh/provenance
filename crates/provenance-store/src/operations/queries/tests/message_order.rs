@@ -38,7 +38,7 @@ fn legacy_messages(store: &StateStore, messages: &[(&str, i64)]) {
         append_record(
             &path,
             &json!({"scope_id": "default", "id": id, "thread_id": "thread_edge",
-                "role": "user", "body": format!("Message {id}"), "created_at": created_at}),
+                "role": "user", "actor": "agent", "body": format!("Message {id}"), "created_at": created_at}),
         );
     }
 }

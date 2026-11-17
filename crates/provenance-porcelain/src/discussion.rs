@@ -370,13 +370,14 @@ pub fn render_readable(outcome: &DiscussionOutcome) -> String {
             )];
             for entry in &result.entries {
                 lines.push(format!(
-                    "- {} parent={} {} status={} version={} truncated={}\n  {}",
+                    "- {} parent={} {} status={} version={} truncated={} actor={}\n  {}",
                     entry.discussion_id.as_str(),
                     entry.parent.node_type.as_str(),
                     entry.parent.node_id.as_str(),
                     status_word(entry.status),
                     entry.version,
                     entry.excerpt_truncated,
+                    entry.actor,
                     entry.opening_excerpt
                 ));
             }
@@ -405,9 +406,10 @@ pub fn render_readable(outcome: &DiscussionOutcome) -> String {
             )];
             for message in &result.messages.entries {
                 lines.push(format!(
-                    "- message {} role={:?}\n  {}",
+                    "- message {} role={:?} actor={}\n  {}",
                     message.id.as_str(),
                     message.role,
+                    message.actor,
                     message.body
                 ));
             }
