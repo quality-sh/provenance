@@ -14,9 +14,9 @@ fn statesman_marker_in_a_source_file_gives_no_binding() {
         "// @statesman rule: SCHADS-PAY-001\nfn pays_overtime() {}\n",
     );
 
-    assert!(scan.annotations.is_empty());
-    assert!(scan.bindings.is_empty());
-    assert!(scan.warnings.is_empty());
+    assert_eq!(scan.annotations.len(), 0);
+    assert_eq!(scan.bindings.len(), 0);
+    assert_eq!(scan.warnings.len(), 0);
 }
 
 /// The same line with the `@provenance` marker binds the function.
@@ -35,5 +35,5 @@ fn provenance_marker_in_a_source_file_gives_an_annotation() {
         scan.annotations[0].function_name.as_deref(),
         Some("pays_overtime")
     );
-    assert!(scan.warnings.is_empty());
+    assert_eq!(scan.warnings.len(), 0);
 }
