@@ -229,6 +229,7 @@ fn read_change_list(transaction: &Utf8Path) -> anyhow::Result<ChangeList> {
 /// systems, the state directory holds a link or a special entry, a part of
 /// the path of the key is not a directory, or the live entry of the key is
 /// not a regular file.
+#[rule("rule_whole_set_refuses_a_link_in_the_state_directory")]
 fn ensure_installable(
     live: &ProvenanceLayout,
     transaction: &Utf8Path,
