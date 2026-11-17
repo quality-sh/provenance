@@ -37,7 +37,7 @@ fn reserved_rows() -> (serde_json::Value, serde_json::Value) {
     });
     let message = json!({
         "scope_id": "imported", "id": "api", "thread_id": "answer",
-        "role": "user", "body": "An earlier note.", "created_at": 1,
+        "role": "user", "actor": "agent", "body": "An earlier note.", "created_at": 1,
     });
     (thread, message)
 }

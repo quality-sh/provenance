@@ -184,7 +184,7 @@ async fn a_page_of_legacy_threads_past_the_bound_is_the_page_budget_refusal() {
         append_record(
             &messages,
             &json!({"scope_id": "default", "id": format!("msg_legacy_{i:03}"),
-                "thread_id": thread, "role": "user", "body": "Legacy message", "created_at": i}),
+                "thread_id": thread, "role": "user", "actor": "agent", "body": "Legacy message", "created_at": i}),
         );
     }
     let root = root_of(&dir);
