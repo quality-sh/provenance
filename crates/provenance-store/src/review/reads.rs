@@ -1,10 +1,11 @@
-use super::history::index::{self, Made};
-use super::history::{evidence_page, VersionedRecord};
+use super::history::index::RecordIndex;
+use super::history::{evidence_page, Indexing, VersionedRecord};
 use crate::operations::read_policy::ReadPolicy;
 use crate::operations::reader::{
     self, check_limit, Cursor, Live, Position, ReadContext, PAGE_BYTES,
 };
 use crate::repository::Repository;
+use crate::write_error::{failure_cause, in_repository, native};
 use provenance_core::protocol::{read_failure::ReadFailure, Stamped};
 use provenance_core::review::{
     EvidencePage, EvidenceQuery, RecordVersion, ReviewHistoryPage, ReviewHistoryQuery,
@@ -14,12 +15,17 @@ use provenance_macros::rule;
 use serde_json::Value;
 use std::sync::{Arc, Mutex, PoisonError};
 
-/// The index rows that one history read made, kept after the read.
-type Slot = Arc<Mutex<Made>>;
+/// The index of the record file that one history read used, kept after
+/// the read with the rows that the read made.
+type Slot = Arc<Mutex<Option<RecordIndex>>>;
 
 /// Runs one history read as [`reader::answer`] does, then keeps the index
 /// rows that it made in the read database, also when the read failed. The
 /// read transaction is closed by then, so the write does not wait on it.
+///
+/// The write is best effort: when it fails, the read gives its own answer
+/// or failure. A refusal while more versions wait then says that the index
+/// could not be written, so a repeat does not continue.
 async fn indexed<R: Send>(
     repository: &Repository,
     policy: ReadPolicy,
@@ -28,11 +34,38 @@ async fn indexed<R: Send>(
     let slot = Slot::default();
     let kept = slot.clone();
     let answer = reader::answer(repository, policy, move |ctx| run(ctx, kept)).await;
-    let made = std::mem::take(&mut *slot.lock().unwrap_or_else(PoisonError::into_inner));
-    if !made.commits.is_empty() {
-        index::save(repository.read_database()?, made).await?;
+    let index = slot.lock().unwrap_or_else(PoisonError::into_inner).take();
+    let Some(index) = index else {
+        return answer;
+    };
+    let saved = match repository.read_database() {
+        Ok(database) => index.save(database).await,
+        Err(error) => Err(error),
+    };
+    match (answer, saved) {
+        (Err(refusal), Err(failed)) => Err(unwritten(repository, refusal, failed)),
+        (answer, _) => answer,
     }
-    answer
+}
+
+/// The failure of a read whose index write failed with `failed`. A refusal
+/// while more versions wait gives the cause of the write, with each path
+/// relative to the repository; any other failure stays as it is.
+fn unwritten(
+    repository: &Repository,
+    refusal: anyhow::Error,
+    failed: anyhow::Error,
+) -> anyhow::Error {
+    let Some(indexing) = refusal.downcast_ref::<Indexing>() else {
+        return refusal;
+    };
+    let located = in_repository(repository.layout().root().as_std_path(), failed);
+    let cause = failure_cause(&located, native(&located));
+    anyhow::Error::from(ReadFailure::PageBudgetExceeded).context(format!(
+        "versions of {} that are not in the index of record changes: {}; the history read could \
+         not write the index, so a repeat does not continue: {cause}",
+        indexing.path, indexing.waiting
+    ))
 }
 
 pub async fn read_history(
@@ -120,8 +153,8 @@ pub async fn read_history_entry(
 }
 
 /// Reads the versions of one record from the committed file versions, the
-/// index of its record file and the saved working copy. The index rows
-/// that the read makes go to `slot`.
+/// index of its record file and the saved working copy. The index, with
+/// the rows that the read made, goes to `slot`.
 async fn versions(
     ctx: &ReadContext,
     kind: NodeType,
@@ -134,21 +167,20 @@ async fn versions(
     let store = ctx.live(Live::Canonical).store();
     let scope = ctx.snapshot().scope().clone();
     let records = store.history_paths(&scope, kind)?.records;
+    let path = records.clone();
     let files = on_host(ctx.live(Live::Canonical).store(), move |store| async move {
-        store.file_versions_of(&records).await
+        store.file_versions_of(&path).await
     })
     .await?;
-    let records = store.history_paths(&scope, kind)?.records;
-    let mut known = index::load(ctx.snapshot(), &records, &id, &files).await?;
-    let (versions, made) = on_host(store, move |store| async move {
-        let mut made = Made::default();
+    let mut index = RecordIndex::load(ctx.snapshot(), &records, &id, &files).await?;
+    let (versions, index) = on_host(store, move |store| async move {
         let versions = store
-            .read_record_versions(&scope, kind, &id, &files, &mut known, &mut made)
+            .read_record_versions(&scope, kind, &id, &files, &mut index)
             .await;
-        Ok((versions, made))
+        Ok((versions, index))
     })
     .await?;
-    *slot.lock().unwrap_or_else(PoisonError::into_inner) = made;
+    *slot.lock().unwrap_or_else(PoisonError::into_inner) = Some(index);
     versions
 }
 
@@ -225,7 +257,11 @@ async fn record_of(
     }
     let store = ctx.live(Live::Canonical).store();
     let records = store.history_paths(ctx.snapshot().scope(), kind)?.records;
-    let commit = versioned.version.commit.clone().unwrap_or_default();
+    let commit = versioned
+        .version
+        .commit
+        .clone()
+        .ok_or_else(|| crate::refusal::fault!("a committed record version names no commit"))?;
     let (at, id) = (commit.clone(), id.clone());
     on_host(store, move |store| async move {
         store.record_at(&records, &at, &id).await

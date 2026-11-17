@@ -78,6 +78,14 @@ pub trait FileVersions: Send + Sync + Debug {
     /// history does not change. A history read keeps what it found at each
     /// listed commit in the index of the read database, so a new read of an
     /// indexed file reads no text of it.
+    ///
+    /// So a commit id names one text of each path for the life of the read
+    /// database: the history read keeps what it found at a commit, and reads
+    /// the commit again only when its listed parents change. An adapter must
+    /// not give an id that it used for one text to a different text, as a
+    /// sequence number or an id used again after a rewrite of the history
+    /// does. A Git commit id names its tree and its parents, so it keeps
+    /// this.
     fn versions<'a>(
         &'a self,
         path: &'a str,

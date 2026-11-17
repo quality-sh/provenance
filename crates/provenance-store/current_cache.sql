@@ -205,3 +205,4 @@ CREATE TABLE record_history_changes (
     digest TEXT, revision TEXT, fields TEXT, outcomes TEXT,
     PRIMARY KEY (path, record_id, commit_id)
 );
+CREATE INDEX idx_record_history_changes_commit ON record_history_changes(path, commit_id);

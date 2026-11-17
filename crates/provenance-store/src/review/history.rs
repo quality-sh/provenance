@@ -27,7 +27,7 @@ use crate::{
     shards,
     state_store::StateStore,
 };
-use index::{Held, Known, Made};
+use index::{Held, RecordIndex};
 use provenance_core::protocol::read_failure::ReadFailure;
 use provenance_core::review::{RecordVersion, SaveOutcome};
 use provenance_core::{NodeType, ScopeId, StableId};
@@ -111,8 +111,8 @@ impl StateStore {
     /// does not parse adds no version.
     ///
     /// The committed versions come from the listed versions `files` of the
-    /// record file and from the index `known` of that file. The rows that
-    /// the read adds to the index go to `made`, also when the read fails.
+    /// record file and from the index of that file. The rows that the read
+    /// adds stay in `index`, also when the read fails.
     #[rule("rule_record_history_reads_git")]
     pub(super) async fn read_record_versions(
         &self,
@@ -120,8 +120,7 @@ impl StateStore {
         kind: NodeType,
         id: &StableId,
         files: &[FileVersion],
-        known: &mut Known,
-        made: &mut Made,
+        index: &mut RecordIndex,
     ) -> anyhow::Result<Vec<VersionedRecord>> {
         let paths = self.history_paths(scope, kind)?;
         let path = shards::path_for(&self.layout, scope, kind);
@@ -133,8 +132,7 @@ impl StateStore {
             records: &paths.records,
             discussions: &paths.discussions,
         };
-        let committed =
-            found::committed(history.as_ref(), files, found, kind, id, known, made).await?;
+        let committed = found::committed(history.as_ref(), files, found, kind, id, index).await?;
         let mut versions = committed.versions;
         let working = working.as_deref().and_then(|text| find(text, id));
         if let Some(record) = working {
@@ -171,13 +169,42 @@ impl StateStore {
 }
 
 /// Refuses with the page budget refusal a read of a record file with more
-/// versions to index than one history read indexes.
+/// versions to index than one history read indexes. The refusal says how
+/// many versions of the file at `path` the read indexed and how many wait.
 #[rule("rule_history_reads_bound_file_versions")]
-fn bound_file_versions(waiting: usize) -> anyhow::Result<()> {
+fn bound_file_versions(path: &str, added: usize, waiting: usize) -> anyhow::Result<()> {
     if waiting > HISTORY_FILE_VERSIONS {
-        return Err(ReadFailure::PageBudgetExceeded.into());
+        return Err(
+            anyhow::Error::from(ReadFailure::PageBudgetExceeded).context(Indexing {
+                path: path.to_owned(),
+                added,
+                waiting,
+            }),
+        );
     }
     Ok(())
+}
+
+/// The cause of a page budget refusal of a history read that put versions
+/// in the index while more wait: a repeat of the read continues.
+#[derive(Debug)]
+pub(super) struct Indexing {
+    pub(super) path: String,
+    pub(super) added: usize,
+    pub(super) waiting: usize,
+}
+
+impl std::fmt::Display for Indexing {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "the history read put {} versions of {} in the index of record changes; versions \
+             that wait: {}; a repeat of the read continues",
+            self.added,
+            self.path,
+            self.waiting - self.added,
+        )
+    }
 }
 
 /// The indexes of the commits that changed the record at `HEAD`, oldest
