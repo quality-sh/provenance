@@ -11,8 +11,8 @@ use serde::Deserialize;
 pub struct WriteDiscussionRequest {
     pub scope_id: ScopeId,
     pub parent: ThreadParent,
-    /// The actor of the write. A status change must give an actor. A start that gives no
-    /// actor records the actor `authoring`, and a reply needs no actor.
+    /// The actor of the write. A status change must give an actor. A start or a reply that
+    /// gives no actor records the actor `authoring` on its Message.
     #[serde(default)]
     pub actor: ActorInput,
     pub declared_by: Option<String>,

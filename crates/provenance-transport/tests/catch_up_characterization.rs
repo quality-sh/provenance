@@ -67,8 +67,50 @@ async fn reads_after_each_write_equal_a_full_rebuild() {
         transcript.push(json!({"step": step, "answers": answers}));
     }
     let text = serde_json::to_string_pretty(&transcript).unwrap();
-    assert_eq!(fingerprint(&transcript[..15]), "4b95c406da338453", "{text}");
-    assert_eq!(fingerprint(&transcript), "998f679fd5df7554", "{text}");
+    let mut actors = Vec::new();
+    let without_actors = message_actors_removed(&json!(transcript), &mut actors);
+    let without_actors = without_actors.as_array().unwrap();
+    assert_eq!(
+        fingerprint(&without_actors[..15]),
+        "4b95c406da338453",
+        "{text}"
+    );
+    assert_eq!(fingerprint(without_actors), "998f679fd5df7554", "{text}");
+    actors.sort();
+    actors.dedup();
+    let expected = [
+        ("Keep this record.", "reviewer"),
+        ("Name the scope.", "reviewer"),
+    ];
+    let expected = expected.map(|(body, actor)| (body.to_owned(), actor.to_owned()));
+    assert_eq!(actors, expected, "{text}");
+}
+
+/// `value` with the field `actor` removed from each Message, and the body and the actor of
+/// each Message that had one put in `actors`.
+fn message_actors_removed(value: &Value, actors: &mut Vec<(String, String)>) -> Value {
+    match value {
+        Value::Array(items) => Value::Array(
+            items
+                .iter()
+                .map(|item| message_actors_removed(item, actors))
+                .collect(),
+        ),
+        Value::Object(fields) => {
+            let message = fields.contains_key("thread_id") && fields.contains_key("role");
+            let mut out = serde_json::Map::new();
+            for (key, field) in fields {
+                if message && key == "actor" {
+                    let body = fields["body"].as_str().unwrap_or_default().to_owned();
+                    actors.push((body, field.as_str().unwrap_or_default().to_owned()));
+                } else {
+                    out.insert(key.clone(), message_actors_removed(field, actors));
+                }
+            }
+            Value::Object(out)
+        }
+        other => other.clone(),
+    }
 }
 
 /// A hand edit that each validator refuses, and the answer the next read

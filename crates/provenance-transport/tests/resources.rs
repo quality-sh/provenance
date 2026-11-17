@@ -187,6 +187,7 @@ async fn legacy_message_member_requires_the_addressed_parent() {
                 node_id: StableId::new("source_shared").unwrap(),
             },
             role: MessageRole::User,
+            actor: "agent".into(),
             body: "Owned by the source.".into(),
         })
         .unwrap();

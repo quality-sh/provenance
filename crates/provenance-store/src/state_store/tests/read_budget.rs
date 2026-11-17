@@ -8,8 +8,8 @@ use crate::operations::catalog::{
 };
 use crate::operations::read_policy::ReadPolicy;
 use crate::state_store::{
-    read_budget::ReadBudget, CreateResolutionInput, CreateSourceInput, PostMessageInput,
-    SourceClearField, UpdateSourceInput,
+    read_budget::ReadBudget, CreateResolutionInput, CreateSourceInput, MessageWrite,
+    PostMessageInput, SourceClearField, UpdateSourceInput,
 };
 use crate::write_error::{SourceFailure, WriteError, WriteFailure};
 use provenance_core::model::ProjectionRow;
@@ -263,13 +263,22 @@ async fn oversized_update_is_refused_and_keeps_the_published_record() {
     assert_eq!(member["result"]["id"], OVERSIZED_ID);
 }
 
+/// A user Message with the actor `agent` and the body `body`.
+fn write(body: String) -> MessageWrite {
+    MessageWrite {
+        role: MessageRole::User,
+        actor: "agent".into(),
+        body,
+    }
+}
+
 #[tokio::test]
 #[verifies("rule_accepted_writes_stay_readable", examples)]
 async fn oversized_message_write_is_refused_and_persists_nothing() {
     let (_dir, store, scope) = initialized_store();
     let thread = StableId::new("thread_x").unwrap();
     let error = store
-        .append_discussion_message(&scope, &thread, MessageRole::User, "x".repeat(READ_BUDGET))
+        .append_discussion_message(&scope, &thread, write("x".repeat(READ_BUDGET)))
         .expect_err("a message above the message read budget is refused");
     let failure = error
         .downcast_ref::<SourceFailure>()
@@ -287,6 +296,7 @@ async fn oversized_message_write_is_refused_and_persists_nothing() {
         id: StableId::new(format!("msg_{}", uuid::Uuid::new_v4())).unwrap(),
         thread_id: thread,
         role: MessageRole::User,
+        actor: "agent".into(),
         body: String::new(),
         created_at: i64::try_from(
             time::OffsetDateTime::now_utc().unix_timestamp_nanos() / 1_000_000,
@@ -298,8 +308,7 @@ async fn oversized_message_write_is_refused_and_persists_nothing() {
         .append_discussion_message(
             &scope,
             &StableId::new("thread_x").unwrap(),
-            MessageRole::User,
-            "x".repeat(crate::cache::read::page::RECORD_BYTES - base),
+            write("x".repeat(crate::cache::read::page::RECORD_BYTES - base)),
         )
         .expect("a message at the message read budget is accepted");
     assert_eq!(
@@ -320,6 +329,7 @@ fn oversized_post_refuses_before_creating_or_archiving_threads() {
         scope_id: scope.clone(),
         parent: parent.clone(),
         role: MessageRole::User,
+        actor: "agent".into(),
         body,
     };
     let error = store

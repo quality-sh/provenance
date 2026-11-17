@@ -324,6 +324,7 @@ fn every_discussion_message_member_schema_accepts_one_message() {
             "id": "message_a",
             "thread_id": "thread_a",
             "role": "user",
+            "actor": "agent",
             "body": "One message.",
             "created_at": 1
         },

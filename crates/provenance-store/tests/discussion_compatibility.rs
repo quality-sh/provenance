@@ -10,7 +10,7 @@ fn legacy_partial_origins_keep_their_existing_crud_shapes() {
         .post_thread_message(
             serde_json::from_value(json!({
                 "scope_id":"default", "parent":{"node_type":"requirement","node_id":"req_a"},
-                "role":"user", "body":"Legacy concern"
+                "role":"user", "actor":"agent", "body":"Legacy concern"
             }))
             .unwrap(),
         )
@@ -51,7 +51,7 @@ fn a_message_read_failure_prevents_legacy_thread_publication() {
         .post_thread_message(
             serde_json::from_value(json!({
                 "scope_id":"default", "parent":{"node_type":"requirement","node_id":"req_a"},
-                "role":"user", "body":"Legacy concern"
+                "role":"user", "actor":"agent", "body":"Legacy concern"
             }))
             .unwrap(),
         )

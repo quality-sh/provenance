@@ -15,6 +15,7 @@ fn list_messages_reads_all_month_shards() {
         id: StableId::new("msg_july").unwrap(),
         thread_id: StableId::new("thread_source_source_schads").unwrap(),
         role: MessageRole::User,
+        actor: "agent".into(),
         body: "July message".into(),
         created_at: 1,
     };
@@ -23,6 +24,7 @@ fn list_messages_reads_all_month_shards() {
         id: StableId::new("msg_august").unwrap(),
         thread_id: StableId::new("thread_source_source_schads").unwrap(),
         role: MessageRole::Assistant,
+        actor: "agent".into(),
         body: "August message".into(),
         created_at: 2,
     };
@@ -163,6 +165,7 @@ fn post(store: &StateStore, scope: &ScopeId, parent: &ThreadParent) -> Thread {
             scope_id: scope.clone(),
             parent: parent.clone(),
             role: MessageRole::User,
+            actor: "agent".into(),
             body: "posted".into(),
         })
         .unwrap()

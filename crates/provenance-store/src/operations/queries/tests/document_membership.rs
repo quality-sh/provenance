@@ -59,7 +59,7 @@ async fn discussion_pages_preserve_independent_threads_and_logical_order() {
         append_record(
             &path,
             &json!({"scope_id":"default","id":format!("msg_{i:03}"),
-            "thread_id":if i%2==0 {"thread_later"} else {"thread_earlier"},"role":"user", "body":"Saved discussion",
+            "thread_id":if i%2==0 {"thread_later"} else {"thread_earlier"},"role":"user", "actor":"agent", "body":"Saved discussion",
             "created_at":i/2}),
         );
     }
@@ -83,7 +83,7 @@ async fn discussion_pages_preserve_independent_threads_and_logical_order() {
     append_record(
         &path,
         &json!({"scope_id":"default","id":"msg_new",
-        "thread_id":"thread_earlier","role":"user","body":"New revision","created_at":200}),
+        "thread_id":"thread_earlier","role":"user","actor":"agent","body":"New revision","created_at":200}),
     );
     assert!(page(&root, "req_overtime", first["next_cursor"].clone())
         .await

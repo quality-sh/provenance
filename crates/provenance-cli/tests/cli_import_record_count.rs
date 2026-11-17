@@ -153,6 +153,7 @@ fn document_with_each_family() -> Value {
         "id": "message_a",
         "thread_id": "thread_a",
         "role": "user",
+        "actor": "agent",
         "body": "The policy asks for the record.",
         "created_at": 1
     }]);
