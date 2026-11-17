@@ -123,6 +123,7 @@ fn decide_with_a_message(repository: &Repository, task: &Task) -> anyhow::Result
                 node_id: stable(FIRST_REQUIREMENT),
             },
             role: MessageRole::User,
+            actor: "agent".into(),
             body: task.body(),
         })?;
         Ok(Effect::Decided {

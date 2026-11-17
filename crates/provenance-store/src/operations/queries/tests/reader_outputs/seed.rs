@@ -32,8 +32,8 @@ pub(super) async fn seed(pool: &SqlitePool) {
     run(pool, thread, &["thread_a", "req_top", "resolved", "20"]).await;
     run(pool, thread, &["thread_c", "req_left", "archived", "10"]).await;
     let message =
-        "INSERT INTO messages (scope_id, id, thread_id, role, body, created_at, payload) \
-                   VALUES ('default', ?, ?, ?, ?, ?, '{}')";
+        "INSERT INTO messages (scope_id, id, thread_id, role, actor, body, created_at, payload) \
+                   VALUES ('default', ?, ?, ?, 'agent', ?, ?, '{}')";
     run(
         pool,
         message,

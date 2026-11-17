@@ -110,6 +110,39 @@ fn page_rejection_stores_the_reason_and_keeps_the_resolution() {
     );
 }
 
+/// The body of a GET of `path` on the review host.
+fn get(host: &Host, path: &str) -> Value {
+    let result = request(host, "GET", path, true).call().unwrap();
+    serde_json::from_str(&result.into_string().unwrap()).unwrap()
+}
+
+#[test]
+#[verifies("rule_message_records_its_actor", examples)]
+fn the_feedback_message_of_a_decision_records_the_actor_of_the_decision() {
+    let repo = repository_with_actors(&["reviewer"]);
+    create_resolution(repo.path(), Some("shaping_agent"));
+    let host = start(repo.path());
+    let proposal = pending(&host);
+    let path = format!("/resolutions/res_reject/submissions/{proposal}/decide");
+    let (status, result) = post(&host, &path, &rejection());
+    assert_eq!(status, 200, "{result}");
+
+    let discussions = get(&host, "/resolutions/res_reject/discussions");
+    let discussion_id = discussions["data"]["items"][0]["discussion"]["discussion_id"]
+        .as_str()
+        .unwrap();
+    let path = format!("/resolutions/res_reject/discussions/{discussion_id}/messages");
+    let messages = get(&host, &path)["data"]["items"].clone();
+    let shown = messages
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|message| (message["body"].clone(), message["actor"].clone()))
+        .collect::<Vec<_>>();
+    let body = json!("The result needs a clear condition.");
+    assert_eq!(shown, vec![(body, json!("reviewer"))]);
+}
+
 #[test]
 /// Implementation aid: an explicit wrong owner must leave the decision and feedback unwritten.
 fn wrong_feedback_owner_leaves_the_submission_pending() {

@@ -53,6 +53,8 @@ pub struct DiscussionSummary {
     pub version: u64,
     pub opening_excerpt: String,
     pub excerpt_truncated: bool,
+    /// The actor of the Discussion, which is also the actor of its root Message.
+    pub actor: String,
 }
 
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]

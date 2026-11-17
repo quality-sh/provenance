@@ -295,11 +295,11 @@ fn check_accepts_origin_message_in_non_default_month_shard() {
     );
     write_jsonl(
         &state.join("scopes/default/threads/2026-07.jsonl"),
-        serde_json::json!({"scope_id":"default","id":"msg_july","thread_id":"thread_source_july","role":"user","body":"July policy discussion","created_at":1}).to_string(),
+        serde_json::json!({"scope_id":"default","id":"msg_july","thread_id":"thread_source_july","role":"user","actor":"agent","body":"July policy discussion","created_at":1}).to_string(),
     );
     write_jsonl(
         &state.join("scopes/default/threads/2026-08.jsonl"),
-        serde_json::json!({"scope_id":"default","id":"msg_august","thread_id":"thread_source_august","role":"user","body":"August policy discussion","created_at":2}).to_string(),
+        serde_json::json!({"scope_id":"default","id":"msg_august","thread_id":"thread_source_august","role":"user","actor":"agent","body":"August policy discussion","created_at":2}).to_string(),
     );
 
     provenance(dir.path())

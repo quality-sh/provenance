@@ -119,7 +119,7 @@ async fn a_second_month_message_shard_is_covered_by_the_sweep() {
         format!(
             "{}\n",
             serde_json::json!({"scope_id": scope.as_str(),
-                "id": "message_late", "thread_id": "thread_a", "role": "user",
+                "id": "message_late", "thread_id": "thread_a", "role": "user", "actor": "agent",
                 "body": "Late month", "created_at": 2})
         ),
     )
