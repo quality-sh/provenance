@@ -161,14 +161,6 @@ async fn pages(snapshot: &ReadSnapshot, lines: &mut Vec<String>) {
         rules.page_record("rule_overtime_001").await,
     ));
     lines.push(line(
-        "rule resource_record",
-        rules.resource_record("rule_penalty_001").await,
-    ));
-    lines.push(line(
-        "rule resource_record absent",
-        rules.resource_record("none").await,
-    ));
-    lines.push(line(
         "rule page_ids",
         rules.page_ids("", 3, false, None).await,
     ));

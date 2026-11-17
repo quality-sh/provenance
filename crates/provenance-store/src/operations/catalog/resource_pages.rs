@@ -126,7 +126,7 @@ async fn projection_page<K: ProjectionRow>(
         .await?;
     let table = &table;
     let (items, position, has_more) = collect_page(ids, request.limit, position, |id| async move {
-        table.resource_record(&id).await
+        table.page_record(&id).await
     })
     .await?;
     finish(ctx, &cursor, position, request.limit, items, has_more)
@@ -194,7 +194,7 @@ async fn verification_binding_page(
         .await?;
     let table = &table;
     let (items, position, has_more) = collect_page(ids, request.limit, position, |id| async move {
-        table.resource_record(&id).await
+        table.page_record(&id).await
     })
     .await?;
     finish(ctx, &cursor, position, request.limit, items, has_more)

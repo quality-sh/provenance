@@ -78,14 +78,10 @@ pub fn id_page_sql(table: &str, filter: &str) -> String {
 }
 
 impl<K: ProjectionRow> Table<'_, K> {
-    /// Reads one canonical row only after its stored byte count passes the cap.
+    /// Reads one row only after its stored byte count is at most the record
+    /// budget, for the query reads and the resource reads alike.
     pub(crate) async fn page_record(&self, id: &str) -> anyhow::Result<Option<K>> {
         self.record_within(id, RECORD_BYTES).await
-    }
-
-    /// Reads one public resource within the resource-page byte ceiling.
-    pub(crate) async fn resource_record(&self, id: &str) -> anyhow::Result<Option<K>> {
-        self.record_within(id, RESOURCE_RECORD_BYTES).await
     }
 
     /// Reads one row by id only after its stored byte count is at most
