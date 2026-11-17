@@ -9,7 +9,7 @@
 
 use crate::support;
 
-use provenance_core::protocol::read_failure::{MATERIALIZE, STATE_CORRECTIONS};
+use provenance_core::protocol::read_failure::STATE_CORRECTIONS;
 use provenance_macros::verifies;
 use serde_json::{json, Value};
 use support::depends_on_cycle::add_a_depends_on_cycle;
@@ -18,6 +18,10 @@ use support::resource_http::{call, host};
 use support::state_lines::give_refines_a_string;
 
 const DOCUMENT: &str = "/requirements/req_shared/document";
+
+/// The hint of a read with no stored revision that `provenance materialize`
+/// corrects.
+const MATERIALIZE: &str = "run `provenance materialize`";
 
 /// A repository whose document was read one time, so that the projection
 /// holds a revision.
