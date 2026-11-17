@@ -196,10 +196,9 @@ impl Invocation {
         Self::new(json, command)
     }
 
-    /// Parses the target before its action, defaults to get, and handles help before validation.
-    #[provenance_macros::rule("rule_record_help_exits_before_validation")]
-    #[rule("rule_porcelain_cli_target_action_order")]
-    fn parse_target(arguments: Vec<String>) -> anyhow::Result<Self> {
+    /// The matches of the target parser. A help request prints the help of the selected
+    /// action and kind and exits.
+    fn target_matches(arguments: Vec<String>) -> anyhow::Result<clap::ArgMatches> {
         let command = catalog_cli::target_command()?;
         let help_command = command.clone().mut_arg("type", |arg| {
             arg.value_parser(clap::builder::StringValueParser::new())
@@ -227,6 +226,14 @@ impl Invocation {
             }
             Err(error) => error.exit(),
         };
+        Ok(matches)
+    }
+
+    /// Parses the target before its action, defaults to get, and handles help before validation.
+    #[provenance_macros::rule("rule_record_help_exits_before_validation")]
+    #[rule("rule_porcelain_cli_target_action_order")]
+    fn parse_target(arguments: Vec<String>) -> anyhow::Result<Self> {
+        let matches = Self::target_matches(arguments)?;
         let args = TargetArgs::from_matches(&matches);
         if let Some(TargetVerb::Action(action)) = args.action {
             if Action::DISCUSSION.contains(&action) {
@@ -246,13 +253,15 @@ impl Invocation {
                 kind: args.kind,
                 limit: args.limit,
             };
-            let get = GetInvocation {
-                context,
-                format,
-                input: input.into(),
-                delivery: Delivery::Read,
-            };
-            return Ok(Self::new(json, Selected::Get(get)));
+            return Ok(Self::new(
+                json,
+                Selected::Get(GetInvocation {
+                    context,
+                    format,
+                    input: input.into(),
+                    delivery: Delivery::Read,
+                }),
+            ));
         }
         if matches!(args.action, None | Some(TargetVerb::Get)) {
             catalog_cli::ensure_only_fields(
@@ -280,13 +289,15 @@ impl Invocation {
             input.kind = args.kind;
             input.limit = args.limit;
             (input.notify, input.thread) = notify(&matches)?;
-            let get = GetInvocation {
-                context,
-                format,
-                input,
-                delivery: args.delivery,
-            };
-            return Ok(Self::new(json, Selected::Get(get)));
+            return Ok(Self::new(
+                json,
+                Selected::Get(GetInvocation {
+                    context,
+                    format,
+                    input,
+                    delivery: args.delivery,
+                }),
+            ));
         }
         let Some(TargetVerb::Action(action)) = args.action else {
             anyhow::bail!("unsupported target action");
@@ -295,24 +306,26 @@ impl Invocation {
         if let Err(error) = validate_target(action, &args.target, kind) {
             catalog_cli::action_usage_error(error);
         }
-        let target = TargetInvocation {
-            context,
-            format,
-            target: args.target,
-            action,
-            kind,
-            matches,
-        };
-        Ok(Self::new(json, Selected::Target(target)))
+        Ok(Self::new(
+            json,
+            Selected::Target(TargetInvocation {
+                context,
+                format,
+                target: args.target,
+                action,
+                kind,
+                matches,
+            }),
+        ))
     }
 
-    fn new(json: bool, selected: Selected) -> Self {
+    const fn new(json: bool, selected: Selected) -> Self {
         Self { selected, json }
     }
 
     /// Whether the caller gave `--format json`, so a refusal prints as one
     /// `{error,meta}` object instead of text.
-    pub fn json_output(&self) -> bool {
+    pub const fn json_output(&self) -> bool {
         self.json
     }
 
