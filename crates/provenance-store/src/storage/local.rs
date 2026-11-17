@@ -31,7 +31,7 @@ pub(crate) mod whole_set;
 pub use durability::is_state_temporary_name;
 #[cfg(any(unix, windows))]
 pub(crate) use file_install::FileInstall;
-pub(crate) use in_place::roll_forward;
+pub(crate) use in_place::{roll_forward, StateFileInUse};
 #[cfg(all(test, unix))]
 pub(crate) use recovery::validated_transaction_dir;
 pub use recovery::{write_publication_marker, PublicationPhase};

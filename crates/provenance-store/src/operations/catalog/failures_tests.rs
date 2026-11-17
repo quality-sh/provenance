@@ -248,3 +248,29 @@ fn a_store_refusal_inside_a_read_keeps_its_kind_and_status() {
         assert_eq!(error.status(), status, "{error}");
     }
 }
+
+/// A read or a write whose section entry cannot install a held state file
+/// answers `state_file_in_use` with the path of the file relative to the
+/// repository, and the status 503.
+#[test]
+#[verifies("rule_held_record_file_refusal_names_the_file", examples)]
+fn a_state_file_in_use_names_the_file_and_has_the_status_503() {
+    let held = || {
+        anyhow::Error::new(crate::storage::local::StateFileInUse {
+            path: Utf8PathBuf::from("/repo/.provenance/state/scopes/default/rules/rule.jsonl"),
+            file: ".provenance/state/scopes/default/rules/rule.jsonl".to_owned(),
+            source: std::io::Error::from_raw_os_error(32),
+        })
+        .context("enter the publication section")
+    };
+    let wire = serde_json::json!({
+        "kind": "state_file_in_use",
+        "file": ".provenance/state/scopes/default/rules/rule.jsonl"
+    });
+    let read = ReadError(held());
+    assert_eq!(serde_json::to_value(&read).unwrap(), wire);
+    assert_eq!(read.status(), 503);
+    let write = crate::write_error::WriteError(held());
+    assert_eq!(serde_json::to_value(&write).unwrap(), wire);
+    assert_eq!(write.status(), 503);
+}

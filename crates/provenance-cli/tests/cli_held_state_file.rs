@@ -90,3 +90,59 @@ fn a_new_discussion_passes_while_a_reader_has_the_discussion_files_open() {
     let read = success(repo, &[&id, "discussion"]);
     assert!(read.contains("Second text"), "{read}");
 }
+
+/// The refusal object of a failed command on standard error.
+#[cfg(windows)]
+fn refusal(repo: &Path, words: &[&str]) -> serde_json::Value {
+    let output = bounded_process::provenance()
+        .current_dir(repo)
+        .args(words)
+        .bounded_output();
+    let text = String::from_utf8(output.stderr).unwrap();
+    assert_eq!(output.status.code(), Some(1), "{words:?}: {text}");
+    let line = text.lines().next().unwrap_or_default();
+    let object = line.strip_prefix("Error: ").unwrap_or(line);
+    serde_json::from_str(object).unwrap_or_else(|error| panic!("{words:?}: {error}: {text}"))
+}
+
+/// The test keeps the Message shard open with a share mode that lets other
+/// handles only read, as a program that locks a file it reads does. The
+/// write of a second Discussion succeeds, because its marker names all of
+/// its changes. A read cannot complete the install while the file is held,
+/// so it answers `state_file_in_use` with the file. When the holder closes
+/// the file, the next read completes the write and shows the message one
+/// time.
+#[cfg(windows)]
+#[test]
+#[verifies("rule_held_record_file_refusal_names_the_file", examples)]
+fn a_read_names_the_state_file_that_a_holder_with_no_delete_sharing_keeps() {
+    use std::os::windows::fs::OpenOptionsExt;
+    const FILE_SHARE_READ: u32 = 0x1;
+    let directory = repository_with_a_discussion();
+    let repo = directory.path();
+    let threads = repo.join(".provenance/state/scopes/default/threads");
+    let shard = std::fs::read_dir(&threads)
+        .unwrap()
+        .map(|entry| entry.unwrap().file_name().into_string().unwrap())
+        .find(|name| name.as_bytes().first().is_some_and(u8::is_ascii_digit))
+        .expect("the Message shard of the month exists");
+    let held = std::fs::OpenOptions::new()
+        .read(true)
+        .share_mode(FILE_SHARE_READ)
+        .open(threads.join(&shard))
+        .unwrap();
+
+    let id = discuss(repo, "Second text");
+    let refused = refusal(repo, &["api", "/requirements/req_a"]);
+    drop(held);
+
+    assert_eq!(
+        refused["error"],
+        serde_json::json!({
+            "kind": "state_file_in_use",
+            "file": format!(".provenance/state/scopes/default/threads/{shard}")
+        })
+    );
+    let read = success(repo, &[&id, "discussion"]);
+    assert_eq!(read.matches("Second text").count(), 1, "{read}");
+}

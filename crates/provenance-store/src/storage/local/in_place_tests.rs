@@ -172,3 +172,36 @@ fn the_install_replaces_a_live_file_that_a_reader_holds() {
     assert_eq!(read(&layout, RULES).as_deref(), Some("new"));
     assert!(!layout.publication_marker_path().exists());
 }
+
+/// A reader keeps the live file open with a share mode that lets other
+/// handles only read. The roll forward cannot replace the file, so the
+/// section entry answers `state_file_in_use` with the file, and the marker
+/// stays. When the reader closes the file, the next entry completes the
+/// write.
+#[cfg(windows)]
+#[test]
+#[verifies("rule_held_record_file_refusal_names_the_file", examples)]
+fn a_file_that_a_reader_holds_with_no_delete_sharing_is_refused_by_name() {
+    use std::os::windows::fs::OpenOptionsExt;
+    const FILE_SHARE_READ: u32 = 0x1;
+    let (_temp, layout) = live();
+    stopped_write(&layout, &[RULES], &[RULES], &[]);
+    let reader = std::fs::OpenOptions::new()
+        .read(true)
+        .share_mode(FILE_SHARE_READ)
+        .open(layout.state_dir().join(RULES))
+        .unwrap();
+
+    let entered = enter(&layout);
+    drop(reader);
+
+    let error = crate::write_error::WriteError(entered.unwrap_err());
+    assert_eq!(
+        serde_json::to_value(&error).unwrap(),
+        serde_json::json!({"kind": "state_file_in_use", "file": format!(".provenance/state/{RULES}")})
+    );
+    assert_eq!(error.status(), 503);
+    assert!(layout.publication_marker_path().exists());
+    enter(&layout).unwrap();
+    assert_eq!(read(&layout, RULES).as_deref(), Some("new"));
+}
