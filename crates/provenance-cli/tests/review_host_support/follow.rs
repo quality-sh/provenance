@@ -85,6 +85,13 @@ impl Follow {
             }
         }
     }
+    /// Checks that the command gave no more lines before its output ended.
+    pub fn ended(&self) {
+        assert_eq!(
+            self.lines.recv_timeout(Duration::from_secs(15)),
+            Err(mpsc::RecvTimeoutError::Disconnected)
+        );
+    }
     pub fn quiet(&self) {
         assert!(matches!(
             self.lines.recv_timeout(Duration::from_millis(250)),
