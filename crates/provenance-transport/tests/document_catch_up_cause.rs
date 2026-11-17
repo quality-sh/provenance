@@ -249,3 +249,40 @@ async fn a_read_with_no_stored_revision_gives_no_absolute_path_in_the_cause() {
         }))
     );
 }
+
+/// Removes the stored revision from the read database of `repo`, and keeps
+/// each table, so that the database opens and holds no revision.
+async fn remove_the_revision(repo: &Repository) {
+    use sqlx::Connection as _;
+    let database = repo.dir.path().join(".provenance/cache/provenance.db");
+    let options = sqlx::sqlite::SqliteConnectOptions::new().filename(database);
+    let mut connection = sqlx::SqliteConnection::connect_with(&options)
+        .await
+        .unwrap();
+    sqlx::query("DELETE FROM projection_revision")
+        .execute(&mut connection)
+        .await
+        .unwrap();
+    connection.close().await.unwrap();
+}
+
+/// An `annotate_only` read of a read database that opens and holds no
+/// revision has no cause. The refusal has only the hint, which names
+/// `provenance materialize`.
+#[tokio::test]
+#[verifies("rule_no_revision_refuses_and_names_materialize", examples)]
+async fn a_read_with_no_revision_and_no_cause_names_materialize() {
+    let repo = Repository::new("The shared graph is readable.");
+    read_policy(&repo, "annotate_only");
+    let host = host(&repo, false);
+    let (status, read) = call(&host, "GET", "/requirements/req_shared", None).await;
+    assert_eq!(status, 200, "{read}");
+    remove_the_revision(&repo).await;
+
+    let (status, refused) = call(&host, "GET", "/requirements/req_shared", None).await;
+
+    assert_eq!(
+        (status, refused),
+        (409, no_projection(&json!({"hint": MATERIALIZE})))
+    );
+}

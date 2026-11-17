@@ -102,7 +102,7 @@ where
 {
     /// The work of the read: the check, the pinned snapshot, the operation
     /// and the stamp.
-    fn work<'a>(&'a mut self, check: Check, policy: StampPolicy) -> ReadWork<'a> {
+    fn work(&mut self, check: Check, policy: StampPolicy) -> ReadWork<'_> {
         Box::new(move |transaction| {
             Box::pin(async move {
                 let run = self
