@@ -60,6 +60,8 @@ mod refusals_declare_a_kind;
 mod relation_deltas;
 #[path = "../repository_open.rs"]
 mod repository_open;
+#[path = "../source_edit_held_file.rs"]
+mod source_edit_held_file;
 #[path = "../stage_landing_local_disk.rs"]
 mod stage_landing_local_disk;
 #[path = "../staged_view.rs"]

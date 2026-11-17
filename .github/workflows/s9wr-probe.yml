@@ -1,0 +1,34 @@
+name: s9wr probe
+on:
+  push:
+    branches: [wip/rpi/provenance-s9wr-red2]
+  workflow_dispatch:
+    inputs:
+      filter:
+        required: true
+        type: string
+permissions:
+  contents: read
+env:
+  RUST_TOOLCHAIN: 1.100.0
+jobs:
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master
+        with:
+          toolchain: ${{ env.RUST_TOOLCHAIN }}
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          prefix-key: v1
+          shared-key: test-all-features
+          add-job-id-key: "false"
+          save-if: false
+      - uses: taiki-e/install-action@a4d3f3f761dcd95cce1b72cb61cb6d1963438177 # v2
+        with:
+          tool: nextest@0.9.143
+      - name: Source edit held-file test
+        shell: bash
+        run: cargo nextest run -p provenance-store --features host,test-fixture --test engine --no-fail-fast -E "test(source_edit_held_file)"
