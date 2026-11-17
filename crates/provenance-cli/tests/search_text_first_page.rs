@@ -3,12 +3,10 @@
 //! `needle`, then one Source that holds it. The first page holds that Source
 //! and has no continuation on the CLI text form, the CLI JSON form, the MCP
 //! `search` tool, and the HTTP route.
-//!
-//! These tests have no Rule, because no active Rule states that a page holds a
-//! record when more records match.
 
 use crate::search_repository;
 
+use provenance_macros::verifies;
 use provenance_mcp::Client;
 use search_repository::{
     binary, cli, page, plain_sources, repository, search_json, source, source_node, without_stamp,
@@ -24,6 +22,7 @@ fn seed(directory: &std::path::Path) -> String {
 }
 
 #[test]
+#[verifies("rule_search_page_with_more_holds_a_record", examples)]
 fn cli_first_text_search_page_holds_the_match_after_513_other_records() {
     let directory = tempfile::tempdir().unwrap();
     let repo = seed(directory.path());
@@ -50,6 +49,7 @@ fn cli_first_text_search_page_holds_the_match_after_513_other_records() {
 }
 
 #[test]
+#[verifies("rule_search_page_with_more_holds_a_record", examples)]
 fn http_route_first_text_search_page_holds_the_match_after_513_other_records() {
     let directory = tempfile::tempdir().unwrap();
     let repo = seed(directory.path());
@@ -77,6 +77,7 @@ fn http_route_first_text_search_page_holds_the_match_after_513_other_records() {
 }
 
 #[tokio::test]
+#[verifies("rule_search_page_with_more_holds_a_record", examples)]
 async fn mcp_first_text_search_page_holds_the_match_after_513_other_records() {
     let directory = tempfile::tempdir().unwrap();
     let repo = seed(directory.path());
