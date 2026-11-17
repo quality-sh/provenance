@@ -6,15 +6,16 @@
 use crate::cli_mcp_write_actor::{repository, run};
 use crate::cli_message_actor::discussion_with_reply;
 use provenance_macros::verifies;
+use serde_json::{json, Value};
 use std::path::Path;
 
 /// The step that the refusal gives for a message row with no actor or a blank actor.
 const CORRECTION: &str = "To correct this fault, add the field actor to this line, with the \
     actor that wrote the Message. If that actor is not known, use the actor authoring.";
 
-/// Replaces the stored actor `,"actor":"agent-b"` of the reply row with `actor`, and gives
-/// the path of the shard below the state directory and the number of the line.
-fn edit_reply_actor(repo: &Path, reply: &str, actor: &str) -> (String, usize) {
+/// Writes the reply row again with the actor `actor`, or with no actor for `None`, and
+/// gives the path of the shard below the state directory and the number of the line.
+fn edit_reply_actor(repo: &Path, reply: &str, actor: Option<&str>) -> (String, usize) {
     let threads = repo.join(".provenance/state/scopes/default/threads");
     for entry in std::fs::read_dir(&threads).unwrap() {
         let path = entry.unwrap().path();
@@ -22,9 +23,15 @@ fn edit_reply_actor(repo: &Path, reply: &str, actor: &str) -> (String, usize) {
         let Some(index) = stored.lines().position(|line| line.contains(reply)) else {
             continue;
         };
-        let changed = stored.replacen(",\"actor\":\"agent-b\"", actor, 1);
-        assert_ne!(changed, stored, "{stored}");
-        std::fs::write(&path, changed).unwrap();
+        let mut lines: Vec<String> = stored.lines().map(str::to_owned).collect();
+        let mut row: Value = serde_json::from_str(&lines[index]).unwrap();
+        let fields = row.as_object_mut().unwrap();
+        match actor {
+            Some(actor) => fields.insert("actor".to_owned(), json!(actor)),
+            None => fields.remove("actor"),
+        };
+        lines[index] = row.to_string();
+        std::fs::write(&path, lines.join("\n") + "\n").unwrap();
         let name = path.file_name().unwrap().to_str().unwrap();
         return (format!("scopes/default/threads/{name}"), index + 1);
     }
@@ -35,9 +42,9 @@ fn edit_reply_actor(repo: &Path, reply: &str, actor: &str) -> (String, usize) {
 #[verifies("rule_message_records_its_actor", examples)]
 fn a_message_row_with_no_actor_or_a_blank_actor_is_refused_with_its_line() {
     for (actor, message) in [
-        ("", "missing field `actor`"),
-        (",\"actor\":\"\"", "the field `actor` is blank"),
-        (",\"actor\":\"  \"", "the field `actor` is blank"),
+        (None, "missing field `actor`"),
+        (Some(""), "the field `actor` is blank"),
+        (Some("  "), "the field `actor` is blank"),
     ] {
         let directory = repository();
         let repo = directory.path();
@@ -53,14 +60,14 @@ fn a_message_row_with_no_actor_or_a_blank_actor_is_refused_with_its_line() {
                 format!("graph: findings\n  - {fault}\n"),
                 format!("Error: {fault}\n")
             ),
-            "{actor}"
+            "{actor:?}"
         );
         let (code, stdout, stderr) = run(repo, &["api", "messages"]);
-        assert_eq!(code, 0, "{actor}: {stderr}");
-        let answer: serde_json::Value = serde_json::from_str(&stdout).unwrap();
+        assert_eq!(code, 0, "{actor:?}: {stderr}");
+        let answer: Value = serde_json::from_str(&stdout).unwrap();
         let warning = answer["meta"]["freshness_error"]
             .as_str()
             .unwrap_or_default();
-        assert_eq!(warning.replace('\\', "/"), fault, "{actor}: {stdout}");
+        assert_eq!(warning.replace('\\', "/"), fault, "{actor:?}: {stdout}");
     }
 }
