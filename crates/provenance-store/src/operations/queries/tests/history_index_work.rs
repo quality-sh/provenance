@@ -173,5 +173,14 @@ async fn the_index_load_of_a_real_size_runs_within_the_page_work_bound() {
         "{refused:#}"
     );
     let page = read(&repository, longer(), None).await.unwrap();
-    assert_eq!(page.entries.len(), 2, "{:?}", page.entries);
+    let ids = page.entries.iter().map(|entry| entry.id.as_str());
+    let ids = ids.collect::<Vec<_>>();
+    assert_eq!(
+        ids,
+        [
+            &format!("c{COMMITS}"),
+            &format!("c{}", COMMITS + 1),
+            "working"
+        ]
+    );
 }
