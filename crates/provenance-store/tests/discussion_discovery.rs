@@ -35,10 +35,7 @@ async fn selected_pages_are_complete_and_bind_status_parent_and_revision() {
     let a = start(&store, "a");
     let b = start(&store, "b");
     let c = start(&store, "c");
-    store
-        .write_discussion(status(&b, "resolved"))
-        .unwrap()
-        .discussion;
+    store.write_discussion(status(&b, "resolved")).unwrap();
     let mut query = list(None, 1);
     let mut found = Vec::new();
     loop {

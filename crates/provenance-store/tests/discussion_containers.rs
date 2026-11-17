@@ -145,10 +145,7 @@ fn resolving_a_discussion_leaves_all_container_statuses_unchanged() {
         threads.push(later);
     });
     let before = store.list_threads(&scope()).unwrap();
-    store
-        .write_discussion(status(&a, "resolved"))
-        .unwrap()
-        .discussion;
+    store.write_discussion(status(&a, "resolved")).unwrap();
     assert_eq!(before, store.list_threads(&scope()).unwrap());
 }
 

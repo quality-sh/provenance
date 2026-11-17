@@ -16,10 +16,7 @@ async fn legacy_membership_is_explicit_and_pages_rebuild_from_records() {
     let root = camino::Utf8Path::from_path(temp.path()).unwrap();
     let old=store.post_thread_message(serde_json::from_value(json!({"scope_id":"default","parent":{"node_type":"requirement","node_id":"req_a"},"role":"user","actor":"agent","body":"Unknown root"})).unwrap()).unwrap();
     let a = start(&store, "a");
-    store
-        .write_discussion(reply(&a, "reply"))
-        .unwrap()
-        .discussion;
+    store.write_discussion(reply(&a, "reply")).unwrap();
     let query = DiscussionQuery {
         parent: a.parent.clone(),
         limit: 1,

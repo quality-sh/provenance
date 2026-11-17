@@ -8,7 +8,7 @@ use provenance_macros::rule;
 use std::collections::BTreeMap;
 
 /// The fields of one Message that the writer gives: its role, its actor, and its body.
-pub(crate) struct MessageWrite {
+pub struct MessageWrite {
     pub role: provenance_core::MessageRole,
     pub actor: String,
     pub body: String,

@@ -177,8 +177,7 @@ fn parent_ownership_and_existence_are_per_kind() {
             "res_award",
             &json!("maker"),
         ))
-        .unwrap()
-        .discussion;
+        .unwrap();
     for (kind, node) in [
         (NodeType::Topic, "topic_award"),
         (NodeType::Question, "question_award"),
@@ -191,8 +190,7 @@ fn parent_ownership_and_existence_are_per_kind() {
         );
         store
             .write_discussion(write_for(kind, node, &json!(null)))
-            .unwrap_or_else(|error| panic!("{node}: {error}"))
-            .discussion;
+            .unwrap_or_else(|error| panic!("{node}: {error}"));
     }
     assert!(store
         .write_discussion(write_for(NodeType::Source, "source_missing", &json!(null)))
