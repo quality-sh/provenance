@@ -73,6 +73,7 @@ fn statement_commits(temp: &tempfile::TempDir, count: usize) {
 
 /// The git adapter of the repository at `temp`, with a count of its text
 /// calls.
+#[derive(Debug)]
 struct Counted {
     git: GitFileVersions,
     texts: AtomicUsize,

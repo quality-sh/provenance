@@ -11,7 +11,7 @@ use super::{repository_at, root_of, seeded_store};
 use crate::layout::ProvenanceLayout;
 use crate::read_database::SqlValue;
 use crate::repository::Repository;
-use crate::review::history::contract::{Commit, Entry, MemoryFileVersions};
+use crate::review::history::{BoxFuture, FileVersion, FileVersions};
 use crate::review::read_history;
 use crate::shards;
 use crate::test_probes::set_page_work_steps;
@@ -23,14 +23,61 @@ use std::sync::Arc;
 const COMMITS: usize = 10_000;
 const RECORDS: usize = 2_000;
 
-/// The history of `req_overtime` through `commits`, under the work bound
+/// A line of commits `c0`, `c1`, … of one record file, each the child of
+/// the one before. Only the last commit has a text; the read asks for no
+/// other.
+#[derive(Debug)]
+struct Line {
+    path: String,
+    files: Arc<Vec<FileVersion>>,
+    last: String,
+}
+
+impl Line {
+    fn new(path: &str, count: usize, last: &str) -> Arc<Self> {
+        let files = (0..count)
+            .map(|index| {
+                let parents = index.checked_sub(1).map(|parent| format!("c{parent}"));
+                FileVersion::new(
+                    format!("c{index}"),
+                    parents.into_iter().collect(),
+                    "ann".to_owned(),
+                    1_700_000_000,
+                )
+            })
+            .collect();
+        Arc::new(Self {
+            path: path.to_owned(),
+            files: Arc::new(files),
+            last: last.to_owned(),
+        })
+    }
+}
+
+impl FileVersions for Line {
+    fn versions<'a>(&'a self, _: &'a str) -> BoxFuture<'a, anyhow::Result<Arc<Vec<FileVersion>>>> {
+        Box::pin(std::future::ready(Ok(self.files.clone())))
+    }
+
+    fn text<'a>(
+        &'a self,
+        path: &'a str,
+        commit: &'a str,
+    ) -> BoxFuture<'a, anyhow::Result<Option<String>>> {
+        let last = self.files.last().map(|file| file.commit.as_str());
+        let text = (path == self.path && Some(commit) == last).then(|| self.last.clone());
+        Box::pin(std::future::ready(Ok(text)))
+    }
+}
+
+/// The history of `req_overtime` through `line`, under the work bound
 /// `steps`, or the engine's bound when `None`.
 async fn read(
     repository: &Repository,
-    commits: &[Commit],
+    line: Arc<Line>,
     steps: Option<u64>,
 ) -> anyhow::Result<ReviewHistoryPage> {
-    let opened = repository.with_file_versions(Arc::new(MemoryFileVersions::new(commits)));
+    let opened = repository.with_file_versions(line);
     let query = ReviewHistoryQuery {
         record_kind: NodeType::Requirement,
         record_id: StableId::new("req_overtime").unwrap(),
@@ -41,24 +88,6 @@ async fn read(
     let answer = read_history(&opened, Default::default(), query).await;
     set_page_work_steps(None);
     Ok(answer?.result)
-}
-
-/// `count` commits `c0`, `c1`, … of the record file `path`, each the child
-/// of the one before. The last holds `last`; each other holds a text of its
-/// own, which the read does not ask for.
-fn commits(path: &str, count: usize, last: &str) -> Vec<Commit> {
-    (0..count)
-        .map(|index| {
-            let parent = index.checked_sub(1).map(|parent| format!("c{parent}"));
-            let parents = parent.iter().map(String::as_str).collect::<Vec<_>>();
-            let text = if index + 1 == count {
-                last.to_owned()
-            } else {
-                format!("{index}\n")
-            };
-            Commit::new(&format!("c{index}"), &parents, "ann", 1_700_000_000).with_file(path, &text)
-        })
-        .collect()
 }
 
 /// Writes the index of `path` for the commits `c0` to `c9999`: `c0` holds
@@ -122,21 +151,27 @@ async fn the_index_load_of_a_real_size_runs_within_the_page_work_bound() {
         .as_str()
         .replace('\\', "/");
     let saved = std::fs::read_to_string(&shard).unwrap();
-    read(&repository, &[], None).await.unwrap();
+    read(&repository, Line::new(&path, 0, ""), None)
+        .await
+        .unwrap();
     index_of_real_size(&repository, &path).await;
 
-    let listed = commits(&path, COMMITS + 1, &saved);
-    let page = read(&repository, &listed, Some(1_000_000)).await;
+    let page = read(
+        &repository,
+        Line::new(&path, COMMITS + 1, &saved),
+        Some(1_000_000),
+    )
+    .await;
     let page = page.unwrap_or_else(|error| panic!("a tenth of the bound: {error:#}"));
     assert_eq!(page.entries[0].id.as_str(), format!("c{COMMITS}"));
 
-    let longer = commits(&path, COMMITS + 2, &saved.replace("Overtime", "Pay"));
-    let refused = read(&repository, &longer, Some(0)).await.unwrap_err();
+    let longer = || Line::new(&path, COMMITS + 2, &saved.replace("Overtime", "Pay"));
+    let refused = read(&repository, longer(), Some(0)).await.unwrap_err();
     assert_eq!(
         refused.downcast_ref::<ReadFailure>(),
         Some(&ReadFailure::PageBudgetExceeded),
         "{refused:#}"
     );
-    let page = read(&repository, &longer, None).await.unwrap();
+    let page = read(&repository, longer(), None).await.unwrap();
     assert_eq!(page.entries.len(), 2, "{:?}", page.entries);
 }
