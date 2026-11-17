@@ -196,8 +196,10 @@ fn missing_disposition_canonical_artifact_import_is_atomic() {
     import_scope(&repo, &input)
         .failure()
         .stderr(predicates::str::contains(
-            "scopes/default/ideation/dispositions.jsonl line 1: disposition disposition_a \
-             names requirement req_missing, which the scope does not have",
+            r#""file":"scopes/default/ideation/dispositions.jsonl","#,
+        ))
+        .stderr(predicates::str::contains(
+            r#""line":1,"message":"disposition disposition_a names requirement req_missing, which the scope does not have""#,
         ));
 
     let after = dir.path().join("after.json");
