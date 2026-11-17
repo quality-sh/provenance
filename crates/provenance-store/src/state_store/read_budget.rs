@@ -156,7 +156,7 @@ fn ensure_within(id: &str, size: usize, budget: usize) -> anyhow::Result<()> {
     if size > budget {
         return Err(crate::refusal::refuse!(
             (crate::write_error::WriteFailure::record_too_large(Some(id), size, budget)),
-            "record `{id}` uses {size} bytes; the record may use at most {budget} bytes"
+            "record `{id}` uses {size} bytes; the supported read allows at most {budget} bytes"
         ));
     }
     Ok(())

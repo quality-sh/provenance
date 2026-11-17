@@ -339,7 +339,7 @@ macro_rules! expand_record_family_rows {
                     id: field,
                     loader: [kind],
                     graph: [implementation],
-                    import: [assignable],
+                    import: [assignable_budget],
                     catalog: [none],
                     route: [none]
                 };

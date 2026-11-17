@@ -88,8 +88,20 @@ impl StateStore {
         scope: &ScopeId,
         restatements: Vec<Restatement>,
     ) -> anyhow::Result<()> {
+        let desired = self.restatement_reviews(scope, restatements)?;
+        self.write_reviews(scope, desired)
+    }
+
+    /// The review records that `restatements` raise, one for each Rule that cites a restated
+    /// Requirement, at the time of the store clock. Refuses a review whose stored row passes
+    /// the record budget, so a caller can refuse the change before it writes.
+    pub(super) fn restatement_reviews(
+        &self,
+        scope: &ScopeId,
+        restatements: Vec<Restatement>,
+    ) -> anyhow::Result<Vec<RequirementReview>> {
         if restatements.is_empty() {
-            return Ok(());
+            return Ok(Vec::new());
         }
         let rules = self.list_rules(scope)?;
         let cited = restatements
@@ -101,7 +113,7 @@ impl StateStore {
             .filter(|(_, rule_ids)| !rule_ids.is_empty())
             .collect::<Vec<_>>();
         if cited.is_empty() {
-            return Ok(());
+            return Ok(Vec::new());
         }
         let changed_at = now_millis(&*self.clock())?;
         let desired = cited
@@ -120,6 +132,18 @@ impl StateStore {
             .map(|review| review.into_record(scope))
             .collect::<anyhow::Result<Vec<_>>>()?;
         super::read_budget::ensure_slice_within_read_budget(&desired)?;
+        Ok(desired)
+    }
+
+    /// Writes each review of `desired` that is not on file.
+    pub(super) fn write_reviews(
+        &self,
+        scope: &ScopeId,
+        desired: Vec<RequirementReview>,
+    ) -> anyhow::Result<()> {
+        if desired.is_empty() {
+            return Ok(());
+        }
         let path = shards::requirement_reviews_path(&self.layout, scope);
         self.mutate_jsonl_records(&path, |records: &mut Vec<RequirementReview>| {
             for record in desired {

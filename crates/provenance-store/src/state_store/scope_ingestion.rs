@@ -86,19 +86,6 @@ macro_rules! write_binding {
     ) => {};
 }
 
-macro_rules! ensure_binding_budget {
-    (
-        $shards:ident, verification,
-        verification, $field:ident
-    ) => {
-        ensure_slice_within_read_budget($shards.$field)?;
-    };
-    (
-        $shards:ident, $phase:ident,
-        $other:ident, $field:ident
-    ) => {};
-}
-
 macro_rules! ensure_binding_assignable {
     (
         $store:ident, $scope:ident, $shards:ident, verification,
@@ -224,9 +211,7 @@ macro_rules! define_imported_scope_shards {
                 self.with_staged_import(|store| {
                     validate_threads(shards.threads)?;
                     $(ensure_slice_within_read_budget(shards.$export_field)?;)*
-                    $(ensure_binding_budget!(
-                        shards, verification, $($binding_graph)+, $binding_field
-                    );)*
+                    $(ensure_slice_within_read_budget(shards.$binding_field)?;)*
                     $(ensure_slice_within_read_budget(shards.$canonical_field)?;)*
 
                     let mut records = Vec::new();

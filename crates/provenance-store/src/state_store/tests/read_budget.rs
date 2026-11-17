@@ -22,8 +22,8 @@ use provenance_macros::verifies;
 use serde_json::json;
 use std::sync::Arc;
 
-/// The read budget the supported resource member and page reads enforce.
-const READ_BUDGET: usize = crate::cache::read::page::RESOURCE_RECORD_BYTES;
+/// The row budget of a record, which the writer and each read apply.
+const READ_BUDGET: usize = crate::cache::read::page::RECORD_BYTES;
 
 /// The transport body budget the HTTP and MCP surfaces accept.
 const TRANSPORT_BUDGET: usize = 1024 * 1024;
@@ -162,7 +162,10 @@ async fn oversized_write_is_refused_before_publication_and_read_stays_clean() {
     let failure = error
         .downcast_ref::<SourceFailure>()
         .expect("the refusal is typed");
-    assert!(matches!(failure.failure, WriteFailure::RecordTooLarge { .. }));
+    assert!(matches!(
+        failure.failure,
+        WriteFailure::RecordTooLarge { .. }
+    ));
 
     let root = camino::Utf8PathBuf::from_path_buf(dir.path().to_path_buf()).unwrap();
     let kind = member_read(&root, OVERSIZED_ID)
@@ -251,7 +254,10 @@ async fn oversized_update_is_refused_and_keeps_the_published_record() {
     let failure = error
         .downcast_ref::<SourceFailure>()
         .expect("the refusal is typed");
-    assert!(matches!(failure.failure, WriteFailure::RecordTooLarge { .. }));
+    assert!(matches!(
+        failure.failure,
+        WriteFailure::RecordTooLarge { .. }
+    ));
     assert_eq!(
         std::fs::read_to_string(&shard).unwrap(),
         before,
@@ -274,7 +280,10 @@ async fn oversized_message_write_is_refused_and_persists_nothing() {
     let failure = error
         .downcast_ref::<SourceFailure>()
         .expect("the refusal is typed");
-    assert!(matches!(failure.failure, WriteFailure::RecordTooLarge { .. }));
+    assert!(matches!(
+        failure.failure,
+        WriteFailure::RecordTooLarge { .. }
+    ));
     assert!(
         store.list_messages(&scope).unwrap().is_empty(),
         "a refused message is not published"
