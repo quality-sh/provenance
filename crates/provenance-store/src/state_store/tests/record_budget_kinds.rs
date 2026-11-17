@@ -151,7 +151,7 @@ fn ideation_and_binding_kinds() -> Vec<Kind> {
             name: "disposition",
             input: |suffix, pad| {
                 json!({"scope_id": "default", "id": format!("disposition_{suffix}"),
-                    "proposal_id": "proposal_probe", "decision": "rejected",
+                    "proposal_id": format!("decided_{suffix}"), "decision": "rejected",
                     "rationale": pad, "actor": {"identity_type": "human", "id": "ben"}})
             },
             write: |store, input| row(store.create_disposition(parse(input))),
@@ -211,6 +211,10 @@ fn each_kind_lands_at_the_record_budget_and_is_refused_one_byte_over() {
         let mut rule = (graph_kinds()[2].input)(suffix, "p".into());
         rule["id"] = json!(format!("bind_{suffix}"));
         store.create_rule(parse(rule)).unwrap();
+        let mut proposal = (ideation_and_binding_kinds()[2].input)(suffix, "p".into());
+        proposal["id"] = json!(format!("decided_{suffix}"));
+        proposal["proposal_key"] = json!(format!("decided-{suffix}"));
+        store.create_proposal_card(parse(proposal)).unwrap();
     }
     let mut manifest = store.manifest().unwrap();
     manifest.disposition_actor_ids.push("ben".into());
