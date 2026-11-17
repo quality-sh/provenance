@@ -7,7 +7,7 @@ use super::LocalStateStorage;
 use crate::layout::ProvenanceLayout;
 use crate::publication::with_repository_publication;
 use crate::stopped_child::{run_as_child, stop_in_child};
-use crate::storage::{Atomicity, StateKey, StateStorage, WriteSet};
+use crate::storage::{Atomicity, StateKey, StateStorage, StateView, WriteSet};
 use crate::test_probes;
 use crate::test_support::directory::utf8;
 use provenance_macros::verifies;
@@ -82,7 +82,7 @@ fn a_read_in_the_section_completes_an_install_that_failed_first() {
     let (disk, seen) = with_repository_publication(&layout, |_| {
         storage.publish(new_set()).unwrap();
         let disk = on_disk(&layout);
-        Ok((disk, storage.read_view().map(|view| view.into_entries())))
+        Ok((disk, storage.read_view().map(StateView::into_entries)))
     })
     .unwrap();
     test_probes::disarm("state_file_installed");
@@ -109,7 +109,7 @@ fn a_read_in_the_section_fails_while_the_install_fails_and_the_next_entry_comple
 
     let (seen, next_write) = with_repository_publication(&layout, |_| {
         storage.publish(new_set()).unwrap();
-        let seen = storage.read_view().map(|view| view.into_entries());
+        let seen = storage.read_view().map(StateView::into_entries);
         let other = WriteSet::new(Atomicity::PerKey)
             .put(StateKey::new(KEYS[1]).unwrap(), b"other".to_vec());
         Ok((seen, storage.publish(other)))

@@ -50,6 +50,8 @@ mod document_visibility;
 mod fallback_auth;
 #[path = "../file_access.rs"]
 mod file_access;
+#[path = "../held_state_file.rs"]
+mod held_state_file;
 #[path = "../history_evidence.rs"]
 mod history_evidence;
 #[path = "../history_pages.rs"]

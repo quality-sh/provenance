@@ -117,23 +117,23 @@ pub fn a_failed_whole_set_is_never_seen_in_part<H: Harness>(mut harness: H) {
     let mut whole = before.clone();
     whole.extend(expected(&[(A, b"a"), (B, b"b"), (C, b"c")]));
     let allowed = match landed {
-        Err(PublishFailure::Refused(_)) => vec![before.clone()],
-        Ok(()) => vec![whole.clone()],
-        Err(PublishFailure::Started(_)) => vec![before.clone(), whole.clone()],
+        Err(PublishFailure::Refused(_)) => vec![&before],
+        Ok(()) => vec![&whole],
+        Err(PublishFailure::Started(_)) => vec![&before, &whole],
         Err(PublishFailure::BaseMoved { .. }) => {
             panic!("a set with no base is not refused for its base")
         }
     };
     if let Some(seen) = &seen {
         assert!(
-            allowed.contains(seen),
+            allowed.contains(&seen),
             "a read in the section sees the set in part"
         );
     }
     harness.repair_key(B);
     let after = read(&harness).into_entries();
     assert!(
-        allowed.contains(&after),
+        allowed.contains(&&after),
         "the next section leaves the set in part"
     );
     assert!(
