@@ -11,7 +11,8 @@
 //!
 //! The check reads each scope in its own publication section. A caller
 //! that holds the section for the whole check, or that reads a read-only
-//! store, gets findings from one state.
+//! store, gets findings from one state. A caller sets `repository_wide` only
+//! when the manifest lists every scope of the state.
 
 use crate::scope_snapshot::{snapshot, ScopeSnapshot};
 use crate::state_store::StateStore;
@@ -59,9 +60,8 @@ impl StateFindings {
     }
 }
 
-/// Checks a state as `provenance check` does and writes nothing. Call it on a
-/// store that holds the publication section, or on a read-only store, and set
-/// `repository_wide` only when the manifest lists every scope of the state.
+/// Checks a state as `provenance check` does, on a store that holds the
+/// publication section or is read-only, and writes nothing.
 #[rule("rule_state_check_without_host")]
 pub fn check_state(
     store: &StateStore,
