@@ -165,20 +165,22 @@ fn validate_marker_leaves(marker: &SourceEditMarker) -> anyhow::Result<()> {
     Ok(())
 }
 
+/// Puts the live state in the backup and the staged state at the live path,
+/// and moves the marker to `StateInstalled`. Each move looks at the disk and
+/// not at the phase: the roll back of a failed file install moves the state
+/// back under the `StateInstalled` marker, and a stop in that roll back can
+/// leave no state at the live path.
 fn complete_state(
     layout: &ProvenanceLayout,
     transaction: &Utf8Path,
     marker: &mut SourceEditMarker,
 ) -> anyhow::Result<()> {
-    if marker.phase == SourceEditPhase::Prepared {
-        complete_backup_phase(layout, transaction, marker)?;
-    }
-    if marker.phase == SourceEditPhase::BackupCreated {
-        complete_install_phase(layout, transaction, marker)?;
-    }
-    Ok(())
+    let staged = ProvenanceLayout::new(transaction.join("staged-repo"));
+    complete_backup_phase(layout, transaction, marker)?;
+    complete_install_phase(layout, &staged, marker)
 }
 
+/// Moves the live state to the backup when no backup exists.
 fn complete_backup_phase(
     layout: &ProvenanceLayout,
     transaction: &Utf8Path,
@@ -188,6 +190,11 @@ fn complete_backup_phase(
     if layout.state_dir().exists() && !backup.exists() {
         std::fs::rename(layout.state_dir(), &backup)?;
         crate::test_probes::at("state_after_backup_rename")?;
+        sync_directory(transaction)?;
+        sync_directory(&layout.provenance_dir())?;
+    }
+    if marker.phase != SourceEditPhase::Prepared {
+        return Ok(());
     }
     marker.phase = SourceEditPhase::BackupCreated;
     write_source_edit_marker(layout, marker)?;
@@ -196,18 +203,20 @@ fn complete_backup_phase(
 
 fn complete_install_phase(
     layout: &ProvenanceLayout,
-    transaction: &Utf8Path,
+    staged: &ProvenanceLayout,
     marker: &mut SourceEditMarker,
 ) -> anyhow::Result<()> {
-    let staged = ProvenanceLayout::new(transaction.join("staged-repo"));
     if staged.state_dir().exists() {
-        install_staged_state(layout, &staged)?;
+        install_staged_state(layout, staged)?;
     } else {
         crate::write_error::ensure!(
             Fault,
             layout.state_dir().exists(),
             "source-edit recovery found no state"
         );
+    }
+    if marker.phase != SourceEditPhase::BackupCreated {
+        return Ok(());
     }
     marker.phase = SourceEditPhase::StateInstalled;
     write_source_edit_marker(layout, marker)?;
