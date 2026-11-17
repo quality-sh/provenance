@@ -95,16 +95,20 @@ fn discussion(value: Value) -> (tempfile::TempDir, String, String) {
 }
 
 /// The text of `output` with the parse message of each line left out: the
-/// value of `"message":"..."` in a JSON line, and the text after `line 1: `
-/// in a text line.
+/// value of `"message":"..."` in a JSON line, also in pretty JSON with a space
+/// after the colon, and the text after `line 1: ` in a text line.
 fn without_messages(output: &[u8]) -> String {
-    const MESSAGE: &str = "\"message\":\"";
+    const MESSAGE: [&str; 2] = ["\"message\":\"", "\"message\": \""];
     const LINE: &str = " line 1: ";
+    let message = |line: &str| {
+        MESSAGE
+            .iter()
+            .find_map(|form| line.find(form).map(|at| at + form.len()))
+    };
     String::from_utf8_lossy(output)
         .lines()
-        .map(|line| match (line.find(MESSAGE), line.find(LINE)) {
-            (Some(at), _) => {
-                let start = at + MESSAGE.len();
+        .map(|line| match (message(line), line.find(LINE)) {
+            (Some(start), _) => {
                 let rest = &line[start..];
                 let mut escaped = false;
                 let end = rest
