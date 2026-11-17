@@ -25,7 +25,7 @@ pub(super) struct FileEvents {
 }
 
 /// What the file events since the last read ask of the next read.
-#[derive(Default)]
+#[derive(Clone, Copy, Default)]
 pub(super) struct Notice {
     /// A watched directory changed, so the watches must be made again.
     pub reattach: bool,
@@ -34,7 +34,7 @@ pub(super) struct Notice {
 }
 
 impl Notice {
-    fn merge(&mut self, other: Self) {
+    const fn merge(&mut self, other: Self) {
         self.reattach |= other.reattach;
         self.lost |= other.lost;
     }

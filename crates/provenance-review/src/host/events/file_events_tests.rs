@@ -6,15 +6,13 @@ fn layout() -> ProvenanceLayout {
     ProvenanceLayout::new("/repository")
 }
 
-fn write_event(layout: &ProvenanceLayout) -> notify::Result<Event> {
-    Ok(
-        Event::new(EventKind::Modify(ModifyKind::Data(DataChange::Content)))
-            .add_path(layout.manifest_path().into_std_path_buf()),
-    )
+fn write_event(layout: &ProvenanceLayout) -> Event {
+    Event::new(EventKind::Modify(ModifyKind::Data(DataChange::Content)))
+        .add_path(layout.manifest_path().into_std_path_buf())
 }
 
-fn rescan_event() -> notify::Result<Event> {
-    Ok(Event::new(EventKind::Other).set_flag(Flag::Rescan))
+fn rescan_event() -> Event {
+    Event::new(EventKind::Other).set_flag(Flag::Rescan)
 }
 
 /// Calls the handler with a write event at each `interval`, from the start of the test.
@@ -25,7 +23,7 @@ fn write_every(
     let layout = layout();
     tokio::spawn(async move {
         loop {
-            handler(write_event(&layout));
+            handler(Ok(write_event(&layout)));
             tokio::time::sleep(interval).await;
         }
     });
@@ -35,7 +33,7 @@ fn write_every(
 async fn a_quiet_time_ends_the_wait() {
     let (mut handler, mut events) = FileEvents::new(layout());
     let (_stop, mut stopped) = watch::channel(false);
-    handler(write_event(&layout()));
+    handler(Ok(write_event(&layout())));
     let start = Instant::now();
 
     events.settle(&mut stopped).await;
@@ -79,7 +77,7 @@ async fn a_rescan_during_the_wait_marks_the_events_as_lost() {
     let (_stop, mut stopped) = watch::channel(false);
     tokio::spawn(async move {
         tokio::time::sleep(Duration::from_millis(100)).await;
-        handler(rescan_event());
+        handler(Ok(rescan_event()));
         std::future::pending::<()>().await;
     });
 
@@ -95,7 +93,7 @@ async fn an_overflow_during_the_wait_is_given_one_time() {
     tokio::spawn(async move {
         tokio::time::sleep(Duration::from_millis(100)).await;
         for _ in 0..300 {
-            handler(write_event(&layout()));
+            handler(Ok(write_event(&layout())));
         }
         std::future::pending::<()>().await;
     });
