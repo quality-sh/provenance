@@ -254,7 +254,11 @@ pub(super) fn complete_install(
 }
 
 /// The path of the working-tree file `leaf` next to the target of `marker`.
-fn artifact(layout: &ProvenanceLayout, marker: &SourceEditMarker, leaf: &str) -> Utf8PathBuf {
+pub(super) fn artifact(
+    layout: &ProvenanceLayout,
+    marker: &SourceEditMarker,
+    leaf: &str,
+) -> Utf8PathBuf {
     layout.root().join(&marker.target).with_file_name(leaf)
 }
 

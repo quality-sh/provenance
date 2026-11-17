@@ -1,6 +1,7 @@
 use super::source_edit::{
-    backup, complete_install, write_source_edit_marker, PreparedSourceRecord, SourceEditMarker,
-    SourceEditPhase, SourceEditRecoveryFailure, PREPARED_SOURCE_RECORD, REPLACEMENT,
+    artifact, backup, complete_install, write_source_edit_marker, PreparedSourceRecord,
+    SourceEditMarker, SourceEditPhase, SourceEditRecoveryFailure, PREPARED_SOURCE_RECORD,
+    REPLACEMENT,
 };
 use crate::{
     layout::ProvenanceLayout,
