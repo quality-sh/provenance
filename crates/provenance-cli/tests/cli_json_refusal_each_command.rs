@@ -115,7 +115,8 @@ fn refusal_kind(stderr: &str) -> Option<String> {
 }
 
 /// The outcome of each line of the walk: the kind of its refusal object, or
-/// [`ACCEPTED`] for a line that the command accepts.
+/// [`ACCEPTED`] for a line that the command accepts. The `dogfood` lines are in
+/// the walk only with the `dogfood` feature.
 const OUTCOMES: &[(&str, &str)] = &[
     ("record_x get --kind source --format json", "invalid_input"),
     ("search --kind source --format json", ACCEPTED),
@@ -171,6 +172,9 @@ const OUTCOMES: &[(&str, &str)] = &[
         "report build --base damaged --head damaged --repository damaged --format json",
         "operation_failed",
     ),
+    ("dogfood list --format json", ACCEPTED),
+    ("dogfood report --format json", ACCEPTED),
+    ("dogfood triage list --format json", ACCEPTED),
 ];
 
 /// The outcome of a line that the command accepts with exit code 0.
