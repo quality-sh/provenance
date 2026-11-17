@@ -16,7 +16,7 @@ const ACTOR_DESCRIPTION: &str = "The actor is optional for a Requirement creatio
 
 /// The stored rows of the Discussion files of the scope `default`: the Discussion rows and
 /// the message rows.
-fn discussion_rows(repo: &Path) -> (Vec<Value>, Vec<Value>) {
+pub(crate) fn discussion_rows(repo: &Path) -> (Vec<Value>, Vec<Value>) {
     let threads = repo.join(".provenance/state/scopes/default/threads");
     let rows = |name: &str| {
         std::fs::read_to_string(threads.join(name))
@@ -42,8 +42,8 @@ async fn refusal(server: &Server, arguments: Value) -> Value {
     answer["structuredContent"].clone()
 }
 
-/// A reply with no actor is accepted on the CLI and on MCP. Its message row and its receipt
-/// give the actor `authoring`, and the Discussion keeps the actor of its start.
+/// A reply with no actor is accepted on the CLI and on MCP. Its message row gives the actor
+/// `authoring`, and the receipt is the Discussion, which keeps the actor of its start.
 #[tokio::test]
 #[verifies("rule_write_without_actor_records_authoring", examples)]
 async fn a_reply_with_no_actor_is_accepted_on_the_cli_and_mcp_and_records_authoring() {
@@ -112,13 +112,11 @@ async fn a_reply_with_no_actor_is_accepted_on_the_cli_and_mcp_and_records_author
             "thread_id": thread, "root_message_id": message_ids[0],
             "message_ids": message_ids[..version], "status": "active", "version": version,
             "actor": "reviewer", "outcomes": [], "disposition_id": null,
-            "message": messages[version - 1],
         })
     };
     assert_eq!(by_cli, json!({"kind": "written", "receipt": receipt(2)}));
     let text = format!(
-        "discussion {id} parent=requirement req_a status=active version=3 message={} \
-         actor=authoring",
+        "discussion {id} parent=requirement req_a status=active version=3 message={}",
         message_ids[2].as_str().unwrap()
     );
     assert_eq!(

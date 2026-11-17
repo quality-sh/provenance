@@ -89,8 +89,7 @@ async fn a_message_beyond_the_first_page_reads_directly_and_messages_paginate() 
                 body: "Root".into(),
             },
         })
-        .unwrap()
-        .discussion;
+        .unwrap();
     let mut last = root.root_message_id.clone();
     for version in 1..=50 {
         let reply = store
@@ -106,8 +105,7 @@ async fn a_message_beyond_the_first_page_reads_directly_and_messages_paginate() 
                     body: format!("Reply {version}"),
                 },
             })
-            .unwrap()
-            .discussion;
+            .unwrap();
         last = reply.message_ids.last().unwrap().clone();
     }
 

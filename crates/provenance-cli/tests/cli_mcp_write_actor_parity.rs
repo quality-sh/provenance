@@ -159,13 +159,9 @@ async fn the_cli_and_mcp_give_the_same_receipt_to_a_discuss_with_no_actor() {
         for generated in ["discussion_id", "root_message_id", "message_ids"] {
             receipt[generated] = json!(format!("<{generated}>"));
         }
-        for generated in ["id", "created_at"] {
-            receipt["message"][generated] = json!(format!("<{generated}>"));
-        }
     }
     assert_eq!(receipts[0], receipts[1]);
     assert_eq!(receipts[0]["receipt"]["actor"], "authoring");
-    assert_eq!(receipts[0]["receipt"]["message"]["actor"], "authoring");
 }
 
 /// A submit that gives no actor is refused on the two interfaces with the same error.

@@ -69,12 +69,7 @@ fn reply(repo: &Repository) -> serde_json::Value {
         "action":{"kind":"start","role":"user","body":"Open the check."}
     }))
     .unwrap();
-    let started = repo
-        .open()
-        .store()
-        .write_discussion(request)
-        .unwrap()
-        .discussion;
+    let started = repo.open().store().write_discussion(request).unwrap();
     json!({
         "action":"reply",
         "target":started.discussion_id,

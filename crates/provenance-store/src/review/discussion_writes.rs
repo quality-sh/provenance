@@ -7,7 +7,7 @@ use crate::{
     state_store::{PostMessageInput, RecordStamp, StateStore},
 };
 use provenance_core::{
-    threads::{Discussion, DiscussionReceipt, DiscussionStatus},
+    threads::{Discussion, DiscussionStatus},
     Thread, ThreadStatus,
 };
 use provenance_macros::rule;
@@ -31,7 +31,7 @@ fn unchanged_status(head: Option<&Discussion>, status: DiscussionStatus) -> Opti
 impl StateStore {
     /// Creates a distinct Discussion root or changes one addressed Discussion.
     #[rule("rule_record_comments_have_separate_reply_threads")]
-    pub fn write_discussion(&self, input: WriteDiscussion) -> anyhow::Result<DiscussionReceipt> {
+    pub fn write_discussion(&self, input: WriteDiscussion) -> anyhow::Result<Discussion> {
         self.with_repository_publication(|held| held.write_discussion_in_publication(input, None))
     }
 
@@ -39,7 +39,7 @@ impl StateStore {
         &self,
         input: WriteDiscussion,
         resolved_head: Option<Discussion>,
-    ) -> anyhow::Result<DiscussionReceipt> {
+    ) -> anyhow::Result<Discussion> {
         check_size(&input)?;
         self.authorize_discussion(&input)?;
         let head = match &input.action {
@@ -113,10 +113,7 @@ impl StateStore {
             }
             DiscussionAction::SetStatus { status, .. } => {
                 if let Some(current) = unchanged_status(head.as_ref(), *status) {
-                    return Ok(DiscussionReceipt {
-                        discussion: current,
-                        message: None,
-                    });
+                    return Ok(current);
                 }
             }
         }
@@ -139,7 +136,7 @@ impl StateStore {
         input: WriteDiscussion,
         head: Option<Discussion>,
         feedback_for: Option<provenance_core::StableId>,
-    ) -> anyhow::Result<DiscussionReceipt> {
+    ) -> anyhow::Result<Discussion> {
         let scope = &input.scope_id;
         let (thread, message, status) = match input.action {
             DiscussionAction::Start { role, body } => {
@@ -183,16 +180,10 @@ impl StateStore {
         let discussion = if let Some(mut discussion) = head {
             discussion.version += 1;
             discussion.status = status;
-            discussion
-                .message_ids
-                .extend(message.as_ref().map(|m| m.id.clone()));
+            discussion.message_ids.extend(message.map(|m| m.id));
             discussion
         } else {
-            let root = message
-                .as_ref()
-                .expect("a started Discussion has a root Message")
-                .id
-                .clone();
+            let root = message.expect("a started Discussion has a root Message").id;
             Discussion {
                 scope_id: scope.clone(),
                 discussion_id: super::new_id(&*self.ids()),
@@ -220,10 +211,7 @@ impl StateStore {
                 Ok(())
             })
         })?;
-        Ok(DiscussionReceipt {
-            discussion,
-            message,
-        })
+        Ok(discussion)
     }
 
     fn validate_discussion_thread(

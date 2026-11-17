@@ -57,7 +57,7 @@ fn catalog_reply(
     .unwrap()
 }
 
-fn failure(result: anyhow::Result<provenance_core::threads::DiscussionReceipt>) -> WriteFailure {
+fn failure(result: anyhow::Result<provenance_core::threads::Discussion>) -> WriteFailure {
     WriteError(result.unwrap_err()).safe()
 }
 
@@ -77,12 +77,9 @@ fn addressed_reply_contract_has_only_reply_fields() {
 #[test]
 fn target_reply_changes_only_its_discussion() {
     let (_temp, store) = fixture();
-    let a = store.write_discussion(start("a")).unwrap().discussion;
-    let b = store.write_discussion(start("b")).unwrap().discussion;
-    let changed = store
-        .write_target_discussion(reply("reply_a", &a))
-        .unwrap()
-        .discussion;
+    let a = store.write_discussion(start("a")).unwrap();
+    let b = store.write_discussion(start("b")).unwrap();
+    let changed = store.write_target_discussion(reply("reply_a", &a)).unwrap();
     assert_eq!(changed.discussion_id, a.discussion_id);
     assert_eq!(changed.version, 2);
     assert_eq!(b.version, 1);
@@ -92,7 +89,7 @@ fn target_reply_changes_only_its_discussion() {
 #[test]
 fn target_reply_checks_host_parent_grants_inside_publication() {
     let (_temp, store) = fixture();
-    let original = store.write_discussion(start("first")).unwrap().discussion;
+    let original = store.write_discussion(start("first")).unwrap();
     let mut denied_reply = reply("denied_reply", &original);
     denied_reply.allowed_parent_kinds = vec![provenance_core::NodeType::Source];
     assert!(matches!(
@@ -105,7 +102,7 @@ fn target_reply_checks_host_parent_grants_inside_publication() {
 #[test]
 fn target_refusals_do_not_append_messages() {
     let (_temp, store) = fixture();
-    let a = store.write_discussion(start("a")).unwrap().discussion;
+    let a = store.write_discussion(start("a")).unwrap();
     let missing =
         request(&json!({"discussion_id":"missing","expected_version":1,"role":"user","body":"x"}));
     assert!(matches!(
@@ -125,7 +122,7 @@ fn target_refusals_do_not_append_messages() {
 #[test]
 fn one_expected_version_wins_concurrent_replies() {
     let (_temp, store) = fixture();
-    let a = store.write_discussion(start("a")).unwrap().discussion;
+    let a = store.write_discussion(start("a")).unwrap();
     let barrier = std::sync::Barrier::new(2);
     std::thread::scope(|threads| {
         let one = threads.spawn(|| {
@@ -149,11 +146,10 @@ fn one_expected_version_wins_concurrent_replies() {
 #[test]
 fn resolved_discussion_refuses_target_reply() {
     let (_temp, store) = fixture();
-    let a = store.write_discussion(start("a")).unwrap().discussion;
+    let a = store.write_discussion(start("a")).unwrap();
     let resolved = store
         .write_discussion(discussion_support::status(&a, "resolved"))
-        .unwrap()
-        .discussion;
+        .unwrap();
     assert_eq!(resolved.status, DiscussionStatus::Resolved);
     assert!(matches!(
         failure(store.write_target_discussion(reply("reply", &resolved))),
@@ -165,7 +161,7 @@ fn resolved_discussion_refuses_target_reply() {
 #[test]
 fn owner_and_parent_membership_refuse_without_publication() {
     let (_temp, store) = fixture();
-    let a = store.write_discussion(start("a")).unwrap().discussion;
+    let a = store.write_discussion(start("a")).unwrap();
     let mut wrong_owner = start("owner");
     wrong_owner.declared_by = Some("other".into());
     assert!(matches!(
@@ -197,7 +193,7 @@ fn owner_and_parent_membership_refuse_without_publication() {
 #[test]
 fn closed_container_refuses_target_reply() {
     let (temp, store) = fixture();
-    let a = store.write_discussion(start("a")).unwrap().discussion;
+    let a = store.write_discussion(start("a")).unwrap();
     let layout = ProvenanceLayout::new(camino::Utf8Path::from_path(temp.path()).unwrap());
     let path = layout.scopes_dir().join("default/threads/threads.jsonl");
     let line = std::fs::read_to_string(&path).unwrap();
@@ -218,7 +214,7 @@ fn closed_container_refuses_target_reply() {
 #[tokio::test]
 async fn catalog_operation_uses_the_target_write_path() {
     let (temp, store) = fixture();
-    let started = store.write_discussion(start("a")).unwrap().discussion;
+    let started = store.write_discussion(start("a")).unwrap();
     let context = PreparedContext::for_scope(PreparedScope {
         repository: repository(camino::Utf8Path::from_path(temp.path()).unwrap()),
         requested_target: "selected".into(),
@@ -227,7 +223,7 @@ async fn catalog_operation_uses_the_target_write_path() {
         invoke_typed::<WriteTargetDiscussion>(context, catalog_reply("catalog", &started))
             .await
             .unwrap();
-    assert_eq!(receipt.discussion.version, 2);
+    assert_eq!(receipt.version, 2);
     assert_eq!(store.list_messages(&scope()).unwrap().len(), 2);
 }
 

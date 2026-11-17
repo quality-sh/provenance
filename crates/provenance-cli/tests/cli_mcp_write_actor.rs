@@ -96,18 +96,6 @@ fn receipt(review: &Value) -> Value {
     })
 }
 
-/// The write receipt of the Discussion start of `receipt`: the Discussion and its root
-/// Message, with the actor `authoring` and the write time `created_at`.
-fn written(receipt: &Value, created_at: &Value) -> Value {
-    let mut written = receipt.clone();
-    written["message"] = json!({
-        "scope_id": "default", "id": receipt["root_message_id"],
-        "thread_id": "thread_requirement_req_a", "role": "user", "actor": "authoring",
-        "body": "A concern.", "created_at": created_at,
-    });
-    written
-}
-
 /// The answer of one MCP change call that succeeds.
 async fn change(server: &Server, arguments: Value) -> Value {
     let answer = server.client.call("change", arguments.clone()).await;
@@ -185,8 +173,6 @@ fn a_cli_discuss_with_no_actor_records_authoring() {
     let review = cli_review(repo);
     let receipt = receipt(&review);
     assert_eq!(review["discussions"]["entries"][0]["head"], receipt);
-    let created_at = &started["receipt"]["message"]["created_at"];
-    let receipt = written(&receipt, created_at);
     assert_eq!(started, json!({"kind": "written", "receipt": receipt}));
 }
 
@@ -257,13 +243,10 @@ async fn an_mcp_discuss_with_no_actor_records_authoring() {
     let receipt = receipt(&review);
     assert_eq!(review["discussions"]["entries"][0]["head"], receipt);
     let text = format!(
-        "discussion {} parent=requirement req_a status=active version=1 message={} \
-         actor=authoring",
+        "discussion {} parent=requirement req_a status=active version=1 message={}",
         receipt["discussion_id"].as_str().unwrap(),
         receipt["root_message_id"].as_str().unwrap()
     );
-    let created_at = &started["structuredContent"]["receipt"]["message"]["created_at"];
-    let receipt = written(&receipt, created_at);
     assert_eq!(
         started,
         json!({

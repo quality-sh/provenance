@@ -170,7 +170,7 @@ impl StateStore {
         let started = self.permitting(&[&threads, &messages], "*", |store| {
             store.commit_discussion(discussion, None, Some(disposition_id.clone()))
         })?;
-        Ok(started.discussion.root_message_id)
+        Ok(started.root_message_id)
     }
 }
 

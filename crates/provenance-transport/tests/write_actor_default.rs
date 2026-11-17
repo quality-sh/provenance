@@ -115,13 +115,7 @@ async fn an_api_discussion_start_with_no_actor_records_authoring() {
             "outcomes": [], "disposition_id": null,
         })
     );
-    let mut written = stored;
-    written["message"] = json!({
-        "scope_id": "default", "id": root, "thread_id": "thread_requirement_req_shared",
-        "role": "user", "actor": "authoring", "body": "A concern.",
-        "created_at": started["data"]["message"]["created_at"],
-    });
-    assert_eq!(started, json!({"data": written, "meta": {}}));
+    assert_eq!(started, json!({"data": stored, "meta": {}}));
 }
 
 /// A status change names the actor who makes it, so a status change with no actor is
@@ -193,9 +187,9 @@ async fn a_status_change_with_no_actor_is_refused_before_the_host_opens_the_repo
     );
 }
 
-/// A reply with an actor and a reply with no actor are accepted. Each message row and each
-/// receipt give the actor of the reply, or `authoring` for the reply with no actor, and the
-/// Discussion keeps the actor of its start.
+/// A reply with an actor and a reply with no actor are accepted. Each message row gives the
+/// actor of the reply, or `authoring` for the reply with no actor. The receipt is the
+/// Discussion, which keeps the actor of its start.
 #[tokio::test]
 #[verifies("rule_message_records_its_actor", examples)]
 async fn an_api_reply_with_or_without_an_actor_records_the_actor_of_the_reply() {
@@ -261,7 +255,6 @@ async fn an_api_reply_with_or_without_an_actor_records_the_actor_of_the_reply() 
             "thread_id": thread, "root_message_id": message_ids[0],
             "message_ids": message_ids[..version], "status": "active", "version": version,
             "actor": "reviewer", "outcomes": [], "disposition_id": null,
-            "message": messages[version - 1],
         })
     };
     let expected = [2, 3].map(|version| json!({"data": receipt(version), "meta": {}}));

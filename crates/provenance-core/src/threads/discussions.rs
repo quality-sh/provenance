@@ -68,16 +68,6 @@ impl Discussion {
     }
 }
 
-/// The answer of a Discussion write: the Discussion after the write, and the Message that
-/// the write added with its actor. A status change adds no Message.
-#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct DiscussionReceipt {
-    #[serde(flatten)]
-    pub discussion: Discussion,
-    pub message: Option<crate::Message>,
-}
-
 /// A record created or changed from one Message of a Discussion, with the
 /// review revision that the write gave the record.
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]

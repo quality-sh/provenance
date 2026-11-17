@@ -172,7 +172,7 @@ async fn list_rows(
     first_by_id(rows, wanted)
 }
 
-/// A compact entry gives the stored identity, parent, status, and the actor and text of the opening Message.
+/// A compact entry gives the stored identity, parent, status, opening text, and actor.
 #[rule("rule_porcelain_discussion_list_entry")]
 fn summary(id: String, mut row: SqlRow) -> anyhow::Result<DiscussionSummary> {
     let opening = row.blob(5)?.to_vec();
@@ -194,9 +194,9 @@ fn summary(id: String, mut row: SqlRow) -> anyhow::Result<DiscussionSummary> {
         },
         status: serde_json::from_value(serde_json::Value::String(row.take_text(3)?))?,
         version: u64::try_from(row.integer(4)?)?,
-        opening_actor: row.take_text(7)?,
         opening_excerpt,
         excerpt_truncated,
+        actor: row.take_text(7)?,
     })
 }
 

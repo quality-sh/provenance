@@ -1,5 +1,6 @@
 // Implementation aid: the pinned renderer ships its own SDK build, so this flow checks the
-// host's read responses against the response validators that the renderer bundles.
+// host's read responses, and the Discussion write responses, against the response validators
+// that the renderer bundles.
 import { readFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -69,6 +70,17 @@ const { failures, summary } = await withFixtureHost(binaryArg, repository => {
       cursor = (body as { meta?: { next_cursor?: string | null } }).meta?.next_cursor ?? undefined;
     } while (cursor);
   }
+  // A Discussion with a reply on req_child: the start and the reply go through the write
+  // validators, and the document reads below then hold its Message entries.
+  const id = 'req_child';
+  await check('requirementCreateDiscussion', 'RequirementsCreateDiscussionSuccess', 'start',
+    () => client.requirementCreateDiscussion({ id, data: { actor: 'reviewer', role: 'user', body: statement } }));
+  const discussion_id = (body as { data: { discussion_id: string } }).data.discussion_id;
+  await check('requirementCreateDiscussionMessage', 'RequirementsCreateDiscussionMessageSuccess', 'reply',
+    () => client.requirementCreateDiscussionMessage({
+      id, discussion_id, if_match: '1', data: { actor: 'agent', role: 'assistant', body: statement },
+    }));
+  const message_id = (body as { data: { message_ids: string[] } }).data.message_ids[1];
   for (const [id] of requirements) {
     await check('getRequirementDocument', 'GetRequirementDocumentSuccess', id,
       cursor => client.getRequirementDocument({ id, limit: 1, ...(cursor ? { cursor } : {}) }));
@@ -80,6 +92,21 @@ const { failures, summary } = await withFixtureHost(binaryArg, repository => {
     cursor => client.listRequirements({ limit: 1, ...(cursor ? { cursor } : {}) }));
   await check('listRequirements', 'ListRequirementsSearchSuccess', 'search',
     cursor => client.listRequirements({ query: 'search', text: 'readable', limit: 1, ...(cursor ? { cursor } : {}) }));
+  await check('requirementListDiscussions', 'RequirementsListDiscussionsSuccess', id,
+    () => client.requirementListDiscussions({ id }));
+  await check('requirementGetDiscussion', 'RequirementsGetDiscussionSuccess', discussion_id,
+    () => client.requirementGetDiscussion({ id, discussion_id }));
+  await check('requirementListDiscussionMessages', 'RequirementsListDiscussionMessagesSuccess', discussion_id,
+    cursor => client.requirementListDiscussionMessages({ id, discussion_id, limit: 1, ...(cursor ? { cursor } : {}) }));
+  await check('requirementGetDiscussionMessage', 'RequirementsGetDiscussionMessageSuccess', message_id,
+    () => client.requirementGetDiscussionMessage({ id, discussion_id, message_id }));
+  await check('listMessages', 'ListMessagesSuccess', 'list',
+    cursor => client.listMessages({ limit: 1, ...(cursor ? { cursor } : {}) }));
+  await check('getMessage', 'GetMessageSuccess', message_id, () => client.getMessage({ id: message_id }));
+  await check('requirementUpdateDiscussion', 'RequirementsUpdateDiscussionSuccess', 'status',
+    () => client.requirementUpdateDiscussion({
+      id, discussion_id, if_match: '2', data: { actor: 'reviewer', status: 'resolved' },
+    }));
   // The page shows a refusal when a document root is gone, so its failure body is checked too.
   await check('getRequirementDocument', 'GetRequirementDocumentFailure', 'req_missing',
     () => client.getRequirementDocument({ id: 'req_missing' }).then(

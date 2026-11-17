@@ -51,10 +51,10 @@ pub struct DiscussionSummary {
     pub parent: ThreadParent,
     pub status: DiscussionStatus,
     pub version: u64,
-    /// The actor of the root Message.
-    pub opening_actor: String,
     pub opening_excerpt: String,
     pub excerpt_truncated: bool,
+    /// The actor of the Discussion, which is also the actor of its root Message.
+    pub actor: String,
 }
 
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]

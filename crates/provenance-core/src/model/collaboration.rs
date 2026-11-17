@@ -58,9 +58,19 @@ pub struct Message {
     pub thread_id: StableId,
     pub role: MessageRole,
     /// The actor of the write that added the Message.
+    #[serde(deserialize_with = "non_blank_actor")]
     pub actor: String,
     #[serde(alias = "content")]
     pub body: String,
     #[serde(deserialize_with = "super::exact_integer::time")]
     pub created_at: i64,
+}
+
+/// Reads the actor of a Message and refuses a blank actor, as serde refuses a missing one.
+fn non_blank_actor<'de, D: serde::Deserializer<'de>>(deserializer: D) -> Result<String, D::Error> {
+    let actor = String::deserialize(deserializer)?;
+    if actor.trim().is_empty() {
+        return Err(serde::de::Error::custom("the field `actor` is blank"));
+    }
+    Ok(actor)
 }

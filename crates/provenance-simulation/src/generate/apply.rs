@@ -179,15 +179,13 @@ pub fn apply(repository: &Repository, task: &Task) -> anyhow::Result<Effect> {
                     body: task.body(),
                 },
             };
-            let discussion = store
-                .write_discussion(WriteDiscussion {
-                    scope_id: scope(),
-                    parent: first_parent(),
-                    actor: task.actor(),
-                    declared_by: None,
-                    action,
-                })?
-                .discussion;
+            let discussion = store.write_discussion(WriteDiscussion {
+                scope_id: scope(),
+                parent: first_parent(),
+                actor: task.actor(),
+                declared_by: None,
+                action,
+            })?;
             Effect::Discussion {
                 id: discussion.discussion_id.as_str().to_owned(),
                 version: discussion.version,

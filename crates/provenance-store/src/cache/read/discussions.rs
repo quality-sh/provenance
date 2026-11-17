@@ -44,6 +44,8 @@ fn thread(mut row: SqlRow) -> anyhow::Result<Thread> {
     })
 }
 
+/// The Message of one cache row, with the actor of the write that added it.
+#[provenance_macros::rule("rule_message_read_shows_its_actor")]
 fn message(mut row: SqlRow) -> anyhow::Result<Message> {
     Ok(Message {
         scope_id: ScopeId::new(row.text(0)?)?,
