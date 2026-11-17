@@ -260,7 +260,7 @@ fn a_symlinked_cache_is_refused_before_recovery_runs() {
         layout.publication_marker_path(),
         serde_json::to_vec(&serde_json::json!({
             "transaction_dir": transaction,
-            "phase": "backup_created"
+            "phase": "installing"
         }))
         .unwrap(),
     )

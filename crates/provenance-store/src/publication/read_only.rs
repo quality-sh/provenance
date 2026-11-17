@@ -61,7 +61,7 @@ fn holds(store: &StateStore, scope: &ScopeId, kind: NodeType, id: &str) -> anyho
 #[cfg(test)]
 pub(super) mod tests {
     use super::*;
-    use crate::publication::{guard, staged};
+    use crate::publication::guard;
     use camino::Utf8PathBuf;
     use provenance_macros::verifies;
 
@@ -82,7 +82,7 @@ pub(super) mod tests {
             "source_help",
         );
         let copy = ProvenanceLayout::new(root.join("copy"));
-        staged::copy_directory(&live.state_dir(), &copy.state_dir()).unwrap();
+        crate::stopped_child::copy_state(live.root(), copy.root());
         (directory, live, copy)
     }
 

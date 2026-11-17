@@ -1,20 +1,19 @@
-//! A whole set of many keys on local disk. A write of records installs each
-//! changed file in place (see `in_place`). A source edit swaps a changed
-//! copy of the state directory in for the live state directory.
+//! A whole set of many keys on local disk, installed file by file in the
+//! live state directory (see `in_place`), with at most one working-tree file.
 //!
 //! The transaction lives under `.provenance/cache`. A marker names its phase,
-//! so recovery at the next section entry completes the write, or for a swap
-//! completes or rolls it back, after a stop. A transaction that no marker names belongs to no live
-//! write: the write removes it when it fails, and the next section entry
-//! removes it after a stop.
+//! so the next section entry completes a write that stopped after its
+//! marker. A transaction that no marker names belongs to no live write: the
+//! write removes it when it fails, and the next section entry removes it
+//! after a stop.
 
-use super::durability::{sync_directory, sync_tree, write_staged_file};
+use super::durability::sync_directory;
 use super::in_place;
 use super::recovery::{write_publication_marker, PublicationPhase};
 use super::transactions::{clear_marker, end_marked_write, remove_unpublished, TransactionKind};
 use crate::layout::ProvenanceLayout;
 use crate::storage::WriteSet;
-use camino::{Utf8Path, Utf8PathBuf};
+use camino::Utf8Path;
 use provenance_macros::rule;
 
 /// The steps that a publication names in one whole-set transaction.
@@ -24,15 +23,10 @@ use provenance_macros::rule;
 pub trait WholeSetHook {
     fn kind(&self) -> TransactionKind;
     fn prepared(&mut self, live: &ProvenanceLayout, transaction: &Utf8Path) -> anyhow::Result<()>;
-    fn backup_created(
-        &mut self,
-        live: &ProvenanceLayout,
-        transaction: &Utf8Path,
-    ) -> anyhow::Result<()>;
     fn state_installed(&mut self, live: &ProvenanceLayout) -> anyhow::Result<()>;
-    /// Installs the working-tree file. A failure gives the state of the file
-    /// with the error, so that the write rolls back only a file that is in
-    /// its initial place.
+    /// Installs the working-tree file, before the state. A failure gives the
+    /// state of the file with the error: a file in its initial place lets
+    /// the write end with no change.
     fn install_file(
         &mut self,
         live: &ProvenanceLayout,
@@ -59,9 +53,8 @@ pub enum InstallState {
     FileMoved,
 }
 
-/// Lands `writes` on the state directory of `live`. A write of records
-/// installs each changed file in place; see `in_place`. A source edit lands
-/// as one swap of a changed copy of the state directory.
+/// Lands `writes` on the state directory of `live`, with the working-tree
+/// file of `hook`. The cost is proportional to the changed bytes.
 #[rule("rule_live_projection_shows_only_published_state")]
 pub fn land(
     live: &ProvenanceLayout,
@@ -77,10 +70,7 @@ pub fn land(
     );
     let transaction = hook.kind().directory(live).join(transaction_name);
     std::fs::create_dir(&transaction)?;
-    let result = match hook.kind() {
-        TransactionKind::Import => stage_and_install(live, writes, &transaction, hook),
-        TransactionKind::SourceEdit => stage_and_publish(live, writes, &transaction, hook),
-    };
+    let result = stage_and_install(live, writes, &transaction, hook);
     if result.is_err() && !hook.kind().marker(live).exists() {
         // The error of the write wins. A failed removal leaves data that the
         // next section entry removes, or that stops it with its path.
@@ -104,22 +94,31 @@ fn stage_and_install(
         Ok(()) => install_after_marker(live, transaction, hook),
         // A marker that exists names a complete change list, so the next
         // section entry completes the write.
-        Err(_) if hook.kind().marker(live).exists() => {}
-        Err(error) => return Err(error),
+        Err(_) if hook.kind().marker(live).exists() => Ok(()),
+        Err(error) => Err(error),
     }
-    Ok(())
 }
 
-/// Installs the write that the marker names. The marker names a complete
-/// change list, so the write succeeds: when a step fails, the marker stays,
-/// and the next section entry completes the write. When the write cannot
-/// remove its transaction data, the marker stays too.
+/// Installs the write that the marker names: the working-tree file, and then
+/// the state. When the file install fails with the file in its initial
+/// place, no file changed: the write clears its marker and fails. After that
+/// point the write succeeds: when a step fails, the marker stays, and the
+/// next section entry completes the write. When the write cannot remove its
+/// transaction data, the marker stays too.
 #[rule("rule_published_write_succeeds_when_its_cleanup_fails")]
 fn install_after_marker(
     live: &ProvenanceLayout,
     transaction: &Utf8Path,
     hook: &mut dyn WholeSetHook,
-) {
+) -> anyhow::Result<()> {
+    match hook.install_file(live) {
+        Ok(_) => {}
+        Err((InstallState::StateOnly, error)) => {
+            clear_marker(live, hook.kind()).map_err(crate::write_error::publication_started)?;
+            return Err(error);
+        }
+        Err((InstallState::FileMoved, _)) => return Ok(()),
+    }
     let installed = in_place::install(live, transaction)
         .and_then(|()| hook.state_installed(live))
         .and_then(|()| hook.published(live, transaction))
@@ -127,160 +126,12 @@ fn install_after_marker(
     if installed.is_ok() {
         let _ = end_marked_write(live, hook.kind(), transaction);
     }
-}
-
-fn stage_and_publish(
-    live: &ProvenanceLayout,
-    writes: &WriteSet,
-    transaction: &Utf8Path,
-    hook: &mut dyn WholeSetHook,
-) -> anyhow::Result<()> {
-    let staged_repo = transaction.join("staged-repo");
-    let staged = ProvenanceLayout::new(staged_repo.clone());
-    copy_directory(&live.state_dir(), &staged.state_dir())?;
-    apply(&staged, writes)?;
-    crate::test_probes::at("state_prepared")?;
-    publish_staged_state(live, &staged, &staged_repo, transaction, hook)
-}
-
-/// Applies `writes` to the copy of the state directory at `staged`, with no
-/// sync: `publish_staged_state` syncs the staged tree one time.
-fn apply(staged: &ProvenanceLayout, writes: &WriteSet) -> anyhow::Result<()> {
-    let state = staged.state_dir();
-    for key in writes.deletes() {
-        let path = state.join(key.as_str());
-        match std::fs::remove_file(crate::long_path::extended(&path)?) {
-            Err(error) if error.kind() != std::io::ErrorKind::NotFound => {
-                return Err(crate::refusal::caused(error, format!("remove {path}")));
-            }
-            _ => {}
-        }
-    }
-    for (key, bytes) in writes.puts() {
-        write_staged_file(&state.join(key.as_str()), bytes)?;
-    }
     Ok(())
-}
-
-/// Publishes the staged state and the working-tree file of `hook`. When the
-/// write is published, it succeeds when its end fails: the marker stays, or
-/// a sync of the cache did not make the removal of the marker durable, and
-/// the next section entry ends the write.
-fn publish_staged_state(
-    live: &ProvenanceLayout,
-    staged: &ProvenanceLayout,
-    staged_repo: &Utf8Path,
-    transaction: &Utf8Path,
-    hook: &mut dyn WholeSetHook,
-) -> anyhow::Result<()> {
-    sync_tree(&staged.state_dir())?;
-    sync_directory(&staged.provenance_dir())?;
-    sync_directory(staged_repo)?;
-    sync_directory(transaction)?;
-    sync_directory(&hook.kind().directory(live))?;
-    let backup = transaction.join("backup-state");
-    hook.prepared(live, transaction)?;
-    std::fs::rename(live.state_dir(), &backup).map_err(|error| {
-        crate::refusal::fault!("move live state {} to backup: {error}", live.state_dir())
-    })?;
-    install_staged_state(live, staged, transaction, &backup, hook)?;
-    let install_state = install_file(live, staged, &backup, hook)?;
-    record_publication(live, staged, transaction, &backup, install_state, hook)?;
-    hook.after_published()?;
-    let _ = end_marked_write(live, hook.kind(), transaction);
-    Ok(())
-}
-
-fn install_staged_state(
-    live: &ProvenanceLayout,
-    staged: &ProvenanceLayout,
-    transaction: &Utf8Path,
-    backup: &Utf8Path,
-    hook: &mut dyn WholeSetHook,
-) -> anyhow::Result<()> {
-    let state_result = crate::test_probes::at("state_after_backup_rename")
-        .and_then(|()| hook.backup_created(live, transaction))
-        .and_then(|()| crate::test_probes::at("state_before_install"))
-        .and_then(|()| {
-            std::fs::rename(staged.state_dir(), live.state_dir()).map_err(|error| {
-                crate::refusal::fault!("install staged state {}: {error}", staged.state_dir())
-            })
-        })
-        .and_then(|()| crate::test_probes::at("state_after_install_rename"))
-        .and_then(|()| crate::test_probes::at("state_installed"))
-        .and_then(|()| sync_directory(&live.provenance_dir()))
-        .and_then(|()| hook.state_installed(live));
-    if let Err(error) = state_result {
-        rollback_after_error(live, staged, backup, hook.kind())?;
-        return Err(error);
-    }
-    Ok(())
-}
-
-fn install_file(
-    live: &ProvenanceLayout,
-    staged: &ProvenanceLayout,
-    backup: &Utf8Path,
-    hook: &mut dyn WholeSetHook,
-) -> anyhow::Result<InstallState> {
-    hook.install_file(live).or_else(|(state, error)| {
-        if state == InstallState::StateOnly {
-            rollback_after_error(live, staged, backup, hook.kind())?;
-        }
-        Err(error)
-    })
-}
-
-fn record_publication(
-    live: &ProvenanceLayout,
-    staged: &ProvenanceLayout,
-    transaction: &Utf8Path,
-    backup: &Utf8Path,
-    install_state: InstallState,
-    hook: &mut dyn WholeSetHook,
-) -> anyhow::Result<()> {
-    let Err(error) = hook.published(live, transaction) else {
-        return Ok(());
-    };
-    if install_state == InstallState::FileMoved {
-        return Err(error);
-    }
-    rollback_after_error(live, staged, backup, hook.kind())?;
-    Err(error)
-}
-
-fn rollback_after_error(
-    live: &ProvenanceLayout,
-    staged: &ProvenanceLayout,
-    backup: &Utf8Path,
-    kind: TransactionKind,
-) -> anyhow::Result<()> {
-    rollback_publication(live, staged, backup).map_err(crate::write_error::publication_started)?;
-    clear_marker(live, kind).map_err(crate::write_error::publication_started)
-}
-
-fn rollback_publication(
-    live: &ProvenanceLayout,
-    staged: &ProvenanceLayout,
-    backup: &Utf8Path,
-) -> anyhow::Result<()> {
-    crate::test_probes::at("state_before_rollback")?;
-    if live.state_dir().exists() {
-        std::fs::rename(live.state_dir(), staged.state_dir()).map_err(|error| {
-            crate::refusal::fault!("return live state to stage during rollback: {error}")
-        })?;
-    }
-    if backup.exists() {
-        std::fs::rename(backup, live.state_dir()).map_err(|error| {
-            crate::refusal::fault!("restore backup state during rollback: {error}")
-        })?;
-    }
-    sync_directory(&live.provenance_dir())
 }
 
 /// The hook of a whole set with no working-tree file: its transaction goes
 /// under `cache/import-transactions`, and the publication marker records
-/// each phase. It installs in place, so it makes no backup.
+/// each phase.
 pub struct StatePublication;
 
 impl WholeSetHook for StatePublication {
@@ -291,14 +142,6 @@ impl WholeSetHook for StatePublication {
     fn prepared(&mut self, live: &ProvenanceLayout, transaction: &Utf8Path) -> anyhow::Result<()> {
         write_publication_marker(live, transaction, PublicationPhase::Installing)?;
         crate::test_probes::at("state_marker_prepared")
-    }
-
-    fn backup_created(
-        &mut self,
-        _live: &ProvenanceLayout,
-        _transaction: &Utf8Path,
-    ) -> anyhow::Result<()> {
-        Ok(())
     }
 
     fn state_installed(&mut self, _live: &ProvenanceLayout) -> anyhow::Result<()> {
@@ -319,26 +162,4 @@ impl WholeSetHook for StatePublication {
     fn after_published(&mut self) -> anyhow::Result<()> {
         crate::test_probes::at("state_published")
     }
-}
-
-pub fn copy_directory(source: &Utf8Path, destination: &Utf8Path) -> anyhow::Result<()> {
-    std::fs::create_dir_all(destination)?;
-    for entry in std::fs::read_dir(source)? {
-        let entry = entry?;
-        let source_path = Utf8PathBuf::from_path_buf(entry.path()).map_err(|path| {
-            crate::refusal::fault!("state path is not UTF-8: {}", path.display())
-        })?;
-        let target = destination.join(entry.file_name().to_string_lossy().as_ref());
-        let file_type = std::fs::symlink_metadata(&source_path)?.file_type();
-        if file_type.is_dir() {
-            copy_directory(&source_path, &target)?;
-        } else if file_type.is_file() {
-            std::fs::copy(source_path, target)?;
-        } else {
-            return Err(crate::refusal::fault!(
-                "unsupported state entry: {source_path}"
-            ));
-        }
-    }
-    Ok(())
 }

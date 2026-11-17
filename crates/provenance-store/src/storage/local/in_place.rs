@@ -15,7 +15,7 @@ use super::durability::{
 };
 use crate::layout::ProvenanceLayout;
 use crate::storage::{StateKey, WriteSet};
-use camino::Utf8Path;
+use camino::{Utf8Path, Utf8PathBuf};
 use provenance_macros::rule;
 
 /// The name of the change list in a transaction.
@@ -79,8 +79,7 @@ pub fn install(live: &ProvenanceLayout, transaction: &Utf8Path) -> anyhow::Resul
     let state = live.state_dir();
     let staged = transaction.join(STAGED);
     for key in &changes.puts {
-        let source = staged.join(key.as_str());
-        if file_exists(&source)? {
+        if let Some(source) = staged_file(&staged, key)? {
             install_staged_file(&source, &state.join(key.as_str()))?;
             crate::test_probes::at("state_file_installed")?;
         }
@@ -139,18 +138,34 @@ fn ensure_installable(live: &ProvenanceLayout, writes: &WriteSet) -> anyhow::Res
     Ok(())
 }
 
-/// Tells if a regular file is at `path`. A failure gives the path.
-fn file_exists(path: &Utf8Path) -> anyhow::Result<bool> {
-    match std::fs::symlink_metadata(crate::long_path::extended(path)?) {
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(false),
-        Err(error) => Err(crate::refusal::caused(error, format!("read {path}"))),
-        Ok(metadata) => {
-            crate::write_error::ensure!(
-                Fault,
-                metadata.is_file(),
-                "staged entry {path} is not a regular file"
-            );
-            Ok(true)
+/// The staged file of `key` below `staged`, or `None` when the install
+/// moved it. Each directory on the way is a real directory and the file is
+/// a regular file, so that the install does not follow a link out of the
+/// transaction. A failure gives the path.
+fn staged_file(staged: &Utf8Path, key: &str) -> anyhow::Result<Option<Utf8PathBuf>> {
+    let mut path = staged.to_owned();
+    let parts: Vec<&str> = key.split('/').collect();
+    for (index, part) in std::iter::once("").chain(parts.iter().copied()).enumerate() {
+        if !part.is_empty() {
+            path.push(part);
         }
+        let metadata = match std::fs::symlink_metadata(crate::long_path::extended(&path)?) {
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+            Err(error) => return Err(crate::refusal::caused(error, format!("read {path}"))),
+            Ok(metadata) => metadata,
+        };
+        let is_file = index == parts.len();
+        let expected = if is_file {
+            metadata.is_file()
+        } else {
+            metadata.is_dir()
+        };
+        crate::write_error::ensure!(
+            Fault,
+            expected && !metadata.file_type().is_symlink(),
+            "staged entry {path} is not a real {}",
+            if is_file { "file" } else { "directory" }
+        );
     }
+    Ok(Some(path))
 }

@@ -65,7 +65,8 @@ fn crash_child() {
             "repository_file_clone_parent",
             "source_edit_temp_prepared",
             "source_edit_prepared",
-            "source_edit_backup_created",
+            "repository_file_after_displace",
+            "state_file_installed",
             "source_edit_state_installed",
             "repository_file_unlink_backup",
             "source_edit_file_installed",
@@ -74,11 +75,74 @@ fn crash_child() {
     );
 }
 
+/// The test that the recovery stop tests run as a child: its section entry
+/// completes the stopped source edit.
+const RECOVERY_CHILD: &str = "operations::files::tests::source_edit_recovery_tests::recovery_child";
+
+#[test]
+fn recovery_child() {
+    run_as_child(
+        &[
+            "repository_file_after_displace",
+            "state_file_installed",
+            "source_edit_state_installed",
+            "repository_file_unlink_backup",
+            "source_edit_file_installed",
+        ],
+        |root| with_repository_publication(&ProvenanceLayout::new(root), |_| Ok(())).unwrap(),
+    );
+}
+
+/// At each stop of the write after its marker, and at each stop of the
+/// recovery of a write that stopped after its marker, the live state
+/// directory exists. The next section entry gives the new file with the new
+/// state.
+#[test]
+#[verifies("rule_stopped_write_completes_after_its_marker", examples)]
+fn each_stop_of_a_source_edit_and_of_its_recovery_keeps_the_state_and_completes() {
+    let recovery_stops = [
+        "repository_file_after_displace",
+        "state_file_installed",
+        "source_edit_state_installed",
+        "repository_file_unlink_backup",
+        "source_edit_file_installed",
+    ];
+    let stops = recovery_stops.iter().map(|phase| (*phase, None)).chain(
+        recovery_stops
+            .iter()
+            .map(|phase| (*phase, Some("source_edit_prepared"))),
+    );
+    for (phase, first) in stops {
+        let temp = fixture();
+        let root_path = canonical_root(&temp);
+        let root = root_path.as_path();
+        let layout = ProvenanceLayout::new(root);
+        if let Some(first) = first {
+            stop_in_child(CHILD, root, first);
+            stop_in_child(RECOVERY_CHILD, root, phase);
+        } else {
+            stop_in_child(CHILD, root, phase);
+        }
+        assert!(layout.state_dir().is_dir(), "{phase} {first:?}");
+
+        with_repository_publication(&layout, |_| Ok(())).unwrap();
+        assert_eq!(
+            published(root),
+            (AFTER.to_vec(), AFTER.to_vec()),
+            "{phase} {first:?}"
+        );
+        assert!(
+            !layout.source_edit_marker_path().exists(),
+            "{phase} {first:?}"
+        );
+    }
+}
+
 #[test]
 fn each_source_edit_phase_recovers_matching_file_and_state() {
     for phase in [
         "source_edit_prepared",
-        "source_edit_backup_created",
+        "state_file_installed",
         "source_edit_state_installed",
         "source_edit_file_installed",
     ] {
@@ -180,19 +244,19 @@ fn recovery_refuses_third_file_bytes_without_overwriting_them() {
 }
 
 #[test]
-fn file_install_refusal_rolls_state_back_without_overwriting_external_bytes() {
+fn file_install_refusal_keeps_the_state_and_the_external_bytes() {
     let temp = fixture();
     let root_path = canonical_root(&temp);
     let root = root_path.as_path();
     let source = root.join("source.txt");
     let changed = source.clone();
-    test_probes::arm("source_edit_state_installed", move || {
+    test_probes::arm("source_edit_prepared", move || {
         std::fs::write(&changed, b"external\n").unwrap();
         Ok(())
     });
 
     let result = std::panic::catch_unwind(|| publish(root));
-    test_probes::disarm("source_edit_state_installed");
+    test_probes::disarm("source_edit_prepared");
 
     assert!(result.is_err());
     let layout = ProvenanceLayout::new(root);
@@ -226,28 +290,26 @@ fn final_marker_clears_when_cleanup_lost_its_result() {
     assert!(!layout.source_edit_marker_path().exists());
 }
 
+/// The file install fails after its backup check and puts the target back,
+/// so no file changed: the write clears its marker and fails, and the state
+/// keeps its old bytes.
 #[test]
-fn failed_rollback_retains_material_and_restart_finishes_the_edit() {
+fn a_file_install_that_puts_the_target_back_ends_the_write_with_no_change() {
     let temp = fixture();
     let root_path = canonical_root(&temp);
     let root = root_path.as_path();
     test_probes::crash_at("repository_file_after_backup_check");
-    test_probes::crash_at("state_before_rollback");
 
-    let result = std::panic::catch_unwind(|| publish(root));
+    let result = try_publish(root);
     test_probes::disarm("repository_file_after_backup_check");
-    test_probes::disarm("state_before_rollback");
 
     assert!(result.is_err());
     let layout = ProvenanceLayout::new(root);
-    assert!(layout.source_edit_marker_path().exists());
-    with_repository_publication(&layout, |_| Ok(())).unwrap();
-    assert_eq!(std::fs::read(root.join("source.txt")).unwrap(), AFTER);
-    assert_eq!(
-        std::fs::read(layout.state_dir().join("value")).unwrap(),
-        AFTER
-    );
     assert!(!layout.source_edit_marker_path().exists());
+    assert_eq!(published(root), (BEFORE.to_vec(), BEFORE.to_vec()));
+    with_repository_publication(&layout, |_| Ok(())).unwrap();
+    assert_eq!(published(root), (BEFORE.to_vec(), BEFORE.to_vec()));
+    assert_eq!(prepared_files(root), Vec::<String>::new());
 }
 
 /// A file and a link in the source-edit transaction directory are entries

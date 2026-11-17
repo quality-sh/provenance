@@ -26,8 +26,9 @@ pub enum SourceEditRecoveryFailure {
 #[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub(super) enum SourceEditPhase {
-    Prepared,
-    BackupCreated,
+    /// The change list and the prepared file are complete: recovery installs
+    /// the file and the state.
+    Installing,
     StateInstalled,
     FileInstalled,
 }
@@ -129,7 +130,7 @@ impl WholeSetHook for SourceEditPublication {
         crate::test_probes::at("source_edit_temp_prepared")?;
         let marker = SourceEditMarker {
             transaction_dir: transaction.to_owned(),
-            phase: SourceEditPhase::Prepared,
+            phase: SourceEditPhase::Installing,
             target: held.relative().to_owned(),
             target_identity: held.identity().clone(),
             before_digest: held.digest(),
@@ -145,19 +146,6 @@ impl WholeSetHook for SourceEditPublication {
         crate::test_probes::at("source_edit_prepared")
     }
 
-    fn backup_created(
-        &mut self,
-        live: &ProvenanceLayout,
-        transaction: &Utf8Path,
-    ) -> anyhow::Result<()> {
-        sync_directory(transaction)?;
-        sync_directory(&live.provenance_dir())?;
-        let marker = self.marker.as_mut().expect("source-edit marker");
-        marker.phase = SourceEditPhase::BackupCreated;
-        write_source_edit_marker(live, marker)?;
-        crate::test_probes::at("source_edit_backup_created")
-    }
-
     fn state_installed(&mut self, live: &ProvenanceLayout) -> anyhow::Result<()> {
         let marker = self.marker.as_mut().expect("source-edit marker");
         marker.phase = SourceEditPhase::StateInstalled;
@@ -165,9 +153,10 @@ impl WholeSetHook for SourceEditPublication {
         crate::test_probes::at("source_edit_state_installed")
     }
 
-    /// A failed rename back of the target leaves the initial file in the
-    /// backup, so the write keeps its marker, and the next section entry
-    /// puts the backup back and completes the install.
+    /// A refusal with the target in its initial place lets the write end
+    /// with no change. A failed rename back of the target leaves the initial
+    /// file in the backup, so the write keeps its marker, and the next
+    /// section entry puts the backup back and completes the install.
     fn install_file(
         &mut self,
         live: &ProvenanceLayout,

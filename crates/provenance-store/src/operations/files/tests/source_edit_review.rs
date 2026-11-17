@@ -78,8 +78,8 @@ fn review_crash_child() {
     let phase = match phase.as_str() {
         "source_edit_temp_prepared" => "source_edit_temp_prepared",
         "source_edit_prepared" => "source_edit_prepared",
-        "state_after_backup_rename" => "state_after_backup_rename",
-        "state_after_install_rename" => "state_after_install_rename",
+        "state_file_installed" => "state_file_installed",
+        "state_installed" => "state_installed",
         "repository_file_after_displace" => "repository_file_after_displace",
         "repository_file_after_backup_check" => "repository_file_after_backup_check",
         "repository_file_unlink_backup" => "repository_file_unlink_backup",
@@ -95,8 +95,8 @@ fn review_crash_child() {
 fn every_physical_transition_recovers_exact_file_and_state_bytes() {
     for (phase, expected) in [
         ("source_edit_temp_prepared", (BEFORE, BEFORE)),
-        ("state_after_backup_rename", (AFTER, AFTER)),
-        ("state_after_install_rename", (AFTER, AFTER)),
+        ("state_file_installed", (AFTER, AFTER)),
+        ("state_installed", (AFTER, AFTER)),
         ("repository_file_after_displace", (AFTER, AFTER)),
         ("repository_file_after_backup_check", (AFTER, AFTER)),
         ("repository_file_unlink_backup", (AFTER, AFTER)),
@@ -159,10 +159,9 @@ fn marker_failure_after_file_install_keeps_forward_recovery_material() {
         anyhow::bail!("injected marker write failure")
     });
 
-    let error = try_publish(root).unwrap_err();
+    try_publish(root).unwrap();
     test_probes::disarm("source_edit_before_file_marker_write");
 
-    assert!(error.to_string().contains("injected marker write failure"));
     assert_bytes(root, AFTER, AFTER);
     let layout = ProvenanceLayout::new(root);
     assert!(layout.source_edit_marker_path().exists());
@@ -256,25 +255,22 @@ fn symlink_directory(target: &Utf8Path, link: &Utf8Path) {
 }
 
 #[test]
-fn recovery_refuses_a_symlinked_staged_provenance_directory() {
+fn recovery_refuses_a_symlinked_staged_directory() {
     let temp = fixture();
     let root_path = canonical_root(&temp);
     let root = root_path.as_path();
     let (layout, value) = crash_with_marker(root);
     let transaction = Utf8Path::new(value["transaction_dir"].as_str().unwrap());
-    let staged_provenance = transaction.join("staged-repo/.provenance");
-    std::fs::remove_dir_all(&staged_provenance).unwrap();
-    let outside = root.join("outside-provenance");
-    std::fs::create_dir_all(outside.join("state")).unwrap();
-    std::fs::write(outside.join("state/value"), b"outside\n").unwrap();
-    symlink_directory(&outside, &staged_provenance);
+    let staged = transaction.join("staged");
+    std::fs::remove_dir_all(&staged).unwrap();
+    let outside = root.join("outside-staged");
+    std::fs::create_dir_all(&outside).unwrap();
+    std::fs::write(outside.join("value"), b"outside\n").unwrap();
+    symlink_directory(&outside, &staged);
 
     assert!(recover(root).is_err());
 
     assert_bytes(root, BEFORE, BEFORE);
-    assert_eq!(
-        std::fs::read(outside.join("state/value")).unwrap(),
-        b"outside\n"
-    );
+    assert_eq!(std::fs::read(outside.join("value")).unwrap(), b"outside\n");
     assert!(layout.source_edit_marker_path().exists());
 }
