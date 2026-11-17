@@ -9,6 +9,7 @@
 
 use super::{repository_at, root_of, seeded_store};
 use crate::layout::ProvenanceLayout;
+use crate::operations::read_policy::ReadPolicy;
 use crate::read_database::SqlValue;
 use crate::repository::Repository;
 use crate::review::history::{BoxFuture, FileVersion, FileVersions};
@@ -85,7 +86,7 @@ async fn read(
         cursor: None,
     };
     set_page_work_steps(steps);
-    let answer = read_history(&opened, Default::default(), query).await;
+    let answer = read_history(&opened, ReadPolicy::default(), query).await;
     set_page_work_steps(None);
     Ok(answer?.result)
 }
