@@ -1,17 +1,18 @@
 //! The optional actor input on the CLI and on a spawned `provenance mcp`: a reply with no
-//! actor is accepted and stores no actor, a JSON `null` actor is refused, and the input has
-//! one description.
+//! actor is accepted and records the actor `authoring`, a JSON `null` actor is refused, and
+//! the input has one description.
 
 use crate::cli_mcp_read_parity::cli_json;
 use crate::cli_mcp_record_actions::Server;
 use crate::cli_mcp_write_actor::{mcp_review, repository, requirement};
+use provenance_macros::verifies;
 use serde_json::{json, Value};
 use std::path::Path;
 
 /// The description of the optional actor input.
 const ACTOR_DESCRIPTION: &str = "The actor is optional for a Requirement creation or update, and \
-     for a Discussion start or reply. A Requirement creation or update, or a Discussion start, \
-     with no actor records the actor `authoring`.";
+     for a Discussion start or reply. A Requirement creation or update, a Discussion start, or \
+     a reply with no actor records the actor `authoring`.";
 
 /// The stored rows of the Discussion files of the scope `default`: the Discussion rows and
 /// the message rows.
@@ -41,11 +42,11 @@ async fn refusal(server: &Server, arguments: Value) -> Value {
     answer["structuredContent"].clone()
 }
 
-/// Implementation aid: no Rule states what a reply stores for its actor. A reply with no
-/// actor is accepted on the CLI and on MCP. The message rows have no actor, and the
-/// Discussion keeps the actor of its start.
+/// A reply with no actor is accepted on the CLI and on MCP. Its message row and its receipt
+/// give the actor `authoring`, and the Discussion keeps the actor of its start.
 #[tokio::test]
-async fn a_reply_with_no_actor_is_accepted_on_the_cli_and_mcp_and_stores_no_actor() {
+#[verifies("rule_write_without_actor_records_authoring", examples)]
+async fn a_reply_with_no_actor_is_accepted_on_the_cli_and_mcp_and_records_authoring() {
     let directory = repository();
     let repo = directory.path();
     requirement(repo);
@@ -92,10 +93,15 @@ async fn a_reply_with_no_actor_is_accepted_on_the_cli_and_mcp_and_stores_no_acto
         .collect::<Vec<_>>();
     assert_eq!(discussions[0]["message_ids"], json!(message_ids));
     let thread = &discussions[0]["thread_id"];
-    for (row, body) in messages.iter().zip(["A concern.", "A reply.", "A reply."]) {
+    let written = [
+        ("reviewer", "A concern."),
+        ("authoring", "A reply."),
+        ("authoring", "A reply."),
+    ];
+    for (row, (actor, body)) in messages.iter().zip(written) {
         let expected = json!({
             "scope_id": "default", "id": row["id"], "thread_id": thread, "role": "user",
-            "body": body, "created_at": row["created_at"],
+            "actor": actor, "body": body, "created_at": row["created_at"],
         });
         assert_eq!(row, &expected);
     }
@@ -106,11 +112,13 @@ async fn a_reply_with_no_actor_is_accepted_on_the_cli_and_mcp_and_stores_no_acto
             "thread_id": thread, "root_message_id": message_ids[0],
             "message_ids": message_ids[..version], "status": "active", "version": version,
             "actor": "reviewer", "outcomes": [], "disposition_id": null,
+            "message": messages[version - 1],
         })
     };
     assert_eq!(by_cli, json!({"kind": "written", "receipt": receipt(2)}));
     let text = format!(
-        "discussion {id} parent=requirement req_a status=active version=3 message={}",
+        "discussion {id} parent=requirement req_a status=active version=3 message={} \
+         actor=authoring",
         message_ids[2].as_str().unwrap()
     );
     assert_eq!(

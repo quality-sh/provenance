@@ -7,8 +7,8 @@ use provenance_macros::rule;
 /// The actor that a write records when the request gives no actor.
 pub const AUTHORING_ACTOR: &str = "authoring";
 
-/// A Requirement creation, a Requirement update, or a Discussion start that gives no actor
-/// records the actor `authoring`; a write that gives an actor records that actor.
+/// A Requirement creation, a Requirement update, a Discussion start, or a reply that gives
+/// no actor records the actor `authoring`; a write that gives an actor records that actor.
 #[rule("rule_write_without_actor_records_authoring")]
 pub fn recorded_actor(given: ActorInput) -> String {
     given.0.unwrap_or_else(|| AUTHORING_ACTOR.to_owned())

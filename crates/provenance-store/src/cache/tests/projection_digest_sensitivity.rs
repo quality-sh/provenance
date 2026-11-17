@@ -227,7 +227,8 @@ pub(super) fn change_one_record(
                     }))
                     .unwrap(),
                 )
-                .unwrap();
+                .unwrap()
+                .discussion;
         }
         ProjectionFamily::AssertionRecords => {
             let content = std::fs::read_to_string(&path).unwrap();

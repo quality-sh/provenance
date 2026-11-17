@@ -142,7 +142,8 @@ fn a_typed_spec_apply_on_memory_deletes_the_messages_of_a_removed_discussion() {
                 body: "A concern.".into(),
             },
         })
-        .unwrap();
+        .unwrap()
+        .discussion;
     assert_eq!(started.status, DiscussionStatus::Active);
     let view = memory.repository.view().unwrap();
     assert_eq!(view.list_messages(&scope()).unwrap().len(), 1);

@@ -14,9 +14,12 @@ use serde_json::json;
 async fn legacy_membership_is_explicit_and_pages_rebuild_from_records() {
     let (temp, store) = fixture();
     let root = camino::Utf8Path::from_path(temp.path()).unwrap();
-    let old=store.post_thread_message(serde_json::from_value(json!({"scope_id":"default","parent":{"node_type":"requirement","node_id":"req_a"},"role":"user","body":"Unknown root"})).unwrap()).unwrap();
+    let old=store.post_thread_message(serde_json::from_value(json!({"scope_id":"default","parent":{"node_type":"requirement","node_id":"req_a"},"role":"user","actor":"agent","body":"Unknown root"})).unwrap()).unwrap();
     let a = start(&store, "a");
-    store.write_discussion(reply(&a, "reply")).unwrap();
+    store
+        .write_discussion(reply(&a, "reply"))
+        .unwrap()
+        .discussion;
     let query = DiscussionQuery {
         parent: a.parent.clone(),
         limit: 1,
@@ -178,7 +181,10 @@ async fn complete_cache_rebuild_retains_resolved_groups_and_outcomes() {
     let (temp, store) = fixture();
     let root = camino::Utf8Path::from_path(temp.path()).unwrap();
     let a = start(&store, "a");
-    let resolved = store.write_discussion(status(&a, "resolved")).unwrap();
+    let resolved = store
+        .write_discussion(status(&a, "resolved"))
+        .unwrap()
+        .discussion;
     store
         .save_requirement_from_discussion(
             save(&store, json!({"description":"After"})),
@@ -243,7 +249,8 @@ async fn large_but_legal_discussion_messages_stay_readable() {
         .write_discussion(write(
             json!({"kind":"start","role":"user","body":"a".repeat(60_000)}),
         ))
-        .unwrap();
+        .unwrap()
+        .discussion;
     let page = read_discussion_messages(
         &repository(root),
         ReadPolicy::default(),
@@ -269,7 +276,7 @@ async fn legacy_message_appends_refuse_oversized_bodies() {
         serde_json::from_value(json!({
             "scope_id":"default",
             "parent":{"node_type":"requirement","node_id":"req_a"},
-            "role":"user",
+            "role":"user", "actor":"agent",
             "body":"a".repeat(70_000)
         }))
         .unwrap(),
@@ -284,7 +291,7 @@ async fn legacy_message_appends_refuse_oversized_bodies() {
             serde_json::from_value(json!({
                 "scope_id":"default",
                 "parent":{"node_type":"requirement","node_id":"req_a"},
-                "role":"user",
+                "role":"user", "actor":"agent",
                 "body":"The system keeps messages readable."
             }))
             .unwrap(),

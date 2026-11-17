@@ -200,7 +200,8 @@ fn second_records(store: &StateStore, scope: &ScopeId) {
                 }))
                 .unwrap(),
             )
-            .unwrap();
+            .unwrap()
+            .discussion;
     }
     for id in ["req_top", "req_left"] {
         let id = sid(id);

@@ -115,9 +115,10 @@ async fn list(ctx: &ReadContext, query: DiscussionListQuery) -> anyhow::Result<D
     })
 }
 
-/// The rows of the list after the discussion id `after`, at most `wanted`
-/// of them, in discussion id order. The parent kinds go in chunks of the
-/// list size of the read.
+/// The rows of the list after the discussion id `after`, at most `wanted` of them, in
+/// discussion id order, each with the actor of its root Message. The parent kinds go in
+/// chunks of the list size of the read.
+#[rule("rule_discussion_list_entry_shows_opening_actor")]
 async fn list_rows(
     ctx: &ReadContext,
     query: &DiscussionListQuery,

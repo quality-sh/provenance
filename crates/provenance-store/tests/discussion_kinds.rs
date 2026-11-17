@@ -174,7 +174,8 @@ fn parent_ownership_and_existence_are_per_kind() {
             "res_award",
             &json!("maker"),
         ))
-        .unwrap();
+        .unwrap()
+        .discussion;
     for (kind, node) in [
         (NodeType::Topic, "topic_award"),
         (NodeType::Question, "question_award"),
@@ -203,7 +204,7 @@ fn legacy_containers_stay_readable_beside_addressed_discussions() {
             serde_json::from_value(json!({
                 "scope_id": "default",
                 "parent": {"node_type": "question", "node_id": "question_award"},
-                "role": "user", "body": "A legacy comment"
+                "role": "user", "actor": "agent", "body": "A legacy comment"
             }))
             .unwrap(),
         )
@@ -215,7 +216,8 @@ fn legacy_containers_stay_readable_beside_addressed_discussions() {
             "question_award",
             &json!(null),
         ))
-        .unwrap();
+        .unwrap()
+        .discussion;
     assert_eq!(addressed.thread_id, legacy.thread.id);
     let containers = store
         .list_threads(&scope())

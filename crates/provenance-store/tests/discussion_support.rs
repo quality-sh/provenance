@@ -20,6 +20,7 @@ pub fn start(store: &StateStore, body: &str) -> Discussion {
     store
         .write_discussion(write(json!({"kind":"start","role":"user","body":body})))
         .unwrap()
+        .discussion
 }
 pub fn reply(discussion: &Discussion, body: &str) -> WriteDiscussion {
     write(
@@ -37,7 +38,8 @@ pub fn five_messages(store: &StateStore) -> Discussion {
     for n in 0..4 {
         latest = store
             .write_discussion(reply(&latest, &format!("reply_{n}")))
-            .unwrap();
+            .unwrap()
+            .discussion;
     }
     latest
 }

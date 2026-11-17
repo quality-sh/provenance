@@ -48,7 +48,7 @@ fn fixture() -> tempfile::TempDir {
     store
         .write_requirement(serde_json::from_value(json!({"scope_id":"default","id":"req_a","statement":"The system stores records.","status":"discovery","depends_on":[],"supersedes":[]})).unwrap())
         .unwrap();
-    store.write_discussion(root_input()).unwrap();
+    store.write_discussion(root_input()).unwrap().discussion;
     temp
 }
 
@@ -81,7 +81,10 @@ fn crash_child() {
                 .unwrap();
         }
         _ => {
-            store.write_discussion(mutation(&root, &operation)).unwrap();
+            store
+                .write_discussion(mutation(&root, &operation))
+                .unwrap()
+                .discussion;
         }
     }
     panic!("crash phase was not reached");

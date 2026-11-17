@@ -35,7 +35,10 @@ async fn selected_pages_are_complete_and_bind_status_parent_and_revision() {
     let a = start(&store, "a");
     let b = start(&store, "b");
     let c = start(&store, "c");
-    store.write_discussion(status(&b, "resolved")).unwrap();
+    store
+        .write_discussion(status(&b, "resolved"))
+        .unwrap()
+        .discussion;
     let mut query = list(None, 1);
     let mut found = Vec::new();
     loop {
@@ -165,7 +168,10 @@ async fn conversation_returns_head_and_ordered_bounded_messages() {
     let (temp, store) = fixture();
     let root = camino::Utf8Path::from_path(temp.path()).unwrap();
     let entry = start(&store, "opening");
-    let reply = store.write_discussion(reply(&entry, "answer")).unwrap();
+    let reply = store
+        .write_discussion(reply(&entry, "answer"))
+        .unwrap()
+        .discussion;
     let mut query = DiscussionConversationQuery {
         discussion_id: entry.discussion_id.clone(),
         allowed_parent_kinds: vec![NodeType::Requirement],
@@ -228,7 +234,7 @@ async fn default_list_has_truthful_parent_status_and_bounded_opening() {
         .post_thread_message(
             serde_json::from_value(json!({
                 "scope_id":"default", "parent":{"node_type":"requirement","node_id":"req_a"},
-                "role":"user", "body":"legacy message"
+                "role":"user", "actor":"agent", "body":"legacy message"
             }))
             .unwrap(),
         )
@@ -245,7 +251,8 @@ async fn default_list_has_truthful_parent_status_and_bounded_opening() {
         .write_discussion(write(json!({
             "kind":"start", "role":"user", "body":body
         })))
-        .unwrap();
+        .unwrap()
+        .discussion;
     let query: DiscussionListQuery = serde_json::from_value(json!({
         "parent": entry.parent, "allowed_parent_kinds":["requirement"],
         "limit":10, "cursor":null
@@ -273,7 +280,8 @@ async fn page_limits_and_large_messages_are_bounded() {
         .write_discussion(write(json!({
             "kind":"start", "role":"user", "body":"x".repeat(60_000)
         })))
-        .unwrap();
+        .unwrap()
+        .discussion;
     let page = read_discussion_list(&repository(root), ReadPolicy::default(), list(None, 10))
         .await
         .unwrap()
@@ -351,7 +359,7 @@ async fn scope_list_includes_other_parents_and_parent_list_does_not() {
     })).unwrap()).unwrap();
     let mut input = write(json!({"kind":"start","role":"user","body":"second"}));
     input.parent.node_id = StableId::new("req_b").unwrap();
-    let b = store.write_discussion(input).unwrap();
+    let b = store.write_discussion(input).unwrap().discussion;
     let scope_page = read_discussion_list(&repository(root), ReadPolicy::default(), list(None, 10))
         .await
         .unwrap()
@@ -388,7 +396,8 @@ async fn concurrent_replies_do_not_split_head_from_messages() {
         for index in 0..12 {
             head = store
                 .write_discussion(reply(&head, &format!("reply_{index}")))
-                .unwrap();
+                .unwrap()
+                .discussion;
         }
     });
     for _ in 0..20 {

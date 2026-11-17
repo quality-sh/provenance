@@ -241,7 +241,8 @@ fn resolve_second_discussion(directory: &tempfile::TempDir, second_id: &str) {
                 status: provenance_core::threads::DiscussionStatus::Resolved,
             },
         })
-        .unwrap();
+        .unwrap()
+        .discussion;
 }
 
 #[test]

@@ -4,6 +4,7 @@ use super::{serde_name, PostMessageInput, PostMessageResult, RecordStamp, StateS
 use crate::shards;
 use crate::write_error::publication_started;
 use provenance_core::{Message, ScopeId, StableId, Thread, ThreadParent, ThreadStatus};
+use provenance_macros::rule;
 use std::collections::BTreeMap;
 
 /// The fields of one Message that the writer gives: its role, its actor, and its body.
@@ -92,6 +93,8 @@ impl StateStore {
         Ok(message)
     }
 
+    /// Builds a Message with the actor of the write, after the checks of its actor and size.
+    #[rule("rule_message_records_its_actor")]
     fn prepare_discussion_message(
         &self,
         scope_id: &ScopeId,

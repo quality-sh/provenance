@@ -1,6 +1,7 @@
 use super::{DiscussionAction, WriteDiscussion};
 use crate::state_store::StateStore;
 use provenance_core::{threads::DiscussionReceipt, MessageRole, NodeType, ScopeId, StableId};
+use provenance_macros::rule;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -19,7 +20,9 @@ pub struct TargetDiscussionWrite {
 }
 
 impl StateStore {
-    /// Resolves a reply target and writes it in one publication.
+    /// Resolves a reply target, writes it in one publication, and gives the reply Message
+    /// with its actor in the receipt.
+    #[rule("rule_discussion_receipt_shows_message_actor")]
     pub fn write_target_discussion(
         &self,
         input: TargetDiscussionWrite,

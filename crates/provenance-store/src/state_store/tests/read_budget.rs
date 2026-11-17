@@ -287,6 +287,7 @@ async fn oversized_message_write_is_refused_and_persists_nothing() {
         id: StableId::new(format!("msg_{}", uuid::Uuid::new_v4())).unwrap(),
         thread_id: thread,
         role: MessageRole::User,
+        actor: "agent".into(),
         body: String::new(),
         created_at: i64::try_from(
             time::OffsetDateTime::now_utc().unix_timestamp_nanos() / 1_000_000,
@@ -320,6 +321,7 @@ fn oversized_post_refuses_before_creating_or_archiving_threads() {
         scope_id: scope.clone(),
         parent: parent.clone(),
         role: MessageRole::User,
+        actor: "agent".into(),
         body,
     };
     let error = store

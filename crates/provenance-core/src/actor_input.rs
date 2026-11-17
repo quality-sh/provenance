@@ -5,8 +5,8 @@ use serde::{Deserialize, Deserializer, Serializer};
 
 /// The description of the optional actor input, in each request schema that has it.
 pub const DESCRIPTION: &str = "The actor is optional for a Requirement creation or update, and \
-     for a Discussion start or reply. A Requirement creation or update, or a Discussion start, \
-     with no actor records the actor `authoring`.";
+     for a Discussion start or reply. A Requirement creation or update, a Discussion start, or \
+     a reply with no actor records the actor `authoring`.";
 
 /// The optional actor of a write request: the given actor, or `None` when the request has no
 /// actor member.

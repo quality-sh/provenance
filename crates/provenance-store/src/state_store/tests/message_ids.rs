@@ -24,6 +24,7 @@ fn independent_stores_write_distinct_uuid_messages_at_the_write_clock() {
                     node_id: StableId::new("req_overtime").unwrap(),
                 },
                 role: MessageRole::User,
+                actor: "agent".into(),
                 body: body.into(),
             })
             .unwrap()
@@ -112,6 +113,7 @@ fn posted_store() -> (
                 node_id: StableId::new("req_overtime").unwrap(),
             },
             role: MessageRole::User,
+            actor: "agent".into(),
             body: "first".into(),
         })
         .unwrap()

@@ -261,7 +261,7 @@ async fn reply_grant_does_not_admit_start() {
         "action":{"kind":"start","role":"user","body":"Opening text"}
     }))
     .unwrap();
-    let receipt = store.write_discussion(request).unwrap();
+    let receipt = store.write_discussion(request).unwrap().discussion;
     let host = StatementHost::with_fixture_access(
         access(&repository).deny_operation("requirements-create-discussion"),
     );
@@ -319,7 +319,7 @@ async fn denied_parent_grant_is_applied_before_discussion_page_selection() {
             "action":{"kind":"start","role":"user","body":body}
         }))
         .unwrap();
-        let receipt = store.write_discussion(request).unwrap();
+        let receipt = store.write_discussion(request).unwrap().discussion;
         if node_type == "source" {
             source = Some(receipt);
         }

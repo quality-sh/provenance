@@ -89,7 +89,8 @@ async fn a_message_beyond_the_first_page_reads_directly_and_messages_paginate() 
                 body: "Root".into(),
             },
         })
-        .unwrap();
+        .unwrap()
+        .discussion;
     let mut last = root.root_message_id.clone();
     for version in 1..=50 {
         let reply = store
@@ -105,7 +106,8 @@ async fn a_message_beyond_the_first_page_reads_directly_and_messages_paginate() 
                     body: format!("Reply {version}"),
                 },
             })
-            .unwrap();
+            .unwrap()
+            .discussion;
         last = reply.message_ids.last().unwrap().clone();
     }
 
@@ -191,6 +193,7 @@ async fn legacy_message_lists_paginate_and_refuse_changed_limits() {
                 node_id: sid("req_shared"),
             },
             role: MessageRole::User,
+            actor: "agent".into(),
             body: "Legacy one".into(),
         })
         .unwrap();
@@ -202,6 +205,7 @@ async fn legacy_message_lists_paginate_and_refuse_changed_limits() {
                 node_id: sid("req_shared"),
             },
             role: MessageRole::Assistant,
+            actor: "agent".into(),
             body: "Legacy two".into(),
         })
         .unwrap();

@@ -364,7 +364,8 @@ fn started(graph: &mut Graph, sources: &Sources) -> DiscussionOrigin {
             }))
             .unwrap(),
         )
-        .unwrap();
+        .unwrap()
+        .discussion;
     graph.commit("start", &["rename"], "Reviewer", files(&storage));
     DiscussionOrigin {
         discussion_id: discussion.discussion_id.clone(),
