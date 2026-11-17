@@ -1,3 +1,4 @@
+use super::history::index::{self, Made};
 use super::history::{evidence_page, VersionedRecord};
 use crate::operations::read_policy::ReadPolicy;
 use crate::operations::reader::{
@@ -11,6 +12,28 @@ use provenance_core::review::{
 use provenance_core::{NodeType, StableId};
 use provenance_macros::rule;
 use serde_json::Value;
+use std::sync::{Arc, Mutex, PoisonError};
+
+/// The index rows that one history read made, kept after the read.
+type Slot = Arc<Mutex<Made>>;
+
+/// Runs one history read as [`reader::answer`] does, then keeps the index
+/// rows that it made in the read database, also when the read failed. The
+/// read transaction is closed by then, so the write does not wait on it.
+async fn indexed<R: Send>(
+    repository: &Repository,
+    policy: ReadPolicy,
+    run: impl for<'c> FnOnce(&'c ReadContext, Slot) -> reader::ReadFuture<'c, R> + Send,
+) -> anyhow::Result<Stamped<R>> {
+    let slot = Slot::default();
+    let kept = slot.clone();
+    let answer = reader::answer(repository, policy, move |ctx| run(ctx, kept)).await;
+    let made = std::mem::take(&mut *slot.lock().unwrap_or_else(PoisonError::into_inner));
+    if !made.commits.is_empty() {
+        index::save(repository.read_database()?, made).await?;
+    }
+    answer
+}
 
 pub async fn read_history(
     repository: &Repository,
@@ -18,14 +41,17 @@ pub async fn read_history(
     query: ReviewHistoryQuery,
 ) -> anyhow::Result<Stamped<ReviewHistoryPage>> {
     check_limit(query.limit)?;
-    let answer =
-        reader::answer(repository, policy, move |ctx| Box::pin(history(ctx, query))).await?;
+    let answer = indexed(repository, policy, move |ctx, slot| {
+        Box::pin(history(ctx, query, slot))
+    })
+    .await?;
     crate::operations::queries::page::checked("review-history", answer)
 }
 
 async fn history(
     ctx: &ReadContext,
     query: ReviewHistoryQuery,
+    slot: Slot,
 ) -> anyhow::Result<ReviewHistoryPage> {
     let (cursor, position) = Cursor::open(
         ctx,
@@ -34,7 +60,7 @@ async fn history(
         query.cursor.as_deref(),
     )?;
     ctx.snapshot().bound_page_work().await?;
-    let versions = versions(ctx, query.record_kind, query.record_id.clone()).await?;
+    let versions = versions(ctx, query.record_kind, query.record_id.clone(), slot).await?;
     let skip = usize::try_from(position.counter)?;
     let mut more = versions.len() > skip + query.limit;
     let mut entries = Vec::new();
@@ -77,10 +103,10 @@ pub async fn read_history_entry(
     id: StableId,
     entry: StableId,
 ) -> anyhow::Result<Stamped<RecordVersion>> {
-    let answer = reader::answer(repository, policy, move |ctx| {
+    let answer = indexed(repository, policy, move |ctx, slot| {
         Box::pin(async move {
             ctx.snapshot().bound_page_work().await?;
-            let versions = versions(ctx, kind, id).await?;
+            let versions = versions(ctx, kind, id, slot).await?;
             let found = versions
                 .into_iter()
                 .map(|versioned| versioned.version)
@@ -93,26 +119,58 @@ pub async fn read_history_entry(
     crate::operations::queries::page::checked("review-history-entry", answer)
 }
 
-/// Reads the versions of one record from the committed file versions and
-/// the saved working copy.
+/// Reads the versions of one record from the committed file versions, the
+/// index of its record file and the saved working copy. The index rows
+/// that the read makes go to `slot`.
 async fn versions(
     ctx: &ReadContext,
     kind: NodeType,
     id: StableId,
+    slot: Slot,
 ) -> anyhow::Result<Vec<VersionedRecord>> {
     // The committed versions and the working copy are outside the projection
     // stamp.
     ctx.live(Live::Diff);
     let store = ctx.live(Live::Canonical).store();
     let scope = ctx.snapshot().scope().clone();
-    // The host's section lock and the git adapter block, so the host reads
-    // on a thread where a blocking call is permitted.
+    let records = store.history_paths(&scope, kind)?.records;
+    let files = on_host(ctx.live(Live::Canonical).store(), move |store| async move {
+        store.file_versions_of(&records).await
+    })
+    .await?;
+    let records = store.history_paths(&scope, kind)?.records;
+    let mut known = index::load(ctx.snapshot(), &records, &id, &files).await?;
+    let (versions, made) = on_host(store, move |store| async move {
+        let mut made = Made::default();
+        let versions = store
+            .read_record_versions(&scope, kind, &id, &files, &mut known, &mut made)
+            .await;
+        Ok((versions, made))
+    })
+    .await?;
+    *slot.lock().unwrap_or_else(PoisonError::into_inner) = made;
+    versions
+}
+
+/// Runs `work` over `store`. The host's section lock and the git adapter
+/// block, so the host runs it on a thread where a blocking call is
+/// permitted.
+async fn on_host<T, F>(
+    store: crate::state_store::StateStore,
+    work: impl FnOnce(crate::state_store::StateStore) -> F + Send + 'static,
+) -> anyhow::Result<T>
+where
+    T: Send + 'static,
+    F: std::future::Future<Output = anyhow::Result<T>> + Send,
+{
     #[cfg(feature = "host")]
-    let versions =
-        tokio::task::spawn_blocking(move || store.record_versions(&scope, kind, &id)).await??;
+    let done = tokio::task::spawn_blocking(move || {
+        tokio::runtime::Handle::current().block_on(work(store))
+    })
+    .await?;
     #[cfg(not(feature = "host"))]
-    let versions = store.read_record_versions(&scope, kind, &id).await?;
-    Ok(versions)
+    let done = work(store).await;
+    done
 }
 
 /// Reads a bounded span of one record version, or of the version before it.
@@ -121,10 +179,10 @@ pub async fn read_evidence(
     policy: ReadPolicy,
     query: EvidenceQuery,
 ) -> anyhow::Result<Stamped<EvidencePage>> {
-    let answer = reader::answer(repository, policy, move |ctx| {
+    let answer = indexed(repository, policy, move |ctx, slot| {
         Box::pin(async move {
             ctx.snapshot().bound_page_work().await?;
-            let versions = versions(ctx, query.record_kind, query.record_id.clone()).await?;
+            let versions = versions(ctx, query.record_kind, query.record_id.clone(), slot).await?;
             let index = versions
                 .iter()
                 .position(|versioned| versioned.version.id == query.entry_id)
@@ -134,7 +192,14 @@ pub async fn read_evidence(
             } else {
                 index
             };
-            let value = evidence_value(&versions, selected, query.field.as_deref())?;
+            let record = record_of(
+                ctx,
+                query.record_kind,
+                &query.record_id,
+                &versions[selected],
+            )
+            .await?;
+            let value = evidence_value(&versions, &record, query.field.as_deref())?;
             evidence_page(
                 versions[selected].version.id.clone(),
                 &value,
@@ -147,27 +212,45 @@ pub async fn read_evidence(
     crate::operations::queries::page::checked("review-evidence", answer)
 }
 
+/// The record JSON of one version: the record of the saved working copy,
+/// or the record in the text of the commit of a committed version.
+async fn record_of(
+    ctx: &ReadContext,
+    kind: NodeType,
+    id: &StableId,
+    versioned: &VersionedRecord,
+) -> anyhow::Result<Value> {
+    if let Some(record) = &versioned.record {
+        return Ok(record.clone());
+    }
+    let store = ctx.live(Live::Canonical).store();
+    let records = store.history_paths(ctx.snapshot().scope(), kind)?.records;
+    let commit = versioned.version.commit.clone().unwrap_or_default();
+    let (at, id) = (commit.clone(), id.clone());
+    on_host(store, move |store| async move {
+        store.record_at(&records, &at, &id).await
+    })
+    .await?
+    .ok_or_else(|| crate::refusal::fault!("the commit {commit} holds no record version"))
+}
+
 /// The value one evidence read pages: the selected record version, or one
 /// field of it. A field that no version of the record holds names no
 /// evidence. A field that the selected version does not hold is `null`.
 #[rule("rule_evidence_read_states_absent_fields")]
 fn evidence_value(
     versions: &[VersionedRecord],
-    selected: usize,
+    selected: &Value,
     field: Option<&str>,
 ) -> anyhow::Result<Value> {
     let Some(name) = field else {
-        return Ok(versions[selected].record.clone());
+        return Ok(selected.clone());
     };
     if !versions
         .iter()
-        .any(|versioned| versioned.record.get(name).is_some())
+        .any(|versioned| versioned.held.fields.contains_key(name))
     {
         return Err(ReadFailure::ResourceNotFound.into());
     }
-    Ok(versions[selected]
-        .record
-        .get(name)
-        .cloned()
-        .unwrap_or(Value::Null))
+    Ok(selected.get(name).cloned().unwrap_or(Value::Null))
 }

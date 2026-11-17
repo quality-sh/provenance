@@ -195,3 +195,13 @@ CREATE TABLE record_identities (
     PRIMARY KEY (scope_id, node_type, id)
 );
 CREATE UNIQUE INDEX idx_record_identities_id ON record_identities(id);
+
+CREATE TABLE record_history_commits (
+    path TEXT NOT NULL, commit_id TEXT NOT NULL, base TEXT,
+    PRIMARY KEY (path, commit_id)
+);
+CREATE TABLE record_history_changes (
+    path TEXT NOT NULL, commit_id TEXT NOT NULL, record_id TEXT NOT NULL,
+    digest TEXT, revision TEXT, fields TEXT, outcomes TEXT,
+    PRIMARY KEY (path, record_id, commit_id)
+);

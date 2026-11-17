@@ -3,15 +3,16 @@
 //!
 //! Implementation aid with no Rule binding: no Rule states how many texts a
 //! history read asks for. The adapter counts its text calls, so these tests
-//! do not need a Git process and run on each platform. A history read keeps
-//! what it found for the last version list in the process, so these tests
-//! are in their own binary, and the tests that read a history to its end
-//! take `ONE_READER` so that no other test changes what the process keeps.
+//! do not need a Git process and run on each platform. Each test has a
+//! repository of its own, and so an index of its own. The tests that read
+//! a history to its end take `ONE_READER`, so that one long read at a time
+//! runs.
 //! `entry_edges` holds the entry reads at the edges of a page, and
 //! `page_edges` the history pages at the same edges; its budget refusal
-//! test is evidence of `rule_query_pages_bound_shared_reads`. The refusal
-//! of a record file with more than 1,000 versions is evidence of
-//! `rule_history_reads_bound_file_versions`.
+//! test is evidence of `rule_query_pages_bound_shared_reads`. The reads of
+//! a file with more than 1,000 versions to index are evidence of
+//! `rule_history_reads_bound_file_versions`, and the reads of an indexed
+//! file of `rule_record_history_reads_index`.
 
 mod discussion_support;
 #[path = "history_text_calls/entry_edges.rs"]
@@ -220,10 +221,12 @@ async fn the_first_text_that_is_not_utf8_wins_with_no_later_error() {
     assert_eq!(versions.calls(), 5, "each version");
 }
 
-/// A new read of the same version list reads no text, and a read of another
-/// record of the same file does not take the kept answer.
+/// Once a read indexed the record file, a new read of a record of the file
+/// reads no text, also of another record, and a new commit costs one text
+/// of the record file and one of the Discussion file.
 #[tokio::test]
-async fn a_new_read_of_the_same_versions_reads_no_text() {
+#[verifies("rule_record_history_reads_index", examples)]
+async fn a_read_of_an_indexed_record_file_reads_no_text() {
     let _one = ONE_READER.lock().await;
     let (temp, store) = fixture();
     store
@@ -233,27 +236,30 @@ async fn a_new_read_of_the_same_versions_reads_no_text() {
         }))
         .unwrap())
         .unwrap();
-    let (relative, text) = records(&temp);
-    let entries = (0..3)
-        .map(|index| Entry::text(&format!("{text}{index}\n")))
-        .collect();
-    let versions = Counted::new(&chain(&relative, entries));
+    let commits = statement_edits(&temp, 4);
+    let versions = Counted::new_lists(&commits[..3]);
     let root = Utf8Path::from_path(temp.path()).unwrap();
-    let repository = repository(root).with_file_versions(versions.clone());
+    let opened = repository(root).with_file_versions(versions.clone());
     let answer = |page: ReviewHistoryPage| serde_json::to_value(page).unwrap();
 
-    let first = answer(history(&repository, "req_a").await.unwrap());
-    assert!(versions.calls() > 0, "the first read reads texts");
-    let again = answer(history(&repository, "req_a").await.unwrap());
-    assert_eq!(versions.calls(), 0, "a new read of the same versions");
+    let first = answer(history(&opened, "req_a").await.unwrap());
+    assert!(versions.calls() > 0, "the first read indexes the file");
+    let again = answer(history(&opened, "req_a").await.unwrap());
+    assert_eq!(versions.calls(), 0, "a new read of the same record");
     assert_eq!(again, first);
-
-    let other = answer(history(&repository, "req_b").await.unwrap());
-    assert!(versions.calls() > 0, "a read of another record reads texts");
+    let other = answer(history(&opened, "req_b").await.unwrap());
+    assert_eq!(versions.calls(), 0, "a read of another record");
     assert_ne!(other, first, "the revision of another record differs");
 
-    let last = answer(history(&repository, "req_a").await.unwrap());
-    assert_eq!(last, first);
+    let longer = Counted::new_lists(&commits);
+    let reopened = repository(root).with_file_versions(longer.clone());
+    let last = answer(history(&reopened, "req_a").await.unwrap());
+    assert_eq!(longer.calls(), 2, "one new commit");
+    let ids = last["entries"].as_array().unwrap().iter();
+    let ids = ids
+        .map(|entry| entry["id"].as_str().unwrap())
+        .collect::<Vec<_>>();
+    assert_eq!(ids, ["c0", "c1", "c2", "c3", "working"]);
 }
 
 /// `count` commits, each the child of the one before, that each give
@@ -336,31 +342,36 @@ fn history_reads() -> [(&'static str, Value); 3] {
     ]
 }
 
-/// A history read of a record file with more than 1,000 versions gives the
-/// budget refusal before it reads a text. At 1,000 versions it answers.
+/// A history read indexes at most 1,000 versions of a record file: one
+/// text of the record file and one of the Discussion file for each. While
+/// more versions wait, it gives the budget refusal after it indexed 1,000.
+/// The read after the last of them answers, as a read of a shorter file.
 #[tokio::test]
 #[verifies("rule_history_reads_bound_file_versions", examples)]
-async fn a_read_of_more_than_1000_file_versions_is_refused_before_a_text() {
+async fn a_read_indexes_at_most_1000_versions_and_refuses_while_more_wait() {
     let _one = ONE_READER.lock().await;
-    for (committed, refused) in [(1_000, false), (1_001, true)] {
-        let (temp, _store) = fixture();
-        let versions = Counted::new_lists(&statement_edits(&temp, committed));
-        let root = Utf8Path::from_path(temp.path()).unwrap();
-        let repository = repository(root).with_file_versions(versions.clone());
-        for (name, request) in history_reads() {
-            let answer = operation(&repository, name, request).await;
-            let calls = versions.calls();
-            if refused {
-                assert_eq!(
-                    answer,
-                    Err(json!({"kind": "page_budget_exceeded"})),
-                    "{name}"
-                );
-                assert_eq!(calls, 0, "{name}");
-            } else {
-                assert!(answer.is_ok(), "{name}: {answer:?}");
-                assert!(calls > 0, "{name}");
-            }
-        }
+    let (temp, _store) = fixture();
+    let versions = Counted::new_lists(&statement_edits(&temp, 2_500));
+    let root = Utf8Path::from_path(temp.path()).unwrap();
+    let repository = repository(root).with_file_versions(versions.clone());
+    let mut reads = Vec::new();
+    for (name, request) in history_reads() {
+        let answer = operation(&repository, name, request).await;
+        reads.push((name, answer.err(), versions.calls()));
     }
+    let refused = Some(json!({"kind": "page_budget_exceeded"}));
+    assert_eq!(
+        reads,
+        [
+            ("review-history", refused.clone(), 2_000),
+            ("review-history-entry", refused, 2_000),
+            ("review-evidence", None, 1_000),
+        ]
+    );
+    let page = history(&repository, "req_a").await.unwrap();
+    assert_eq!(page.entries[49].id.as_str(), "c49");
+    let last = history_entry(&repository, "c2499").await.unwrap();
+    assert_eq!(last["before"], json!("c2498"));
+    assert_eq!(last["changed_fields"], json!(["statement"]));
+    assert_eq!(versions.calls(), 0, "the file is indexed");
 }

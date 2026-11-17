@@ -13,8 +13,9 @@
 //! No Rule states when the git adapter starts a Git process, or how it reads
 //! an answer that ends before its object, a `missing` answer or an answer of
 //! an unknown form, so those tests are implementation aids with no Rule
-//! binding. The refusal of a record file with more than 1,000 versions is
-//! evidence of `rule_history_reads_bound_file_versions`.
+//! binding. The reads of a record file with more than 1,000 versions are
+//! evidence of `rule_history_reads_bound_file_versions` and
+//! `rule_record_history_reads_index`.
 #![cfg(unix)]
 
 mod discussion_support;
@@ -25,11 +26,14 @@ use provenance_core::protocol::read_failure::ReadFailure;
 use provenance_core::review::ReviewHistoryQuery;
 use provenance_core::NodeType;
 use provenance_macros::verifies;
+use provenance_store::operations::read_operations::{InProcessReadOperations, ReadOperations};
 use provenance_store::operations::read_policy::ReadPolicy;
+use provenance_store::operations::LocalRepository;
 use provenance_store::review::history::contract::UNKNOWN_COMMIT;
 use provenance_store::review::history::{FileVersions, GitFileVersions};
 use provenance_store::review::read_history;
 use repository::repository;
+use serde_json::json;
 use std::fmt::Write as _;
 use std::os::unix::fs::PermissionsExt as _;
 use std::path::Path;
@@ -193,34 +197,88 @@ fn statement_commits(temp: &tempfile::TempDir, count: usize) {
     discussion_support::git(temp, &["reset", "-q", "--hard"]);
 }
 
-/// A history read of a Git repository whose record file has more than 1,000
-/// versions gives the budget refusal and starts no `cat-file` process.
-#[tokio::test]
-#[verifies("rule_history_reads_bound_file_versions", examples)]
-async fn a_read_of_more_than_1000_file_versions_starts_no_cat_file() {
-    logging_git();
-    let (temp, _store) = discussion_support::fixture();
-    discussion_support::commit_state(&temp, "Create");
-    statement_commits(&temp, 1_000);
+/// The history read of `req_a` in the repository at `temp`, opened again.
+async fn read(temp: &tempfile::TempDir) -> anyhow::Result<Vec<String>> {
     let query = ReviewHistoryQuery {
         record_kind: NodeType::Requirement,
         record_id: discussion_support::id(),
-        limit: 50,
+        limit: 200,
         cursor: None,
     };
     let root = camino::Utf8Path::from_path(temp.path()).unwrap();
-    let error = read_history(
+    let page = read_history(
         &discussion_support::repository(root),
         ReadPolicy::default(),
         query,
     )
-    .await
-    .expect_err("a refusal");
+    .await?;
+    Ok(page
+        .result
+        .entries
+        .into_iter()
+        .map(|entry| entry.id.as_str().to_owned())
+        .collect())
+}
+
+/// The `cat-file` processes that started in the repository at `temp`.
+fn cat_files(temp: &tempfile::TempDir) -> usize {
+    let starts = std::fs::read_to_string(temp.path().join(".git/git-starts")).unwrap();
+    starts
+        .lines()
+        .filter(|line| line.contains("cat-file"))
+        .count()
+}
+
+/// A history read of a Git repository whose record file has more than 1,000
+/// versions to index gives the budget refusal after it indexed 1,000, and
+/// the next read answers. The index stays in the read database, so a read
+/// in a repository opened again starts no `cat-file` process. After
+/// `HEAD` moves back one commit, a read lists no commit past `HEAD`.
+#[tokio::test]
+#[verifies("rule_history_reads_bound_file_versions", examples)]
+#[verifies("rule_record_history_reads_index", examples)]
+async fn a_read_of_more_than_1000_file_versions_indexes_them_over_two_reads() {
+    logging_git();
+    let (temp, _store) = discussion_support::fixture();
+    discussion_support::commit_state(&temp, "Create");
+    statement_commits(&temp, 1_000);
+    let error = read(&temp).await.expect_err("a refusal");
     assert_eq!(
         error.downcast_ref::<ReadFailure>(),
         Some(&ReadFailure::PageBudgetExceeded),
         "{error:#}"
     );
-    let starts = std::fs::read_to_string(temp.path().join(".git/git-starts")).unwrap();
-    assert!(!starts.contains("cat-file"), "{starts}");
+    let head = discussion_support::git(&temp, &["rev-parse", "HEAD"]);
+    let previous = discussion_support::git(&temp, &["rev-parse", "HEAD~1"]);
+    let first = read(&temp).await.unwrap();
+    assert_eq!(first.len(), 200);
+    let started = cat_files(&temp);
+    assert_eq!(read(&temp).await.unwrap(), first);
+    assert_eq!(cat_files(&temp), started, "a read of the indexed file");
+
+    discussion_support::git(&temp, &["reset", "-q", "--hard", "HEAD~1"]);
+    let entry = |id: &str| {
+        let binding = LocalRepository::bind(
+            discussion_support::repository(camino::Utf8Path::from_path(temp.path()).unwrap()),
+            "folder",
+        )
+        .unwrap();
+        let request = json!({
+            "context": {"repository": "folder", "scope": "default"},
+            "request": {"record_kind": "requirement", "record_id": "req_a", "entry_id": id},
+        });
+        async move {
+            InProcessReadOperations::new(&binding)
+                .run("review-history-entry", request)
+                .await
+                .map(|answer| answer["id"].clone())
+                .map_err(|failure| failure.error)
+        }
+    };
+    assert_eq!(entry(&previous).await, Ok(json!(previous)));
+    assert_eq!(
+        entry(&head).await,
+        Err(json!({"kind": "resource_not_found"}))
+    );
+    assert_eq!(cat_files(&temp), started, "the commits are indexed");
 }

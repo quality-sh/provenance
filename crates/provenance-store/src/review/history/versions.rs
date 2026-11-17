@@ -75,8 +75,9 @@ pub trait FileVersions: Send + Sync + Debug {
     /// commit that changed the file, gives no versions.
     ///
     /// An adapter can give the same list, the same `Arc`, again while its
-    /// history does not change. A history read keeps what it found for the
-    /// last list that it read, so a new read of that list reads no text.
+    /// history does not change. A history read keeps what it found at each
+    /// listed commit in the index of the read database, so a new read of an
+    /// indexed file reads no text of it.
     fn versions<'a>(
         &'a self,
         path: &'a str,

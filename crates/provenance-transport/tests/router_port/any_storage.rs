@@ -31,11 +31,13 @@ use camino::{Utf8Path, Utf8PathBuf};
 use provenance_store::operations::read_operations::READ_OPERATIONS;
 use provenance_store::repository::{RandomIds, Repository as Opened, SystemClock};
 use provenance_store::review::history::contract::MemoryFileVersions;
+use provenance_store::review::history::{BoxFuture, FileVersion, FileVersions};
 use provenance_store::settings::Settings;
 use serde_json::json;
 use std::collections::{BTreeMap, BTreeSet};
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 
 /// The read operations of the history routes, which the second test calls.
@@ -150,6 +152,18 @@ pub async fn history_in_memory(
     root: &Utf8Path,
     scope: &str,
 ) -> Opened {
+    history_in_memory_with(history, folder, root, scope, |memory| Arc::new(memory)).await
+}
+
+/// The repository of [`history_in_memory`], with the adapter that `adapter`
+/// makes of the history contract's memory adapter.
+async fn history_in_memory_with(
+    history: &History,
+    folder: &Folder,
+    root: &Utf8Path,
+    scope: &str,
+    adapter: impl FnOnce(MemoryFileVersions) -> Arc<dyn FileVersions>,
+) -> Opened {
     let ids: BTreeMap<&str, &str> = folder
         .names
         .iter()
@@ -168,7 +182,32 @@ pub async fn history_in_memory(
         })
         .collect();
     let (repository, _) = over_memory(root, scope, Settings::default(), history.state()).await;
-    repository.with_file_versions(Arc::new(MemoryFileVersions::new(&commits)))
+    repository.with_file_versions(adapter(MemoryFileVersions::new(&commits)))
+}
+
+/// The history contract's memory adapter, with a count of its text calls.
+#[derive(Debug)]
+struct Counted {
+    memory: MemoryFileVersions,
+    texts: AtomicUsize,
+}
+
+impl FileVersions for Counted {
+    fn versions<'a>(
+        &'a self,
+        path: &'a str,
+    ) -> BoxFuture<'a, anyhow::Result<Arc<Vec<FileVersion>>>> {
+        self.memory.versions(path)
+    }
+
+    fn text<'a>(
+        &'a self,
+        path: &'a str,
+        commit: &'a str,
+    ) -> BoxFuture<'a, anyhow::Result<Option<String>>> {
+        self.texts.fetch_add(1, Ordering::SeqCst);
+        self.memory.text(path, commit)
+    }
 }
 
 /// The 18 history routes over memory storage, through the port, with the
@@ -237,10 +276,12 @@ async fn the_history_routes_over_memory_storage_answer_as_over_a_folder() {
 }
 
 /// The three history routes over a record file with more than 1,000
-/// versions give the budget refusal over memory storage, through the port,
-/// as over a folder's Git history.
+/// versions to index give the budget refusal once, over memory storage
+/// through the port as over a folder's Git history. Then the routes give
+/// the same answers over both. The index of the file stays in the read
+/// database in memory, so the reads after it read no text.
 #[tokio::test]
-async fn the_history_routes_refuse_more_than_1000_file_versions_as_over_a_folder() {
+async fn the_history_routes_index_more_than_1000_file_versions_as_over_a_folder() {
     let _alone = crate::one_at_a_time().await;
     let (base, _missing, root) = long_setup();
     let long = History {
@@ -248,22 +289,57 @@ async fn the_history_routes_refuse_more_than_1000_file_versions_as_over_a_folder
         working: base.working,
     };
     let folder = folder(&long);
-    let over_memory = over_port(history_in_memory(&long, &folder, &root, "default").await);
+    let counted = Arc::new(std::sync::OnceLock::<Arc<Counted>>::new());
+    let kept = counted.clone();
+    let memory = history_in_memory_with(&long, &folder, &root, "default", move |memory| {
+        let counted = Arc::new(Counted {
+            memory,
+            texts: AtomicUsize::new(0),
+        });
+        kept.set(counted.clone()).unwrap();
+        counted
+    })
+    .await;
+    let texts = || counted.get().unwrap().texts.swap(0, Ordering::SeqCst);
+    let over_memory = over_port(memory);
     let over_folder = Http::over(Opened::open(folder.root(), "default").unwrap());
     let record = json!({"record_kind": "requirement", "record_id": "req_a"});
     let mut entry = record.clone();
     entry["entry_id"] = json!("working");
     let mut evidence = entry.clone();
     evidence["side"] = json!("after");
-    for (operation, request) in [(LIST, &record), (ENTRY, &entry), (EVIDENCE, &evidence)] {
-        let route = path(operation, request);
-        for http in [&over_memory, &over_folder] {
-            let answer = http.call("GET", &route, None, &[], route.clone()).await;
+    let routes = [
+        path(LIST, &record),
+        path(ENTRY, &entry),
+        path(EVIDENCE, &evidence),
+    ];
+    for http in [&over_memory, &over_folder] {
+        let answer = http
+            .call("GET", &routes[0], None, &[], routes[0].clone())
+            .await;
+        assert_eq!(
+            (answer.status, answer.json()["error"].clone()),
+            (409, json!({"kind": "page_budget_exceeded"}))
+        );
+    }
+    assert_eq!(texts(), 2_000, "one read indexes 1,000 versions");
+    let (mut memory_names, mut folder_names) = (Names::default(), Names::default());
+    for round in 0..2 {
+        for route in &routes {
+            let answer = over_memory
+                .call("GET", route, None, &[], route.clone())
+                .await;
+            let expected = over_folder
+                .call("GET", route, None, &[], route.clone())
+                .await;
+            assert_eq!(expected.status, 200, "{}", folder.named(route));
             assert_eq!(
-                (answer.status, answer.json()["error"].clone()),
-                (409, json!({"kind": "page_budget_exceeded"})),
-                "{route}"
+                compared(&mut memory_names, &answer),
+                compared(&mut folder_names, &expected),
+                "{}",
+                folder.named(route)
             );
         }
+        assert_eq!(texts(), if round == 0 { 2 } else { 0 }, "round {round}");
     }
 }
