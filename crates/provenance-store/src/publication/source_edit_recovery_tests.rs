@@ -173,7 +173,7 @@ pub(super) fn prepared_files(root: &Utf8Path) -> Vec<String> {
     files_named(root, ".source.txt.provenance-", ".tmp")
 }
 
-/// A stop after the copy of the state and before the record of the prepared
+/// A stop after the state is staged and before the record of the prepared
 /// file, and a stop after the prepared file and before the marker.
 #[test]
 #[verifies("rule_stopped_write_leaves_no_transaction_data", examples)]

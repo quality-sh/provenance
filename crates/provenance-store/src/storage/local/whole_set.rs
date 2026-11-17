@@ -103,9 +103,9 @@ fn stage_and_install(
 /// the state. When the file install fails with the file in its initial
 /// place, no file changed: the write clears its marker and fails. After that
 /// point the write succeeds: when a step fails, the marker stays, and the
-/// next section entry completes the write. When the write cannot remove its
-/// transaction data, the marker stays too.
-#[rule("rule_published_write_succeeds_when_its_cleanup_fails")]
+/// next section entry, or the next call of the storage port in this
+/// section, completes the write.
+#[rule("rule_write_succeeds_after_its_marker")]
 fn install_after_marker(
     live: &ProvenanceLayout,
     transaction: &Utf8Path,
@@ -124,9 +124,18 @@ fn install_after_marker(
         .and_then(|()| hook.published(live, transaction))
         .and_then(|()| hook.after_published());
     if installed.is_ok() {
-        let _ = end_marked_write(live, hook.kind(), transaction);
+        end_published_write(live, transaction, hook);
     }
     Ok(())
+}
+
+/// Removes the transaction data and the marker of a write that published.
+/// A failure of that removal keeps the marker for the next section entry,
+/// and the write succeeds.
+#[rule("rule_published_write_succeeds_when_its_cleanup_fails")]
+fn end_published_write(live: &ProvenanceLayout, transaction: &Utf8Path, hook: &dyn WholeSetHook) {
+    // The write published, so a failed removal does not change its answer.
+    let _ = end_marked_write(live, hook.kind(), transaction);
 }
 
 /// The hook of a whole set with no working-tree file: its transaction goes

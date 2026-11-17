@@ -58,12 +58,12 @@ fn a_publication_passes_while_a_reader_has_the_marker_open() {
         with_staged_state(held, false, StampFromGit, |staged| {
             let manifest = staged.layout.manifest_path();
             staged.publish_shard(&manifest, serde_json::to_vec(&published)?)?;
-            // A stage of one key lands with no swap.
+            // A stage of one key lands with no marker.
             stage_two_new_shards(staged)
         })
     });
     crate::test_probes::disarm("state_marker_prepared");
-    let handle = held.take().expect("the publication reached the swap");
+    let handle = held.take().expect("the publication reached its marker");
     result.unwrap_or_else(|error| panic!("{error:#}"));
     drop(handle);
     let repository = crate::repository::Repository::open(root.as_std_path(), "default");

@@ -125,9 +125,11 @@ fn two_updates_at_once_have_one_winner() {
 /// the probe tested no stop. A stop before the rename keeps each file below
 /// the state directory and its bytes, and leaves the temporary file in the
 /// cache. After the stop, one read runs through the CLI. Then no marker, no
-/// transaction and no temporary file of the write are there, and the state
-/// is the state before `stopped`, with only the Topic key changed for a stop
-/// after a rename or a write that answered. The run must keep the laws. The
+/// transaction and no temporary file of the write are there. After a stop
+/// between the marker and the install, the state is the new state of
+/// `stopped`: the read completes the install. Else the state is the state
+/// before `stopped`, with only the Topic key changed for a stop after a
+/// rename or a write that answered. The run must keep the laws. The
 /// job summary counts the landing of the stop under `probe`.
 fn stop_probe(probe: &'static str, stopped: Operation, at: u8, landings: &[Landing]) {
     provenance_simulation::stats::record_probe(probe);
@@ -186,8 +188,27 @@ fn stop_probe(probe: &'static str, stopped: Operation, at: u8, landings: &[Landi
         .filter(|key| before.get(*key) != after.get(*key))
         .map(StateKey::as_str)
         .collect();
-    let landing = landing.map(|landed| landed.landing);
-    if one_key && landing != Some(Landing::BeforeRename) {
+    if let Some(landed) = landing.filter(|landed| landed.landing == Landing::BeforeInstall) {
+        // The read after the stop completes the install: each key of the
+        // change list has its new bytes, and no other key changed.
+        let new: BTreeSet<_> = landed
+            .changes
+            .iter()
+            .filter(|(key, bytes)| {
+                let key = StateKey::new(key.as_str()).unwrap();
+                before.get(&key) != bytes.as_ref()
+            })
+            .map(|(key, _)| key.as_str())
+            .collect();
+        assert_eq!(
+            changed, new,
+            "{row}: after the read, the state is not the new state"
+        );
+        for (key, bytes) in &landed.changes {
+            let key = StateKey::new(key.as_str()).unwrap();
+            assert_eq!(after.get(&key), bytes.as_ref(), "{row}: {}", key.as_str());
+        }
+    } else if one_key && landing.map(|landed| landed.landing) != Some(Landing::BeforeRename) {
         assert!(
             changed.len() == 1 && changed.iter().all(|key| key.contains("/topics/")),
             "{row}: after the read, keys other than the Topic key changed: {changed:?}"
@@ -235,7 +256,7 @@ fn a_merged_branch_and_a_stop_before_the_marker_keep_the_laws() {
 
 // No Rule: a probe of the nightly simulation. It runs `stop_probe` on an
 // update of two keys with the stop at the marker, which must land after the
-// marker and before the install, so that the read after the stop recovers
+// marker and before the install, so that the read after the stop completes
 // the publish.
 #[test]
 #[ignore = "a probe of the nightly simulation"]

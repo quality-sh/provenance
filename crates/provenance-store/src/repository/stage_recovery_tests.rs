@@ -326,6 +326,7 @@ fn the_removal_of_a_stopped_transaction_keeps_a_link_and_its_target() {
 
 #[test]
 #[verifies("rule_live_projection_shows_only_published_state", examples)]
+#[verifies("rule_write_succeeds_after_its_marker", examples)]
 fn an_error_before_the_marker_is_refused_and_an_error_after_it_keeps_new_state() {
     for (phase, _) in CRASH_PHASES {
         let fixture = fixture();

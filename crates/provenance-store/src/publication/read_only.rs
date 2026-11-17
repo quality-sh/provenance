@@ -19,8 +19,8 @@ pub fn with_read_only_validation<R>(
 /// store crate reads through a read-only store.
 ///
 /// The answer is best-effort while a publication runs: with no lock, the read
-/// can see the live state before or after the publication, or no live state
-/// while the publication swaps it. The only production caller is the CLI ID
+/// can see the live state before or after the publication, or a state with
+/// some files of the publication installed and others not. The only production caller is the CLI ID
 /// help, which uses the answer only to select the help of one record kind.
 #[rule("rule_read_only_section_stays_inside_the_store")]
 pub fn read_only_record_kinds(

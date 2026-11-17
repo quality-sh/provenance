@@ -304,7 +304,7 @@ impl crate::state_store::StateStore {
     /// that has no base, and applies the set to the view once it lands. Any
     /// other store publishes through its adapter, and gives it a set of one
     /// key with the atomicity of each key: one key lands whole either way,
-    /// and a per-key set needs no copy of the state.
+    /// and a per-key set needs no transaction.
     #[rule("rule_store_sends_the_smallest_write_set")]
     fn publish_set(&self, writes: WriteSet) -> anyhow::Result<()> {
         if let Some(stage) = self.stage() {

@@ -154,9 +154,9 @@ impl WholeSetHook for SourceEditPublication {
     }
 
     /// A refusal with the target in its initial place lets the write end
-    /// with no change. A failed rename back of the target leaves the initial
-    /// file in the backup, so the write keeps its marker, and the next
-    /// section entry puts the backup back and completes the install.
+    /// with no change. When the rename back of the target fails, the initial
+    /// file stays in the backup: the write succeeds and keeps its marker, and
+    /// the next section entry puts the backup back and completes the install.
     fn install_file(
         &mut self,
         live: &ProvenanceLayout,

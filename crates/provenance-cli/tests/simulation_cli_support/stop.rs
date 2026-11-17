@@ -103,6 +103,9 @@ pub struct Landed {
     pub files: (Files, Files),
     /// A live state is there after the kill.
     pub live_state: bool,
+    /// Each key that the change list of the transaction names, read after
+    /// the kill, with its new bytes, or `None` for a delete.
+    pub changes: BTreeMap<String, Option<Vec<u8>>>,
 }
 
 /// What a stop that a case drew did.
@@ -241,6 +244,10 @@ pub fn run_stopped(
         before,
         files: (files_before, files(layout.state_dir().as_std_path())),
         live_state: layout.state_dir().exists(),
+        changes: match &made {
+            Made::Transaction(transaction) => changes(layout, transaction),
+            Made::Temporary(_) => BTreeMap::new(),
+        },
     };
     (
         Some(done(task, Err("stopped".into()), true)),
@@ -361,6 +368,34 @@ fn landing(layout: &ProvenanceLayout, transaction: &Path) -> Landing {
         Some("published") => Landing::AfterInstall,
         _ => panic!("the marker {marker} has no phase that the test knows"),
     }
+}
+
+/// Each key that the change list of `transaction` names, with the bytes of
+/// a put: its staged file, or the live file when the install moved it. A
+/// delete has `None`. With no change list, there is no key.
+fn changes(layout: &ProvenanceLayout, transaction: &Path) -> BTreeMap<String, Option<Vec<u8>>> {
+    let Ok(bytes) = std::fs::read(transaction.join("changes.json")) else {
+        return BTreeMap::new();
+    };
+    let list = parse(&bytes);
+    let keys = |field: &str| -> Vec<String> {
+        list[field]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .filter_map(|entry| entry["key"].as_str().or_else(|| entry.as_str()))
+            .map(str::to_owned)
+            .collect()
+    };
+    let puts = keys("puts").into_iter().map(|key| {
+        let staged = std::fs::read(transaction.join("staged").join(&key));
+        let bytes = staged
+            .or_else(|_| std::fs::read(layout.state_dir().join(&key).as_std_path()))
+            .expect("the bytes of a put are staged or installed");
+        (key, Some(bytes))
+    });
+    let deletes = keys("deletes").into_iter().map(|key| (key, None));
+    puts.chain(deletes).collect()
 }
 
 /// The paths of the temporary files of one-key writes in the cache of

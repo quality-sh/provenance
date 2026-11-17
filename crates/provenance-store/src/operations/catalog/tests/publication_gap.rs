@@ -1,16 +1,18 @@
-//! The check of the scope of a scoped call in the gap of a publication.
+//! The check of the scope of a scoped call while a publication holds its
+//! section.
 use super::super::{invoke_authorized_typed, ListThreads, RequestedContext};
 use crate::{layout::ProvenanceLayout, operations::local_repository::tests::repository};
 use provenance_core::protocol::repository::RepositoryScope;
 use provenance_macros::verifies;
 use std::sync::Arc;
 
-/// The probe runs a scoped read through the binding while the publication
-/// holds its lock with its files installed. The check of the scope reads
-/// the manifest, so the read must wait for the publication and not fail.
+/// The probe runs a scoped read through the binding after the publication
+/// installed its files and before it ends its write. The check of the scope
+/// reads the manifest, so the read must wait for the publication and not
+/// fail.
 #[test]
 #[verifies("rule_preparation_reads_published_state", examples)]
-fn a_scoped_read_in_the_publication_gap_succeeds_after_the_publication() {
+fn a_scoped_read_during_a_publication_succeeds_after_the_publication() {
     let (dir, binding) = repository();
     let layout = ProvenanceLayout::new(dir.path().to_str().unwrap());
     let reader = std::rc::Rc::new(std::cell::RefCell::new(None));

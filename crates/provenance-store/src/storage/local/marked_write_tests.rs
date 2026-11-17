@@ -65,6 +65,7 @@ fn next_section_view(layout: &ProvenanceLayout) -> BTreeMap<StateKey, Vec<u8>> {
 /// completes the install first, so it sees the whole set.
 #[test]
 #[verifies("rule_section_reads_no_partial_whole_set", examples)]
+#[verifies("rule_write_succeeds_after_its_marker", examples)]
 fn a_read_in_the_section_completes_an_install_that_failed_first() {
     let temp = tempfile::tempdir().unwrap();
     let layout = live(&temp);

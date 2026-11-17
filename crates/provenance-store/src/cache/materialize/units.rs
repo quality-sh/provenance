@@ -53,10 +53,10 @@ impl Unit {
 
 /// Reads scope ids without the publication lock.
 ///
-/// A manifest write renames the old file away before it renames the new one
-/// into place, so an unlocked reader sees one complete version or, for the
-/// width of those two renames, no file at all. A missing file is retried
-/// rather than refused; the bytes a read returns are always one whole version.
+/// A write installs a new manifest with one rename onto the old file, so an
+/// unlocked reader sees one complete version. A missing file is read again a
+/// few times before the read refuses it; the bytes a read returns are always
+/// one whole version.
 pub fn scope_ids(state_dir: &Utf8Path) -> anyhow::Result<Vec<ScopeId>> {
     let path = state_dir.join("manifest.json");
     let bytes = read_through_rename(&path)?;
