@@ -45,10 +45,14 @@ fn relative_repository_access_completes_an_interrupted_install() {
     let key = format!("scopes/default/sources/{shard}");
     let transaction = repo.join(".provenance/cache/import-transactions/interrupted");
     std::fs::create_dir_all(transaction.join("staged/scopes/default/sources")).unwrap();
-    std::fs::rename(sources.join(&shard), transaction.join("staged").join(&key)).unwrap();
+    let staged = transaction.join("staged").join(&key);
+    std::fs::rename(sources.join(&shard), &staged).unwrap();
+    let digest: [u8; 32] =
+        <sha2::Sha256 as sha2::Digest>::digest(std::fs::read(&staged).unwrap()).into();
     std::fs::write(
         transaction.join("changes.json"),
-        serde_json::json!({ "puts": [key], "deletes": [] }).to_string(),
+        serde_json::json!({ "puts": [{ "key": key, "sha256": digest }], "deletes": [] })
+            .to_string(),
     )
     .unwrap();
     write_publication_marker(&repo, &transaction, "installing");

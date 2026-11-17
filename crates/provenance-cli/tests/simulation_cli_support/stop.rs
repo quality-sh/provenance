@@ -236,6 +236,10 @@ pub fn run_stopped(
         Made::Temporary(temporary) if temporary.exists() => Landing::BeforeRename,
         Made::Temporary(_) => Landing::AfterRename,
     };
+    let changes = match &made {
+        Made::Transaction(transaction) => changes(layout, transaction),
+        Made::Temporary(_) => BTreeMap::new(),
+    };
     let landed = Landed {
         landing,
         made: match made {
@@ -244,10 +248,7 @@ pub fn run_stopped(
         before,
         files: (files_before, files(layout.state_dir().as_std_path())),
         live_state: layout.state_dir().exists(),
-        changes: match &made {
-            Made::Transaction(transaction) => changes(layout, transaction),
-            Made::Temporary(_) => BTreeMap::new(),
-        },
+        changes,
     };
     (
         Some(done(task, Err("stopped".into()), true)),

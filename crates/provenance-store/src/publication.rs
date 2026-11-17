@@ -116,6 +116,7 @@ fn enter_section<R>(
 
 /// Whether this thread holds the live section of the repository at
 /// `layout`.
+#[cfg(feature = "host")]
 pub(crate) fn holds_live_section(layout: &ProvenanceLayout) -> anyhow::Result<bool> {
     Ok(held_here(
         Some(&publication_lock_identity(layout)?),
