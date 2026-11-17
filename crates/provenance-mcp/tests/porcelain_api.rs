@@ -315,3 +315,29 @@ async fn api_query_invocations_follow_their_contracts() {
 
     session.shutdown().await;
 }
+
+/// The api tool gives the history of a record with one warning for each
+/// committed line that the history read refuses, in the order of the
+/// commits.
+#[tokio::test]
+async fn api_history_read_warns_about_each_refused_line() {
+    let refused = support::refused_history::refused_history();
+    let session = ApiSession::start(host(&refused.repo)).await;
+
+    let history = session
+        .call(json!({"path": "requirements/req_refused/history"}))
+        .await;
+
+    assert_ne!(history.is_error, Some(true), "{history:?}");
+    let data = &history.structured_content.as_ref().unwrap()["data"];
+    let ids = data["items"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|item| item["id"].as_str().unwrap())
+        .collect::<Vec<_>>();
+    assert_eq!(ids, refused.versions, "{data}");
+    assert_eq!(data["warnings"], refused.warnings, "{data}");
+
+    session.shutdown().await;
+}

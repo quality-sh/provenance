@@ -27,6 +27,9 @@ mod support {
     #[path = "../../../provenance-transport/tests/support/records.rs"]
     pub mod records;
     #[cfg(feature = "test-fixture")]
+    #[path = "../../../provenance-transport/tests/support/refused_history.rs"]
+    pub mod refused_history;
+    #[cfg(feature = "test-fixture")]
     #[path = "../../../provenance-transport/tests/support/resource_http.rs"]
     pub mod resource_http;
     #[cfg(feature = "test-fixture")]

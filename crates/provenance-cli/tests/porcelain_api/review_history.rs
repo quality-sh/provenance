@@ -146,3 +146,54 @@ fn a_version_with_a_directory_at_the_path_of_the_record_file_has_no_record() {
         .collect::<Vec<_>>();
     assert_eq!(ids, [created, described]);
 }
+
+/// Flow: create and commit, commit a line that is not one JSON value, then a
+/// line that holds a top-level member two times, then the file as it was.
+/// The history lists the one version and gives one warning for each refused
+/// line, in the order of the commits.
+#[test]
+fn history_warns_about_each_refused_committed_line() {
+    let (_directory, repo) = init();
+    git(&repo, &["init", "-q"]);
+    success(&[
+        "req_history",
+        "create",
+        "--type",
+        "requirement",
+        "--repo",
+        &repo,
+        "--statement",
+        "The history statement applies.",
+    ]);
+    let created = commit(&repo);
+    let path = ".provenance/state/scopes/default/requirements/req.jsonl";
+    let file = std::path::Path::new(&repo).join(path);
+    let text = std::fs::read_to_string(&file).unwrap();
+    let line = text.lines().count() + 1;
+    std::fs::write(&file, format!("{text}<<<<<<< HEAD\n")).unwrap();
+    let marker = commit(&repo);
+    let repeated_line = r#"{"id":"req_other","id":"req_again"}"#;
+    std::fs::write(&file, format!("{text}{repeated_line}\n")).unwrap();
+    let repeated = commit(&repo);
+    std::fs::write(&file, &text).unwrap();
+    commit(&repo);
+
+    let history = json(&["api", "requirements/req_history/history", "--repo", &repo]);
+    let ids = history["data"]["items"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|item| item["id"].as_str().unwrap().to_owned())
+        .collect::<Vec<_>>();
+    assert_eq!(ids, [created], "{history}");
+    assert_eq!(
+        history["data"]["warnings"],
+        json!([
+            {"commit": marker, "path": path, "line": line,
+                "message": "The line is not one JSON value."},
+            {"commit": repeated, "path": path, "line": line,
+                "message": "The line holds the top-level member \"id\" two times."},
+        ]),
+        "{history}"
+    );
+}

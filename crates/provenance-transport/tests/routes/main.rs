@@ -17,6 +17,7 @@ mod support {
     pub mod ideation;
     pub mod names;
     pub mod records;
+    pub mod refused_history;
     pub mod resource_http;
     pub mod state_lines;
     pub mod transcript;
@@ -54,6 +55,8 @@ mod file_access;
 mod history_evidence;
 #[path = "../history_pages.rs"]
 mod history_pages;
+#[path = "../history_refused_lines.rs"]
+mod history_refused_lines;
 #[path = "../host_body_deadline.rs"]
 mod host_body_deadline;
 #[path = "../ideation_ids.rs"]
