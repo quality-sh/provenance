@@ -106,6 +106,7 @@ pub fn apply(repository: &Repository, task: &Task) -> anyhow::Result<Effect> {
                 scope_id: scope(),
                 parent: first_parent(),
                 role: MessageRole::User,
+                actor: task.actor(),
                 body: task.body(),
             })?;
             Effect::Message {
@@ -184,7 +185,8 @@ pub fn apply(repository: &Repository, task: &Task) -> anyhow::Result<Effect> {
                 actor: task.actor(),
                 declared_by: None,
                 action,
-            })?;
+            })?
+            .discussion;
             Effect::Discussion {
                 id: discussion.discussion_id.as_str().to_owned(),
                 version: discussion.version,

@@ -57,6 +57,8 @@ pub struct Message {
     pub id: StableId,
     pub thread_id: StableId,
     pub role: MessageRole,
+    /// The actor of the write that added the Message.
+    pub actor: String,
     #[serde(alias = "content")]
     pub body: String,
     #[serde(deserialize_with = "super::exact_integer::time")]

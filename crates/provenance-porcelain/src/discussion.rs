@@ -5,7 +5,7 @@ use provenance_core::{
     actor_input::ActorInput,
     protocol::{Stamp, Stamped},
     threads::{
-        Discussion, DiscussionConversationResult, DiscussionResultPage, DiscussionStatus,
+        DiscussionConversationResult, DiscussionReceipt, DiscussionResultPage, DiscussionStatus,
         DiscussionStatusFilter, DiscussionSummary,
     },
     MessageRole, ScopeId, StableId, ThreadParent,
@@ -205,7 +205,7 @@ pub enum DiscussionOutcome {
         freshness_error: Option<String>,
     },
     Written {
-        receipt: Discussion,
+        receipt: DiscussionReceipt,
     },
 }
 
@@ -225,8 +225,8 @@ pub trait DiscussionPort: Send + Sync {
         &self,
         input: ConversationInput,
     ) -> PortFuture<'_, Stamped<DiscussionConversationResult>>;
-    fn start(&self, input: StartInput) -> PortFuture<'_, Discussion>;
-    fn reply(&self, input: ReplyInput) -> PortFuture<'_, Discussion>;
+    fn start(&self, input: StartInput) -> PortFuture<'_, DiscussionReceipt>;
+    fn reply(&self, input: ReplyInput) -> PortFuture<'_, DiscussionReceipt>;
 }
 
 impl<P: DiscussionPort> crate::Porcelain<P> {
@@ -370,12 +370,13 @@ pub fn render_readable(outcome: &DiscussionOutcome) -> String {
             )];
             for entry in &result.entries {
                 lines.push(format!(
-                    "- {} parent={} {} status={} version={} truncated={}\n  {}",
+                    "- {} parent={} {} status={} version={} actor={} truncated={}\n  {}",
                     entry.discussion_id.as_str(),
                     entry.parent.node_type.as_str(),
                     entry.parent.node_id.as_str(),
                     status_word(entry.status),
                     entry.version,
+                    entry.opening_actor,
                     entry.excerpt_truncated,
                     entry.opening_excerpt
                 ));
@@ -405,9 +406,10 @@ pub fn render_readable(outcome: &DiscussionOutcome) -> String {
             )];
             for message in &result.messages.entries {
                 lines.push(format!(
-                    "- message {} role={:?}\n  {}",
+                    "- message {} role={:?} actor={}\n  {}",
                     message.id.as_str(),
                     message.role,
+                    message.actor,
                     message.body
                 ));
             }
@@ -421,15 +423,24 @@ pub fn render_readable(outcome: &DiscussionOutcome) -> String {
             }
             lines.join("\n")
         }
-        DiscussionOutcome::Written { receipt } => format!(
-            "discussion {} parent={} {} status={} version={} message={}",
-            receipt.discussion_id.as_str(),
-            receipt.parent.node_type.as_str(),
-            receipt.parent.node_id.as_str(),
-            status_word(receipt.status),
-            receipt.version,
-            receipt.message_ids.last().map_or("none", StableId::as_str),
-        ),
+        DiscussionOutcome::Written { receipt } => {
+            let discussion = &receipt.discussion;
+            let written = receipt.message.as_ref().map_or_else(
+                || {
+                    let last = discussion.message_ids.last();
+                    last.map_or("none", StableId::as_str).to_owned()
+                },
+                |message| format!("{} actor={}", message.id.as_str(), message.actor),
+            );
+            format!(
+                "discussion {} parent={} {} status={} version={} message={written}",
+                discussion.discussion_id.as_str(),
+                discussion.parent.node_type.as_str(),
+                discussion.parent.node_id.as_str(),
+                status_word(discussion.status),
+                discussion.version,
+            )
+        }
     }
 }
 

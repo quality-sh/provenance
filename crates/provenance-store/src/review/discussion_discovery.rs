@@ -99,15 +99,7 @@ async fn list(ctx: &ReadContext, query: DiscussionListQuery) -> anyhow::Result<D
             break;
         }
         let id = row.take_text(0)?;
-        let entry = summary(
-            id.clone(),
-            row.take_text(1)?,
-            row.take_text(2)?,
-            row.take_text(3)?,
-            row.integer(4)?,
-            row.blob(5)?,
-            row.integer(6)?,
-        )?;
+        let entry = summary(id.clone(), row)?;
         let size = serde_json::to_vec(&entry)?.len();
         if bytes + size > PAGE_BYTES - 16_384 {
             break;
@@ -153,7 +145,7 @@ async fn list_rows(
         let sql = format!(
             "SELECT d.discussion_id,json_extract(d.parent,'$.node_type'),\
              json_extract(d.parent,'$.node_id'),d.status,d.version,\
-             substr(CAST(m.body AS BLOB),1,?),length(CAST(m.body AS BLOB)) \
+             substr(CAST(m.body AS BLOB),1,?),length(CAST(m.body AS BLOB)),m.actor \
              FROM discussions d \
              JOIN messages m ON m.scope_id=d.scope_id AND m.id=d.root_message_id \
              WHERE d.scope_id=? AND d.discussion_id>? \
@@ -179,18 +171,11 @@ async fn list_rows(
     first_by_id(rows, wanted)
 }
 
-/// A compact entry gives the stored identity, parent, status, and opening text.
+/// A compact entry gives the stored identity, parent, status, and the actor and text of the opening Message.
 #[rule("rule_porcelain_discussion_list_entry")]
-fn summary(
-    id: String,
-    kind: String,
-    parent_id: String,
-    status: String,
-    version: i64,
-    opening: &[u8],
-    body_bytes: i64,
-) -> anyhow::Result<DiscussionSummary> {
-    let prefix = match std::str::from_utf8(opening) {
+fn summary(id: String, mut row: SqlRow) -> anyhow::Result<DiscussionSummary> {
+    let opening = row.blob(5)?.to_vec();
+    let prefix = match std::str::from_utf8(&opening) {
         Ok(prefix) => prefix,
         Err(error) if error.error_len().is_none() => {
             std::str::from_utf8(&opening[..error.valid_up_to()])?
@@ -198,16 +183,17 @@ fn summary(
         Err(error) => return Err(error.into()),
     };
     let opening_excerpt = prefix.chars().take(EXCERPT_CHARS).collect();
-    let excerpt_truncated =
-        usize::try_from(body_bytes)? > opening.len() || prefix.chars().nth(EXCERPT_CHARS).is_some();
+    let excerpt_truncated = usize::try_from(row.integer(6)?)? > opening.len()
+        || prefix.chars().nth(EXCERPT_CHARS).is_some();
     Ok(DiscussionSummary {
         discussion_id: StableId::new(id)?,
         parent: ThreadParent {
-            node_type: serde_json::from_value(serde_json::Value::String(kind))?,
-            node_id: StableId::new(parent_id)?,
+            node_type: serde_json::from_value(serde_json::Value::String(row.take_text(1)?))?,
+            node_id: StableId::new(row.take_text(2)?)?,
         },
-        status: serde_json::from_value(serde_json::Value::String(status))?,
-        version: u64::try_from(version)?,
+        status: serde_json::from_value(serde_json::Value::String(row.take_text(3)?))?,
+        version: u64::try_from(row.integer(4)?)?,
+        opening_actor: row.take_text(7)?,
         opening_excerpt,
         excerpt_truncated,
     })

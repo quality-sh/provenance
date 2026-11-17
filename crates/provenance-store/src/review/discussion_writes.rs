@@ -5,8 +5,9 @@ use crate::{
     shards,
     state_store::{PostMessageInput, RecordStamp, StateStore},
 };
+use crate::state_store::MessageWrite;
 use provenance_core::{
-    threads::{Discussion, DiscussionStatus},
+    threads::{Discussion, DiscussionReceipt, DiscussionStatus},
     Thread, ThreadStatus,
 };
 use provenance_macros::rule;
@@ -30,7 +31,7 @@ fn unchanged_status(head: Option<&Discussion>, status: DiscussionStatus) -> Opti
 impl StateStore {
     /// Creates a distinct Discussion root or changes one addressed Discussion.
     #[rule("rule_record_comments_have_separate_reply_threads")]
-    pub fn write_discussion(&self, input: WriteDiscussion) -> anyhow::Result<Discussion> {
+    pub fn write_discussion(&self, input: WriteDiscussion) -> anyhow::Result<DiscussionReceipt> {
         self.with_repository_publication(|held| held.write_discussion_in_publication(input, None))
     }
 
@@ -38,7 +39,7 @@ impl StateStore {
         &self,
         input: WriteDiscussion,
         resolved_head: Option<Discussion>,
-    ) -> anyhow::Result<Discussion> {
+    ) -> anyhow::Result<DiscussionReceipt> {
         check_size(&input)?;
         self.authorize_discussion(&input)?;
         let head = match &input.action {
@@ -112,7 +113,10 @@ impl StateStore {
             }
             DiscussionAction::SetStatus { status, .. } => {
                 if let Some(current) = unchanged_status(head.as_ref(), *status) {
-                    return Ok(current);
+                    return Ok(DiscussionReceipt {
+                        discussion: current,
+                        message: None,
+                    });
                 }
             }
         }
@@ -135,7 +139,7 @@ impl StateStore {
         input: WriteDiscussion,
         head: Option<Discussion>,
         feedback_for: Option<provenance_core::StableId>,
-    ) -> anyhow::Result<Discussion> {
+    ) -> anyhow::Result<DiscussionReceipt> {
         let scope = &input.scope_id;
         let (thread, message, status) = match input.action {
             DiscussionAction::Start { role, body } => {
@@ -143,6 +147,7 @@ impl StateStore {
                     scope_id: scope.clone(),
                     parent: input.parent.clone(),
                     role,
+                    actor: input.actor.clone(),
                     body,
                 })?;
                 (
@@ -160,8 +165,12 @@ impl StateStore {
                     .unwrap();
                 match action {
                     DiscussionAction::Reply { role, body, .. } => {
-                        let message =
-                            self.append_discussion_message(scope, &thread.id, role, body)?;
+                        let write = MessageWrite {
+                            role,
+                            actor: input.actor.clone(),
+                            body,
+                        };
+                        let message = self.append_discussion_message(scope, &thread.id, write)?;
                         (thread, Some(message), DiscussionStatus::Active)
                     }
                     DiscussionAction::SetStatus { status, .. } => (thread, None, status),
@@ -174,10 +183,16 @@ impl StateStore {
         let discussion = if let Some(mut discussion) = head {
             discussion.version += 1;
             discussion.status = status;
-            discussion.message_ids.extend(message.map(|m| m.id));
+            discussion
+                .message_ids
+                .extend(message.as_ref().map(|m| m.id.clone()));
             discussion
         } else {
-            let root = message.expect("a started Discussion has a root Message").id;
+            let root = message
+                .as_ref()
+                .expect("a started Discussion has a root Message")
+                .id
+                .clone();
             Discussion {
                 scope_id: scope.clone(),
                 discussion_id: super::new_id(&*self.ids()),
@@ -205,7 +220,10 @@ impl StateStore {
                 Ok(())
             })
         })?;
-        Ok(discussion)
+        Ok(DiscussionReceipt {
+            discussion,
+            message,
+        })
     }
 
     fn validate_discussion_thread(

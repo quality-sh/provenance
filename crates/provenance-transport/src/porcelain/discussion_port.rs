@@ -2,7 +2,8 @@ use provenance_contract::DiscussionWriteKind;
 use provenance_core::{
     protocol::{failure::OperationError, Stamped},
     threads::{
-        Discussion, DiscussionConversationQuery, DiscussionConversationResult, DiscussionListQuery,
+        DiscussionConversationQuery, DiscussionConversationResult, DiscussionListQuery,
+        DiscussionReceipt,
     },
     NodeType, ScopeId,
 };
@@ -146,7 +147,7 @@ impl DiscussionPort for HostDiscussionPort {
         })
     }
 
-    fn start(&self, input: StartInput) -> PortFuture<'_, Discussion> {
+    fn start(&self, input: StartInput) -> PortFuture<'_, DiscussionReceipt> {
         Box::pin(async move {
             let kinds = self.permitted_write_parent_kinds(Action::Discuss);
             if !kinds.contains(&input.parent.node_type) {
@@ -171,7 +172,7 @@ impl DiscussionPort for HostDiscussionPort {
         })
     }
 
-    fn reply(&self, input: ReplyInput) -> PortFuture<'_, Discussion> {
+    fn reply(&self, input: ReplyInput) -> PortFuture<'_, DiscussionReceipt> {
         Box::pin(async move {
             let kinds = self.permitted_write_parent_kinds(Action::Reply);
             if kinds.is_empty() {

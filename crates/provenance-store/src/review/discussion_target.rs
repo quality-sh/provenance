@@ -1,6 +1,6 @@
 use super::{DiscussionAction, WriteDiscussion};
 use crate::state_store::StateStore;
-use provenance_core::{threads::Discussion, MessageRole, NodeType, ScopeId, StableId};
+use provenance_core::{threads::DiscussionReceipt, MessageRole, NodeType, ScopeId, StableId};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -23,7 +23,7 @@ impl StateStore {
     pub fn write_target_discussion(
         &self,
         input: TargetDiscussionWrite,
-    ) -> anyhow::Result<Discussion> {
+    ) -> anyhow::Result<DiscussionReceipt> {
         self.with_repository_publication(|held| {
             let head = held
                 .validated_discussions(&input.scope_id)?

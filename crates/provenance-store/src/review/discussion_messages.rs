@@ -51,8 +51,8 @@ async fn message(
     let (join, selector_id, condition) = selector_sql(&selector);
     let kind = super::discussion_state::discussion_kind_word(parent.node_type);
     let sql = format!(
-        "SELECT m.thread_id,m.role,m.body,m.created_at,\
-         length(CAST(m.body AS BLOB))+\
+        "SELECT m.thread_id,m.role,m.actor,m.body,m.created_at,\
+         length(CAST(m.body AS BLOB))+length(CAST(m.actor AS BLOB))+\
          length(m.id)+length(m.thread_id)+256 FROM messages m \
          JOIN threads t ON t.scope_id=m.scope_id AND t.id=m.thread_id {join} \
          WHERE m.scope_id=? AND t.parent_type=? AND t.parent_id=? AND {condition} AND m.id=?"
@@ -78,18 +78,21 @@ async fn message(
                 row.take_text(0)?,
                 row.take_text(1)?,
                 row.take_text(2)?,
-                row.integer(3)?,
+                row.take_text(3)?,
                 row.integer(4)?,
+                row.integer(5)?,
             ))
         })
         .transpose()?;
-    let (thread, role, body, created_at, size) = row.ok_or(ReadFailure::ResourceNotFound)?;
+    let (thread, role, actor, body, created_at, size) =
+        row.ok_or(ReadFailure::ResourceNotFound)?;
     check_stored_size(size)?;
     Ok(Message {
         scope_id: ctx.snapshot().scope().clone(),
         id: message_id,
         thread_id: StableId::new(thread)?,
         role: MessageRole::parse(&role)?,
+        actor,
         body,
         created_at,
     })
@@ -202,7 +205,8 @@ async fn message_keys(
     let (join, selector, condition) = selector_sql(&query.selector);
     let kind = super::discussion_state::discussion_kind_word(query.parent.node_type);
     let sql = format!(
-        "SELECT m.id,m.created_at,length(CAST(m.body AS BLOB))+length(m.id)+length(m.thread_id)+256 \
+        "SELECT m.id,m.created_at,length(CAST(m.body AS BLOB))+length(CAST(m.actor AS BLOB))+\
+         length(m.id)+length(m.thread_id)+256 \
          FROM messages m JOIN threads t ON t.scope_id=m.scope_id AND t.id=m.thread_id {join} \
          WHERE m.scope_id=? AND t.parent_type=? AND t.parent_id=? AND {condition}{after} \
          ORDER BY m.created_at,m.id LIMIT ?",
@@ -243,7 +247,7 @@ async fn page_message(ctx: &ReadContext, id: &str, created_at: i64) -> anyhow::R
     let rows = ctx
         .snapshot()
         .fetch(
-            "SELECT thread_id,role,body FROM messages WHERE scope_id=? AND id=?",
+            "SELECT thread_id,role,actor,body FROM messages WHERE scope_id=? AND id=?",
             vec![ctx.snapshot().scope_value(), SqlValue::from(id)],
         )
         .await?;
@@ -252,12 +256,18 @@ async fn page_message(ctx: &ReadContext, id: &str, created_at: i64) -> anyhow::R
             "no rows returned by a query that expected to return at least one row"
         )
     })?;
-    let (thread, role, body) = (row.take_text(0)?, row.take_text(1)?, row.take_text(2)?);
+    let (thread, role, actor, body) = (
+        row.take_text(0)?,
+        row.take_text(1)?,
+        row.take_text(2)?,
+        row.take_text(3)?,
+    );
     Ok(Message {
         scope_id: ctx.snapshot().scope().clone(),
         id: StableId::new(id)?,
         thread_id: StableId::new(thread)?,
         role: MessageRole::parse(&role)?,
+        actor,
         body,
         created_at,
     })

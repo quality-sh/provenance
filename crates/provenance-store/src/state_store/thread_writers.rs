@@ -6,6 +6,13 @@ use crate::write_error::publication_started;
 use provenance_core::{Message, ScopeId, StableId, Thread, ThreadParent, ThreadStatus};
 use std::collections::BTreeMap;
 
+/// The fields of one Message that the writer gives: its role, its actor, and its body.
+pub(crate) struct MessageWrite {
+    pub role: provenance_core::MessageRole,
+    pub actor: String,
+    pub body: String,
+}
+
 impl StateStore {
     /// Posts a Message on the canonical active Thread of its parent. The
     /// Thread shard, with the archive of the sibling Threads, and the Message
@@ -37,6 +44,7 @@ impl StateStore {
             scope_id,
             parent,
             role,
+            actor,
             body,
         } = input;
         crate::write_error::ensure!(
@@ -58,7 +66,11 @@ impl StateStore {
             }
         }
         ensure_within_read_budget(&thread)?;
-        let message = self.prepare_discussion_message(&scope_id, &thread.id, role, body)?;
+        let message = self.prepare_discussion_message(
+            &scope_id,
+            &thread.id,
+            MessageWrite { role, actor, body },
+        )?;
 
         self.mutate_jsonl_records(&threads_path, |threads: &mut Vec<Thread>| {
             *threads = staged;
@@ -73,10 +85,9 @@ impl StateStore {
         &self,
         scope_id: &ScopeId,
         thread_id: &StableId,
-        role: provenance_core::MessageRole,
-        body: String,
+        write: MessageWrite,
     ) -> anyhow::Result<Message> {
-        let message = self.prepare_discussion_message(scope_id, thread_id, role, body)?;
+        let message = self.prepare_discussion_message(scope_id, thread_id, write)?;
         self.append_prepared_message(scope_id, &message)?;
         Ok(message)
     }
@@ -85,9 +96,10 @@ impl StateStore {
         &self,
         scope_id: &ScopeId,
         thread_id: &StableId,
-        role: provenance_core::MessageRole,
-        body: String,
+        write: MessageWrite,
     ) -> anyhow::Result<Message> {
+        let MessageWrite { role, actor, body } = write;
+        crate::write_error::ensure_actor(&actor)?;
         let existing = self.list_messages(scope_id)?;
         let now_ms = super::requirement_reviews::now_millis(&*self.clock())?;
         let created_at = next_message_time(now_ms, existing.iter().map(|m| m.created_at).max())?;
@@ -100,6 +112,7 @@ impl StateStore {
             id,
             thread_id: thread_id.clone(),
             role,
+            actor,
             body,
             created_at,
         };

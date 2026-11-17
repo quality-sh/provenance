@@ -1,7 +1,7 @@
 use super::{shapes::scoped_write_operation, ExecutionNeed};
 use crate::review;
 use provenance_core::{
-    actor_input::ActorInput, threads::Discussion, MessageRole, NodeType, ScopeId, StableId,
+    actor_input::ActorInput, threads::DiscussionReceipt, MessageRole, NodeType, ScopeId, StableId,
 };
 use serde::Deserialize;
 
@@ -24,7 +24,7 @@ scoped_write_operation!(
     pub WriteTargetDiscussion,
     "write-target-discussion",
     WriteTargetDiscussionRequest,
-    Discussion,
+    DiscussionReceipt,
     &[409],
     &[ExecutionNeed::GraphStorage],
     scope = scope_id,

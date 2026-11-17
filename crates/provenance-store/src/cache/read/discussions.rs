@@ -15,7 +15,15 @@ const THREAD_COLUMNS: [&str; 6] = [
 ];
 
 /// The columns of a message, in the order that `message` reads them.
-const MESSAGE_COLUMNS: [&str; 6] = ["scope_id", "id", "thread_id", "role", "body", "created_at"];
+const MESSAGE_COLUMNS: [&str; 7] = [
+    "scope_id",
+    "id",
+    "thread_id",
+    "role",
+    "actor",
+    "body",
+    "created_at",
+];
 
 fn word<T: DeserializeOwned>(text: &str) -> anyhow::Result<T> {
     Ok(serde_json::from_value(serde_json::Value::String(
@@ -42,8 +50,9 @@ fn message(mut row: SqlRow) -> anyhow::Result<Message> {
         id: StableId::new(row.take_text(1)?)?,
         thread_id: StableId::new(row.take_text(2)?)?,
         role: word(row.text(3)?)?,
-        body: row.take_text(4)?,
-        created_at: row.integer(5)?,
+        actor: row.take_text(4)?,
+        body: row.take_text(5)?,
+        created_at: row.integer(6)?,
     })
 }
 
