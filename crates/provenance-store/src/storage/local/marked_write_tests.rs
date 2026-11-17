@@ -195,13 +195,16 @@ fn a_read_in_the_section_waits_for_a_write_on_another_thread() {
                 LocalStateStorage::new(layout.clone()).publish(new_set())
             });
             at_pause.recv().unwrap();
+            let (read, at_read) = mpsc::channel::<()>();
             scope.spawn(|| {
-                std::thread::sleep(std::time::Duration::from_millis(300));
+                // A read that does not wait for the write returns first.
+                let _ = at_read.recv_timeout(std::time::Duration::from_secs(2));
                 released.store(true, Ordering::SeqCst);
                 drop(resume);
             });
             let seen = LocalStateStorage::new(layout.clone()).read_view();
             let released_first = released.load(Ordering::SeqCst);
+            drop(read);
             Ok((writer.join().unwrap(), seen, released_first))
         })
     })
