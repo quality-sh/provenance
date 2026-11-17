@@ -158,6 +158,7 @@ fn record_stamps_and_message_ids_come_from_the_identity() {
                 node_id: id("req_expiry"),
             },
             role: MessageRole::User,
+            actor: "agent".into(),
             body: "Who owns a link?".into(),
         })
         .unwrap();
