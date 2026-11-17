@@ -62,7 +62,7 @@ fn crash_child() {
     let phase = match phase.as_str() {
         "state_prepared" => "state_prepared",
         "state_marker_prepared" => "state_marker_prepared",
-        "state_backup_created" => "state_backup_created",
+        "state_file_installed" => "state_file_installed",
         "state_installed" => "state_installed",
         "state_published" => "state_published",
         "synced_file_before_rename" => "synced_file_before_rename",
@@ -108,8 +108,8 @@ fn edit(store: &StateStore) -> super::SaveRequirement {
 /// write is complete after a stop there.
 const WHOLE_SET_PHASES: &[(&str, bool)] = &[
     ("state_prepared", false),
-    ("state_marker_prepared", false),
-    ("state_backup_created", false),
+    ("state_marker_prepared", true),
+    ("state_file_installed", true),
     ("state_installed", true),
     ("state_published", true),
 ];

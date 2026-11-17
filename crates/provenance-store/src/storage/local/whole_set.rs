@@ -1,13 +1,15 @@
-//! A whole set of many keys on local disk: a copy of the state directory
-//! with the set applied, swapped in for the live state directory.
+//! A whole set of many keys on local disk. A write of records installs each
+//! changed file in place (see `in_place`). A source edit swaps a changed
+//! copy of the state directory in for the live state directory.
 //!
 //! The transaction lives under `.provenance/cache`. A marker names its phase,
-//! so recovery at the next section entry completes or rolls back a swap that
-//! a crash interrupted. A transaction that no marker names belongs to no live
+//! so recovery at the next section entry completes the write, or for a swap
+//! completes or rolls it back, after a stop. A transaction that no marker names belongs to no live
 //! write: the write removes it when it fails, and the next section entry
 //! removes it after a stop.
 
 use super::durability::{sync_directory, sync_tree, write_staged_file};
+use super::in_place;
 use super::recovery::{write_publication_marker, PublicationPhase};
 use super::transactions::{clear_marker, end_marked_write, remove_unpublished, TransactionKind};
 use crate::layout::ProvenanceLayout;
@@ -57,8 +59,9 @@ pub enum InstallState {
     FileMoved,
 }
 
-/// Lands `writes` on the state directory of `live` as one swap. The copy
-/// cost is proportional to all state bytes.
+/// Lands `writes` on the state directory of `live`. A write of records
+/// installs each changed file in place; see `in_place`. A source edit lands
+/// as one swap of a changed copy of the state directory.
 #[rule("rule_live_projection_shows_only_published_state")]
 pub fn land(
     live: &ProvenanceLayout,
@@ -74,13 +77,56 @@ pub fn land(
     );
     let transaction = hook.kind().directory(live).join(transaction_name);
     std::fs::create_dir(&transaction)?;
-    let result = stage_and_publish(live, writes, &transaction, hook);
+    let result = match hook.kind() {
+        TransactionKind::Import => stage_and_install(live, writes, &transaction, hook),
+        TransactionKind::SourceEdit => stage_and_publish(live, writes, &transaction, hook),
+    };
     if result.is_err() && !hook.kind().marker(live).exists() {
         // The error of the write wins. A failed removal leaves data that the
         // next section entry removes, or that stops it with its path.
         let _ = hook.remove_unpublished(live, &transaction);
     }
     result
+}
+
+/// Stages the changed files and the change list, writes the marker, and
+/// then installs the files in place.
+fn stage_and_install(
+    live: &ProvenanceLayout,
+    writes: &WriteSet,
+    transaction: &Utf8Path,
+    hook: &mut dyn WholeSetHook,
+) -> anyhow::Result<()> {
+    in_place::stage(live, transaction, writes)?;
+    sync_directory(&hook.kind().directory(live))?;
+    crate::test_probes::at("state_prepared")?;
+    match hook.prepared(live, transaction) {
+        Ok(()) => install_after_marker(live, transaction, hook),
+        // A marker that exists names a complete change list, so the next
+        // section entry completes the write.
+        Err(_) if hook.kind().marker(live).exists() => {}
+        Err(error) => return Err(error),
+    }
+    Ok(())
+}
+
+/// Installs the write that the marker names. The marker names a complete
+/// change list, so the write succeeds: when a step fails, the marker stays,
+/// and the next section entry completes the write. When the write cannot
+/// remove its transaction data, the marker stays too.
+#[rule("rule_published_write_succeeds_when_its_cleanup_fails")]
+fn install_after_marker(
+    live: &ProvenanceLayout,
+    transaction: &Utf8Path,
+    hook: &mut dyn WholeSetHook,
+) {
+    let installed = in_place::install(live, transaction)
+        .and_then(|()| hook.state_installed(live))
+        .and_then(|()| hook.published(live, transaction))
+        .and_then(|()| hook.after_published());
+    if installed.is_ok() {
+        let _ = end_marked_write(live, hook.kind(), transaction);
+    }
 }
 
 fn stage_and_publish(
@@ -120,7 +166,6 @@ fn apply(staged: &ProvenanceLayout, writes: &WriteSet) -> anyhow::Result<()> {
 /// write is published, it succeeds when its end fails: the marker stays, or
 /// a sync of the cache did not make the removal of the marker durable, and
 /// the next section entry ends the write.
-#[rule("rule_published_write_succeeds_when_its_cleanup_fails")]
 fn publish_staged_state(
     live: &ProvenanceLayout,
     staged: &ProvenanceLayout,
@@ -235,7 +280,7 @@ fn rollback_publication(
 
 /// The hook of a whole set with no working-tree file: its transaction goes
 /// under `cache/import-transactions`, and the publication marker records
-/// each phase.
+/// each phase. It installs in place, so it makes no backup.
 pub struct StatePublication;
 
 impl WholeSetHook for StatePublication {
@@ -244,19 +289,16 @@ impl WholeSetHook for StatePublication {
     }
 
     fn prepared(&mut self, live: &ProvenanceLayout, transaction: &Utf8Path) -> anyhow::Result<()> {
-        write_publication_marker(live, transaction, PublicationPhase::Prepared)?;
+        write_publication_marker(live, transaction, PublicationPhase::Installing)?;
         crate::test_probes::at("state_marker_prepared")
     }
 
     fn backup_created(
         &mut self,
-        live: &ProvenanceLayout,
-        transaction: &Utf8Path,
+        _live: &ProvenanceLayout,
+        _transaction: &Utf8Path,
     ) -> anyhow::Result<()> {
-        sync_directory(transaction)?;
-        crate::test_probes::at("state_backup_created")?;
-        sync_directory(&live.provenance_dir())?;
-        write_publication_marker(live, transaction, PublicationPhase::BackupCreated)
+        Ok(())
     }
 
     fn state_installed(&mut self, _live: &ProvenanceLayout) -> anyhow::Result<()> {

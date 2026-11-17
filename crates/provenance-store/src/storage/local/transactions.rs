@@ -54,6 +54,7 @@ impl TransactionKind {
 pub enum RemovalStep {
     List,
     Read,
+    ReadMarker,
     Transaction,
     Unpublished,
     Temporary,
@@ -75,6 +76,11 @@ where
     let context = match step {
         RemovalStep::List => format!("list {path}"),
         RemovalStep::Read => format!("read {path}"),
+        RemovalStep::ReadMarker => format!(
+            "read {path} (the marker is not in the format of this release: open the \
+             repository one time with the release that wrote the marker, so that its write \
+             completes)"
+        ),
         RemovalStep::Transaction => format!("remove transaction directory {path}"),
         RemovalStep::Unpublished => format!(
             "remove transaction directory {path} (no marker names this directory, thus the \
@@ -105,8 +111,10 @@ pub fn write_marker(
     write_synced_file_named(&marker, bytes, &temporary_name::builder(&prefix))
 }
 
-/// The marker of `kind`, or `None` when it does not exist. A read or a parse
-/// that fails gives the path of the marker.
+/// The marker of `kind`, or `None` when it does not exist. A read that fails
+/// gives the path of the marker. A marker that is JSON with a shape that
+/// this release does not know is one that an earlier release wrote: its
+/// error gives the path and the repair.
 pub fn read_marker<T: serde::de::DeserializeOwned>(
     layout: &ProvenanceLayout,
     kind: TransactionKind,
@@ -116,9 +124,14 @@ pub fn read_marker<T: serde::de::DeserializeOwned>(
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
         bytes => bytes.map_err(|error| removal_failure(RemovalStep::Read, &marker, error))?,
     };
-    serde_json::from_slice(&bytes)
-        .map(Some)
-        .map_err(|error| removal_failure(RemovalStep::Read, &marker, error))
+    serde_json::from_slice(&bytes).map(Some).map_err(|error| {
+        let step = if error.is_data() {
+            RemovalStep::ReadMarker
+        } else {
+            RemovalStep::Read
+        };
+        removal_failure(step, &marker, error)
+    })
 }
 
 fn marker_temporary_prefix(marker: &Utf8Path) -> String {

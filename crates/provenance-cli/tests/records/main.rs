@@ -41,6 +41,8 @@ mod cli_enrichment;
 mod cli_export_stray_state;
 #[path = "../cli_graph_state.rs"]
 mod cli_graph_state;
+#[path = "../cli_held_state_file.rs"]
+mod cli_held_state_file;
 #[path = "../cli_id_charset_conformance.rs"]
 mod cli_id_charset_conformance;
 #[path = "../cli_import_exact_replacement.rs"]

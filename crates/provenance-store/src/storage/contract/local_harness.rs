@@ -7,10 +7,6 @@ use crate::storage::local::LocalStateStorage;
 use camino::Utf8Path;
 
 pub struct Local {
-    /// The files of broken keys, held open until the harness drops, before
-    /// the temporary directory is removed.
-    #[cfg(windows)]
-    held: Vec<std::fs::File>,
     _temp: tempfile::TempDir,
     pub layout: ProvenanceLayout,
     storage: LocalStateStorage,
@@ -20,8 +16,6 @@ pub fn local() -> Local {
     let temp = tempfile::tempdir().unwrap();
     let layout = ProvenanceLayout::new(Utf8Path::from_path(temp.path()).unwrap());
     Local {
-        #[cfg(windows)]
-        held: Vec::new(),
         storage: LocalStateStorage::new(layout.clone()),
         layout,
         _temp: temp,
@@ -47,24 +41,10 @@ impl Harness for Local {
     /// also makes a copy of the state directory fail, so a set that copies
     /// the stored keys fails too.
     ///
-    /// On Windows, the harness holds the file of a stored key open with a
-    /// share mode that permits reads only. A write, a remove or a rename of
-    /// that file then fails, and so does a rename of a directory above it,
-    /// but a read succeeds and the view keeps the key.
+    /// The harness puts a directory with a file and, on Unix, a link in the
+    /// place of the key. A write cannot replace it, and the view refuses it.
     fn break_key(&mut self, key: &str) {
         let path = self.layout.state_dir().join(key);
-        #[cfg(windows)]
-        if path.is_file() {
-            use std::os::windows::fs::OpenOptionsExt;
-            const FILE_SHARE_READ: u32 = 0x1;
-            let file = std::fs::OpenOptions::new()
-                .read(true)
-                .share_mode(FILE_SHARE_READ)
-                .open(&path)
-                .unwrap();
-            self.held.push(file);
-            return;
-        }
         if path.is_file() {
             std::fs::remove_file(&path).unwrap();
         }

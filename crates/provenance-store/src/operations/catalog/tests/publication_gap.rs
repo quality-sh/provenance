@@ -6,7 +6,7 @@ use provenance_macros::verifies;
 use std::sync::Arc;
 
 /// The probe runs a scoped read through the binding while the publication
-/// holds its lock with the live state moved away. The check of the scope reads
+/// holds its lock with its files installed. The check of the scope reads
 /// the manifest, so the read must wait for the publication and not fail.
 #[test]
 #[verifies("rule_preparation_reads_published_state", examples)]
@@ -14,7 +14,7 @@ fn a_scoped_read_in_the_publication_gap_succeeds_after_the_publication() {
     let (dir, binding) = repository();
     let layout = ProvenanceLayout::new(dir.path().to_str().unwrap());
     let reader = std::rc::Rc::new(std::cell::RefCell::new(None));
-    crate::test_probes::arm("state_after_backup_rename", {
+    crate::test_probes::arm("state_installed", {
         let reader = reader.clone();
         let mut binding = Some(binding);
         move || {
@@ -65,7 +65,7 @@ fn a_scoped_read_in_the_publication_gap_succeeds_after_the_publication() {
         )
     })
     .unwrap();
-    crate::test_probes::disarm("state_after_backup_rename");
+    crate::test_probes::disarm("state_installed");
     let reader = reader.take().expect("the publication reached the gap");
     assert_eq!(reader.join().unwrap(), Ok(Vec::new()));
 }

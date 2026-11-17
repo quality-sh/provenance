@@ -74,11 +74,11 @@ enum Made {
 /// Where a stop landed in the publish of its write.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Landing {
-    /// The transaction of the write stays and no marker is there, so the
-    /// live state did not move.
+    /// The transaction of the write stays and no marker is there, so no
+    /// live file changed.
     BeforeMarker,
-    /// The marker names the transaction of the write, and the new state is
-    /// not installed.
+    /// The marker names the transaction of the write, and the install of
+    /// the new state is not complete: the next section entry completes it.
     BeforeInstall,
     /// The new state is installed: the marker says so, or the write removed
     /// its transaction and its marker.
@@ -354,13 +354,11 @@ fn landing(layout: &ProvenanceLayout, transaction: &Path) -> Landing {
         transaction.file_name(),
         "the marker {marker} does not name the transaction of the stopped write"
     );
-    // The write moves the live state into its transaction before the phase
-    // `backup_created`, and installs the new state after it. So in that
-    // phase, a live state is the new state.
+    // The write installs its files in the phase `installing`, and writes the
+    // phase `published` after the last one.
     match marker["phase"].as_str() {
-        Some("prepared") => Landing::BeforeInstall,
-        Some("backup_created") if !layout.state_dir().exists() => Landing::BeforeInstall,
-        Some("backup_created" | "published") => Landing::AfterInstall,
+        Some("installing") => Landing::BeforeInstall,
+        Some("published") => Landing::AfterInstall,
         _ => panic!("the marker {marker} has no phase that the test knows"),
     }
 }

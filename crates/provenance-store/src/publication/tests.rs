@@ -219,7 +219,7 @@ fn recovery_rejects_a_transaction_that_is_a_regular_file() {
         layout.publication_marker_path(),
         serde_json::to_vec(&serde_json::json!({
             "transaction_dir": transaction,
-            "phase": "backup_created"
+            "phase": "installing"
         }))
         .unwrap(),
     )
@@ -341,8 +341,8 @@ fn a_nested_section_completes_on_the_held_store_and_is_refused_through_an_alias(
     assert_eq!(refused, [true, true]);
 }
 
-/// The probe starts the host read while the publication holds its lock with the live state
-/// moved away, and does not wait for it. The open and the manifest read wait for the publication.
+/// The probe starts the host read while the publication holds its lock with the changed files
+/// installed, and does not wait for it. The open and the manifest read wait for the publication.
 #[test]
 #[verifies("rule_preparation_reads_published_state", examples)]
 fn a_repository_read_in_the_publication_gap_waits_for_the_publication() {
@@ -360,7 +360,7 @@ fn a_repository_read_in_the_publication_gap_waits_for_the_publication() {
     )
     .unwrap();
     let reader = std::rc::Rc::new(std::cell::RefCell::new(None));
-    crate::test_probes::arm("state_after_backup_rename", {
+    crate::test_probes::arm("state_installed", {
         let reader = reader.clone();
         move || {
             let root = root.clone();
@@ -380,20 +380,20 @@ fn a_repository_read_in_the_publication_gap_waits_for_the_publication() {
         })
     })
     .unwrap();
-    crate::test_probes::disarm("state_after_backup_rename");
+    crate::test_probes::disarm("state_installed");
     let reader = reader.take().expect("the publication reached the gap");
     assert_eq!(reader.join().unwrap().unwrap(), published);
 }
 
 /// The probe reads the record kinds on another thread while the
-/// publication has moved the live state to its backup. The read takes no
-/// lock, so it does not wait, and it finds no record.
+/// publication installs its files. The read takes no lock, so it does not
+/// wait, and it reads the live files.
 #[test]
 #[verifies("rule_read_only_section_stays_inside_the_store", examples)]
-fn read_only_record_kinds_in_the_publication_swap_find_no_record() {
+fn read_only_record_kinds_in_the_publication_install_read_the_live_files() {
     let (_directory, live, _copy) = record_kind_repositories();
     let answer = std::rc::Rc::new(std::cell::RefCell::new(None));
-    crate::test_probes::arm("state_after_backup_rename", {
+    crate::test_probes::arm("state_installed", {
         let answer = answer.clone();
         let live = live.clone();
         move || {
@@ -407,10 +407,10 @@ fn read_only_record_kinds_in_the_publication_swap_find_no_record() {
     let published = with_repository_publication(&live, |held| {
         with_staged_state(held, false, StampFromGit, stage_two_new_shards)
     });
-    crate::test_probes::disarm("state_after_backup_rename");
+    crate::test_probes::disarm("state_installed");
     published.unwrap();
-    let answer = answer.take().expect("the publication reached the swap");
-    assert_eq!(answer.unwrap(), Vec::<NodeType>::new());
+    let answer = answer.take().expect("the publication reached the install");
+    assert_eq!(answer.unwrap(), vec![NodeType::Source]);
     assert_eq!(
         read_only_record_kinds(&live, &scope(), "source_help").unwrap(),
         vec![NodeType::Source],

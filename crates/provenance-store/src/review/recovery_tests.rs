@@ -53,7 +53,7 @@ fn crash_child() {
     let phase = match phase.as_str() {
         "state_prepared" => "state_prepared",
         "state_marker_prepared" => "state_marker_prepared",
-        "state_backup_created" => "state_backup_created",
+        "state_file_installed" => "state_file_installed",
         "state_installed" => "state_installed",
         "state_published" => "state_published",
         _ => panic!("unknown crash phase"),
@@ -74,8 +74,8 @@ fn crash_child() {
 fn process_crashes_reopen_as_complete_old_or_new_state() {
     for (phase, committed) in [
         ("state_prepared", false),
-        ("state_marker_prepared", false),
-        ("state_backup_created", false),
+        ("state_marker_prepared", true),
+        ("state_file_installed", true),
         ("state_installed", true),
         ("state_published", true),
     ] {
@@ -130,8 +130,8 @@ fn creation_crashes_reopen_with_both_or_neither_published_half() {
     let new_id = StableId::new("req_new").unwrap();
     for (phase, committed) in [
         ("state_prepared", false),
-        ("state_marker_prepared", false),
-        ("state_backup_created", false),
+        ("state_marker_prepared", true),
+        ("state_file_installed", true),
         ("state_installed", true),
         ("state_published", true),
     ] {
@@ -171,15 +171,15 @@ fn creation_crashes_reopen_with_both_or_neither_published_half() {
 }
 
 #[test]
-fn failed_rollback_retains_recovery_material() {
+fn a_failed_install_keeps_its_marker_and_the_next_entry_completes_it() {
     let temp = fixture();
     let root = Utf8Path::from_path(temp.path()).unwrap();
-    assert_failed_rollback(root);
+    assert_failed_install(root);
 }
 
 #[cfg(any(unix, windows))]
 #[test]
-fn failed_rollback_recovers_through_a_symlinked_repository_parent() {
+fn a_failed_install_completes_through_a_symlinked_repository_parent() {
     let temp = fixture();
     let aliases = tempfile::tempdir().unwrap();
     let physical = Utf8Path::from_path(temp.path()).unwrap();
@@ -188,18 +188,18 @@ fn failed_rollback_recovers_through_a_symlinked_repository_parent() {
     std::os::unix::fs::symlink(physical.parent().unwrap(), &alias).unwrap();
     #[cfg(windows)]
     std::os::windows::fs::symlink_dir(physical.parent().unwrap(), &alias).unwrap();
-    assert_failed_rollback(&alias.join(physical.file_name().unwrap()));
+    assert_failed_install(&alias.join(physical.file_name().unwrap()));
 }
 
-fn assert_failed_rollback(root: &Utf8Path) {
+/// The install of the save fails after its marker. The save succeeds, the
+/// marker stays, and the next section entry installs the new state.
+fn assert_failed_install(root: &Utf8Path) {
     let store = open(root);
     let input = input(&store, "failed");
-    test_probes::crash_at("state_before_install");
-    test_probes::crash_at("state_before_rollback");
+    test_probes::crash_at("state_file_installed");
     let outcome = store.save_requirement(input);
-    test_probes::disarm("state_before_install");
-    test_probes::disarm("state_before_rollback");
-    assert!(outcome.is_err());
+    test_probes::disarm("state_file_installed");
+    outcome.unwrap();
     assert!(ProvenanceLayout::new(root)
         .publication_marker_path()
         .exists());
@@ -208,8 +208,11 @@ fn assert_failed_rollback(root: &Utf8Path) {
         store.list_requirements(&scope()).unwrap()[0]
             .description
             .as_deref(),
-        Some("baseline")
+        Some("failed")
     );
+    assert!(!ProvenanceLayout::new(root)
+        .publication_marker_path()
+        .exists());
 }
 
 #[test]
@@ -219,13 +222,11 @@ fn a_lost_result_resolves_through_resubmission_after_recovery() {
     let store = open(root);
     let input = input(&store, "lost_result");
     let request = serde_json::to_vec(&input).unwrap();
+    // An error after the marker does not reach the caller, so the client
+    // loses only the answer, as when its connection closes.
     test_probes::crash_at("state_published");
-    let error = store.save_requirement(input).unwrap_err();
+    store.save_requirement(input).unwrap();
     test_probes::disarm("state_published");
-    assert!(matches!(
-        crate::write_error::WriteError(error).safe(),
-        crate::write_error::WriteFailure::WriteFailed { .. }
-    ));
     let reopened = open(root);
     let retried: SaveRequirement = serde_json::from_slice(&request).unwrap();
     let state = reopened.save_requirement(retried).unwrap();

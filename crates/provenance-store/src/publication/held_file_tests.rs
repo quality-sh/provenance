@@ -25,9 +25,9 @@ pub(super) fn stage_two_new_shards(staged: &StateStore) -> anyhow::Result<()> {
 /// The test uses a private surface because no public call stops between two
 /// writes of the publication marker, so only the probe can hold it open there.
 ///
-/// The probe opens the publication marker when the publication has moved the
-/// live state to its backup, and keeps the handle until the publication
-/// returns. The next marker writes replace the open marker.
+/// The probe opens the publication marker when the publication has written
+/// it, and keeps the handle until the publication returns. The next marker
+/// write replaces the open marker.
 #[test]
 fn a_publication_passes_while_a_reader_has_the_marker_open() {
     let directory = tempfile::tempdir().unwrap();
@@ -44,7 +44,7 @@ fn a_publication_passes_while_a_reader_has_the_marker_open() {
     )
     .unwrap();
     let held = std::rc::Rc::new(std::cell::RefCell::new(None));
-    crate::test_probes::arm("state_after_backup_rename", {
+    crate::test_probes::arm("state_marker_prepared", {
         let held = held.clone();
         let marker = layout.publication_marker_path();
         move || {
@@ -62,7 +62,7 @@ fn a_publication_passes_while_a_reader_has_the_marker_open() {
             stage_two_new_shards(staged)
         })
     });
-    crate::test_probes::disarm("state_after_backup_rename");
+    crate::test_probes::disarm("state_marker_prepared");
     let handle = held.take().expect("the publication reached the swap");
     result.unwrap_or_else(|error| panic!("{error:#}"));
     drop(handle);

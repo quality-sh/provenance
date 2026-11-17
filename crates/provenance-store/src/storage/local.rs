@@ -20,6 +20,9 @@ pub(crate) mod durability;
 mod durability_tests;
 #[cfg(any(unix, windows))]
 mod file_install;
+mod in_place;
+#[cfg(test)]
+mod in_place_tests;
 mod recovery;
 mod section;
 mod transactions;

@@ -156,6 +156,7 @@ fn crash_child() {
     };
     let phase = std::env::var("PROVENANCE_TOPIC_ARCHIVE_CRASH_PHASE").unwrap();
     let phase = match phase.as_str() {
+        "state_prepared" => "state_prepared",
         "state_marker_prepared" => "state_marker_prepared",
         "state_installed" => "state_installed",
         _ => panic!("unknown crash phase"),
@@ -170,7 +171,7 @@ fn crash_child() {
 
 #[test]
 fn archive_recovery_restores_complete_old_or_new_state() {
-    for (phase, committed) in [("state_marker_prepared", false), ("state_installed", true)] {
+    for (phase, committed) in [("state_prepared", false), ("state_marker_prepared", true)] {
         let (directory, _store, scope) = seed();
         let root = Utf8Path::from_path(directory.path()).unwrap();
         let status = std::process::Command::new(std::env::current_exe().unwrap())
