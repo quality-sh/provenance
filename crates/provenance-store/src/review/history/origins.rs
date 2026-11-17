@@ -1,45 +1,65 @@
 //! Assigns an outcome to the first record version that contains it. A
 //! committed Discussion line that does not parse holds no outcome.
 
-use super::texts::each_text;
-use super::versions::FileVersions;
+use super::index::OutcomeRow;
 use super::VersionedRecord;
 use provenance_core::{
     threads::{Discussion, DiscussionOrigin},
     NodeType, StableId,
 };
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 
 /// One outcome: its Discussion, message and revision.
 pub(super) type Outcome = (String, String, String);
 
-/// Assigns the outcomes of the committed Discussion file `path` to the
-/// committed `versions`, oldest first. `seen` gets each outcome of a version.
-pub(super) async fn committed(
-    history: &dyn FileVersions,
-    path: &str,
-    kind: NodeType,
-    id: &StableId,
-    versions: &mut [VersionedRecord],
-    seen: &mut BTreeSet<Outcome>,
-) -> anyhow::Result<()> {
-    let commits = versions
-        .iter()
-        .filter_map(|version| version.version.commit.clone())
-        .collect::<Vec<_>>();
-    let commits = commits.iter().map(String::as_str).collect::<Vec<_>>();
-    let mut versions = versions.iter_mut();
-    each_text(history, path, &commits, |text| {
-        let discussions = text
-            .unwrap_or_default()
-            .lines()
-            .filter_map(|line| serde_json::from_str::<Discussion>(line).ok())
-            .collect();
-        if let Some(version) = versions.next() {
-            assign(discussions, kind, id, seen, version);
+/// The outcomes for each record of `kind` in the text of a committed
+/// Discussion file, by record id, in file order.
+pub(super) fn outcomes(text: Option<&str>, kind: NodeType) -> BTreeMap<String, Vec<OutcomeRow>> {
+    let mut found = BTreeMap::<String, Vec<OutcomeRow>>::new();
+    for line in text.unwrap_or_default().lines() {
+        let Ok(discussion) = serde_json::from_str::<Discussion>(line) else {
+            continue;
+        };
+        for outcome in discussion.outcomes {
+            if outcome.record_kind != kind {
+                continue;
+            }
+            found
+                .entry(outcome.record_id.as_str().to_owned())
+                .or_default()
+                .push(OutcomeRow {
+                    discussion_id: discussion.discussion_id.clone(),
+                    thread_id: discussion.thread_id.clone(),
+                    message_id: outcome.message_id,
+                    revision: outcome.revision.as_str().to_owned(),
+                });
         }
-    })
-    .await
+    }
+    found
+}
+
+/// Assigns `outcomes`, the outcomes of a committed version, to `version`,
+/// except an outcome that an earlier version holds. `seen` gets each
+/// outcome of the version.
+pub(super) fn committed(
+    outcomes: &[OutcomeRow],
+    seen: &mut BTreeSet<Outcome>,
+    version: &mut VersionedRecord,
+) {
+    for outcome in outcomes {
+        let key = (
+            outcome.discussion_id.as_str().to_owned(),
+            outcome.message_id.as_str().to_owned(),
+            outcome.revision.clone(),
+        );
+        if seen.insert(key) {
+            version.version.origin = Some(DiscussionOrigin {
+                discussion_id: outcome.discussion_id.clone(),
+                thread_id: outcome.thread_id.clone(),
+                message_id: outcome.message_id.clone(),
+            });
+        }
+    }
 }
 
 /// Assigns the outcomes of the Discussions of the saved working copy to its
