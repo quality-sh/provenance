@@ -68,7 +68,7 @@ pub(super) fn column_bytes(value: &ColumnValue) -> anyhow::Result<usize> {
 /// conversion as the projection.
 #[cfg(feature = "host")]
 fn sqlite_real_bytes(real: f64) -> anyhow::Result<usize> {
-    use libsqlite3_sys as sqlite;
+    use crate::sqlite_ffi as sqlite;
 
     let mut connection = std::ptr::null_mut();
     let mut statement = std::ptr::null_mut();
