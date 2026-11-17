@@ -13,12 +13,7 @@ use provenance_macros::rule;
 const MAX_SAFE_CYCLE: u64 = (1 << 53) - 1;
 
 pub(super) fn check_request_size(input: &impl serde::Serialize) -> anyhow::Result<()> {
-    crate::write_error::ensure!(
-        RecordTooLarge,
-        serde_json::to_vec(input)?.len() <= 1_048_576,
-        "review request exceeds the operation byte budget"
-    );
-    Ok(())
+    crate::write_error::ensure_request_size(serde_json::to_vec(input)?.len(), "review")
 }
 
 /// The key of the review Proposal for one record and one review cycle.

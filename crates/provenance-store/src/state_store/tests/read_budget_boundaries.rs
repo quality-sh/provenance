@@ -27,7 +27,7 @@ fn assert_too_large<T>(result: anyhow::Result<T>) {
     let failure = error
         .downcast_ref::<SourceFailure>()
         .expect("typed refusal");
-    assert!(matches!(failure.failure, WriteFailure::RecordTooLarge));
+    assert!(matches!(failure.failure, WriteFailure::RecordTooLarge { .. }));
 }
 
 #[tokio::test]

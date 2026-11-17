@@ -119,6 +119,7 @@ impl StateStore {
             })
             .map(|review| review.into_record(scope))
             .collect::<anyhow::Result<Vec<_>>>()?;
+        super::read_budget::ensure_slice_within_read_budget(&desired)?;
         let path = shards::requirement_reviews_path(&self.layout, scope);
         self.mutate_jsonl_records(&path, |records: &mut Vec<RequirementReview>| {
             for record in desired {

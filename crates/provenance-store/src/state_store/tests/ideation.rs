@@ -49,7 +49,7 @@ fn landing_refuses_oversized_records_of_every_kind_before_publication() {
         let batch: IdeationLandingBatch = serde_json::from_value(value.into()).unwrap();
         let error = store.land_ideation_batch(&scope, batch, false).unwrap_err();
         assert!(
-            matches!(WriteError(error).safe(), WriteFailure::RecordTooLarge),
+            matches!(WriteError(error).safe(), WriteFailure::RecordTooLarge { .. }),
             "oversized {kind} must receive the typed refusal"
         );
         assert!(

@@ -9,7 +9,7 @@ use provenance_core::protocol::failure::{InvalidInputReason, OperationFailure};
 use provenance_core::protocol::read_failure::ReadFailure;
 use provenance_macros::rule;
 
-pub const RECORD_BYTES: usize = 65_536;
+pub use crate::state_store::read_budget::RECORD_BYTES;
 pub const PAGE_BYTES: usize = 1_048_576;
 pub const RESOURCE_RECORD_BYTES: usize = PAGE_BYTES - 16_384;
 

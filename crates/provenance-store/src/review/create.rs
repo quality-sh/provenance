@@ -108,11 +108,7 @@ impl StateStore {
 
 fn normalize(input: &mut CreateReviewRequirement) -> anyhow::Result<()> {
     crate::write_error::ensure_actor(&input.actor)?;
-    crate::write_error::ensure!(
-        RecordTooLarge,
-        serde_json::to_vec(&input)?.len() <= 1_048_576,
-        "review request exceeds the operation byte budget"
-    );
+    crate::write_error::ensure_request_size(serde_json::to_vec(&input)?.len(), "review")?;
     for ids in [
         &mut input.create.refines,
         &mut input.create.depends_on,

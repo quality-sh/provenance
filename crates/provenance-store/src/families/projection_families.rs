@@ -182,9 +182,9 @@ pub enum FamilyGroup {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BudgetKind {
-    Resource,
+    /// An import refuses a row of this family over the record budget.
     Record,
-    Unchecked,
+    /// No import writes this family.
     NotImported,
 }
 
