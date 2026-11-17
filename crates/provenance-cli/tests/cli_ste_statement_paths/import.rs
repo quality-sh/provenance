@@ -3,7 +3,7 @@ use super::support::{
     provenance_tree, write_json, REQUIREMENTS_SHARD,
 };
 use provenance_macros::verifies;
-use serde_json::{json, Value};
+use serde_json::json;
 use std::path::Path;
 
 fn import_output(repo: &Path, input: &Path, dry_run: bool) -> std::process::Output {
@@ -73,14 +73,19 @@ fn apply_and_dry_run_reject_with_identical_diagnostics_and_preserve_all_state_by
     let dry_report = error_json(&dry_run);
     let apply_report = error_json(&apply);
     assert_eq!(apply_report, dry_report);
-    assert_eq!(apply_report["error"], "asd_ste100_violations");
     assert_eq!(
-        apply_report["diagnostics"],
-        Value::Array(vec![
-            diagnostic("requirement", "req_changed", 5),
-            diagnostic("rule", "rule_added", 5),
-            diagnostic("rule", "rule_changed", 5),
-        ])
+        apply_report,
+        json!({
+            "error": {
+                "kind": "statement_invalid",
+                "diagnostics": [
+                    diagnostic("requirement", "req_changed", 5),
+                    diagnostic("rule", "rule_added", 5),
+                    diagnostic("rule", "rule_changed", 5),
+                ],
+            },
+            "meta": {},
+        })
     );
 }
 

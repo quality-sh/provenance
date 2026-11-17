@@ -430,7 +430,7 @@ pub fn unloaded_check(problem: &str) -> (Option<i32>, serde_json::Value, String)
 
 /// The strict statement check when the reference cannot load with
 /// `problem`: the statements category cannot run, its reason is the problem,
-/// and the check fails with the same text.
+/// and the check fails with the same text in its refusal object.
 pub fn unloaded_strict_check(problem: &str) -> (Option<i32>, serde_json::Value, String) {
     let check = serde_json::json!({"categories": [{
         "category": "statements",
@@ -438,5 +438,9 @@ pub fn unloaded_strict_check(problem: &str) -> (Option<i32>, serde_json::Value, 
         "findings": [],
         "unavailable_reason": problem,
     }]});
-    (Some(1), check, format!("Error: {problem}\n"))
+    let refusal = serde_json::json!({
+        "error": {"kind": "operation_failed", "message": problem},
+        "meta": {},
+    });
+    (Some(1), check, format!("{refusal}\n"))
 }

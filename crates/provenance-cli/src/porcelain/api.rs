@@ -34,7 +34,14 @@ pub async fn dispatch_api(
             );
         }
         Ok(ApiOutcome::Invoked(value)) => println!("{}", serde_json::to_string_pretty(&value)?),
-        Err(error) => anyhow::bail!("{}", serde_json::to_string(&error.failure)?),
+        Err(error) => {
+            return Err(crate::refusal::HostRefusal {
+                failure: error.failure,
+                hint: None,
+                text_shows_failure: true,
+            }
+            .into())
+        }
     }
     Ok(())
 }

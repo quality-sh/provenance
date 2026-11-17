@@ -174,24 +174,26 @@ and the `--format json` answer of one route both give its schemas.
 Every catalog result uses `{data,meta}` or `{error,meta}`. Lists put their
 records in `data.items`.
 
-With `--format json`, a record read, search,
-or action, and a Discussion command print a refusal from the operation as one
-`{error,meta}` object. The object is the only line on standard error, it has no
-prefix, and the command exits with code 1. When the CLI knows the next command
-to run, `error.hint` names it.
+With `--format json`, each command that takes `--format` prints a refusal as
+one `{error,meta}` object. The [operation contract](operation-contract.md#envelopes-and-failures)
+defines the object and the kinds `operation_failed`, `statement_invalid`, and
+`invalid_input`. The object is one line on standard error with no prefix, and
+the command exits with code 1. A `hint:` or `warning:` line can come before it.
+When the CLI knows the next command to run, `error.hint` names it.
 
-`provenance api` prints a refusal as one `{error,meta}` object after `Error: `
-on standard error and exits with code 1.
+Only a `--format json` that the caller gives selects the object. These commands
+print JSON by default, and without the flag they print a refusal as text:
+`export`, `merge-jsonl`, `validate`, `schema show`, `dictionary status`,
+`skills list`, `skills install`, `report build`, `dogfood list`,
+`dogfood report`, and `dogfood triage list`.
 
-These errors stay text after `Error: ` and exit with code 1, also with
-`--format json`:
+Without `--format json`, a refusal is text after `Error: ` with exit code 1.
+`provenance api` prints its refusal object after `Error: `. An option that the
+action does not take, or an input value that the command cannot read, is a
+usage error: clap's text with exit code 2.
 
-- A graph that is not initialized, and a command that runs in a directory
-  inside an initialized repository.
-- File and I/O errors.
-- Every error from a builtin command, such as `init`, `check`, and `export`.
-
-A usage error prints clap's text and exits with code 2.
+When the parser refuses the command line, the refusal is clap's text with exit
+code 2, also with `--format json`.
 
 ## Product commands
 

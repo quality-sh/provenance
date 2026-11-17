@@ -61,10 +61,15 @@ fn requirement_and_rule_merges_reject_selected_changed_statements_without_touchi
             b"sentinel output bytes"
         );
         let report = error_json(&output);
-        assert_eq!(report["error"], "asd_ste100_violations");
         assert_eq!(
-            report["diagnostics"],
-            Value::Array(vec![diagnostic(kind, "record_a", 5)])
+            report,
+            json!({
+                "error": {
+                    "kind": "statement_invalid",
+                    "diagnostics": [diagnostic(kind, "record_a", 5)],
+                },
+                "meta": {},
+            })
         );
 
         let repeated = sides.run(path);
@@ -94,7 +99,7 @@ fn existing_three_way_selection_is_analyzed_after_both_sides_change() {
 
     assert!(!output.status.success());
     assert_eq!(
-        error_json(&output)["diagnostics"],
+        error_json(&output)["error"]["diagnostics"],
         Value::Array(vec![diagnostic("requirement", "req_a", 4)])
     );
     assert!(!sides.output.exists());
@@ -146,7 +151,7 @@ fn conflicted_changed_statement_reports_both_contracts_without_touching_output()
     assert_eq!(conflict["status"], "conflicted");
     assert_eq!(conflict["conflicts"][0]["record_id"], "req_conflict");
     assert_eq!(
-        error_json(&output)["diagnostics"],
+        error_json(&output)["error"]["diagnostics"],
         Value::Array(vec![diagnostic("requirement", "req_conflict", 4)])
     );
 }

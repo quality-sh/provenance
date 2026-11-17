@@ -52,16 +52,15 @@ fn store_disposition_of_missing_requirement(repo: &str) {
     std::fs::write(state.join(DISPOSITIONS), format!("{disposition}\n")).unwrap();
 }
 
-/// The refusal that `answer` gives: the error object of the JSON form, else
-/// the text. `check` and `materialize` give the text form.
+/// The `error` member of the refusal object that a `--format json` command gives:
+/// all of standard error, one line with no prefix.
 fn refusal(answer: &Answer) -> Value {
     assert_eq!(answer.code, Some(1), "{}", answer.stdout);
-    let text = answer
-        .stderr
-        .strip_prefix("Error: ")
-        .unwrap_or(&answer.stderr);
-    serde_json::from_str::<Value>(text)
-        .map_or_else(|_| json!(answer.stderr), |value| value["error"].clone())
+    assert_eq!(answer.stderr.lines().count(), 1, "{}", answer.stderr);
+    let value: Value = serde_json::from_str(&answer.stderr)
+        .unwrap_or_else(|error| panic!("{error}: {}", answer.stderr));
+    assert!(value["meta"].is_object(), "{value}");
+    value["error"].clone()
 }
 
 #[test]
@@ -86,16 +85,13 @@ fn each_read_refuses_a_stored_disposition_of_a_missing_record_at_its_line() {
 
     let message = "disposition disposition_a names requirement req_missing, \
                    which the scope does not have";
-    let text = json!(format!(
-        "Error: {DISPOSITIONS} line 1: {message}; {STATE_CORRECTIONS}"
-    ));
     let fault = json!({"kind": "invalid_state_file", "file": DISPOSITIONS, "line": 1,
         "message": message, "hint": STATE_CORRECTIONS});
     assert_eq!(
         answers.map(|(surface, answer)| (surface, refusal(&answer))),
         [
-            ("check", text.clone()),
-            ("materialize", text),
+            ("check", fault.clone()),
+            ("materialize", fault.clone()),
             ("plan", fault.clone()),
             ("apply", fault),
         ]

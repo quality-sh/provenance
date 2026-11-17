@@ -214,7 +214,9 @@ fn invalid_explicit_base_reports_the_revision_error() {
     assert!(!output.status.success());
     let report: Value = serde_json::from_slice(&output.stdout).unwrap();
     assert_eq!(statements(&report)["status"], "unavailable");
-    assert!(String::from_utf8(output.stderr)
+    let refusal: Value = serde_json::from_slice(&output.stderr).unwrap();
+    assert!(refusal["error"]["message"]
+        .as_str()
         .unwrap()
         .contains("Git revision \"does-not-exist\" does not identify a commit"));
 }

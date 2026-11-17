@@ -116,8 +116,8 @@ fn refused_by_cli(actor_ids: &[&str]) {
     assert_eq!(refused.status.code(), Some(1), "{}", stderr(&refused));
     assert!(refused.stdout.is_empty(), "{refused:?}");
     let answer = stderr(&refused);
-    let envelope: Value = serde_json::from_str(answer.trim().strip_prefix("Error: ").unwrap())
-        .unwrap_or_else(|error| panic!("{error}: {answer}"));
+    let envelope: Value =
+        serde_json::from_str(answer.trim()).unwrap_or_else(|error| panic!("{error}: {answer}"));
     assert_guidance(actor_ids, &envelope["error"], &answer);
 }
 
@@ -278,8 +278,8 @@ fn the_init_command_in_the_refusal_lets_the_same_decision_land() {
     let refused = api(repo.path(), "post", &path, Some(&decision(STRANGER)));
     assert_eq!(refused.status.code(), Some(1), "{}", stderr(&refused));
     let answer = stderr(&refused);
-    let envelope: Value = serde_json::from_str(answer.trim().strip_prefix("Error: ").unwrap())
-        .unwrap_or_else(|error| panic!("{error}: {answer}"));
+    let envelope: Value =
+        serde_json::from_str(answer.trim()).unwrap_or_else(|error| panic!("{error}: {answer}"));
     let message = envelope["error"]["message"].as_str().unwrap();
     let (command, _) = message
         .split_once("use the command provenance ")

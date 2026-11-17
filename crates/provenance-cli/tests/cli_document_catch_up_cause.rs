@@ -59,9 +59,15 @@ fn api(directory: &Path, path: &str, format: &[&str]) -> Output {
     }
 }
 
-/// The refusal that the error line of standard error gives.
-fn refusal(output: &Output) -> Value {
-    let line = output.stderr.trim().strip_prefix("Error: ").unwrap();
+/// The refusal on standard error: the one object with `--format json`, and the
+/// text after `Error: ` without it.
+fn refusal(output: &Output, format: &[&str]) -> Value {
+    let line = output.stderr.trim();
+    let line = if format.is_empty() {
+        line.strip_prefix("Error: ").unwrap()
+    } else {
+        line
+    };
     serde_json::from_str(line).unwrap()
 }
 
@@ -89,7 +95,7 @@ fn a_document_read_gives_the_line_that_stops_its_catch_up() {
 
         assert_eq!(refused.status.code(), Some(1), "{format:?}");
         assert_eq!(refused.stdout, "", "{format:?}");
-        assert_eq!(refusal(&refused), expected, "{format:?}");
+        assert_eq!(refusal(&refused, format), expected, "{format:?}");
     }
 }
 
@@ -104,7 +110,7 @@ fn a_document_read_gives_the_line_that_is_not_json() {
     assert_eq!(refused.status.code(), Some(1));
     assert_eq!(refused.stdout, "");
     assert_eq!(
-        refusal(&refused),
+        refusal(&refused, &["--format", "json"]),
         json!({
             "error": {
                 "kind": "document_catch_up_failed",
@@ -199,7 +205,7 @@ fn a_document_read_gives_the_text_of_a_cause_with_a_kind_of_its_own() {
     assert_eq!(refused.status.code(), Some(1), "{}", refused.stderr);
     assert_eq!(refused.stdout, "");
     assert_eq!(
-        refusal(&refused),
+        refusal(&refused, &["--format", "json"]),
         json!({
             "error": {
                 "kind": "document_catch_up_failed",
