@@ -36,19 +36,25 @@ pub fn failure(error: &(dyn Error + Send + Sync + 'static)) -> Value {
 
 /// The first error of type `T` in the cause chain of `error`.
 fn find<'a, T: Error + 'static>(error: &'a (dyn Error + 'static)) -> Option<&'a T> {
-    std::iter::successors(Some(error), |cause| cause.source())
-        .find_map(|cause| cause.downcast_ref::<T>())
+    causes(error).find_map(|cause| cause.downcast_ref::<T>())
 }
 
 /// The text of `error` and of each cause after it, joined by `: `. A cause
 /// whose text the message already holds is not given again.
 fn message(error: &(dyn Error + 'static)) -> String {
     let mut message = error.to_string();
-    for cause in std::iter::successors(error.source(), |cause| cause.source()) {
+    for cause in causes(error).skip(1) {
         let text = cause.to_string();
         if !message.contains(&text) {
             message = format!("{message}: {text}");
         }
     }
     message
+}
+
+/// `error` and each cause after it.
+fn causes<'a>(error: &'a (dyn Error + 'static)) -> impl Iterator<Item = &'a (dyn Error + 'static)> {
+    std::iter::successors(Some(error), |cause: &&'a (dyn Error + 'static)| {
+        (*cause).source()
+    })
 }
