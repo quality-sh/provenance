@@ -130,7 +130,10 @@ fn require_digest(path: &Utf8Path, put: &Put, what: &str) -> anyhow::Result<()> 
 /// not have the bytes of the put: the transaction lost the staged file
 /// before its install.
 fn require_installed(staged: &Utf8Path, target: &Utf8Path, put: &Put) -> anyhow::Result<()> {
-    let missing = staged.join(&put.key);
+    let missing = put
+        .key
+        .split('/')
+        .fold(staged.to_owned(), |path, part| path.join(part));
     let installed = match std::fs::read(crate::long_path::extended(target)?) {
         Ok(bytes) => <[u8; 32]>::from(Sha256::digest(&bytes)) == put.sha256,
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => false,

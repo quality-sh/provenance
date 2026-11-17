@@ -6,7 +6,15 @@ use super::in_place_tests::{enter, live, read, stopped_write, QUESTIONS, REQUIRE
 use super::LocalStateStorage;
 use crate::publication::with_repository_publication;
 use crate::storage::{Atomicity, PublishFailure, StateKey, StateStorage, WriteSet};
+use camino::{Utf8Path, Utf8PathBuf};
 use provenance_macros::verifies;
+
+/// The path of `key` below `directory`, with the separator of the platform
+/// between its parts, as the store gives it.
+fn below(directory: &Utf8Path, key: &str) -> Utf8PathBuf {
+    key.split('/')
+        .fold(directory.to_owned(), |path, part| path.join(part))
+}
 
 /// The staged file of `REQUIREMENTS` is gone, and its live file does not
 /// have the bytes of the put. The section entry refuses with the path of
@@ -19,8 +27,8 @@ fn the_next_entry_refuses_a_put_whose_staged_file_is_gone_and_not_installed() {
 
     let error = format!("{:#}", enter(&layout).unwrap_err());
 
-    let missing = transaction.join("staged").join(REQUIREMENTS);
-    let live = layout.state_dir().join(REQUIREMENTS);
+    let missing = below(&transaction.join("staged"), REQUIREMENTS);
+    let live = below(&layout.state_dir(), REQUIREMENTS);
     assert_eq!(
         error,
         format!(
@@ -39,7 +47,7 @@ fn the_next_entry_refuses_a_put_whose_staged_file_is_gone_and_not_installed() {
 fn the_next_entry_refuses_a_staged_file_with_other_bytes() {
     let (_temp, layout) = live();
     let transaction = stopped_write(&layout, &[RULES], &[RULES], &[]);
-    let staged = transaction.join("staged").join(RULES);
+    let staged = below(&transaction.join("staged"), RULES);
     std::fs::write(&staged, "changed").unwrap();
 
     let error = format!("{:#}", enter(&layout).unwrap_err());
