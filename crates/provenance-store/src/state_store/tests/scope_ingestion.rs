@@ -299,7 +299,10 @@ fn oversized_import_refuses_before_replacing_a_legacy_keyword_record() {
     })
     .unwrap_err();
 
-    assert!(error.to_string().contains("supported read"), "{error}");
+    assert!(
+        error.to_string().ends_with("make the field `name` shorter"),
+        "{error}"
+    );
     assert_eq!(std::fs::read(&old_path).unwrap(), old_bytes);
     assert!(!staged.layout.publication_lock_path().exists());
     assert_eq!(staged.list_sources(&scope).unwrap(), vec![old]);

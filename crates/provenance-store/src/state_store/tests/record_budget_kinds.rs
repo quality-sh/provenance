@@ -33,7 +33,9 @@ fn parse<T: serde::de::DeserializeOwned>(input: Value) -> T {
     serde_json::from_value(input).unwrap()
 }
 
-fn kinds() -> Vec<Kind> {
+/// The graph kinds, in an order where each kind finds the records that it
+/// names.
+fn graph_kinds() -> Vec<Kind> {
     vec![
         Kind {
             name: "source",
@@ -96,6 +98,12 @@ fn kinds() -> Vec<Kind> {
             write: |store, input| row(store.create_resolution(parse(input))),
             refused_id: |id| id == "res_overb",
         },
+    ]
+}
+
+/// The ideation kinds and the bindings.
+fn ideation_and_binding_kinds() -> Vec<Kind> {
+    vec![
         Kind {
             name: "contribution",
             input: |suffix, pad| {
@@ -116,8 +124,10 @@ fn kinds() -> Vec<Kind> {
             input: |suffix, pad| {
                 json!({"scope_id": "default", "id": format!("synthesis_{suffix}"),
                     "target": {"artifact_type": "requirement", "artifact_id": "req_overtime"},
-                    "contribution_ids": ["contrib_probe"], "summary": pad,
-                    "claims": [], "disagreements": [], "unresolved_questions": []})
+                    "summary": pad, "consensus": [], "contested_claims": [],
+                    "minority_objections": [], "evidence_gaps": [],
+                    "unsupported_speculation": [], "open_questions": [],
+                    "suggested_artifacts": [], "required_human_decisions": []})
             },
             write: |store, input| row(store.create_synthesis_packet(parse(input))),
             refused_id: |id| id == "synthesis_overb",
@@ -198,12 +208,15 @@ fn each_kind_lands_at_the_record_budget_and_is_refused_one_byte_over() {
     let (dir, store, _scope) = seeded_requirement_store();
     std::fs::write(dir.path().join("check.rs"), "fn check() {}\n").unwrap();
     for suffix in ["probe", "atbud", "overb"] {
-        let mut rule = (kinds()[2].input)(suffix, "p".into());
+        let mut rule = (graph_kinds()[2].input)(suffix, "p".into());
         rule["id"] = json!(format!("bind_{suffix}"));
         store.create_rule(parse(rule)).unwrap();
     }
     let budget = u64::try_from(BUDGET).unwrap();
-    for kind in kinds() {
+    for kind in graph_kinds()
+        .into_iter()
+        .chain(ideation_and_binding_kinds())
+    {
         let probe = (kind.write)(&store, (kind.input)("probe", "p".into()))
             .unwrap_or_else(|error| panic!("{}: {error:#}", kind.name));
         let base = probe - 1;
