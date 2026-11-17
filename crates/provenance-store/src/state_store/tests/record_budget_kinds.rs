@@ -3,8 +3,12 @@
 //! record, the size of its row and the budget.
 
 use super::seeded_requirement_store;
-use crate::state_store::{read_budget::ReadBudget, StateStore};
+use crate::state_store::{
+    read_budget::ReadBudget, MaterializeImplementationBindingInput,
+    MaterializeVerificationBindingInput, StateStore,
+};
 use crate::write_error::{SourceFailure, WriteFailure};
+use provenance_core::VerificationMethod;
 use provenance_macros::verifies;
 use serde_json::{json, Value};
 
@@ -150,17 +154,39 @@ fn kinds() -> Vec<Kind> {
                     "declared_by": "spec.md", "file": "check.rs",
                     "symbol": format!("check{pad}")})
             },
-            write: |store, input| row(store.materialize_implementation_binding(parse(input))),
+            write: |store, input| {
+                row(store.materialize_implementation_binding(
+                    MaterializeImplementationBindingInput {
+                        scope_id: parse(input["scope_id"].clone()),
+                        rule_id: parse(input["rule_id"].clone()),
+                        declared_by: parse(input["declared_by"].clone()),
+                        file: parse(input["file"].clone()),
+                        symbol: parse(input["symbol"].clone()),
+                    },
+                ))
+            },
             refused_id: |id| id.starts_with("implementation_binding_"),
         },
         Kind {
             name: "verification_binding",
             input: |suffix, pad| {
                 json!({"scope_id": "default", "rule_id": format!("bind_{suffix}"),
-                    "key": "check", "method": "test", "declared_by": "spec.md",
+                    "key": "check", "declared_by": "spec.md",
                     "file": "check.rs", "symbol": format!("check{pad}")})
             },
-            write: |store, input| row(store.materialize_verification_binding(parse(input))),
+            write: |store, input| {
+                row(
+                    store.materialize_verification_binding(MaterializeVerificationBindingInput {
+                        scope_id: parse(input["scope_id"].clone()),
+                        rule_id: parse(input["rule_id"].clone()),
+                        key: parse(input["key"].clone()),
+                        method: VerificationMethod::Examples,
+                        declared_by: parse(input["declared_by"].clone()),
+                        file: parse(input["file"].clone()),
+                        symbol: parse(input["symbol"].clone()),
+                    }),
+                )
+            },
             refused_id: |id| id.starts_with("verification_binding_"),
         },
     ]
