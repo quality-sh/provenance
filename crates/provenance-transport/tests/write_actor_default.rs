@@ -187,11 +187,12 @@ async fn a_status_change_with_no_actor_is_refused_before_the_host_opens_the_repo
     );
 }
 
-/// Implementation aid: no Rule states what a reply stores for its actor. A reply with an
-/// actor and a reply with no actor are accepted. The message rows have no actor, and the
-/// Discussion keeps the actor of its start.
+/// A reply with an actor and a reply with no actor are accepted. Each message row gives the
+/// actor of the reply, or `authoring` for the reply with no actor. The receipt is the
+/// Discussion, which keeps the actor of its start.
 #[tokio::test]
-async fn an_api_reply_with_or_without_an_actor_stores_no_actor() {
+#[verifies("rule_message_records_its_actor", examples)]
+async fn an_api_reply_with_or_without_an_actor_records_the_actor_of_the_reply() {
     let repo = Repository::new("The shared graph is readable.");
     let host = host(&repo, true);
     let discussion = discussion(&host).await;
@@ -234,10 +235,15 @@ async fn an_api_reply_with_or_without_an_actor_stores_no_actor() {
         .collect::<Vec<_>>();
     assert_eq!(discussions[0]["message_ids"], json!(message_ids));
     let thread = &discussions[0]["thread_id"];
-    for (row, body) in messages.iter().zip(["A concern.", "A reply.", "A reply."]) {
+    let written = [
+        ("reviewer", "A concern."),
+        ("agent", "A reply."),
+        ("authoring", "A reply."),
+    ];
+    for (row, (actor, body)) in messages.iter().zip(written) {
         let expected = json!({
             "scope_id": "default", "id": row["id"], "thread_id": thread, "role": "user",
-            "body": body, "created_at": row["created_at"],
+            "actor": actor, "body": body, "created_at": row["created_at"],
         });
         assert_eq!(row, &expected);
     }

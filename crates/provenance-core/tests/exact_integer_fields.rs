@@ -89,7 +89,7 @@ fn fields() -> Vec<Field> {
             name: "Message.created_at",
             key: "created_at",
             line: json!({"scope_id":"default","id":"msg_a","thread_id":"thr_a",
-                "role":"user","body":"Hello.","created_at":0}),
+                "role":"user","actor":"agent","body":"Hello.","created_at":0}),
             read: read::<Message>,
             optional: false,
         },

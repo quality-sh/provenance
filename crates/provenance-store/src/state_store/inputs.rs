@@ -326,6 +326,8 @@ pub struct PostMessageInput {
     pub scope_id: ScopeId,
     pub parent: ThreadParent,
     pub role: MessageRole,
+    /// The actor that writes the Message.
+    pub actor: String,
     pub body: String,
 }
 

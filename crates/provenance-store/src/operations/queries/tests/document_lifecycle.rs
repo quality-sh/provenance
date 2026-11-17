@@ -368,6 +368,7 @@ async fn lifecycle_filter_applies_to_each_record_without_hiding_visible_children
             "id": "message_hidden_parent",
             "thread_id": "thread_hidden_parent",
             "role": "user",
+            "actor": "agent",
             "body": "Hidden discussion",
             "created_at": 1
         }),

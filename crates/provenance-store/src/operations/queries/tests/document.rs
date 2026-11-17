@@ -266,7 +266,7 @@ async fn document_keeps_graph_and_discussions_at_one_revision_during_publication
                 let message_path = layout.state_dir().join("scopes/default/threads/2026-09.jsonl");
                 crate::cache::tests::fixtures::append_record(&message_path, &json!({
                     "scope_id":"default", "id":format!("msg_{counter}"),
-                    "thread_id":id,"role":"user","body":format!("Discussion {counter}"),"created_at":counter
+                    "thread_id":id,"role":"user","actor":"agent","body":format!("Discussion {counter}"),"created_at":counter
                 }));
             }
             crate::cache::catch_up_state(&open(&layout)).await?;
