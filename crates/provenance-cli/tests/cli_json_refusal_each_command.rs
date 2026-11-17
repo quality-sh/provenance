@@ -1,15 +1,17 @@
 //! Each command that the CLI defines and that takes `--format json` prints a
 //! refusal as one `{error,meta}` object on standard error. The test reads the
 //! commands from the declarations that the CLI renders its parser from, so a new
-//! command is in the walk without a change here.
+//! command is in the walk, and the table of outcomes must name its line.
 
 use provenance_cli::cli_options::{self, flag_name};
 use provenance_macros::verifies;
 use provenance_porcelain::registry::{Declaration, Field, FieldValue};
 use serde_json::Value;
 use std::path::Path;
+use std::time::Duration;
 
-use crate::support::review_paths::provenance;
+use crate::bounded_process;
+use crate::support::review_paths::init_scope;
 
 /// The text of each path that a command line gives: a file that is not JSON,
 /// not a PDF, and not a directory, so that a command that reads it refuses.
@@ -63,23 +65,25 @@ fn json_line(declaration: &Declaration, form: &[String], on_record: bool) -> Vec
     line
 }
 
-/// The exit code and standard error of one command line, run in a new directory
-/// that has no graph and no home files.
+/// The exit code and standard error of one command line, run in an initialized
+/// repository with no home files.
 fn run(line: &[String]) -> (Option<i32>, String) {
     let directory = tempfile::tempdir().unwrap();
     let work = directory.path().join("work");
     let home = directory.path().join("home");
     std::fs::create_dir_all(&work).unwrap();
     std::fs::create_dir_all(&home).unwrap();
+    init_scope(&work, "default", ".");
     std::fs::write(work.join(DAMAGED), "not json\n").unwrap();
-    let output = provenance()
+    let mut command = bounded_process::provenance();
+    command
         .current_dir(&work)
         .env_remove("PROVENANCE_REPO")
         .env_remove("PROVENANCE_SCOPE")
+        .env_remove("CODEX_THREAD_ID")
         .envs(home_variables(&home))
-        .args(line)
-        .output()
-        .unwrap();
+        .args(line);
+    let output = bounded_process::output(&mut command, Duration::from_secs(120));
     (
         output.status.code(),
         String::from_utf8_lossy(&output.stderr).into_owned(),
@@ -102,19 +106,24 @@ fn home_variables(home: &Path) -> Vec<(&'static str, std::path::PathBuf)> {
     .collect()
 }
 
-/// Whether standard error is one `{error,meta}` object with a kind and no prefix.
-fn is_refusal_object(stderr: &str) -> bool {
-    let Ok(value) = serde_json::from_str::<Value>(stderr) else {
-        return false;
-    };
-    stderr.trim_end().lines().count() == 1
-        && value["error"]["kind"].is_string()
-        && value["meta"].is_object()
+/// The kind of the refusal when standard error is one `{error,meta}` object
+/// with no prefix.
+fn refusal_kind(stderr: &str) -> Option<String> {
+    let value = serde_json::from_str::<Value>(stderr).ok()?;
+    let kind = value["error"]["kind"].as_str()?;
+    (stderr.trim_end().lines().count() == 1 && value["meta"].is_object()).then(|| kind.to_owned())
 }
 
+/// The outcome of each line of the walk: the kind of its refusal object, or
+/// [`ACCEPTED`] for a line that the command accepts.
+const OUTCOMES: &[(&str, &str)] = &[];
+
+/// The outcome of a line that the command accepts with exit code 0.
+const ACCEPTED: &str = "accepted";
+
 /// Each declared command that accepts `--format json` and refuses the walk's line
-/// prints the refusal object. A command that the line does not refuse has nothing to
-/// check; the walk asserts that most commands refuse, so that it checks the rule.
+/// prints the refusal object with the kind that the table names. A line that
+/// prints text, a new line, or a line with a different outcome fails the test.
 #[verifies("rule_cli_json_refusal_object", examples)]
 #[test]
 fn each_command_with_json_output_prints_a_refusal_as_one_object() {
@@ -126,28 +135,41 @@ fn each_command_with_json_output_prints_a_refusal_as_one_object() {
                 .iter()
                 .map(|server| server.declaration()),
         );
-    let (mut refused, mut text, mut accepted) = (Vec::new(), Vec::new(), Vec::new());
+    let mut outcomes = Vec::new();
     for declaration in declarations {
         for (form, on_record) in forms(&declaration) {
             let line = json_line(&declaration, &form, on_record);
             let (code, stderr) = run(&line);
             let shown = line.join(" ");
-            match code {
-                Some(2) if stderr.contains("unexpected argument '--format'") => {}
-                Some(0) => accepted.push(shown),
+            let outcome = match code {
+                Some(2) if stderr.contains("unexpected argument '--format'") => continue,
+                Some(0) => ACCEPTED.to_owned(),
                 Some(2) => panic!("{shown}: the parser refused the line: {stderr}"),
-                _ if is_refusal_object(&stderr) => refused.push(shown),
-                _ => text.push(format!("{shown}: exit {code:?}: {stderr}")),
-            }
+                _ => refusal_kind(&stderr).unwrap_or_else(|| {
+                    panic!("{shown}: a text refusal with --format json: exit {code:?}: {stderr}")
+                }),
+            };
+            outcomes.push((shown, outcome));
         }
     }
-    assert!(
-        text.is_empty(),
-        "these commands print a text refusal with --format json:\n{}",
-        text.join("\n")
-    );
-    assert!(
-        refused.len() > accepted.len(),
-        "the walk refused only {refused:?}; it accepted {accepted:?}"
+    let expected = outcomes
+        .iter()
+        .map(|(shown, _)| {
+            let outcome = OUTCOMES.iter().find(|(line, _)| line == shown);
+            (
+                shown.clone(),
+                outcome.map_or_else(String::new, |(_, kind)| (*kind).to_owned()),
+            )
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(
+        outcomes,
+        expected,
+        "the outcome of each line:\n{}",
+        outcomes
+            .iter()
+            .map(|(shown, outcome)| format!("    ({shown:?}, {outcome:?}),"))
+            .collect::<Vec<_>>()
+            .join("\n")
     );
 }
