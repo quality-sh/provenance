@@ -161,3 +161,17 @@ fn check_gives_a_damaged_state_file_as_invalid_state_file() {
         serde_json::from_str(&text).unwrap_or_else(|error| panic!("{error}: {text}"));
     assert_eq!(check, export);
 }
+
+/// The message of an `operation_failed` object gives each cause one time,
+/// also when the text before it already holds the cause.
+#[test]
+#[verifies("rule_cli_json_refusal_object", examples)]
+fn an_operation_failed_message_gives_each_cause_one_time() {
+    let directory = tempfile::tempdir().unwrap();
+    let missing = directory.path().join("missing");
+
+    let error = refusal(command(missing.to_str().unwrap(), &["export"]));
+    assert_eq!(error["error"]["kind"], "operation_failed", "{error}");
+    let message = error["error"]["message"].as_str().unwrap();
+    assert_eq!(message.matches("(os error").count(), 1, "{message}");
+}
