@@ -6,7 +6,7 @@
 //! of the record, the review view, the document read, the graph check,
 //! `provenance materialize` and each write, also a write of a different state
 //! file, refuse with that line. When the read database holds no revision, the
-//! get refuses and names `provenance materialize`.
+//! get refuses with the line and its correction.
 
 use provenance_core::protocol::read_failure::STATE_CORRECTIONS;
 use provenance_macros::verifies;
