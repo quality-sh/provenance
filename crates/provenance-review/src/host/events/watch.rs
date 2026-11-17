@@ -1,5 +1,6 @@
 use super::subscribers::Subscribers;
 use notify::{Event, RecommendedWatcher, RecursiveMode, Watcher};
+use provenance_macros::rule;
 use provenance_store::{
     cache::ProjectionFamily,
     layout::ProvenanceLayout,
@@ -12,7 +13,16 @@ use std::sync::{
     atomic::{AtomicBool, Ordering},
     Arc, Mutex,
 };
-use tokio::sync::{mpsc, watch, Notify};
+use std::time::Duration;
+use tokio::{
+    sync::{mpsc, watch, Notify},
+    time::Instant,
+};
+
+/// The time with no file event after which the state files count as settled.
+const QUIET: Duration = Duration::from_millis(500);
+/// The longest wait for the state files to settle before a read that follows a fault.
+const SETTLE_LIMIT: Duration = Duration::from_secs(5);
 
 pub(super) struct Observation {
     repository: Repository,
@@ -137,6 +147,7 @@ impl Observation {
             } else {
                 baseline = None;
                 reset_reason.get_or_insert("observation-recovered");
+                self.settle(&mut stopped).await;
                 self.read(true).await
             };
             match read {
@@ -155,6 +166,21 @@ impl Observation {
                     baseline = None;
                     subscribers.unavailable("observation-failed", &format!("{error:#}"));
                 }
+            }
+        }
+    }
+
+    /// Waits until no file event comes for [`QUIET`], or at most [`SETTLE_LIMIT`], so that
+    /// the read after a fault does not see a write that is only partly done.
+    #[rule("rule_review_host_reads_settled_state")]
+    async fn settle(&mut self, stopped: &mut watch::Receiver<bool>) {
+        let limit = Instant::now() + SETTLE_LIMIT;
+        loop {
+            let quiet = (Instant::now() + QUIET).min(limit);
+            tokio::select! {
+                event = self.receiver.recv() => if event.is_none() { return },
+                () = tokio::time::sleep_until(quiet) => return,
+                _ = stopped.changed() => return,
             }
         }
     }
