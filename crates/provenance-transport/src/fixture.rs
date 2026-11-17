@@ -101,7 +101,7 @@ impl FixtureAccess {
         self.grants.iter().next().cloned()
     }
     /// The reviewer list in the manifest of the bound repository.
-    pub(crate) fn reviewer_ids(&self) -> Option<Vec<provenance_core::DispositionActor>> {
+    pub(crate) fn reviewer_ids(&self) -> Option<provenance_core::Reviewers> {
         let (alias, scope) = self.bound_identity()?;
         let root = self.targets.get(&alias)?;
         let repository = provenance_store::repository::Repository::open(root, &scope).ok()?;

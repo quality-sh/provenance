@@ -8,8 +8,10 @@ use provenance_macros::verifies;
 use serde_json::{json, Value};
 use support::{mcp::Session, records::Repository};
 
-/// Withdraw the pending submission of the Requirement, so that a submit can run.
+/// Withdraw the pending submission of the Requirement as the listed person, so that a
+/// submit can run.
 fn withdraw_pending_submission(repository: &Repository) {
+    support::records::allow_reviewer(repository);
     let store = repository.open().store();
     let scope = provenance_core::ScopeId::new("default").unwrap();
     let requirement = provenance_core::StableId::new("req_shared").unwrap();
@@ -17,7 +19,7 @@ fn withdraw_pending_submission(repository: &Repository) {
         .requirement_decision_state(&scope, &requirement)
         .unwrap();
     let proposal = state.pending.unwrap().proposal_id;
-    let withdrawal = json!({"scope_id": "default", "actor": {"identity_type":"agent","id":"authoring"}, "proposal_id": proposal});
+    let withdrawal = json!({"scope_id": "default", "actor": {"identity_type":"human","id":"reviewer"}, "proposal_id": proposal});
     store
         .withdraw_record_review(serde_json::from_value(withdrawal).unwrap())
         .unwrap();

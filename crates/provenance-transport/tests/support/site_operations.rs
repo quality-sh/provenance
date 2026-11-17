@@ -233,7 +233,7 @@ async fn kind(out: &mut Transcript, http: &Http, plural: &str, singular: &str, i
         http,
         "POST",
         &format!("{submission}/withdraw"),
-        Some(json!({"actor":{"identity_type":"agent","id":"authoring"}, "declared_by":null, "reason":"Revise it."})),
+        Some(json!({"actor":{"identity_type":"human","id":"reviewer"}, "declared_by":null, "reason":"Revise it."})),
         &[],
         &format!("{shown}/withdraw"),
     )

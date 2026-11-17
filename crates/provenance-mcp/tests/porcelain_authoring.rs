@@ -192,6 +192,7 @@ async fn mcp_target_first_requirement_update_passes_relationship_deltas() {
 #[tokio::test]
 async fn mcp_target_first_requirement_submit_uses_the_target() {
     let repository = Repository::new("The shared graph is readable.");
+    support::records::allow_reviewer(&repository);
     let store = repository.open().store();
     let scope = ScopeId::new("default").unwrap();
     let requirement = StableId::new("req_shared").unwrap();
@@ -204,7 +205,7 @@ async fn mcp_target_first_requirement_submit_uses_the_target() {
     store
         .withdraw_record_review(
             serde_json::from_value(
-                json!({"scope_id":"default","actor":{"identity_type":"agent","id":"authoring"},"proposal_id":proposal}),
+                json!({"scope_id":"default","actor":{"identity_type":"human","id":"reviewer"},"proposal_id":proposal}),
             )
             .unwrap(),
         )

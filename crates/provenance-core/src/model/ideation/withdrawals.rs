@@ -2,6 +2,7 @@ use provenance_macros::ProjectionRow;
 use serde::{Deserialize, Serialize};
 
 use crate::model::ids::{ScopeId, StableId};
+use crate::model::DispositionActor;
 
 /// The withdrawal of one review submission from review. It keeps the
 /// submission, its feedback, and its decisions.
@@ -13,6 +14,9 @@ pub struct Withdrawal {
     pub scope_id: ScopeId,
     pub id: StableId,
     pub proposal_id: StableId,
-    pub actor: String,
+    /// The actor that the withdrawal checked, the same form as the actor of a
+    /// stored review decision.
+    #[column(json)]
+    pub actor: DispositionActor,
     pub reason: Option<String>,
 }

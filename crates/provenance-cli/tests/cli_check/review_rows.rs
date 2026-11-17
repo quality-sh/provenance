@@ -58,7 +58,7 @@ fn findings(repo: &Path) -> Vec<String> {
 }
 
 fn withdrawal(id: &str, submission: &Value, reason: &str) -> Value {
-    json!({"scope_id":"default", "id":id, "proposal_id":submission["id"], "actor":"agent",
+    json!({"scope_id":"default", "id":id, "proposal_id":submission["id"], "actor":{"identity_type":"agent","id":"agent"},
         "reason":reason})
 }
 

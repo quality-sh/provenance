@@ -14,7 +14,7 @@ use support::resource_http::{call, host};
 const WITHDRAWALS: &str = "scopes/default/ideation/withdrawals.jsonl";
 
 fn withdrawal(id: &str, proposal: &str) -> String {
-    json!({"scope_id":"default","id":id,"proposal_id":proposal,"actor":"reviewer","reason":null})
+    json!({"scope_id":"default","id":id,"proposal_id":proposal,"actor":{"identity_type":"human","id":"reviewer"},"reason":null})
         .to_string()
 }
 
@@ -105,7 +105,7 @@ async fn a_withdrawal_id_on_two_lines_is_located_at_the_second_line() {
     let repo = Repository::new("The shared graph is readable.");
     let proposal = pending_submission(&repo).await;
     let edited = json!({"scope_id":"default", "id":"withdrawal_a", "proposal_id":proposal,
-        "actor":"agent", "reason":"Edited."});
+        "actor":{"identity_type":"agent","id":"agent"}, "reason":"Edited."});
     write_withdrawals(
         &repo,
         &[withdrawal("withdrawal_a", &proposal), edited.to_string()],

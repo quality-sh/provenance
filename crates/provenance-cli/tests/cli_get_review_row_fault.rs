@@ -41,7 +41,7 @@ fn write_state_line(root: &std::path::Path, file: &str, line: &str) {
 /// Withdrawal file.
 fn write_lost_withdrawal(root: &std::path::Path) {
     let withdrawal = json!({"scope_id":"default","id":"withdrawal_lost",
-        "proposal_id":"proposal_missing","actor":"reviewer","reason":null});
+        "proposal_id":"proposal_missing","actor":{"identity_type":"human","id":"reviewer"},"reason":null});
     write_state_line(root, WITHDRAWALS, &withdrawal.to_string());
 }
 

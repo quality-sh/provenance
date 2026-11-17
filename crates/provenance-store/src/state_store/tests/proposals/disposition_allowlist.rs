@@ -16,9 +16,8 @@ fn scope_validation_does_not_bypass_the_manifest_when_no_allowlist_check_fires()
 fn scope_validation_accepts_explicit_disposition_actor_ids() {
     let (_dir, store, scope) = initialized_store();
     let mut manifest = store.manifest().unwrap();
-    manifest
-        .disposition_actor_ids
-        .push(provenance_core::DispositionActor::human("ben"));
+    manifest.disposition_actor_ids =
+        std::iter::once(provenance_core::DispositionActor::human("ben")).collect();
     std::fs::write(
         store.layout.manifest_path(),
         serde_json::to_vec(&manifest).unwrap(),
@@ -49,7 +48,7 @@ fn scope_validation_accepts_explicit_disposition_actor_ids() {
         })
         .unwrap();
 
-    manifest.disposition_actor_ids.clear();
+    manifest.disposition_actor_ids = provenance_core::Reviewers::default();
     std::fs::write(
         store.layout.manifest_path(),
         serde_json::to_vec(&manifest).unwrap(),
@@ -58,7 +57,7 @@ fn scope_validation_accepts_explicit_disposition_actor_ids() {
     store
         .validate_ideation_scope_with_actor_ids(
             &scope,
-            &[provenance_core::DispositionActor::human("ben")],
+            &std::iter::once(provenance_core::DispositionActor::human("ben")).collect(),
         )
         .unwrap();
     assert!(store.validate_ideation_scope(&scope).is_err());

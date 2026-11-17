@@ -97,7 +97,9 @@ Actions are POSTs on a resource path with one declared action name:
   is the object `{"identity_type":"human|agent|service","id":"..."}`. Decide
   needs an actor whose identity type and ID equal one entry of the manifest
   field `disposition_actor_ids`. Withdraw needs the author of the submission
-  or such an actor; each other actor gets 403 `access_denied`.
+  or such an actor; each other actor gets 403 `access_denied`. A submission
+  from a write that gives no actor has no author. The stored Withdrawal records
+  the actor object that the check used.
 - Verification: `POST /verification-runs/begin-verification`, and
   `POST /verification-runs/{run_id}/complete-verification`. Begin retains
   Rule-ID and declaration-reference targeting.

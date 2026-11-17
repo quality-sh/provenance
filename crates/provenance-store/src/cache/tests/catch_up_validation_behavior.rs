@@ -28,7 +28,7 @@ async fn catch_up_refuses_state_the_aggregate_validator_refuses() {
     // aggregate on disk is one a rebuild refuses.
     let mut manifest: provenance_core::Manifest =
         serde_json::from_slice(&std::fs::read(layout.manifest_path()).unwrap()).unwrap();
-    manifest.disposition_actor_ids.clear();
+    manifest.disposition_actor_ids = provenance_core::Reviewers::default();
     std::fs::write(
         layout.manifest_path(),
         serde_json::to_vec(&manifest).unwrap(),

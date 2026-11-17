@@ -90,7 +90,7 @@ fn withdraw_created(host: &Host, owner: Option<&str>) -> String {
     let (status, result) = post(
         host,
         &format!("/resolutions/res_reject/submissions/{proposal}/withdraw"),
-        &json!({"actor":{"identity_type":"agent","id":"authoring"}, "declared_by":owner, "reason":"Submit it again."}),
+        &json!({"actor":{"identity_type":"human","id":"reviewer"}, "declared_by":owner, "reason":"Submit it again."}),
     );
     assert_eq!(status, 200, "{result}");
     proposal
@@ -105,7 +105,7 @@ fn resolution_owner_can_withdraw_through_the_host() {
     let proposal = pending(&host);
     let before = read(&host);
     let path = format!("/resolutions/res_reject/submissions/{proposal}/withdraw");
-    let data = json!({"actor":{"identity_type":"agent","id":"authoring"}, "declared_by":"shaping_agent", "reason":"Revise the result."});
+    let data = json!({"actor":{"identity_type":"human","id":"reviewer"}, "declared_by":"shaping_agent", "reason":"Revise the result."});
     let (status, result) = post(&host, &path, &data);
     println!("POST {path} {data}\nHTTP {status} {result}");
     assert_eq!(status, 200, "{result}");

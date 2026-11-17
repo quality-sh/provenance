@@ -195,7 +195,7 @@ fn update_payload() -> serde_json::Value {
 }
 
 fn withdraw_payload() -> serde_json::Value {
-    json!({"actor":{"identity_type":"agent","id":"authoring"},"declared_by":null,"reason":null})
+    json!({"actor":{"identity_type":"human","id":"reviewer"},"declared_by":null,"reason":null})
 }
 
 fn submission_payload() -> serde_json::Value {
@@ -276,7 +276,7 @@ fn update_returns_the_review_link() {
 #[test]
 #[verifies("rule_cli_record_review_action_returns_url", examples)]
 fn submit_returns_the_review_link() {
-    let (_directory, repo) = initialized_repo(None);
+    let (_directory, repo) = initialized_repo(Some("reviewer"));
     ready_to_submit(&repo);
     let host = local_host(&repo);
     let submitted = json_stdin_output(

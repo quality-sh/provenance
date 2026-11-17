@@ -11,7 +11,6 @@ use crate::{
     write_error::WriteFailure,
 };
 use provenance_core::{
-    check_withdrawal_actor,
     review::{CycleEntry, CycleFact},
     NodeType, StableId, Withdrawal,
 };
@@ -89,8 +88,10 @@ impl StateStore {
                     "{reason}"
                 ));
             }
-            let reviewers = held.manifest()?.disposition_actor_ids;
-            check_withdrawal_actor(&input.actor, proposal.actor.as_deref(), &reviewers)?;
+            let author = super::super::write_actor::author(proposal.actor.as_deref());
+            held.manifest()?
+                .disposition_actor_ids
+                .admits_withdrawal(&input.actor, author)?;
             with_record_state(held, RecordStamp::ResolveFromRepository, |staged| {
                 staged.commit_withdrawal(input)
             })
@@ -110,7 +111,7 @@ impl StateStore {
                 scope_id: input.scope_id.clone(),
                 id: new_id(&*store.ids()),
                 proposal_id: input.proposal_id.clone(),
-                actor: input.actor.id.clone(),
+                actor: input.actor.clone(),
                 reason: input.reason.clone(),
             })
         })?;

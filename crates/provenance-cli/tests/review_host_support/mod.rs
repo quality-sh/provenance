@@ -478,3 +478,5 @@ pub mod events;
 pub mod follow;
 
 pub mod scripted_feed;
+
+pub mod surfaces;

@@ -157,14 +157,17 @@ fn two_withdrawals_read_as_one(merge: Merge) {
         .lines()
         .map(|line| serde_json::from_str::<Value>(line).unwrap())
         .collect::<Vec<_>>();
-    rows.sort_by_key(|row| row["actor"].as_str().unwrap().to_owned());
+    rows.sort_by_key(|row| row["actor"]["id"].as_str().unwrap().to_owned());
     assert_eq!(rows.len(), 2, "{rows:?}");
     assert_ne!(rows[0]["id"], rows[1]["id"], "{rows:?}");
     assert_eq!(rows[0]["proposal_id"], json!(submission));
     assert_eq!(rows[1]["proposal_id"], json!(submission));
     assert_eq!(
         (&rows[0]["actor"], &rows[1]["actor"]),
-        (&json!("agent"), &json!("reviewer_example_com"))
+        (
+            &json!({"identity_type": "human", "id": "agent"}),
+            &json!({"identity_type": "human", "id": "reviewer_example_com"})
+        )
     );
     assert_eq!(review_reads(&repo), one_withdrawal);
     assert_eq!(one_withdrawal[0]["withdrawn"], json!([submission]));

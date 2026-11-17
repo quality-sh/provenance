@@ -14,9 +14,8 @@ async fn materialize_rejects_missing_disposition_canonical_artifact_before_cache
     let (_dir, layout, scope) = empty_layout();
     let mut manifest: provenance_core::Manifest =
         serde_json::from_slice(&std::fs::read(layout.manifest_path()).unwrap()).unwrap();
-    manifest
-        .disposition_actor_ids
-        .push(provenance_core::DispositionActor::human("reviewer"));
+    manifest.disposition_actor_ids =
+        std::iter::once(provenance_core::DispositionActor::human("reviewer")).collect();
     std::fs::write(
         layout.manifest_path(),
         serde_json::to_vec(&manifest).unwrap(),
@@ -56,9 +55,8 @@ async fn materialize_rejects_misfiled_disposition_target_before_cache_changes() 
     let (_dir, layout, scope) = empty_layout();
     let mut manifest: provenance_core::Manifest =
         serde_json::from_slice(&std::fs::read(layout.manifest_path()).unwrap()).unwrap();
-    manifest
-        .disposition_actor_ids
-        .push(provenance_core::DispositionActor::human("reviewer"));
+    manifest.disposition_actor_ids =
+        std::iter::once(provenance_core::DispositionActor::human("reviewer")).collect();
     std::fs::write(
         layout.manifest_path(),
         serde_json::to_vec(&manifest).unwrap(),
@@ -104,9 +102,8 @@ async fn materialize_caches_generic_disposition_external_action() {
     let (_dir, layout, scope) = seeded_layout();
     let mut manifest: provenance_core::Manifest =
         serde_json::from_slice(&std::fs::read(layout.manifest_path()).unwrap()).unwrap();
-    manifest
-        .disposition_actor_ids
-        .push(provenance_core::DispositionActor::human("reviewer"));
+    manifest.disposition_actor_ids =
+        std::iter::once(provenance_core::DispositionActor::human("reviewer")).collect();
     std::fs::write(
         layout.manifest_path(),
         serde_json::to_vec(&manifest).unwrap(),

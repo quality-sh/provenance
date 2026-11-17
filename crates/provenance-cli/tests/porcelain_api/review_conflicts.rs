@@ -1,14 +1,14 @@
 use super::*;
-use provenance_core::Manifest;
 use provenance_store::layout::ProvenanceLayout;
 
 fn allow_reviewer(repo: &str) {
     let layout = ProvenanceLayout::new(camino::Utf8Path::new(repo));
-    let mut manifest: Manifest =
+    let mut manifest: Value =
         serde_json::from_slice(&std::fs::read(layout.manifest_path()).unwrap()).unwrap();
-    manifest
-        .disposition_actor_ids
-        .push(provenance_core::DispositionActor::human("reviewer"));
+    manifest["disposition_actor_ids"]
+        .as_array_mut()
+        .unwrap()
+        .push(json!({"identity_type": "human", "id": "reviewer"}));
     std::fs::write(
         layout.manifest_path(),
         serde_json::to_vec(&manifest).unwrap(),

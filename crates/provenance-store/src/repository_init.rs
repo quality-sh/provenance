@@ -9,7 +9,9 @@ use crate::layout::ProvenanceLayout;
 use crate::state_store::StateStore;
 use crate::storage::{Atomicity, StateKey, StateView, WriteSet};
 use camino::Utf8PathBuf;
-use provenance_core::{DispositionActor, Manifest, RepoPathPrefix, Scope, ScopeId};
+use provenance_core::{
+    DispositionActor, IdentityType, Manifest, RepoPathPrefix, Reviewers, Scope, ScopeId,
+};
 use std::sync::Arc;
 
 /// Plans the scope and reviewer settings before initialization writes files.
@@ -57,16 +59,45 @@ pub fn plan_manifest(
         }
     }
     if clear_actors {
-        manifest.disposition_actor_ids.clear();
+        manifest.disposition_actor_ids = Reviewers::default();
     } else if !actor_ids.is_empty() {
+        refuse_to_replace_others(&manifest.disposition_actor_ids)?;
         manifest.disposition_actor_ids =
             actor_ids.into_iter().map(DispositionActor::human).collect();
     } else if is_new {
-        manifest
-            .disposition_actor_ids
-            .extend(selected_actor.map(DispositionActor::human));
+        manifest.disposition_actor_ids = selected_actor
+            .map(DispositionActor::human)
+            .into_iter()
+            .collect();
     }
     Ok(manifest)
+}
+
+/// Refuses to replace a list that holds `agent` or `service` entries, which the
+/// flag `--disposition-actor-id` cannot write again, and names each such entry.
+fn refuse_to_replace_others(reviewers: &Reviewers) -> anyhow::Result<()> {
+    let others: Vec<String> = reviewers
+        .others()
+        .map(|entry| {
+            let identity_type = match entry.identity_type {
+                IdentityType::Human => "human",
+                IdentityType::Agent => "agent",
+                IdentityType::Service => "service",
+            };
+            format!("{identity_type} {}", entry.id)
+        })
+        .collect();
+    if others.is_empty() {
+        return Ok(());
+    }
+    Err(crate::refusal::refuse!(
+        (crate::write_error::WriteFailure::invalid_field("actor_ids")),
+        "The manifest field disposition_actor_ids has entries with the identity type agent or \
+         service: {}. The flag --disposition-actor-id writes only entries with the identity type \
+         human and replaces the list, thus it would remove these entries. To change the list, \
+         edit the field in the file .provenance/state/manifest.json.",
+        others.join(", ")
+    ))
 }
 
 /// Finishes an interrupted publication before initialization reads the

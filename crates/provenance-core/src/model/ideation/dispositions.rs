@@ -8,39 +8,6 @@ use crate::model::ids::{ScopeId, StableId};
 #[error("accepted proposal must be asserted before disposition")]
 pub struct ApprovalEvidenceRequired;
 
-/// The refusal of a review decision by an actor that the manifest does not
-/// list. Each cause has no field, so its text cannot give an actor ID.
-#[provenance_macros::rule("rule_decision_refusal_hides_reviewer_ids")]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
-pub enum DispositionActorRefusal {
-    #[error(
-        "The manifest field disposition_actor_ids is empty, thus no actor can make a review \
-         decision. {NEXT_STEP}"
-    )]
-    NoActorsConfigured,
-    #[error(
-        "The manifest field disposition_actor_ids does not contain the actor of a review \
-         decision. {NEXT_STEP}"
-    )]
-    ActorNotListed,
-    #[error(
-        "The actor of a withdrawal is not the author of the review submission, and the manifest \
-         field disposition_actor_ids is empty. {NEXT_STEP}"
-    )]
-    WithdrawalNoActorsConfigured,
-    #[error(
-        "The actor of a withdrawal is not the author of the review submission, and the manifest \
-         field disposition_actor_ids does not contain the actor. {NEXT_STEP}"
-    )]
-    WithdrawalActorNotListed,
-}
-
-/// The next step that each cause of a [`DispositionActorRefusal`] gives. The
-/// flag replaces the full list, so the caller gives it for each actor.
-const NEXT_STEP: &str = "To change this field, use the command provenance init \
-    --disposition-actor-id <DISPOSITION_ACTOR_ID>. Give --disposition-actor-id one time for each \
-    actor that can make a review decision.";
-
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
@@ -52,15 +19,6 @@ pub struct DispositionActor {
 }
 
 impl DispositionActor {
-    /// A listed actor of the manifest field `disposition_actor_ids`: the identity type
-    /// and the ID both equal one entry, and the name has no effect.
-    #[provenance_macros::rule("rule_reviewer_entry_matches_identity_type_and_id")]
-    pub fn is_listed(&self, entries: &[Self]) -> bool {
-        entries
-            .iter()
-            .any(|entry| entry.identity_type == self.identity_type && entry.id == self.id)
-    }
-
     /// An entry of `disposition_actor_ids` for a person with this ID.
     pub fn human(id: impl Into<String>) -> Self {
         Self {
@@ -68,26 +26,6 @@ impl DispositionActor {
             id: id.into(),
             name: None,
         }
-    }
-}
-
-/// Lets the author of a review submission or a listed actor withdraw it.
-///
-/// The submission records only the ID of its author, so the author check
-/// compares the ID. A submission with no recorded author has only the listed
-/// actors.
-#[provenance_macros::rule("rule_withdrawal_actor_is_author_or_reviewer")]
-pub fn check_withdrawal_actor(
-    actor: &DispositionActor,
-    author: Option<&str>,
-    entries: &[DispositionActor],
-) -> Result<(), DispositionActorRefusal> {
-    if author == Some(actor.id.as_str()) || actor.is_listed(entries) {
-        Ok(())
-    } else if entries.is_empty() {
-        Err(DispositionActorRefusal::WithdrawalNoActorsConfigured)
-    } else {
-        Err(DispositionActorRefusal::WithdrawalActorNotListed)
     }
 }
 

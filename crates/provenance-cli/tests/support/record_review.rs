@@ -152,7 +152,7 @@ pub fn withdraw(repo: &str, collection: &str, id: &str, proposal: &str) {
         .args([
             "api", &path, "--method", "post", "--input", "-", "--repo", repo,
         ])
-        .write_stdin(json!({"actor":{"identity_type":"agent","id":"authoring"},"declared_by":null,"reason":null}).to_string())
+        .write_stdin(json!({"actor":{"identity_type":"human","id":"reviewer"},"declared_by":null,"reason":null}).to_string())
         .assert()
         .success();
 }

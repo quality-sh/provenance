@@ -5,7 +5,7 @@ use super::{
 };
 use crate::model::{
     disposition_requires_prior_assertion, validate_disposition_intrinsic, DispositionActor,
-    DispositionActorRefusal, DispositionRecord, PromotionState, ProposalCard,
+    DispositionRecord, PromotionState, ProposalCard, Reviewers,
 };
 use provenance_macros::rule;
 use std::collections::BTreeMap;
@@ -99,24 +99,16 @@ fn validate_actor_allowlist(
     proposal: &ProposalCard,
     assertions: &[AssertionRecord],
     actor: &DispositionActor,
-    disposition_actor_ids: &[DispositionActor],
+    reviewers: &Reviewers,
 ) -> anyhow::Result<()> {
     let requires_allowlisted_actor = matches!(
         effective_proposal_state(proposal, assertions, &[]),
         PromotionState::Proposed | PromotionState::Asserted
     );
-    if requires_allowlisted_actor && !actor.is_listed(disposition_actor_ids) {
-        return Err(allowlist_refusal(disposition_actor_ids).into());
+    if requires_allowlisted_actor {
+        reviewers.admits_decision(actor)?;
     }
     Ok(())
-}
-
-const fn allowlist_refusal(disposition_actor_ids: &[DispositionActor]) -> DispositionActorRefusal {
-    if disposition_actor_ids.is_empty() {
-        DispositionActorRefusal::NoActorsConfigured
-    } else {
-        DispositionActorRefusal::ActorNotListed
-    }
 }
 
 /// What every disposition must satisfy, wherever it is judged.
@@ -234,7 +226,8 @@ mod disposition_actor_trigger_tests {
 
     use super::validate_actor_allowlist;
     use crate::model::{
-        AssertionRecord, DispositionActor, DispositionActorRefusal, PromotionState, ProposalCard,
+        AssertionRecord, DispositionActor, DispositionActorRefusal, IdentityType, PromotionState,
+        ProposalCard, Reviewers,
     };
 
     #[test]
@@ -262,17 +255,24 @@ mod disposition_actor_trigger_tests {
             &proposal,
             &[assertion],
             &DispositionActor::human("reviewer"),
-            &[],
+            &Reviewers::default(),
         )
         .unwrap_err();
         assert_eq!(
             error.downcast_ref::<DispositionActorRefusal>(),
-            Some(&DispositionActorRefusal::NoActorsConfigured),
+            Some(&DispositionActorRefusal::NoActorsConfigured(
+                IdentityType::Human
+            )),
             "{error}"
         );
 
         proposal.promotion_state = PromotionState::Accepted;
-        validate_actor_allowlist(&proposal, &[], &DispositionActor::human("reviewer"), &[])
-            .unwrap();
+        validate_actor_allowlist(
+            &proposal,
+            &[],
+            &DispositionActor::human("reviewer"),
+            &Reviewers::default(),
+        )
+        .unwrap();
     }
 }

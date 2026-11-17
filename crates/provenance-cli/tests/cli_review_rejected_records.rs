@@ -244,7 +244,7 @@ fn rejected_candidate_can_be_withdrawn_with_feedback_and_history_intact() {
     post(
         &host,
         &format!("/resolutions/res_new/submissions/{proposal}/withdraw"),
-        &json!({"actor":{"identity_type":"agent","id":"authoring"}, "declared_by":"shaping_agent",
+        &json!({"actor":{"identity_type":"human","id":"reviewer"}, "declared_by":"shaping_agent",
             "reason":"The candidate needs a different approach."}),
     );
 

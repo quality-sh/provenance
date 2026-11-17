@@ -73,6 +73,10 @@ mod cli_review_undeclared_scope;
 mod cli_review_uninitialized;
 #[path = "../cli_review_unknown_routes.rs"]
 mod cli_review_unknown_routes;
+#[path = "../cli_review_withdrawal_identity.rs"]
+mod cli_review_withdrawal_identity;
+#[path = "../cli_reviewer_list_manifest.rs"]
+mod cli_reviewer_list_manifest;
 #[cfg(target_os = "linux")]
 #[path = "../review_host_support/codex.rs"]
 mod codex;

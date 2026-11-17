@@ -231,7 +231,7 @@
   {
     "body": {
       "data": {
-        "actor": "authoring",
+        "actor": "reviewer",
         "fact": "withdrawn",
         "id": "<generated>",
         "proposal_id": "<generated>",
@@ -492,7 +492,7 @@
   {
     "body": {
       "data": {
-        "actor": "authoring",
+        "actor": "reviewer",
         "fact": "withdrawn",
         "id": "<generated>",
         "proposal_id": "<generated>",
@@ -765,7 +765,7 @@
   {
     "body": {
       "data": {
-        "actor": "authoring",
+        "actor": "reviewer",
         "fact": "withdrawn",
         "id": "<generated>",
         "proposal_id": "<generated>",
@@ -1038,7 +1038,7 @@
   {
     "body": {
       "data": {
-        "actor": "authoring",
+        "actor": "reviewer",
         "fact": "withdrawn",
         "id": "<generated>",
         "proposal_id": "<generated>",
@@ -1304,7 +1304,7 @@
   {
     "body": {
       "data": {
-        "actor": "authoring",
+        "actor": "reviewer",
         "fact": "withdrawn",
         "id": "<generated>",
         "proposal_id": "<generated>",
@@ -1576,7 +1576,7 @@
   {
     "body": {
       "data": {
-        "actor": "authoring",
+        "actor": "reviewer",
         "fact": "withdrawn",
         "id": "<generated>",
         "proposal_id": "<generated>",

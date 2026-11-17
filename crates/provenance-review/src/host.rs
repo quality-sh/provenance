@@ -21,7 +21,6 @@ use axum::{
     Json,
 };
 use provenance_core::protocol::failure::{ErasedFailure, FailureEnvelope, OperationFailure};
-use provenance_core::IdentityType;
 use provenance_macros::rule;
 use provenance_porcelain::check::CheckPort;
 use provenance_store::{
@@ -385,11 +384,7 @@ async fn configuration(
     .ok()
     .flatten();
     // The page decides as the person of the Git identity, so it gets the IDs of the human entries.
-    let person_ids: Vec<&str> = actors
-        .iter()
-        .filter(|actor| actor.identity_type == IdentityType::Human)
-        .map(|actor| actor.id.as_str())
-        .collect();
+    let person_ids: Vec<&str> = actors.people().collect();
     if let Some(actor_id) = reviewer {
         config.value["reviewer"] =
             json!({ "allowed": person_ids.contains(&actor_id.as_str()), "actorId": actor_id });

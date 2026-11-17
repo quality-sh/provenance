@@ -280,7 +280,7 @@ fn an_unauthorized_actor_cannot_accept_a_review() {
     let text = "The manifest field disposition_actor_ids does not contain the actor of a review \
                 decision. To change this field, use the command provenance init \
                 --disposition-actor-id <DISPOSITION_ACTOR_ID>. Give --disposition-actor-id one \
-                time for each actor that can make a review decision.";
+                time for each person that can make a review decision.";
     assert_eq!(error.to_string(), text);
     let crate::write_error::WriteFailure::AccessDenied { message } =
         crate::write_error::WriteError(error).safe()

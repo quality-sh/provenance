@@ -238,7 +238,7 @@ fn submit_after_guarded_update_names_the_pending_review_and_withdrawal() {
     let body = std::path::Path::new(repo).join("withdraw.json");
     std::fs::write(
         &body,
-        r#"{"actor":{"identity_type":"agent","id":"authoring"}}"#,
+        r#"{"actor":{"identity_type":"human","id":"reviewer"}}"#,
     )
     .unwrap();
     json(

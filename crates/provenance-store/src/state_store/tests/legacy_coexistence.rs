@@ -26,8 +26,8 @@ fn modern_lifecycle_coexists_with_frozen_shipped_records() {
     let existing = store.manifest().unwrap();
     let mut actor_ids = existing
         .disposition_actor_ids
-        .iter()
-        .map(|actor| actor.id.clone())
+        .people()
+        .map(str::to_owned)
         .collect::<Vec<_>>();
     actor_ids.push("reviewer".into());
     let manifest =

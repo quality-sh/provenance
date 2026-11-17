@@ -80,7 +80,7 @@ impl LocalRepository {
     /// such as `invalid_state_file` with its line.
     pub fn disposition_actor_ids(
         &self,
-    ) -> Result<Vec<provenance_core::DispositionActor>, ReadError> {
+    ) -> Result<provenance_core::Reviewers, ReadError> {
         Ok(self.repository.manifest()?.disposition_actor_ids)
     }
 

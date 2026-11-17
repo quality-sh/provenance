@@ -78,8 +78,8 @@ fn open_on_a_thread(repo: &Utf8Path) -> mpsc::Receiver<anyhow::Result<Vec<String
             .map(|manifest| {
                 manifest
                     .disposition_actor_ids
-                    .into_iter()
-                    .map(|actor| actor.id)
+                    .people()
+                    .map(str::to_owned)
                     .collect()
             });
         let _ = sender.send(read);
@@ -286,8 +286,8 @@ fn reviewers(repo: &Utf8Path) -> anyhow::Result<Vec<String>> {
     let manifest = Repository::open(repo, "default")?.manifest()?;
     Ok(manifest
         .disposition_actor_ids
-        .into_iter()
-        .map(|actor| actor.id)
+        .people()
+        .map(str::to_owned)
         .collect())
 }
 

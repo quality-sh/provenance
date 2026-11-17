@@ -14,7 +14,7 @@ use serde_json::{json, Value};
 
 const NEXT_STEP: &str = "To change this field, use the command provenance init \
     --disposition-actor-id <DISPOSITION_ACTOR_ID>. Give --disposition-actor-id one time for each \
-    actor that can make a review decision.";
+    person that can make a review decision.";
 
 /// A repository whose manifest field holds `actor_ids`.
 fn repository(actor_ids: &[&str]) -> (tempfile::TempDir, Repository) {

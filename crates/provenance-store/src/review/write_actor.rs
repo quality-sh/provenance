@@ -14,6 +14,12 @@ pub fn recorded_actor(given: ActorInput) -> String {
     given.0.unwrap_or_else(|| AUTHORING_ACTOR.to_owned())
 }
 
+/// The author of a review submission that records `actor`: none when the write
+/// that made it gave no actor.
+pub fn author(actor: Option<&str>) -> Option<&str> {
+    actor.filter(|actor| *actor != AUTHORING_ACTOR)
+}
+
 /// The refusal of a write that must name its actor and gives none: `required` on
 /// `request.actor`, as the decoder names a missing body field.
 pub fn missing_actor() -> OperationFailure {

@@ -22,7 +22,7 @@ pub trait HostAccess: ContextResolver {
     }
     /// The reviewer list of the bound repository: the actors that can make a
     /// review decision. `None` when the access cannot read it.
-    fn reviewer_ids(&self) -> Option<Vec<provenance_core::DispositionActor>> {
+    fn reviewer_ids(&self) -> Option<provenance_core::Reviewers> {
         None
     }
 }
@@ -78,7 +78,7 @@ impl HostAccess for crate::fixture::FixtureAccess {
         self.bound_identity()
     }
 
-    fn reviewer_ids(&self) -> Option<Vec<provenance_core::DispositionActor>> {
+    fn reviewer_ids(&self) -> Option<provenance_core::Reviewers> {
         self.reviewer_ids()
     }
 }
