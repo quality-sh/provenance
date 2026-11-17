@@ -1,6 +1,6 @@
-use crate::check::index::CheckIndex;
-use crate::check::references::{check_ideation_target, check_scoped_reference};
-use crate::snapshot::ScopeSnapshot;
+use super::index::CheckIndex;
+use super::references::{check_ideation_target, check_scoped_reference};
+use crate::scope_snapshot::ScopeSnapshot;
 use provenance_core::{Contribution, DispositionRecord, ProposalCard, ScopeId, SynthesisPacket};
 
 pub(super) struct Records<'a> {
