@@ -5,7 +5,7 @@
 use super::origins::{self, Outcome};
 use super::texts::each_text;
 use super::versions::{FileVersion, FileVersions};
-use super::{find, lineage, push_version, Source, VersionedRecord};
+use super::{bound_file_versions, find, lineage, push_version, Source, VersionedRecord};
 use provenance_core::{NodeType, StableId};
 use serde_json::Value;
 use std::collections::BTreeSet;
@@ -42,7 +42,8 @@ struct Found {
 static LAST_FOUND: Mutex<Option<Found>> = Mutex::new(None);
 
 /// The committed versions of the record `id` over the versions `files` of
-/// its record file.
+/// its record file. A file with more versions than one read reads is
+/// refused before any text.
 pub(super) async fn committed(
     history: &dyn FileVersions,
     files: &Arc<Vec<FileVersion>>,
@@ -50,6 +51,7 @@ pub(super) async fn committed(
     kind: NodeType,
     id: &StableId,
 ) -> anyhow::Result<Arc<Committed>> {
+    bound_file_versions(files)?;
     let known = LAST_FOUND
         .lock()
         .unwrap_or_else(PoisonError::into_inner)

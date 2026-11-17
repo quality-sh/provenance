@@ -13,16 +13,24 @@
 //! No Rule states when the git adapter starts a Git process, or how it reads
 //! an answer that ends before its object, a `missing` answer or an answer of
 //! an unknown form, so those tests are implementation aids with no Rule
-//! binding.
+//! binding. The refusal of a record file with more than 1,000 versions is
+//! evidence of `rule_history_reads_bound_file_versions`.
 #![cfg(unix)]
 
+mod discussion_support;
 #[path = "history_git_support/repository.rs"]
 mod repository;
 
+use provenance_core::protocol::read_failure::ReadFailure;
+use provenance_core::review::ReviewHistoryQuery;
+use provenance_core::NodeType;
 use provenance_macros::verifies;
+use provenance_store::operations::read_policy::ReadPolicy;
 use provenance_store::review::history::contract::UNKNOWN_COMMIT;
 use provenance_store::review::history::{FileVersions, GitFileVersions};
+use provenance_store::review::read_history;
 use repository::repository;
+use std::fmt::Write as _;
 use std::os::unix::fs::PermissionsExt as _;
 use std::path::Path;
 
@@ -134,4 +142,85 @@ async fn an_answer_of_an_unknown_form_is_refused() {
         format!("{error:#}"),
         "git cat-file returned an unreadable header: x tree"
     );
+}
+
+/// Adds `count` commits to the branch of `HEAD` with `git fast-import`, each
+/// the child of the one before, that each give `req_a` in the Requirement
+/// file a new statement. Then sets the work tree to the new `HEAD`.
+fn statement_commits(temp: &tempfile::TempDir, count: usize) {
+    let file = discussion_support::requirements(temp);
+    let path = file
+        .strip_prefix(camino::Utf8Path::from_path(temp.path()).unwrap())
+        .unwrap()
+        .as_str()
+        .replace('\\', "/");
+    let text = std::fs::read_to_string(&file).unwrap();
+    let branch = discussion_support::git(temp, &["symbolic-ref", "HEAD"]);
+    let head = discussion_support::git(temp, &["rev-parse", "HEAD"]);
+    let mut stream = Vec::new();
+    for index in 1..=count {
+        let mut lines = String::new();
+        for line in text.lines() {
+            let mut record: serde_json::Value = serde_json::from_str(line).unwrap();
+            if record["id"] == "req_a" {
+                record["statement"] = format!("Edit {index} of the statement.").into();
+            }
+            writeln!(lines, "{record}").unwrap();
+        }
+        let from = if index == 1 {
+            head.clone()
+        } else {
+            format!(":{}", index - 1)
+        };
+        stream.extend(
+            format!(
+                "commit {branch}\nmark :{index}\ncommitter Ann <ann@example.com> {} +0000\n\
+                 data 4\nedit\nfrom {from}\nM 100644 inline {path}\ndata {}\n{lines}\n",
+                1_700_000_000 + index,
+                lines.len()
+            )
+            .into_bytes(),
+        );
+    }
+    let mut child = provenance_store::git_process::git()
+        .args(["fast-import", "--quiet"])
+        .current_dir(temp.path())
+        .stdin(std::process::Stdio::piped())
+        .spawn()
+        .unwrap();
+    std::io::Write::write_all(&mut child.stdin.take().unwrap(), &stream).unwrap();
+    assert!(child.wait().unwrap().success());
+    discussion_support::git(temp, &["reset", "-q", "--hard"]);
+}
+
+/// A history read of a Git repository whose record file has more than 1,000
+/// versions gives the budget refusal and starts no `cat-file` process.
+#[tokio::test]
+#[verifies("rule_history_reads_bound_file_versions", examples)]
+async fn a_read_of_more_than_1000_file_versions_starts_no_cat_file() {
+    logging_git();
+    let (temp, _store) = discussion_support::fixture();
+    discussion_support::commit_state(&temp, "Create");
+    statement_commits(&temp, 1_000);
+    let query = ReviewHistoryQuery {
+        record_kind: NodeType::Requirement,
+        record_id: discussion_support::id(),
+        limit: 50,
+        cursor: None,
+    };
+    let root = camino::Utf8Path::from_path(temp.path()).unwrap();
+    let error = read_history(
+        &discussion_support::repository(root),
+        ReadPolicy::default(),
+        query,
+    )
+    .await
+    .expect_err("a refusal");
+    assert_eq!(
+        error.downcast_ref::<ReadFailure>(),
+        Some(&ReadFailure::PageBudgetExceeded),
+        "{error:#}"
+    );
+    let starts = std::fs::read_to_string(temp.path().join(".git/git-starts")).unwrap();
+    assert!(!starts.contains("cat-file"), "{starts}");
 }

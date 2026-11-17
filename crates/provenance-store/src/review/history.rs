@@ -27,6 +27,7 @@ use crate::{
     shards,
     state_store::StateStore,
 };
+use provenance_core::protocol::read_failure::ReadFailure;
 use provenance_core::review::{RecordVersion, SaveOutcome};
 use provenance_core::{NodeType, ScopeId, StableId};
 use provenance_macros::rule;
@@ -34,6 +35,9 @@ use serde_json::Value;
 
 /// The version id of the saved working copy.
 pub(super) const WORKING: &str = "working";
+
+/// The most versions of a record file whose texts one history read reads.
+const HISTORY_FILE_VERSIONS: usize = 1_000;
 
 /// One record version and the record JSON it holds.
 #[derive(Clone)]
@@ -126,6 +130,16 @@ impl StateStore {
             .as_str()
             .replace('\\', "/"))
     }
+}
+
+/// Refuses with the page budget refusal a record file with more versions
+/// than one history read reads, before the read asks for a text.
+#[rule("rule_history_reads_bound_file_versions")]
+fn bound_file_versions(files: &[FileVersion]) -> anyhow::Result<()> {
+    if files.len() > HISTORY_FILE_VERSIONS {
+        return Err(ReadFailure::PageBudgetExceeded.into());
+    }
+    Ok(())
 }
 
 /// The indexes of the commits that changed the record at `HEAD`, oldest

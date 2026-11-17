@@ -9,7 +9,9 @@
 //! take `ONE_READER` so that no other test changes what the process keeps.
 //! `entry_edges` holds the entry reads at the edges of a page, and
 //! `page_edges` the history pages at the same edges; its budget refusal
-//! test is evidence of `rule_query_pages_bound_shared_reads`.
+//! test is evidence of `rule_query_pages_bound_shared_reads`. The refusal
+//! of a record file with more than 1,000 versions is evidence of
+//! `rule_history_reads_bound_file_versions`.
 
 mod discussion_support;
 #[path = "history_text_calls/entry_edges.rs"]
@@ -22,6 +24,7 @@ use camino::Utf8Path;
 use discussion_support::*;
 use provenance_core::review::{ReviewHistoryPage, ReviewHistoryQuery};
 use provenance_core::{NodeType, StableId};
+use provenance_macros::verifies;
 use provenance_store::layout::ProvenanceLayout;
 use provenance_store::operations::read_operations::{InProcessReadOperations, ReadOperations};
 use provenance_store::operations::read_policy::ReadPolicy;
@@ -274,18 +277,29 @@ fn statement_edits(temp: &tempfile::TempDir, count: usize) -> Vec<Commit> {
     chain(&relative, entries)
 }
 
-/// The answer of `review-history-entry` for the entry `entry` of `req_a`,
-/// or the error of its failure.
-async fn history_entry(repository: &Repository, entry: &str) -> Result<Value, Value> {
+/// The answer of the read operation `name` for `request`, or the error of
+/// its failure.
+async fn operation(
+    repository: &Repository,
+    name: &'static str,
+    request: Value,
+) -> Result<Value, Value> {
     let binding = LocalRepository::bind(repository.clone(), "folder").unwrap();
     let request = json!({
         "context": {"repository": "folder", "scope": "default"},
-        "request": {"record_kind": "requirement", "record_id": "req_a", "entry_id": entry},
+        "request": request,
     });
     InProcessReadOperations::new(&binding)
-        .run("review-history-entry", request)
+        .run(name, request)
         .await
         .map_err(|failure| failure.error)
+}
+
+/// The answer of `review-history-entry` for the entry `entry` of `req_a`,
+/// or the error of its failure.
+async fn history_entry(repository: &Repository, entry: &str) -> Result<Value, Value> {
+    let request = json!({"record_kind": "requirement", "record_id": "req_a", "entry_id": entry});
+    operation(repository, "review-history-entry", request).await
 }
 
 /// The entry operation reads the history of the record once, also when the
@@ -306,4 +320,47 @@ async fn an_entry_read_reads_the_history_once() {
         counts.push((committed, versions.calls()));
     }
     assert_eq!(counts, [(205, 410), (1_000, 2_000)]);
+}
+
+/// The three history operations for the working entry of `req_a`.
+fn history_reads() -> [(&'static str, Value); 3] {
+    let record = json!({"record_kind": "requirement", "record_id": "req_a"});
+    let mut entry = record.clone();
+    entry["entry_id"] = json!("working");
+    let mut evidence = entry.clone();
+    evidence["side"] = json!("after");
+    [
+        ("review-history", record),
+        ("review-history-entry", entry),
+        ("review-evidence", evidence),
+    ]
+}
+
+/// A history read of a record file with more than 1,000 versions gives the
+/// budget refusal before it reads a text. At 1,000 versions it answers.
+#[tokio::test]
+#[verifies("rule_history_reads_bound_file_versions", examples)]
+async fn a_read_of_more_than_1000_file_versions_is_refused_before_a_text() {
+    let _one = ONE_READER.lock().await;
+    for (committed, refused) in [(1_000, false), (1_001, true)] {
+        let (temp, _store) = fixture();
+        let versions = Counted::new_lists(&statement_edits(&temp, committed));
+        let root = Utf8Path::from_path(temp.path()).unwrap();
+        let repository = repository(root).with_file_versions(versions.clone());
+        for (name, request) in history_reads() {
+            let answer = operation(&repository, name, request).await;
+            let calls = versions.calls();
+            if refused {
+                assert_eq!(
+                    answer,
+                    Err(json!({"kind": "page_budget_exceeded"})),
+                    "{name}"
+                );
+                assert_eq!(calls, 0, "{name}");
+            } else {
+                assert!(answer.is_ok(), "{name}: {answer:?}");
+                assert!(calls > 0, "{name}");
+            }
+        }
+    }
 }

@@ -16,10 +16,12 @@
 //! No Rule: the plan proposes `rule_contract_router_serves_any_storage` for
 //! the owner's review. This test is an implementation aid.
 
-use crate::support::history_cases::CASES;
+use crate::support::history_cases::{CASES, ENTRY, EVIDENCE, LIST};
 use crate::support::history_fixture::{history, History, Sources};
 use crate::support::history_folder::{folder, Folder};
-use crate::support::history_routes::{self, history_routes, route_name};
+use crate::support::history_long::edits;
+use crate::support::history_pages::{long_setup, over_port};
+use crate::support::history_routes::{self, history_routes, path, route_name};
 use crate::support::memory_host::{bound, compared, in_process, memory_repository, over_memory};
 use crate::support::names::Names;
 use crate::support::records::{allow_reviewer, Repository};
@@ -30,6 +32,7 @@ use provenance_store::operations::read_operations::READ_OPERATIONS;
 use provenance_store::repository::{RandomIds, Repository as Opened, SystemClock};
 use provenance_store::review::history::contract::MemoryFileVersions;
 use provenance_store::settings::Settings;
+use serde_json::json;
 use std::collections::{BTreeMap, BTreeSet};
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
@@ -230,5 +233,37 @@ async fn the_history_routes_over_memory_storage_answer_as_over_a_folder() {
     assert!(!root.exists(), "the router made the working tree");
     for directory in [&missing, &home, &working, &temporary] {
         assert_eq!(entries(directory.path()), Vec::<PathBuf>::new());
+    }
+}
+
+/// The three history routes over a record file with more than 1,000
+/// versions give the budget refusal over memory storage, through the port,
+/// as over a folder's Git history.
+#[tokio::test]
+async fn the_history_routes_refuse_more_than_1000_file_versions_as_over_a_folder() {
+    let _alone = crate::one_at_a_time().await;
+    let (base, _missing, root) = long_setup();
+    let long = History {
+        commits: edits(&base.working, 1_001),
+        working: base.working,
+    };
+    let folder = folder(&long);
+    let over_memory = over_port(history_in_memory(&long, &folder, &root, "default").await);
+    let over_folder = Http::over(Opened::open(folder.root(), "default").unwrap());
+    let record = json!({"record_kind": "requirement", "record_id": "req_a"});
+    let mut entry = record.clone();
+    entry["entry_id"] = json!("working");
+    let mut evidence = entry.clone();
+    evidence["side"] = json!("after");
+    for (operation, request) in [(LIST, &record), (ENTRY, &entry), (EVIDENCE, &evidence)] {
+        let route = path(operation, request);
+        for http in [&over_memory, &over_folder] {
+            let answer = http.call("GET", &route, None, &[], route.clone()).await;
+            assert_eq!(
+                (answer.status, answer.json()["error"].clone()),
+                (409, json!({"kind": "page_budget_exceeded"})),
+                "{route}"
+            );
+        }
     }
 }
