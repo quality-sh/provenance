@@ -76,9 +76,12 @@ fn hint_detail(hint: Option<&str>) -> String {
 }
 
 /// The hint of a file below `.provenance/state` that does not parse and that
-/// has no correction of its own: the two procedures that give a state that
-/// reads, each with what it removes.
-pub const STATE_CORRECTIONS: &str = "To correct this fault, use one of these two procedures. \
+/// has no correction of its own: first the correction of the line that the
+/// answer names, then the two procedures that give a state that reads, each
+/// with what it removes.
+pub const STATE_CORRECTIONS: &str = "To correct this fault, correct the line of the file that \
+    this answer names, and then do the command again. If you cannot correct that line, use one \
+    of these two procedures. \
     Procedure 1: get .provenance/state from a commit where Provenance can read it. \
     This can remove records and changes that are not in that commit. \
     Procedure 2: remove .provenance/state and then do the command provenance init. \

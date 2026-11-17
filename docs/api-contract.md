@@ -240,9 +240,10 @@ state directory does not parse, or when stored records do not agree. The
 refusal has `file`, the path below the state directory, `line`, from 1, and
 `message`, the cause without its location. It can also have the optional
 member `hint`, the step that corrects the state. When the reader of the file
-has a correction of its own, `hint` is that correction. Else `hint` gives the
-two procedures that give a state that reads, each with what it removes. A
-file that is not in the state directory has no `hint`.
+has a correction of its own, `hint` is that correction. Else `hint` first
+tells the person to correct the line that `file` and `line` name, and then
+gives the two procedures that give a state that reads, each with what it
+removes. A file that is not in the state directory has no `hint`.
 
 A document read whose catch-up fails returns 409 with
 `document_catch_up_failed`. The document read does not answer from the
