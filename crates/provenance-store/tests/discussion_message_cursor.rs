@@ -53,8 +53,7 @@ async fn an_omitted_limit_continues_a_default_limit_page() {
     for n in 0..50 {
         latest = store
             .write_discussion(reply(&latest, &format!("reply_{n}")))
-            .unwrap()
-            .discussion;
+            .unwrap();
     }
     let parent = serde_json::to_value(&latest.parent).unwrap();
     let selector = json!({

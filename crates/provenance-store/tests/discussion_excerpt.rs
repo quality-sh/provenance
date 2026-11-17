@@ -59,7 +59,6 @@ async fn list_excerpt_counts_characters_across_nul_and_unicode() {
             store
                 .write_discussion(write(json!({"kind":"start", "role":"user", "body":body})))
                 .unwrap()
-                .discussion
                 .discussion_id
         })
         .collect::<Vec<_>>();

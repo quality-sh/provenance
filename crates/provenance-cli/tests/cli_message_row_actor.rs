@@ -1,6 +1,7 @@
 //! A stored message row with no actor, or with a blank actor, does not fit the Message
-//! record. The graph check names the file and the line, and gives the step that adds the
-//! actor to that line.
+//! record. The graph check refuses it, and an api read that answers from the read database
+//! warns with it; each names the file and the line, and gives the step that adds the actor
+//! to that line.
 
 use crate::cli_mcp_write_actor::{repository, run};
 use crate::cli_message_actor::discussion_with_reply;
@@ -54,7 +55,12 @@ fn a_message_row_with_no_actor_or_a_blank_actor_is_refused_with_its_line() {
             ),
             "{actor}"
         );
-        let (code, stdout, _) = run(repo, &["api", "messages"]);
-        assert_eq!((code, stdout.as_str()), (1, ""), "{actor}");
+        let (code, stdout, stderr) = run(repo, &["api", "messages"]);
+        assert_eq!(code, 0, "{actor}: {stderr}");
+        let answer: serde_json::Value = serde_json::from_str(&stdout).unwrap();
+        let warning = answer["meta"]["freshness_error"]
+            .as_str()
+            .unwrap_or_default();
+        assert_eq!(warning.replace('\\', "/"), fault, "{actor}: {stdout}");
     }
 }

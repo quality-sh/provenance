@@ -71,7 +71,6 @@ fn write_discussion(store: &StateStore, action: Value) -> Discussion {
     store
         .write_discussion(serde_json::from_value(input).unwrap())
         .unwrap()
-        .discussion
 }
 
 /// [`MANY`] Discussions on `req_overtime`, each with one message.

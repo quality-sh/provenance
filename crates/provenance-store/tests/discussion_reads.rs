@@ -178,10 +178,7 @@ async fn complete_cache_rebuild_retains_resolved_groups_and_outcomes() {
     let (temp, store) = fixture();
     let root = camino::Utf8Path::from_path(temp.path()).unwrap();
     let a = start(&store, "a");
-    let resolved = store
-        .write_discussion(status(&a, "resolved"))
-        .unwrap()
-        .discussion;
+    let resolved = store.write_discussion(status(&a, "resolved")).unwrap();
     store
         .save_requirement_from_discussion(
             save(&store, json!({"description":"After"})),
@@ -246,8 +243,7 @@ async fn large_but_legal_discussion_messages_stay_readable() {
         .write_discussion(write(
             json!({"kind":"start","role":"user","body":"a".repeat(60_000)}),
         ))
-        .unwrap()
-        .discussion;
+        .unwrap();
     let page = read_discussion_messages(
         &repository(root),
         ReadPolicy::default(),

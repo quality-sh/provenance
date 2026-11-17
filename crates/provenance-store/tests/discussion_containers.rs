@@ -25,10 +25,7 @@ fn closed_containers_refuse_reply_and_reopening_without_reactivation() {
     for closed in [ThreadStatus::Resolved, ThreadStatus::Archived] {
         let (temp, store) = fixture();
         let a = start(&store, "a");
-        let resolved = store
-            .write_discussion(status(&a, "resolved"))
-            .unwrap()
-            .discussion;
+        let resolved = store.write_discussion(status(&a, "resolved")).unwrap();
         replace_threads(&store, &temp, |threads| threads[0].status = closed.clone());
         assert!(store.write_discussion(reply(&a, "reply")).is_err());
         assert!(store.write_discussion(status(&resolved, "active")).is_err());
@@ -53,10 +50,7 @@ fn reply_reconciles_siblings_but_cannot_move_a_losing_discussion() {
         sibling.created_at += 1;
         threads.push(sibling);
     });
-    let replied = store
-        .write_discussion(reply(&a, "reply"))
-        .unwrap()
-        .discussion;
+    let replied = store.write_discussion(reply(&a, "reply")).unwrap();
     assert_eq!(
         store
             .list_threads(&scope())

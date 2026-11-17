@@ -29,8 +29,7 @@ fn old_creation_cannot_omit_an_addressed_outcome() {
             )
             .unwrap(),
         )
-        .unwrap()
-        .discussion;
+        .unwrap();
     assert!(store.create_requirement(serde_json::from_value(json!({
         "scope_id":"default","id":"req_new","statement":"The system retains evidence.","status":"discovery","depends_on":[],"supersedes":[],
         "origin_thread":entry.thread_id,"origin_message":entry.root_message_id
@@ -49,8 +48,7 @@ fn an_enrolled_thread_alone_cannot_bypass_the_outcome_writer() {
             }))
             .unwrap(),
         )
-        .unwrap()
-        .discussion;
+        .unwrap();
     let before = store.list_requirements(&scope()).unwrap();
     assert!(store.create_requirement(serde_json::from_value(json!({
         "scope_id":"default", "id":"req_new", "statement":"The system retains evidence.",

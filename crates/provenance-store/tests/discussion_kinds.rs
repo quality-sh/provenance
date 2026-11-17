@@ -116,8 +116,7 @@ fn every_kind_starts_replies_and_resolves_a_concern() {
                 }))
                 .unwrap(),
             )
-            .unwrap_or_else(|error| panic!("{node}: {error}"))
-            .discussion;
+            .unwrap_or_else(|error| panic!("{node}: {error}"));
         assert_eq!(started.parent.node_type, kind, "{node}");
         assert_eq!(started.version, 1, "{node}");
         let replied = store
@@ -131,8 +130,7 @@ fn every_kind_starts_replies_and_resolves_a_concern() {
                 }))
                 .unwrap(),
             )
-            .unwrap_or_else(|error| panic!("{node}: {error}"))
-            .discussion;
+            .unwrap_or_else(|error| panic!("{node}: {error}"));
         assert_eq!(replied.status, DiscussionStatus::Active, "{node}");
         let resolved = store
             .write_discussion(
@@ -145,8 +143,7 @@ fn every_kind_starts_replies_and_resolves_a_concern() {
                 }))
                 .unwrap(),
             )
-            .unwrap_or_else(|error| panic!("{node}: {error}"))
-            .discussion;
+            .unwrap_or_else(|error| panic!("{node}: {error}"));
         assert_eq!(resolved.status, DiscussionStatus::Resolved, "{node}");
     }
     let threads = store.list_threads(&scope()).unwrap();
@@ -218,8 +215,7 @@ fn legacy_containers_stay_readable_beside_addressed_discussions() {
             "question_award",
             &json!(null),
         ))
-        .unwrap()
-        .discussion;
+        .unwrap();
     assert_eq!(addressed.thread_id, legacy.thread.id);
     let containers = store
         .list_threads(&scope())

@@ -16,18 +16,12 @@ fn concerns_resolve_independently_and_reopen_without_record_changes() {
     let b = start(&store, "concern_b");
     assert_ne!(a.discussion_id, b.discussion_id);
     assert_eq!(a.thread_id, b.thread_id);
-    let resolved = store
-        .write_discussion(status(&a, "resolved"))
-        .unwrap()
-        .discussion;
+    let resolved = store.write_discussion(status(&a, "resolved")).unwrap();
     assert_eq!(resolved.status, DiscussionStatus::Resolved);
     assert!(store
         .write_discussion(reply(&resolved, "closed_reply"))
         .is_err());
-    let reply_b = store
-        .write_discussion(reply(&b, "reply_b"))
-        .unwrap()
-        .discussion;
+    let reply_b = store.write_discussion(reply(&b, "reply_b")).unwrap();
     assert_eq!(reply_b.status, DiscussionStatus::Active);
     assert_eq!(
         store.list_threads(&scope()).unwrap()[0].status,
@@ -42,10 +36,7 @@ fn concerns_resolve_independently_and_reopen_without_record_changes() {
         store.list_dispositions(&scope()).unwrap(),
         [] as [provenance_core::DispositionRecord; 0]
     );
-    let reopened = store
-        .write_discussion(status(&resolved, "active"))
-        .unwrap()
-        .discussion;
+    let reopened = store.write_discussion(status(&resolved, "active")).unwrap();
     assert!(store
         .write_discussion(reply(&reopened, "after_reopen"))
         .is_ok());
