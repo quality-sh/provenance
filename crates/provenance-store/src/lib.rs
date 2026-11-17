@@ -54,10 +54,12 @@ pub mod repository_init;
 pub mod review;
 #[cfg(feature = "host")]
 pub mod review_changes;
+pub mod scope_snapshot;
 pub mod settings;
 pub mod shards;
 #[cfg(feature = "host")]
 pub mod stale;
+pub mod state_check;
 pub mod state_store;
 pub mod statement_analysis;
 #[cfg(all(test, feature = "host"))]
