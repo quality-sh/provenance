@@ -2,8 +2,8 @@
 //! open of a repository has the text of the fault of the manifest, and its
 //! error is that fault. The HTTP API of a started review host whose manifest
 //! stops parsing refuses a read, a write and the page configuration with
-//! `invalid_state_file`, the line of the manifest and the two procedures that
-//! correct the state.
+//! `invalid_state_file`, the line of the manifest, the correction of that line
+//! and then the two procedures that correct the state.
 
 #[path = "support"]
 mod support {
@@ -23,6 +23,16 @@ use provenance_store::repository::OpenFailure;
 use provenance_transport::fixture::records::Repository;
 use serde_json::{json, Value};
 use std::sync::Arc;
+
+/// The hint of a state file that does not parse, as a person reads it.
+const HINT: &str = "To correct this fault, correct the line of the file that this answer \
+    names, and then do the command again. If you cannot correct that line, use one of these \
+    two procedures. \
+    Procedure 1: get .provenance/state from a commit where Provenance can read it. \
+    This can remove records and changes that are not in that commit. \
+    Procedure 2: remove .provenance/state and then do the command provenance init. \
+    This removes all records, the scopes, the disposition actors and the technical names of \
+    the dictionary.";
 
 #[tokio::test(flavor = "multi_thread")]
 #[verifies("rule_state_parse_refusal_names_the_corrections", examples)]
@@ -68,7 +78,7 @@ async fn a_manifest_that_stops_parsing_refuses_each_read_and_write_with_the_corr
 
     let refusal = json!({"kind":"invalid_state_file", "file":"manifest.json", "line":1,
         "message":"invalid type: string \"default\", expected a sequence",
-        "hint":STATE_CORRECTIONS});
+        "hint":HINT});
     assert_eq!(
         answers,
         [
