@@ -143,7 +143,8 @@ fn rename_failure(
         format!(
             "rename a temporary file from the cache {} to {path}: the cache and the state \
              directory {} are on two file systems, and the store writes the state only when \
-             they are on one file system",
+             they are on one file system. Put .provenance/cache on the file system of \
+             .provenance/state, and then send the call again",
             layout.cache_dir(),
             layout.state_dir()
         )

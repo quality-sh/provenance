@@ -23,7 +23,8 @@ fn a_rename_across_two_file_systems_names_the_cache_and_the_state_directory() {
         format!(
             "rename a temporary file from the cache {} to {path}: the cache and the state \
              directory {} are on two file systems, and the store writes the state only when \
-             they are on one file system: {text}",
+             they are on one file system. Put .provenance/cache on the file system of \
+             .provenance/state, and then send the call again: {text}",
             layout.cache_dir(),
             layout.state_dir()
         )

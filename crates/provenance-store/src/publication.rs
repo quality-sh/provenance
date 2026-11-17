@@ -114,22 +114,12 @@ fn enter_section<R>(
     operation()
 }
 
-/// Whether this thread holds the live section of the repository at
-/// `layout`.
-#[cfg(feature = "host")]
-pub(crate) fn holds_live_section(layout: &ProvenanceLayout) -> anyhow::Result<bool> {
-    Ok(held_here(
-        Some(&publication_lock_identity(layout)?),
-        HolderKind::Live,
-    ))
-}
-
 /// The key of the section of `layout`: the lock path under the resolved root.
 /// The existing ancestor is resolved, so planned-state validation creates no
 /// paths. With no file system to resolve the root against, the key is the
 /// lock path of the layout as given.
 #[cfg_attr(not(feature = "host"), allow(clippy::unnecessary_wraps))]
-fn publication_lock_identity(layout: &ProvenanceLayout) -> anyhow::Result<String> {
+pub(crate) fn publication_lock_identity(layout: &ProvenanceLayout) -> anyhow::Result<String> {
     #[cfg(not(feature = "host"))]
     return Ok(layout.publication_lock_path().to_string());
     #[cfg(feature = "host")]

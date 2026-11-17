@@ -18,7 +18,7 @@ pub fn live_file(state: &Utf8Path, key: &str) -> anyhow::Result<Utf8PathBuf> {
         }
         let metadata = match std::fs::symlink_metadata(crate::long_path::extended(&path)?) {
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-                return Ok(below(state, &parts));
+                return Ok(key_path(state, key));
             }
             Err(error) => return Err(crate::refusal::caused(error, format!("read {path}"))),
             Ok(metadata) => metadata,
@@ -38,8 +38,8 @@ pub fn live_file(state: &Utf8Path, key: &str) -> anyhow::Result<Utf8PathBuf> {
 }
 
 /// Refuses a state directory that holds an entry that is not a regular file
-/// or a real directory, such as a link, with the path of the entry. A write
-/// that replaces each record of a scope reads no link and leaves none.
+/// or a real directory, such as a link, or whose name is not UTF-8, with the
+/// path of the entry. Thus a whole set reads no link and leaves none.
 pub fn ensure_plain_state_tree(directory: &Utf8Path) -> anyhow::Result<()> {
     let entries = match std::fs::read_dir(directory) {
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(()),
@@ -50,7 +50,9 @@ pub fn ensure_plain_state_tree(directory: &Utf8Path) -> anyhow::Result<()> {
     for entry in entries {
         let entry =
             entry.map_err(|error| crate::refusal::caused(error, format!("read {directory}")))?;
-        let path = directory.join(entry.file_name().to_string_lossy().as_ref());
+        let path = Utf8PathBuf::from_path_buf(entry.path()).map_err(|path| {
+            crate::refusal::fault!("state path is not UTF-8: {}", path.display())
+        })?;
         let kind = std::fs::symlink_metadata(&path)
             .map_err(|error| crate::refusal::caused(error, format!("read {path}")))?
             .file_type();
@@ -67,10 +69,11 @@ pub fn ensure_plain_state_tree(directory: &Utf8Path) -> anyhow::Result<()> {
     Ok(())
 }
 
-fn below(state: &Utf8Path, parts: &[&str]) -> Utf8PathBuf {
-    parts
-        .iter()
-        .fold(state.to_owned(), |path, part| path.join(part))
+/// The path of `key` below `directory`, with the separator of the platform
+/// between its parts.
+pub(super) fn key_path(directory: &Utf8Path, key: &str) -> Utf8PathBuf {
+    key.split('/')
+        .fold(directory.to_owned(), |path, part| path.join(part))
 }
 
 /// Refuses an install from `transaction` into `state` when the two
@@ -92,7 +95,8 @@ pub fn ensure_one_file_system(transaction: &Utf8Path, state: &Utf8Path) -> anyho
         device(transaction)? == device(state)?,
         "install the state from the cache {transaction} in {state}: the cache and the state \
          directory are on two file systems, and the store writes the state only when they \
-         are on one file system"
+         are on one file system. Put .provenance/cache on the file system of \
+         .provenance/state, and then send the call again"
     );
     Ok(())
 }

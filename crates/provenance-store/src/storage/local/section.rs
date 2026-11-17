@@ -11,6 +11,7 @@ use anyhow::Context;
 use camino::{Utf8Path, Utf8PathBuf};
 use fs2::FileExt;
 use std::fs::{File, OpenOptions};
+use std::sync::{Arc, Mutex, PoisonError};
 
 /// The publication section of one layout.
 ///
@@ -37,10 +38,12 @@ impl LocalSectionLock {
         check: impl FnOnce() -> anyhow::Result<()>,
     ) -> anyhow::Result<LockedPublicationFile> {
         prepare_publication_lock(&self.layout)?;
-        let lock = LockedPublicationFile::acquire(&self.layout.publication_lock_path())?;
+        let mut lock = LockedPublicationFile::acquire(&self.layout.publication_lock_path())?;
         check()?;
         prepare_transaction_dirs(&self.layout)?;
         recover_pending(&self.layout)?;
+        let identity = crate::publication::publication_lock_identity(&self.layout)?;
+        lock.held = Some(HeldSection::record(identity));
         Ok(lock)
     }
 }
@@ -65,6 +68,9 @@ impl SectionLock for LocalSectionLock {
 /// holder may move it to another thread.
 pub struct LockedPublicationFile {
     file: File,
+    /// The record that this process holds the section, from the end of its
+    /// recovery until the release of the lock.
+    held: Option<HeldSection>,
 }
 
 impl LockedPublicationFile {
@@ -81,14 +87,69 @@ impl LockedPublicationFile {
             .with_context(|| format!("open publication lock {path}"))?;
         file.lock_exclusive()
             .with_context(|| format!("acquire publication lock {path}"))?;
-        Ok(Self { file })
+        Ok(Self { file, held: None })
     }
 }
 
 impl Drop for LockedPublicationFile {
     fn drop(&mut self) {
+        // The record goes before the lock, so a record names a section that
+        // this process holds.
+        self.held = None;
         let _ = fs2::FileExt::unlock(&self.file);
     }
+}
+
+/// The sections that this process holds: the identity of the lock of each,
+/// with the lock of its writes through the storage port.
+static HELD: Mutex<Vec<(String, Arc<Mutex<()>>)>> = Mutex::new(Vec::new());
+
+fn held() -> std::sync::MutexGuard<'static, Vec<(String, Arc<Mutex<()>>)>> {
+    // An entry is added or removed in one step, so a poisoned table is intact.
+    HELD.lock().unwrap_or_else(PoisonError::into_inner)
+}
+
+/// The record that this process holds the section with `identity`. Its
+/// drop removes the record.
+struct HeldSection {
+    writes: Arc<Mutex<()>>,
+}
+
+impl HeldSection {
+    fn record(identity: String) -> Self {
+        let writes = Arc::new(Mutex::new(()));
+        held().push((identity, Arc::clone(&writes)));
+        Self { writes }
+    }
+}
+
+impl Drop for HeldSection {
+    fn drop(&mut self) {
+        held().retain(|(_, writes)| !Arc::ptr_eq(writes, &self.writes));
+    }
+}
+
+/// The lock of the writes through the storage port in the section of
+/// `layout`, when this process holds that section, on any thread and also
+/// under an async guard. A caller that holds it is the only reader or
+/// writer of the port in the section, so it can complete a write that a
+/// marker names. With no section of this process, it is `None`: a write of
+/// a different process can own the marker.
+pub(super) fn section_writes(layout: &ProvenanceLayout) -> anyhow::Result<Option<Arc<Mutex<()>>>> {
+    if held().is_empty() {
+        return Ok(None);
+    }
+    let identity = crate::publication::publication_lock_identity(layout)?;
+    Ok(held()
+        .iter()
+        .find(|(held, _)| *held == identity)
+        .map(|(_, writes)| Arc::clone(writes)))
+}
+
+/// Takes `writes`. A thread that stopped while it held them left no write
+/// half done in memory, so a poisoned lock is usable.
+pub(super) fn take(writes: &Mutex<()>) -> std::sync::MutexGuard<'_, ()> {
+    writes.lock().unwrap_or_else(PoisonError::into_inner)
 }
 
 /// Creates the directories of the lock file and refuses a `.provenance`

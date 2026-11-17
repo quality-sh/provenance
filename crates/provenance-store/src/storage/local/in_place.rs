@@ -13,7 +13,9 @@
 use super::durability::{
     install_staged_file, remove_synced_file, sync_tree, write_staged_file, write_synced_file,
 };
-use super::live_entry::{ensure_one_file_system, held_by_another_process, live_file};
+use super::live_entry::{
+    ensure_one_file_system, ensure_plain_state_tree, held_by_another_process, key_path, live_file,
+};
 use crate::layout::ProvenanceLayout;
 use crate::storage::{StateKey, WriteSet};
 use camino::{Utf8Path, Utf8PathBuf};
@@ -45,8 +47,9 @@ struct Put {
 /// and then the change list, and syncs them. When it returns, the
 /// transaction holds all data that the install needs. It first refuses a set
 /// that an install cannot complete for a cause that the write can see before
-/// its marker: a live entry of a key that is not a regular file, a link in
-/// the path of a key, or a cache on a different file system.
+/// its marker: a cache on a different file system, a link or a special entry
+/// in the state directory, or a part of the path of a key that is not a
+/// directory.
 pub fn stage(
     live: &ProvenanceLayout,
     transaction: &Utf8Path,
@@ -85,28 +88,38 @@ pub fn stage(
 /// staged file. Thus the call completes a write that an earlier call did in
 /// part, and refuses a transaction that lost a staged file.
 ///
-/// A replace is a rename of one file onto one file, so a reader that has a
-/// live file open with delete sharing, as each `std::fs` handle has, does
-/// not make it fail. No step follows a link in the path of a live key.
+/// The call checks each put and each delete before it changes a file, so a
+/// refusal changes no file. A replace is a rename of one file onto one
+/// file, so a reader that has a live file open with delete sharing, as each
+/// `std::fs` handle has, does not make it fail. No step follows a link in
+/// the path of a live key.
 #[rule("rule_write_passes_while_a_record_file_is_held")]
 pub fn install(live: &ProvenanceLayout, transaction: &Utf8Path) -> anyhow::Result<()> {
     let changes = read_change_list(transaction)?;
     let state = live.state_dir();
     let staged = transaction.join(STAGED);
+    let mut replaces = Vec::new();
     for put in &changes.puts {
         let target = live_file(&state, &put.key)?;
         match staged_file(&staged, &put.key)? {
             Some(source) => {
                 require_digest(&source, put, "staged file")?;
-                install_staged_file(&source, &target)
-                    .map_err(|error| in_use(live, &target, &put.key, error))?;
-                crate::test_probes::at("state_file_installed")?;
+                replaces.push((put, source, target));
             }
             None => require_installed(&staged, &target, put)?,
         }
     }
-    for key in &changes.deletes {
-        let target = live_file(&state, key)?;
+    let removals = changes
+        .deletes
+        .iter()
+        .map(|key| Ok((key, live_file(&state, key)?)))
+        .collect::<anyhow::Result<Vec<_>>>()?;
+    for (put, source, target) in replaces {
+        install_staged_file(&source, &target)
+            .map_err(|error| in_use(live, &target, &put.key, error))?;
+        crate::test_probes::at("state_file_installed")?;
+    }
+    for (key, target) in removals {
         remove_synced_file(&target).map_err(|error| in_use(live, &target, key, error))?;
     }
     crate::test_probes::at("state_installed")
@@ -130,10 +143,7 @@ fn require_digest(path: &Utf8Path, put: &Put, what: &str) -> anyhow::Result<()> 
 /// not have the bytes of the put: the transaction lost the staged file
 /// before its install.
 fn require_installed(staged: &Utf8Path, target: &Utf8Path, put: &Put) -> anyhow::Result<()> {
-    let missing = put
-        .key
-        .split('/')
-        .fold(staged.to_owned(), |path, part| path.join(part));
+    let missing = key_path(staged, &put.key);
     let installed = match std::fs::read(crate::long_path::extended(target)?) {
         Ok(bytes) => <[u8; 32]>::from(Sha256::digest(&bytes)) == put.sha256,
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => false,
@@ -183,9 +193,7 @@ fn in_use(
         .and_then(std::io::Error::raw_os_error);
     match code {
         Some(code) if held_by_another_process(target, code) => StateFileInUse {
-            path: key
-                .split('/')
-                .fold(live.state_dir(), |path, part| path.join(part)),
+            path: key_path(&live.state_dir(), key),
             file: format!(".provenance/state/{key}"),
             source: std::io::Error::from_raw_os_error(code),
         }
@@ -218,8 +226,9 @@ fn read_change_list(transaction: &Utf8Path) -> anyhow::Result<ChangeList> {
 
 /// Refuses `writes` when the install of a key that it changes cannot
 /// complete: the transaction and the state directory are on two file
-/// systems, a part of the path of the key is a link or not a directory, or
-/// the live entry of the key is not a regular file.
+/// systems, the state directory holds a link or a special entry, a part of
+/// the path of the key is not a directory, or the live entry of the key is
+/// not a regular file.
 fn ensure_installable(
     live: &ProvenanceLayout,
     transaction: &Utf8Path,
@@ -227,14 +236,16 @@ fn ensure_installable(
 ) -> anyhow::Result<()> {
     let state = live.state_dir();
     ensure_one_file_system(transaction, &state)?;
+    ensure_plain_state_tree(&state)?;
     for key in writes.puts().keys().chain(writes.deletes()) {
         live_file(&state, key.as_str())?;
     }
     Ok(())
 }
 
-/// The staged file of `key` below `staged`, or `None` when it is not there. Each directory on the way is a real directory and the file is
-/// a regular file, so that the install does not follow a link out of the
+/// The staged file of `key` below `staged`, or `None` when it is not there.
+/// Each directory on the way is a real directory and the file is a regular
+/// file, so that the install does not follow a link out of the
 /// transaction. A failure gives the path.
 fn staged_file(staged: &Utf8Path, key: &str) -> anyhow::Result<Option<Utf8PathBuf>> {
     let mut path = staged.to_owned();

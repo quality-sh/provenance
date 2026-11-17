@@ -294,8 +294,7 @@ crate::families::family_table::record_family_rows!(define_imported_scope_shards)
 impl StateStore {
     /// Runs a scope import in one section of the stage of this store. A live
     /// store refuses: the import replaces a scope folder shard by shard, and
-    /// only the whole set of a stage publishes that as one change. A state
-    /// directory with a link or a special entry is refused.
+    /// only the whole set of a stage publishes that as one change.
     #[rule("rule_scope_import_needs_a_staged_store")]
     fn with_staged_import<R>(
         &self,
@@ -310,11 +309,7 @@ impl StateStore {
             "a scope import needs a staged store of {}",
             self.layout.root()
         );
-        self.with_repository_publication(|store| {
-            #[cfg(feature = "host")]
-            crate::storage::local::ensure_plain_state_tree(&store.layout.state_dir())?;
-            operation(store)
-        })
+        self.with_repository_publication(operation)
     }
 }
 

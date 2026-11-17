@@ -37,7 +37,6 @@ pub use durability::is_state_temporary_name;
 #[cfg(any(unix, windows))]
 pub(crate) use file_install::FileInstall;
 pub(crate) use in_place::{install as install_in_place, StateFileInUse};
-pub(crate) use live_entry::ensure_plain_state_tree;
 #[cfg(all(test, unix))]
 pub(crate) use recovery::validated_transaction_dir;
 pub use recovery::{write_publication_marker, PublicationPhase};
@@ -84,14 +83,11 @@ impl LocalStateStorage {
 
 impl StateStorage for LocalStateStorage {
     fn read_view(&self) -> Result<StateView, StorageError> {
-        self.complete_marked_write().map_err(StorageError::Read)?;
-        crate::test_probes::at("state_tree_read").map_err(StorageError::Read)?;
-        let mut entries = BTreeMap::new();
-        let state = self.layout.state_dir();
-        if state.try_exists().map_err(read_error(&state))? {
-            read_tree(&state, "", &mut entries)?;
-        }
-        Ok(StateView::new(entries))
+        let section = section::section_writes(&self.layout).map_err(StorageError::Read)?;
+        let _writes = section.as_deref().map(section::take);
+        self.complete_marked_write(section.is_some())
+            .map_err(StorageError::Read)?;
+        self.read_state()
     }
 
     /// With a base, the adapter reads the tree under the lock and compares
@@ -105,12 +101,25 @@ impl StateStorage for LocalStateStorage {
     /// `durability::remove_synced_file` state. A whole set installs each
     /// changed file in place; see `whole_set` and `in_place`.
     fn publish(&self, writes: WriteSet) -> Result<(), PublishFailure> {
-        self.ensure_publishable(&writes)?;
+        let section = section::section_writes(&self.layout).map_err(PublishFailure::Refused)?;
+        let _writes = section.as_deref().map(section::take);
+        self.ensure_publishable(&writes, section.is_some())?;
         self.land(&writes)
     }
 }
 
 impl LocalStateStorage {
+    /// The keys and bytes of the state directory, with no completion.
+    fn read_state(&self) -> Result<StateView, StorageError> {
+        crate::test_probes::at("state_tree_read").map_err(StorageError::Read)?;
+        let mut entries = BTreeMap::new();
+        let state = self.layout.state_dir();
+        if state.try_exists().map_err(read_error(&state))? {
+            read_tree(&state, "", &mut entries)?;
+        }
+        Ok(StateView::new(entries))
+    }
+
     /// Lands a set that passed its checks. A set with no key returns before
     /// it lands, so it makes no transaction, file or marker.
     #[rule("rule_empty_write_set_writes_no_data")]
@@ -126,14 +135,18 @@ impl LocalStateStorage {
 
     /// Refuses a set whose puts and deletes share a key, and, under the lock,
     /// a set whose base is not the stored tree. A set with no base reads
-    /// nothing.
-    fn ensure_publishable(&self, writes: &WriteSet) -> Result<(), PublishFailure> {
+    /// nothing. The caller holds the writes of the section when `in_section`.
+    fn ensure_publishable(
+        &self,
+        writes: &WriteSet,
+        in_section: bool,
+    ) -> Result<(), PublishFailure> {
         writes.ensure_disjoint()?;
-        self.complete_marked_write()
+        self.complete_marked_write(in_section)
             .map_err(PublishFailure::Refused)?;
         if writes.base_view().is_some() {
             let view = self
-                .read_view()
+                .read_state()
                 .map_err(|error| PublishFailure::Refused(error.into()))?;
             writes.ensure_base(view.entries())?;
         }
@@ -141,18 +154,21 @@ impl LocalStateStorage {
     }
 
     /// Completes a write whose marker stays after its install failed, when
-    /// this thread holds the section. Thus no read or write through the
-    /// port in the section sees a set that landed in part: the call
-    /// completes the set first, or fails with the error of the install, such
-    /// as a state file that a different process holds. With no marker, it
-    /// reads nothing more. Out of the section it does nothing, because a
+    /// the caller holds the writes of a section that this process holds
+    /// (`in_section`), on any thread. No other write through the port in
+    /// the process runs while the caller holds them, so the marker belongs
+    /// to a write that ended. Thus no read or write through the port in the
+    /// section sees a set that landed in part: the call completes the set
+    /// first, or fails with the error of the install, such as a state file
+    /// that a different process holds. With no marker, it reads nothing
+    /// more. Out of a section of this process it does nothing, because a
     /// write of a different process can own the marker.
     #[rule("rule_section_reads_no_partial_whole_set")]
-    fn complete_marked_write(&self) -> anyhow::Result<()> {
+    fn complete_marked_write(&self, in_section: bool) -> anyhow::Result<()> {
         let marked = [TransactionKind::Import, TransactionKind::SourceEdit]
             .into_iter()
             .any(|kind| kind.marker(&self.layout).exists());
-        if marked && crate::publication::holds_live_section(&self.layout)? {
+        if marked && in_section {
             section::recover_pending(&self.layout)?;
         }
         Ok(())
