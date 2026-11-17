@@ -155,48 +155,52 @@ impl Invocation {
             .unwrap_or_else(|error| positional_tip::with_tip(error, arguments).exit());
         let (words, selected) = crate::registry_cli::selected(&matches);
         let json = crate::registry_cli::asks_for_json(selected);
-        let usage = catalog_cli::refusal::usage;
-        let command = if let Some(server) = Server::find(&words) {
-            ServerInput::from_matches(server, selected).map(Selected::Server)
-        } else {
-            match exposed::find(&words) {
-                Some(registry::Command::Check) => {
-                    crate::registry_cli::input(&registry::Command::Check.declaration(), selected)
-                        .map(|input| {
-                            Selected::Check(input, crate::registry_cli::bound_context(selected))
-                        })
-                }
-                Some(registry::Command::Prime) => {
-                    crate::registry_cli::input(&registry::Command::Prime.declaration(), selected)
-                        .map(Selected::Prime)
-                }
-                Some(registry::Command::Repository(command)) => {
-                    RepositoryInput::from_matches(command, selected)
-                        .map(|input| Selected::Repository(input, matches.get_flag("quiet")))
-                }
-                Some(registry::Command::Graph(command)) => {
-                    GraphInput::from_matches(command, selected).map(Selected::Graph)
-                }
-                Some(registry::Command::Workspace(command)) => {
-                    WorkspaceInput::from_matches(command, selected).map(Selected::Workspace)
-                }
-                #[cfg(feature = "dogfood")]
-                Some(registry::Command::Dogfood(command)) => {
-                    handlers::DogfoodInput::from_matches(command, selected)
-                        .map(|input| Selected::Dogfood(input, matches.get_flag("quiet")))
-                }
-                _ => root_command()
-                    .error(
-                        clap::error::ErrorKind::InvalidSubcommand,
-                        format!("'{}' is not a command", words.join(" ")),
-                    )
-                    .exit(),
+        let command = Server::find(&words).map_or_else(
+            || Self::registry_selected(&matches, &words, selected),
+            |server| ServerInput::from_matches(server, selected).map(Selected::Server),
+        );
+        let refused = |error| Selected::Refused(catalog_cli::refusal::usage(error));
+        Self::new(json, command.unwrap_or_else(refused))
+    }
+
+    /// The registry command of a root line that the parser accepted.
+    fn registry_selected(
+        matches: &clap::ArgMatches,
+        words: &[&str],
+        selected: &clap::ArgMatches,
+    ) -> anyhow::Result<Selected> {
+        match exposed::find(words) {
+            Some(registry::Command::Check) => {
+                crate::registry_cli::input(&registry::Command::Check.declaration(), selected).map(
+                    |input| Selected::Check(input, crate::registry_cli::bound_context(selected)),
+                )
             }
-        };
-        Self::new(
-            json,
-            command.unwrap_or_else(|error| Selected::Refused(usage(error))),
-        )
+            Some(registry::Command::Prime) => {
+                crate::registry_cli::input(&registry::Command::Prime.declaration(), selected)
+                    .map(Selected::Prime)
+            }
+            Some(registry::Command::Repository(command)) => {
+                RepositoryInput::from_matches(command, selected)
+                    .map(|input| Selected::Repository(input, matches.get_flag("quiet")))
+            }
+            Some(registry::Command::Graph(command)) => {
+                GraphInput::from_matches(command, selected).map(Selected::Graph)
+            }
+            Some(registry::Command::Workspace(command)) => {
+                WorkspaceInput::from_matches(command, selected).map(Selected::Workspace)
+            }
+            #[cfg(feature = "dogfood")]
+            Some(registry::Command::Dogfood(command)) => {
+                handlers::DogfoodInput::from_matches(command, selected)
+                    .map(|input| Selected::Dogfood(input, matches.get_flag("quiet")))
+            }
+            _ => root_command()
+                .error(
+                    clap::error::ErrorKind::InvalidSubcommand,
+                    format!("'{}' is not a command", words.join(" ")),
+                )
+                .exit(),
+        }
     }
 
     /// The matches of the target parser. A help request prints the help of the selected

@@ -113,11 +113,10 @@ fn ensure_required_flags(
         .into_iter()
         .filter(|flag| !input.contains_key(&flag.replace('-', "_")))
         .collect::<Vec<_>>();
-    match missing.first() {
-        Some(first) => Err(crate::catalog_cli::refusal::usage(format!(
+    missing.first().map_or(Ok(()), |first| {
+        Err(crate::catalog_cli::refusal::usage(format!(
             "--{first} is required for {}",
             action.as_str()
-        ))),
-        None => Ok(()),
-    }
+        )))
+    })
 }
