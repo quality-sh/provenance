@@ -196,7 +196,8 @@ fn a_read_in_the_section_waits_for_a_write_on_another_thread() {
             });
             at_pause.recv().unwrap();
             let (read, at_read) = mpsc::channel::<()>();
-            scope.spawn(|| {
+            let released = &released;
+            scope.spawn(move || {
                 // A read that does not wait for the write returns first.
                 let _ = at_read.recv_timeout(std::time::Duration::from_secs(2));
                 released.store(true, Ordering::SeqCst);
