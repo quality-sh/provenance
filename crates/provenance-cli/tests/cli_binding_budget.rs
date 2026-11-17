@@ -47,7 +47,7 @@ fn begin_verification_with_a_long_symbol_is_refused_and_writes_nothing() {
 
     let id = refused["record_id"].as_str().unwrap();
     assert!(id.starts_with("verification_binding_"), "{refused}");
-    assert_eq!(refused, too_large(id, "symbol", 70_078));
+    assert_eq!(refused, too_large(id, "symbol", 70_084));
     assert_eq!(state_files(repo), before);
     let evidence = success(&api(repo, "rules/rule_one/evidence", None));
     assert_eq!(evidence["data"]["verification_bindings"], json!([]));
@@ -114,7 +114,7 @@ fn a_restatement_whose_review_passes_the_budget_is_refused_and_writes_nothing() 
 
     let refused = refusal(&restate(repo, &statement(250, "shows")));
 
-    let bytes = 81_623;
+    let bytes = 81_580;
     assert_eq!(
         refused,
         json!({

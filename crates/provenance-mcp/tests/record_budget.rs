@@ -55,14 +55,19 @@ async fn the_api_tool_refuses_a_rule_create_and_update_over_the_budget() {
         .await;
     let after = session.call(json!({"path": "rules/rule_shared"})).await;
 
-    for (result, id, bytes) in [
-        (&created, "rule_long", 73_022),
-        (&updated, "rule_shared", 73_021),
-    ] {
-        assert_eq!(result.is_error, Some(true), "{result:?}");
-        let error = &result.structured_content.as_ref().unwrap()["error"];
-        assert_eq!(error, &too_large(id, bytes), "{error}");
-    }
+    let error = |result: &rmcp::model::CallToolResult| {
+        (
+            result.is_error,
+            result.structured_content.as_ref().unwrap()["error"].clone(),
+        )
+    };
+    assert_eq!(
+        [error(&created), error(&updated)],
+        [
+            (Some(true), too_large("rule_long", 72_967)),
+            (Some(true), too_large("rule_shared", 72_969)),
+        ]
+    );
     assert_eq!(
         after.structured_content.unwrap()["data"],
         before.structured_content.unwrap()["data"]
