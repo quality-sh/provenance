@@ -75,10 +75,10 @@ fn hint_detail(hint: Option<&str>) -> String {
     hint.map_or_else(String::new, |hint| format!("; {hint}"))
 }
 
-/// The hint of a file below `.provenance/state` that does not parse and that
-/// has no correction of its own: first the correction of the line that the
-/// answer names, then the two procedures that give a state that reads, each
-/// with what it removes.
+/// The hint of a state file that does not parse and has no correction of its own.
+///
+/// It names first the correction of the line that the answer names, then the
+/// two procedures that give a state that reads, each with what it removes.
 pub const STATE_CORRECTIONS: &str = "To correct this fault, correct the line of the file that \
     this answer names, and then do the command again. If you cannot correct that line, use one \
     of these two procedures. \
