@@ -277,11 +277,11 @@ async fn remove_the_revision(repo: &Repository) {
 #[verifies("rule_no_revision_refuses_and_names_materialize", examples)]
 async fn a_read_with_no_revision_and_no_cause_names_materialize() {
     let repo = Repository::new("The shared graph is readable.");
-    read_policy(&repo, "annotate_only");
-    let host = host(&repo, false);
-    let (status, read) = call(&host, "GET", "/requirements/req_shared", None).await;
+    let (status, read) = call(&host(&repo, false), "GET", "/requirements/req_shared", None).await;
     assert_eq!(status, 200, "{read}");
     remove_the_revision(&repo).await;
+    read_policy(&repo, "annotate_only");
+    let host = host(&repo, false);
 
     let (status, refused) = call(&host, "GET", "/requirements/req_shared", None).await;
 
