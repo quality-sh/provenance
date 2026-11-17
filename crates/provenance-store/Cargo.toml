@@ -181,3 +181,7 @@ trybuild.workspace = true
 
 [target.'cfg(windows)'.dev-dependencies]
 windows-sys = { workspace = true, features = ["Win32_System_Diagnostics_ToolHelp", "Win32_System_Threading"] }
+
+[[test]]
+name = "s9wr_swap_probe"
+required-features = ["host", "test-fixture"]
