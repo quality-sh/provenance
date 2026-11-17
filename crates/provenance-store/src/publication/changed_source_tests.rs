@@ -116,3 +116,36 @@ fn a_failed_state_install_and_a_person_change_give_the_whole_state_and_the_refus
 
     assert_refused_with_a_whole_state(&root);
 }
+
+/// The refusal names the action: when the Source file has the content that
+/// the person wants, the person removes the marker, and the next section
+/// entry removes the rest of the write. The state keeps the edit, and the
+/// file of the person stays.
+#[test]
+#[verifies("rule_changed_source_refusal_keeps_a_whole_state", examples)]
+fn the_removal_of_the_marker_that_the_refusal_names_ends_the_write() {
+    let temp = fixture();
+    let root = canonical_root(&temp);
+    stop_in_child(CHILD, &root, "state_file_installed");
+    std::fs::write(root.join("source.txt"), b"person\n").unwrap();
+    let layout = ProvenanceLayout::new(&root);
+    let marker = layout.source_edit_marker_path();
+    let error = with_repository_publication(&layout, |_| Ok(())).unwrap_err();
+    assert!(
+        format!("{error:#}").contains(&format!("remove {marker}, and the next command")),
+        "{error:#}"
+    );
+
+    std::fs::remove_file(&marker).unwrap();
+    with_repository_publication(&layout, |_| Ok(())).unwrap();
+
+    assert_eq!(states(&layout), [AFTER, AFTER]);
+    assert_eq!(std::fs::read(root.join("source.txt")).unwrap(), b"person\n");
+    assert_eq!(
+        std::fs::read_dir(layout.source_edit_transactions_dir())
+            .unwrap()
+            .count(),
+        0
+    );
+    with_repository_publication(&layout, |_| Ok(())).unwrap();
+}

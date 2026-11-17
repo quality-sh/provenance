@@ -19,8 +19,20 @@ use sha2::{Digest as _, Sha256};
 
 #[derive(Debug, thiserror::Error)]
 pub enum SourceEditRecoveryFailure {
-    #[error("source file {file} changed outside the pending source-edit transaction")]
-    ExternalChange { file: Utf8PathBuf },
+    /// The record files have the edit. The person keeps the file or puts
+    /// back its content, and then removes the marker: the next section entry
+    /// removes the rest of the write.
+    #[error(
+        "source file {file} changed outside the pending source-edit transaction. The record \
+         files have the edit. When the file has the content that you want, remove {marker}, and \
+         the next command removes the rest of the write. {backup} can remain with the content \
+         of the file before the edit"
+    )]
+    ExternalChange {
+        file: Utf8PathBuf,
+        marker: Utf8PathBuf,
+        backup: Utf8PathBuf,
+    },
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq)]

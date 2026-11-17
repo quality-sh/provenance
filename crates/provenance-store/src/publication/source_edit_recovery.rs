@@ -140,8 +140,11 @@ fn require_known_target(
 /// The error of a target that a person changed while the marker names a
 /// write: it names the target and the marker.
 fn external_change(layout: &ProvenanceLayout, marker: &SourceEditMarker) -> anyhow::Error {
-    let file = layout.root().join(&marker.target);
-    let change = SourceEditRecoveryFailure::ExternalChange { file };
+    let change = SourceEditRecoveryFailure::ExternalChange {
+        file: layout.root().join(&marker.target),
+        marker: layout.source_edit_marker_path(),
+        backup: artifact(layout, marker, &marker.backup_leaf),
+    };
     removal_failure(
         RemovalStep::Marked,
         &layout.source_edit_marker_path(),

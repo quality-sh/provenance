@@ -123,14 +123,21 @@ fn a_person_change_after_a_failed_removal_of_the_backup_stops_the_section_entry_
     });
 
     let error = crate::write_error::WriteError(entered.unwrap_err());
-    assert_eq!(
-        format!("{:#}", error.0),
-        format!(
-            "end the write that {} names: source file {} changed outside the pending \
-             source-edit transaction",
-            layout.source_edit_marker_path(),
+    let text = format!("{:#}", error.0);
+    let marker = layout.source_edit_marker_path();
+    assert!(
+        text.starts_with(&format!(
+            "end the write that {marker} names: source file {} changed outside the pending \
+             source-edit transaction. The record files have the edit. When the file has the \
+             content that you want, remove {marker}, and the next command removes the rest of \
+             the write. ",
             root.join("source.txt")
-        )
+        )),
+        "{text}"
+    );
+    assert!(
+        text.ends_with(".backup can remain with the content of the file before the edit"),
+        "{text}"
     );
     assert!(matches!(
         error.safe(),
