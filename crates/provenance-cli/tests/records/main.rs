@@ -134,6 +134,8 @@ mod cli_statement_write_gate;
 mod cli_status_request;
 #[path = "../cli_ste_statement_paths.rs"]
 mod cli_ste_statement_paths;
+#[path = "../cli_stored_long_rows.rs"]
+mod cli_stored_long_rows;
 #[path = "../cli_swarm_backtrace_land.rs"]
 mod cli_swarm_backtrace_land;
 #[path = "../cli_swarm_landing_place.rs"]

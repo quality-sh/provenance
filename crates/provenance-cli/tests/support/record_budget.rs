@@ -119,12 +119,41 @@ pub fn refusal(output: &Output) -> Value {
     serde_json::from_str::<Value>(message).unwrap()["error"].clone()
 }
 
-/// The refusal of a row of `bytes` bytes of the record `record_id`.
-pub fn too_large(record_id: &str, bytes: usize) -> Value {
+/// The refusal of a row of `bytes` bytes of the record `record_id`, whose
+/// longest field is `field`.
+pub fn too_large(record_id: &str, field: &str, bytes: usize) -> Value {
     json!({
         "kind": "record_too_large",
         "record_id": record_id,
+        "field": field,
         "bytes": bytes,
-        "limit": BUDGET
+        "limit": BUDGET,
+        "message": format!(
+            "record `{record_id}` uses {bytes} bytes and the limit is {BUDGET} bytes; \
+             make the field `{field}` shorter"
+        )
     })
+}
+
+/// Patches the record at the API `path` with `fields`, guarded by the etag
+/// of its member read. A long value goes on standard input.
+pub fn patch(repo: &Path, path: &str, fields: &Value) -> Output {
+    let read = success(&api(repo, path, None));
+    let etag = read["data"]["edit"]["etag"].as_str().unwrap().to_owned();
+    let mut command = provenance();
+    command
+        .args(["api", path, "--repo", repo.to_str().unwrap()])
+        .args(["--scope", "default", "--method", "patch", "--input", "-"])
+        .args(["--header", &format!("If-Match: {etag}")])
+        .current_dir(repo)
+        .write_stdin(fields.to_string());
+    command.output().unwrap()
+}
+
+/// The bytes of the row of the Rule `id` of `create_rule` without its
+/// description, from the refusal of a create with a long description.
+pub fn rule_row_base(repo: &Path, id: &str) -> usize {
+    let probe = 70_000;
+    let refused = refusal(&create_rule(repo, id, &"x".repeat(probe)));
+    usize::try_from(refused["bytes"].as_u64().unwrap()).unwrap() - probe
 }

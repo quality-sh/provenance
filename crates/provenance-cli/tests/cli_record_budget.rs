@@ -6,17 +6,9 @@ use serde_json::{json, Value};
 use std::path::Path;
 
 use crate::support::record_budget::{
-    api, cli, create_rule, refusal, repository, success, too_large, write, BUDGET,
+    api, cli, create_rule, refusal, repository, rule_row_base, success, too_large, write, BUDGET,
 };
 use crate::support::state_files::state_files;
-
-/// The bytes of the row of the Rule `id` of `create_rule` without its
-/// description, from the refusal of a create with a long description.
-fn rule_row_base(repo: &Path, id: &str) -> usize {
-    let probe = 70_000;
-    let refused = refusal(&create_rule(repo, id, &"x".repeat(probe)));
-    usize::try_from(refused["bytes"].as_u64().unwrap()).unwrap() - probe
-}
 
 #[test]
 #[verifies("rule_writer_refuses_a_row_over_the_record_budget", examples)]
@@ -37,7 +29,11 @@ fn a_rule_with_a_long_description_is_refused_at_create_and_at_update() {
     assert!(created_bytes > 72_900, "{created}");
     assert_eq!(
         created,
-        too_large("rule_long", usize::try_from(created_bytes).unwrap())
+        too_large(
+            "rule_long",
+            "description",
+            usize::try_from(created_bytes).unwrap()
+        )
     );
     assert_eq!(updated["record_id"], "rule_one", "{updated}");
     assert_eq!(updated["limit"], BUDGET);
@@ -89,7 +85,7 @@ fn a_rule_at_the_budget_lands_and_reads_back_and_one_byte_more_is_refused() {
     ));
     let evidence = success(&api(repo, "rules/rule_edge/evidence", None));
 
-    assert_eq!(over, too_large("rule_edge", BUDGET + 1));
+    assert_eq!(over, too_large("rule_edge", "description", BUDGET + 1));
     assert_eq!(unchanged, before);
     assert_eq!(get["record"]["value"]["description"], description.as_str());
     assert_eq!(
