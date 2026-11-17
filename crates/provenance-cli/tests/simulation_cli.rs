@@ -189,7 +189,7 @@ fn stop_probe(probe: &'static str, stopped: Operation, at: u8, landings: &[Landi
         .map(StateKey::as_str)
         .collect();
     if let Some(landed) = landing.filter(|landed| landed.landing == Landing::BeforeInstall) {
-        assert_new_state(&row, &landed.changes, &before, &after, &changed);
+        assert_new_state(row, &landed.changes, &before, &after, &changed);
     } else if one_key && landing.map(|landed| landed.landing) != Some(Landing::BeforeRename) {
         assert!(
             changed.len() == 1 && changed.iter().all(|key| key.contains("/topics/")),
@@ -228,16 +228,16 @@ fn stop_probe(probe: &'static str, stopped: Operation, at: u8, landings: &[Landi
 }
 
 /// The read after a stop between the marker and the install completes the
-/// install: each key of `changes`, the change list of the stopped write, has
+/// install: each key of `stopped`, the change list of the stopped write, has
 /// its new bytes in `after`, and no other key changed from `before`.
 fn assert_new_state(
     row: &str,
-    changes: &BTreeMap<String, Option<Vec<u8>>>,
+    stopped: &BTreeMap<String, Option<Vec<u8>>>,
     before: &BTreeMap<StateKey, Vec<u8>>,
     after: &BTreeMap<StateKey, Vec<u8>>,
     changed: &BTreeSet<&str>,
 ) {
-    let new: BTreeSet<_> = changes
+    let new: BTreeSet<_> = stopped
         .iter()
         .filter(|(key, bytes)| before.get(&StateKey::new(key.as_str()).unwrap()) != bytes.as_ref())
         .map(|(key, _)| key.as_str())
@@ -246,7 +246,7 @@ fn assert_new_state(
         changed, &new,
         "{row}: after the read, the state is not the new state"
     );
-    for (key, bytes) in changes {
+    for (key, bytes) in stopped {
         let key = StateKey::new(key.as_str()).unwrap();
         assert_eq!(after.get(&key), bytes.as_ref(), "{row}: {}", key.as_str());
     }
