@@ -15,7 +15,7 @@ use provenance_macros::verifies;
 
 /// The path of the backup that the marker of the source edit at `root` names,
 /// and the phase of that marker.
-fn marked_backup(layout: &ProvenanceLayout) -> (Utf8PathBuf, String) {
+pub(super) fn marked_backup(layout: &ProvenanceLayout) -> (Utf8PathBuf, String) {
     let marker: serde_json::Value =
         serde_json::from_slice(&std::fs::read(layout.source_edit_marker_path()).unwrap()).unwrap();
     (
@@ -24,7 +24,7 @@ fn marked_backup(layout: &ProvenanceLayout) -> (Utf8PathBuf, String) {
     )
 }
 
-fn backups(root: &Utf8Path) -> Vec<String> {
+pub(super) fn backups(root: &Utf8Path) -> Vec<String> {
     files_named(root, ".source.txt.provenance-", ".backup")
 }
 
