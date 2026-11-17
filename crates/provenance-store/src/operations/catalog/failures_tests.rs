@@ -256,7 +256,7 @@ fn a_store_refusal_inside_a_read_keeps_its_kind_and_status() {
 #[verifies("rule_held_record_file_refusal_names_the_file", examples)]
 fn a_state_file_in_use_names_the_file_and_has_the_status_503() {
     let held = || {
-        anyhow::Error::new(crate::storage::local::StateFileInUse {
+        anyhow::Error::new(crate::write_error::StateFileInUse {
             path: Utf8PathBuf::from("/repo/.provenance/state/scopes/default/rules/rule.jsonl"),
             file: ".provenance/state/scopes/default/rules/rule.jsonl".to_owned(),
             source: std::io::Error::from_raw_os_error(32),

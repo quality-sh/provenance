@@ -240,6 +240,11 @@ pub(crate) fn publish_failure(failure: crate::storage::PublishFailure) -> anyhow
     }
 }
 
+/// The error of a state file that a different process holds, which a read
+/// and a write both answer as `state_file_in_use`.
+#[cfg(feature = "host")]
+pub(crate) use crate::storage::local::StateFileInUse;
+
 const STATE_CHANGED: &str = "The stored state changed after this write read it, so the write saved nothing. Read the records again, then send the write again.";
 
 #[derive(Debug, thiserror::Error)]
@@ -304,7 +309,7 @@ impl WriteError {
         #[cfg(feature = "host")]
         if let Some(held) = error
             .chain()
-            .find_map(|cause| cause.downcast_ref::<crate::storage::local::StateFileInUse>())
+            .find_map(|cause| cause.downcast_ref::<StateFileInUse>())
         {
             return WriteFailure::StateFileInUse {
                 file: held.file.clone(),

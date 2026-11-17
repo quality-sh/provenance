@@ -115,7 +115,8 @@ fn the_install_refuses_a_change_list_with_a_path_outside_the_state() {
 
         let path = layout
             .import_transactions_dir()
-            .join("stopped/changes.json");
+            .join("stopped")
+            .join("changes.json");
         assert_eq!(
             format!("{error:#}"),
             format!("change list {path} names {key}, which is not a state key"),

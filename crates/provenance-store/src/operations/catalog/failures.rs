@@ -144,7 +144,7 @@ impl ReadError {
         #[cfg(feature = "host")]
         if let Some(held) = error
             .chain()
-            .find_map(|cause| cause.downcast_ref::<crate::storage::local::StateFileInUse>())
+            .find_map(|cause| cause.downcast_ref::<crate::write_error::StateFileInUse>())
         {
             return ReadFailure::StateFileInUse {
                 file: held.file.clone(),

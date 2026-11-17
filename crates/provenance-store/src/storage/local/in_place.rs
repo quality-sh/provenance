@@ -121,7 +121,9 @@ fn in_use(live: &ProvenanceLayout, key: &str, error: anyhow::Error) -> anyhow::E
         .and_then(std::io::Error::raw_os_error);
     match code {
         Some(code @ (5 | 32)) if cfg!(windows) => StateFileInUse {
-            path: live.state_dir().join(key),
+            path: key
+                .split('/')
+                .fold(live.state_dir(), |path, part| path.join(part)),
             file: format!(".provenance/state/{key}"),
             source: std::io::Error::from_raw_os_error(code),
         }
