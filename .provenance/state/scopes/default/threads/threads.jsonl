@@ -51,6 +51,7 @@
 {"scope_id":"default","id":"thread_requirement_req_requirement_document_nests_record_lineage","parent":{"node_type":"requirement","node_id":"req_requirement_document_nests_record_lineage"},"status":"active","created_at":1}
 {"scope_id":"default","id":"thread_requirement_req_resolved_badges_disclose_missing_backing","parent":{"node_type":"requirement","node_id":"req_resolved_badges_disclose_missing_backing"},"status":"active","created_at":1}
 {"scope_id":"default","id":"thread_requirement_req_review_page_adds_records","parent":{"node_type":"requirement","node_id":"req_review_page_adds_records"},"status":"active","created_at":1}
+{"scope_id":"default","id":"thread_requirement_req_review_page_replaces_wiki","parent":{"node_type":"requirement","node_id":"req_review_page_replaces_wiki"},"status":"active","created_at":1}
 {"scope_id":"default","id":"thread_requirement_req_shaping_turn_recovery","parent":{"node_type":"requirement","node_id":"req_shaping_turn_recovery"},"status":"active","created_at":1}
 {"scope_id":"default","id":"thread_requirement_req_shared_view_edits_sources_and_records","parent":{"node_type":"requirement","node_id":"req_shared_view_edits_sources_and_records"},"status":"active","created_at":1}
 {"scope_id":"default","id":"thread_requirement_req_source_refinement_for_product_work","parent":{"node_type":"requirement","node_id":"req_source_refinement_for_product_work"},"status":"active","created_at":1}
