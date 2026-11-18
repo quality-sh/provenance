@@ -110,7 +110,8 @@ it without the chat. Each part of a record holds one kind of content:
 
 - **Statement**: one obligation in one plain clause.
 - **Description**: how the product behaves, in the present tense: its states, what moves it
-  between them, what the person sees, and one example. Write it for a builder
+  between them, what the person sees, and an example only when it shows a case that
+  the other sentences do not. Write it for a builder
   who has not read the thread.
 - **Thread**: who said what. The person's words, the brief's words, and what changed go
   here, never in a description.
@@ -438,7 +439,7 @@ provenance res_<stable_slug> create --type resolution --scope <scope> \
 
 provenance req_<child_slug> create --type requirement --scope <scope> \
   --statement "<what the product does because of the decision>" \
-  --description "<states, what changes them, what the person sees, one example>" \
+  --description "<states, what changes them, what the person sees, an example only for a case the text does not give>" \
   --refines <relevant_requirement_id> \
   --spawned-by res_<stable_slug> \
   --status discovery \
@@ -448,7 +449,7 @@ provenance rule_<stable_slug> create --type rule --scope <scope> \
   --requirement-id req_<child_slug> \
   --resolution-id res_<stable_slug> \
   --statement "<atomic behavioural obligation, in one clause>" \
-  --description "<trigger, result, what the person sees, one example>" \
+  --description "<trigger, result, what the person sees, an example only for a case the text does not give>" \
   --severity high \
   --status review \
   --format json

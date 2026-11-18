@@ -121,7 +121,8 @@ fn init_guidance_says_what_a_description_holds() {
     assert!(
         prose.contains(
             "A Requirement or Rule description says how the product behaves, in the present \
-             tense: its states, what changes them, what the person sees, and one example."
+             tense: its states, what changes them, what the person sees, and an example only \
+             when it shows a case that the other sentences do not."
         ),
         "{agents}"
     );

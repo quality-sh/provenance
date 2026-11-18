@@ -32,7 +32,8 @@ fn shaping_guidance_makes_descriptions_state_behaviour_not_history() {
     assert!(
         prose.contains(
             "how the product behaves, in the present tense: its states, what moves it between \
-             them, what the person sees, and one example."
+             them, what the person sees, and an example only when it shows a case that the other \
+             sentences do not."
         ),
         "{shaping}"
     );
@@ -79,7 +80,10 @@ fn shaping_guidance_makes_descriptions_state_behaviour_not_history() {
         "{writing}"
     );
     assert!(
-        prose.contains("what the person sees, and one example. Write it for a builder"),
+        prose.contains(
+            "what the person sees, and an example only when it shows a case that the other \
+             sentences do not. Write it for a builder"
+        ),
         "{writing}"
     );
     assert!(prose.contains("Description as minutes — bad:"), "{writing}");

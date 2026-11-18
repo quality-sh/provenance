@@ -68,7 +68,8 @@ you've overpacked it — a climb-test failure in a long coat. Name the decision 
 statement and put the behaviour in `--description`.
 
 A description says how the product behaves, in the present tense: its states, what moves it
-between them, what the person sees, and one example. Write it for a builder who
+between them, what the person sees, and an example only when it shows a case that the
+other sentences do not. Write it for a builder who
 has not read the conversation. It does not retell the brief, does not say who confirmed
 what, and does not list what remains to be shaped. History goes on the record's thread;
 unknowns go in a Question. One closing `Open:` line may name them. For other record

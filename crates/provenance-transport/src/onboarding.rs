@@ -12,8 +12,9 @@ it in the same change.
 - Use the `provenance-grounded-writing` skill before you write or change a
   Requirement or Rule statement.
 - A Requirement or Rule description says how the product behaves, in the present
-  tense: its states, what changes them, what the person sees, and one example.
-  History goes on the record's thread. Unknowns go in a Question.
+  tense: its states, what changes them, what the person sees, and an example
+  only when it shows a case that the other sentences do not. History goes on the
+  record's thread. Unknowns go in a Question.
 - Before a graph write, run
   `{command} check --statement "<statement>" --format json`. A clean report covers only the
   ASD-STE100 Issue 9 checks that Provenance implements. It does not prove full
