@@ -1,5 +1,6 @@
 {"scope_id":"default","id":"top_req_create_an_end_to_end_product_research_to_ux","requirement_id":"req_create_an_end_to_end_product_research_to","title":"UX","status":"open","links":[]}
 {"scope_id":"default","id":"topic_agents_md_injection","requirement_id":"req_consuming_repo_agents_md_block","title":"AGENTS.md injection block delivery","status":"closed","links":[]}
+{"scope_id":"default","id":"topic_canonical_thread_import","requirement_id":"req_canonical_active_thread","title":"Thread check in a scope import","status":"open","links":[{"target_type":"rule","target_id":"rule_thread_siblings_archived"}]}
 {"scope_id":"default","id":"topic_change_test_selection","requirement_id":"req_change_names_verifying_tests","title":"Test selection from a change","status":"open","links":[]}
 {"scope_id":"default","id":"topic_cli_mcp_command_placement","requirement_id":"req_cli_mcp_shared_grammar","title":"Placement of the CLI commands and MCP tools","status":"open","links":[{"target_type":"source","target_id":"provenance-b0ms-rpi-plan"}]}
 {"scope_id":"default","id":"topic_contradiction_req_state_merges_without_humans","requirement_id":"req_state_merges_without_humans","title":"Requirement req_state_merges_without_humans contradicts requirement req_edge_writes_validated","status":"explored","links":[]}
