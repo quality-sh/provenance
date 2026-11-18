@@ -1,5 +1,5 @@
-use super::subscribers::Subscribers;
-use notify::{Event, RecommendedWatcher, RecursiveMode, Watcher};
+use super::{file_events::FileEvents, subscribers::Subscribers};
+use notify::{RecommendedWatcher, RecursiveMode, Watcher};
 use provenance_store::{
     cache::ProjectionFamily,
     layout::ProvenanceLayout,
@@ -8,49 +8,20 @@ use provenance_store::{
     review_changes::{ReviewStateCapture, ReviewStateSnapshot},
     state_store::StateStore,
 };
-use std::sync::{
-    atomic::{AtomicBool, Ordering},
-    Arc, Mutex,
-};
-use tokio::sync::{mpsc, watch, Notify};
+use std::sync::{Arc, Mutex};
 
 pub(super) struct Observation {
     repository: Repository,
     layout: ProvenanceLayout,
     watcher: Arc<Mutex<RecommendedWatcher>>,
-    receiver: mpsc::Receiver<notify::Result<Event>>,
-    lost: Arc<AtomicBool>,
-    wake: Arc<Notify>,
-}
-
-#[derive(Default)]
-struct Notice {
-    reattach: bool,
-    lost: bool,
+    events: FileEvents,
 }
 
 impl Observation {
     pub fn new(repository: Repository) -> anyhow::Result<Self> {
         let layout = repository.layout().clone();
-        let (sender, receiver) = mpsc::channel(256);
-        let lost = Arc::new(AtomicBool::new(false));
-        let wake = Arc::new(Notify::new());
-        let callback_layout = layout.clone();
-        let callback_lost = lost.clone();
-        let callback_wake = wake.clone();
-        let mut watcher = notify::recommended_watcher(move |event: notify::Result<Event>| {
-            if let Ok(event) = &event {
-                if !event.need_rescan()
-                    && (event.kind.is_access() || !relevant(event, &callback_layout))
-                {
-                    return;
-                }
-            }
-            if sender.try_send(event).is_err() {
-                callback_lost.store(true, Ordering::Release);
-                callback_wake.notify_one();
-            }
-        })?;
+        let (handler, events) = FileEvents::new(layout.clone());
+        let mut watcher = notify::recommended_watcher(handler)?;
         watcher.watch(
             layout.provenance_dir().as_std_path(),
             RecursiveMode::NonRecursive,
@@ -60,9 +31,7 @@ impl Observation {
             repository,
             layout,
             watcher: Arc::new(Mutex::new(watcher)),
-            receiver,
-            lost,
-            wake,
+            events,
         })
     }
 
@@ -123,7 +92,7 @@ impl Observation {
     ) {
         let mut stopped = subscribers.stopped();
         loop {
-            let Some(notice) = self.next(&mut stopped).await else {
+            let Some(notice) = self.events.next(&mut stopped).await else {
                 break;
             };
             if notice.lost {
@@ -136,6 +105,9 @@ impl Observation {
                 Ok(current)
             } else {
                 baseline = None;
+                if self.events.settle(&mut stopped).await.lost {
+                    reset_reason = Some("file-events-lost");
+                }
                 reset_reason.get_or_insert("observation-recovered");
                 self.read(true).await
             };
@@ -158,44 +130,6 @@ impl Observation {
             }
         }
     }
-
-    async fn next(&mut self, stopped: &mut watch::Receiver<bool>) -> Option<Notice> {
-        if *stopped.borrow() {
-            return None;
-        }
-        let first = tokio::select! {
-            event = self.receiver.recv() => event?,
-            () = self.wake.notified() => {
-                return Some(Notice { lost: self.lost.swap(false, Ordering::AcqRel), reattach: true });
-            }
-            _ = stopped.changed() => return None,
-        };
-        let mut notice = self.classify(first);
-        while let Ok(event) = self.receiver.try_recv() {
-            let next = self.classify(event);
-            notice.reattach |= next.reattach;
-            notice.lost |= next.lost;
-        }
-        notice.lost |= self.lost.swap(false, Ordering::AcqRel);
-        Some(notice)
-    }
-
-    fn classify(&self, event: notify::Result<Event>) -> Notice {
-        match event {
-            Ok(event) => Notice {
-                reattach: event.paths.iter().any(|path| {
-                    event_path(path) == event_path(self.layout.state_dir().as_std_path())
-                        || event_path(path)
-                            == event_path(self.layout.provenance_dir().as_std_path())
-                }),
-                lost: event.need_rescan(),
-            },
-            Err(_) => Notice {
-                lost: true,
-                reattach: true,
-            },
-        }
-    }
 }
 
 fn require_regular_file(path: &std::path::Path) -> anyhow::Result<()> {
@@ -209,32 +143,4 @@ fn require_regular_file(path: &std::path::Path) -> anyhow::Result<()> {
         Err(error) => return Err(error.into()),
     }
     Ok(())
-}
-
-fn relevant(event: &Event, layout: &ProvenanceLayout) -> bool {
-    event.paths.iter().any(|path| {
-        let path = event_path(path);
-        path.starts_with(event_path(layout.state_dir().as_std_path()).as_ref())
-            || path == event_path(layout.provenance_dir().join("settings.json").as_std_path())
-            || path == event_path(layout.provenance_dir().as_std_path())
-    })
-}
-
-#[cfg(not(windows))]
-const fn event_path(path: &std::path::Path) -> std::borrow::Cow<'_, std::path::Path> {
-    std::borrow::Cow::Borrowed(path)
-}
-
-#[cfg(windows)]
-fn event_path(path: &std::path::Path) -> std::borrow::Cow<'_, std::path::Path> {
-    if let Some(value) = path.to_str() {
-        // Compare drive and UNC paths without their verbatim prefix.
-        if let Some(value) = value.strip_prefix(r"\\?\UNC\") {
-            return std::borrow::Cow::Owned(std::path::PathBuf::from(format!(r"\\{value}")));
-        }
-        if let Some(value) = value.strip_prefix(r"\\?\") {
-            return std::borrow::Cow::Borrowed(std::path::Path::new(value));
-        }
-    }
-    std::borrow::Cow::Borrowed(path)
 }

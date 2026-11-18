@@ -1,5 +1,6 @@
 mod delivery;
 mod envelope;
+mod file_events;
 pub(super) mod frames;
 mod navigation;
 pub(super) mod output;

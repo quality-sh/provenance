@@ -61,6 +61,8 @@ mod cli_review_reuse;
 mod cli_review_reviewer;
 #[path = "../cli_review_session.rs"]
 mod cli_review_session;
+#[path = "../cli_review_settled_read.rs"]
+mod cli_review_settled_read;
 #[path = "../cli_review_startup.rs"]
 mod cli_review_startup;
 #[path = "../cli_review_submission_characterization.rs"]
