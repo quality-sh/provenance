@@ -6,7 +6,9 @@ use crate::operations::reader::{MovedUnit as NativeMovedUnit, ReadRefusal};
 use crate::stale::git::GitRefusal;
 use camino::Utf8PathBuf;
 use provenance_core::protocol::failure::{InvalidInputReason, OperationFailure};
-use provenance_core::protocol::read_failure::{CacheCloseStage, MovedUnit, ReadFailure};
+use provenance_core::protocol::read_failure::{
+    CacheCloseStage, MovedUnit, ReadFailure, MATERIALIZE,
+};
 use provenance_macros::verifies;
 use std::time::Duration;
 
@@ -60,9 +62,13 @@ fn a_native_refusal_publishes_its_closed_failure_and_status() {
         (
             read_error(ReadRefusal::NoProjection {
                 database: database(),
-                because: String::new(),
+                cause: None,
             }),
-            ReadFailure::NoProjection,
+            ReadFailure::NoProjection {
+                location: None,
+                message: None,
+                hint: Some(MATERIALIZE.into()),
+            },
             409,
         ),
         (

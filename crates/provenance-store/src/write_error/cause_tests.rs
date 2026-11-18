@@ -54,8 +54,8 @@ fn a_path_below_the_repository_is_relative_to_the_root() {
 }
 
 /// An absolute path that is not below the repository root is only its file
-/// name. With no known root, a path that holds a space keeps the part after
-/// the space, but no part of it is absolute.
+/// name, also when a directory name in it holds a space or the path comes
+/// after a URI scheme such as `file:`.
 #[test]
 #[verifies("rule_unclassified_refusal_gives_cause", examples)]
 fn a_path_outside_the_repository_is_only_its_file_name() {
@@ -83,8 +83,19 @@ fn a_path_outside_the_repository_is_only_its_file_name() {
         (
             None,
             r"load: \\?\C:\Users\Jo Smith\r\.provenance\state\x.jsonl line 1",
-            r"load: Jo Smith\r\.provenance\state\x.jsonl line 1",
+            "load: x.jsonl line 1",
         ),
+        (
+            Some("/home/u/r"),
+            "lock /home/Jo Smith/.cache/x.lock: denied",
+            "lock x.lock: denied",
+        ),
+        (
+            Some("/home/u/r"),
+            "open file:/home/u/x.db?mode=ro: denied; open file:///var/y.db",
+            "open file:x.db?mode=ro: denied; open file:y.db",
+        ),
+        (Some("/home/u/r"), "path:/var/z.db", "path:z.db"),
         (
             None,
             "see https://example.com/a and a / b",

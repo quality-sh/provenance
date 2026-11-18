@@ -1,7 +1,7 @@
 //! A get of a record over state that does not parse gives the same result on the CLI and
 //! on a spawned `provenance mcp`. When the read database holds a stored revision, the get
 //! gives the record at that serial with its edit field and the freshness warning. When it
-//! holds no revision, the get refuses and names `provenance materialize`. When the record
+//! holds no revision, the get refuses with the line and its correction. When the record
 //! changed after the stored serial, an update with the `ETag` of the get refuses.
 
 use provenance_core::protocol::read_failure::STATE_CORRECTIONS;
@@ -62,16 +62,13 @@ pub async fn mcp_refusal(server: &Server, tool: &str, arguments: Value) -> Value
 }
 
 /// `refusal` is the refusal of a read with no stored revision whose catch-up failed with
-/// `cause`: its message names the read database, `provenance materialize` and the cause.
+/// `cause`: its message names the read database and the cause. It does not name
+/// `provenance materialize`, which refuses with the same cause.
 pub fn assert_no_revision_refusal(refusal: &Value, cause: &str) {
     let message = refusal["error"]["message"].as_str().unwrap();
     let database = message
         .strip_prefix("no projection revision in ")
-        .and_then(|rest| {
-            rest.strip_suffix(&format!(
-                "; run `provenance materialize` (catch-up failed: {cause})"
-            ))
-        })
+        .and_then(|rest| rest.strip_suffix(&format!(" (catch-up failed: {cause})")))
         .unwrap_or_else(|| panic!("{message}"));
     assert!(database.ends_with("provenance.db"), "{message}");
     assert_eq!(
@@ -260,4 +257,27 @@ async fn a_get_over_a_bad_line_with_no_stored_revision_refuses_on_each_interface
     let arguments = json!({"target":RULE,"review_link":true});
     assert_eq!(mcp_refusal(&server, "get", arguments).await, refused);
     server.close().await;
+}
+
+/// With no stored revision, a get whose catch-up stops at a record file that is not UTF-8
+/// refuses with the cause. The native error names the file by its absolute path; the CLI
+/// text gives it relative to the repository. No Rule states the paths in this cause.
+#[test]
+fn a_get_with_no_stored_revision_gives_the_path_of_the_cause_relative_to_the_repository() {
+    let directory = tempfile::tempdir().unwrap();
+    let repo = directory.path().to_str().unwrap().to_owned();
+    chain(&repo);
+    let file = directory
+        .path()
+        .join(".provenance/state")
+        .join(REQUIREMENTS);
+    let mut opened = std::fs::OpenOptions::new().append(true).open(file).unwrap();
+    opened.write_all(b"\xff\n").unwrap();
+    std::fs::remove_dir_all(directory.path().join(".provenance/cache")).unwrap();
+
+    let cause = format!(".provenance/state/{REQUIREMENTS}: the file is not UTF-8: invalid data");
+    assert_no_revision_refusal(
+        &cli_refusal(&repo, &[RULE, "get"]),
+        &format!("read {cause}"),
+    );
 }
