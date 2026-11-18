@@ -39,6 +39,10 @@
 {"scope_id":"default","id":"thread_requirement_req_change_names_verifying_tests","parent":{"node_type":"requirement","node_id":"req_change_names_verifying_tests"},"status":"active","created_at":1}
 {"scope_id":"default","id":"thread_requirement_req_cli_mcp_shared_grammar","parent":{"node_type":"requirement","node_id":"req_cli_mcp_shared_grammar"},"status":"active","created_at":1}
 {"scope_id":"default","id":"thread_requirement_req_default_wiki_output_is_ignored","parent":{"node_type":"requirement","node_id":"req_default_wiki_output_is_ignored"},"status":"active","created_at":1}
+{"scope_id":"default","id":"thread_requirement_req_generated_sdk_local_hosted_api","parent":{"node_type":"requirement","node_id":"req_generated_sdk_local_hosted_api"},"status":"active","created_at":1}
+{"scope_id":"default","id":"thread_requirement_req_local_http_operation_access","parent":{"node_type":"requirement","node_id":"req_local_http_operation_access"},"status":"active","created_at":1}
+{"scope_id":"default","id":"thread_requirement_req_porcelain_general_access","parent":{"node_type":"requirement","node_id":"req_porcelain_general_access"},"status":"active","created_at":1}
+{"scope_id":"default","id":"thread_requirement_req_porcelain_read_only_sql","parent":{"node_type":"requirement","node_id":"req_porcelain_read_only_sql"},"status":"active","created_at":1}
 {"scope_id":"default","id":"thread_requirement_req_porcelain_target_first_records","parent":{"node_type":"requirement","node_id":"req_porcelain_target_first_records"},"status":"active","created_at":1}
 {"scope_id":"default","id":"thread_requirement_req_pr_report_deterministic_generation","parent":{"node_type":"requirement","node_id":"req_pr_report_deterministic_generation"},"status":"active","created_at":1}
 {"scope_id":"default","id":"thread_requirement_req_proposal_state_from_dispositions","parent":{"node_type":"requirement","node_id":"req_proposal_state_from_dispositions"},"status":"active","created_at":1}
