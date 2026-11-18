@@ -104,18 +104,16 @@ provenance <question_id> claim --scope <scope> \
     Include one exact `suggested_artifacts` entry for every competing proposal. Each
     entry's `proposal_id`, key, and type must match its proposal definition.
 
-4. **Mark the Question `blocked_on_human`** and post the Proposal IDs to a Discussion.
-   A Question update needs the current etag from `review.edit.etag` of the review view:
+4. **Mark the Question `blocked_on_human`.** The status tells the next session that the
+   Question waits for the person. Phase 2 finds the competing Proposals by their `target`
+   with `provenance api proposals`. Do not post a status note to a Discussion. A Question
+   update needs the current etag from `review.edit.etag` of the review view:
 
     ```sh
     provenance <question_id> --view review --scope <scope> --format json
     provenance <question_id> update --scope <scope> \
       --if-match <etag> \
       --status blocked_on_human
-
-    provenance <question_id> discuss --scope <scope> \
-      --role assistant \
-      --body "BLOCKED-ON-HUMAN: fork tournament landed. Competing proposals: prop_<...>, prop_<...>. Awaiting disposal."
     ```
 
 5. **END THE SESSION.** The fork spawn is a two-phase boundary. It is a stop condition in the
@@ -216,8 +214,7 @@ each Proposal.
 - **Question status and method are first-class** — use `<question_id> update --if-match
   <etag> --status blocked_on_human` for the phase boundary, and `<question_id> update
   --if-match <etag> --resolution-method prototype` if an existing Question has the wrong method. Every
-  Question update carries the current `review.edit.etag` from `<question_id> --view review`. Keep the
-  Discussion Message because the Proposal IDs are not Question link targets.
+  Question update carries the current `review.edit.etag` from `<question_id> --view review`.
 - **Proposal definitions are immutable and always `proposed`.** Before disposition, create an
   assertion only when the exact proposal suggestion has positive owned evidence and no
   contested claim or blocking adjudication. `dispositions` is the sole authority for
