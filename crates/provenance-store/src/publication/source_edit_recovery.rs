@@ -1,9 +1,7 @@
-use super::{
-    source_edit::{
-        backup, complete_install, write_source_edit_marker, PreparedSourceRecord, SourceEditMarker,
-        SourceEditPhase, SourceEditRecoveryFailure, PREPARED_SOURCE_RECORD, REPLACEMENT,
-    },
-    sync_directory,
+use super::source_edit::{
+    artifact, backup, complete_install, write_source_edit_marker, PreparedSourceRecord,
+    SourceEditMarker, SourceEditPhase, SourceEditRecoveryFailure, PREPARED_SOURCE_RECORD,
+    REPLACEMENT,
 };
 use crate::{
     layout::ProvenanceLayout,
@@ -11,11 +9,12 @@ use crate::{
         validate_recovery_artifact_leaf, HeldRepositoryFile, RepositoryFileRefusal, RepositoryFiles,
     },
     storage::local::{
-        contained_transaction, end_marked_write, read_marker, removal_failure, remove_leftovers,
-        remove_unpublished, RemovalStep, TransactionKind,
+        contained_transaction, end_marked_write, install_in_place, read_marker, removal_failure,
+        remove_leftovers, remove_unpublished, RemovalStep, TransactionKind,
     },
 };
 use camino::Utf8Path;
+use provenance_macros::rule;
 use sha2::{Digest as _, Sha256};
 
 /// Completes the source edit that the marker names, and then removes the
@@ -57,11 +56,11 @@ fn recover_marked_source_edit(
     if marker.phase != SourceEditPhase::FileInstalled {
         let transaction =
             contained_transaction(layout, TransactionKind::SourceEdit, &marker.transaction_dir)?;
-        validate_recovery_tree(&transaction)?;
         let replacement = read_replacement(&transaction, marker.after_digest)?;
-        let (current, held) = recover_target(layout, marker)
-            .and_then(|held| Ok((require_known_target(layout, &held, marker)?, held)))
-            .map_err(|refusal| refuse_with_live_state(layout, &transaction, marker, refusal))?;
+        let held = recover_target(layout, marker)
+            .map_err(|refusal| refuse_with_state(layout, &transaction, marker, refusal))?;
+        let current = require_known_target(layout, &held, marker)
+            .map_err(|refusal| refuse_with_state(layout, &transaction, marker, refusal))?;
         complete_state(layout, &transaction, marker)?;
         if current == marker.before_digest {
             install_replacement(layout, &held, marker, &replacement)?;
@@ -72,21 +71,19 @@ fn recover_marked_source_edit(
     end_marked_write(layout, TransactionKind::SourceEdit, &marker.transaction_dir)
 }
 
-/// Gives the refusal for the target with a state at the live path. A stop in
-/// the roll back of a failed file install can leave no live state, and the
-/// refusal holds until a person acts on the target, so the recovery first
-/// puts the state after the edit at an empty live path. That is the
-/// direction of each recovery before `FileInstalled`. A failure of that step
-/// is the error, because the next entry gives the refusal again.
-fn refuse_with_live_state(
+/// Gives the refusal for a target that a person changed, after the state
+/// install completes. The state does not depend on the working-tree file,
+/// so the recovery completes it in the direction of each recovery before
+/// `FileInstalled`: thus the refusal, which holds until a person acts on
+/// the target, never stands on a state that is installed in part. A failure
+/// of that install is the error, and the next entry tries it again.
+#[rule("rule_changed_source_refusal_keeps_a_whole_state")]
+fn refuse_with_state(
     layout: &ProvenanceLayout,
     transaction: &Utf8Path,
     marker: &mut SourceEditMarker,
     refusal: anyhow::Error,
 ) -> anyhow::Error {
-    if layout.state_dir().exists() {
-        return refusal;
-    }
     match complete_state(layout, transaction, marker) {
         Ok(()) => refusal,
         Err(error) => error,
@@ -144,8 +141,11 @@ fn require_known_target(
 /// The error of a target that a person changed while the marker names a
 /// write: it names the target and the marker.
 fn external_change(layout: &ProvenanceLayout, marker: &SourceEditMarker) -> anyhow::Error {
-    let file = layout.root().join(&marker.target);
-    let change = SourceEditRecoveryFailure::ExternalChange { file };
+    let change = SourceEditRecoveryFailure::ExternalChange {
+        file: layout.root().join(&marker.target),
+        marker: layout.source_edit_marker_path(),
+        backup: artifact(layout, marker, &marker.backup_leaf),
+    };
     removal_failure(
         RemovalStep::Marked,
         &layout.source_edit_marker_path(),
@@ -187,81 +187,20 @@ fn validate_marker_leaves(marker: &SourceEditMarker) -> anyhow::Result<()> {
     Ok(())
 }
 
-/// Puts the live state in the backup and the staged state at the live path,
-/// and moves the marker to `StateInstalled`. Each move looks at the disk and
-/// not at the phase: the roll back of a failed file install moves the state
-/// back under the `StateInstalled` marker, and a stop in that roll back can
-/// leave no state at the live path.
+/// Installs the state of a write whose marker is `Installing`, and then
+/// records it. A stopped install of the state goes on from where it stopped.
 fn complete_state(
     layout: &ProvenanceLayout,
     transaction: &Utf8Path,
     marker: &mut SourceEditMarker,
 ) -> anyhow::Result<()> {
-    let staged = ProvenanceLayout::new(transaction.join("staged-repo"));
-    complete_backup_phase(layout, transaction, &staged, marker)?;
-    complete_install_phase(layout, &staged, marker)
-}
-
-/// Moves the live state to the backup when no backup exists and a staged
-/// state can take its place, so that the move never leaves the live path
-/// with no state to install.
-fn complete_backup_phase(
-    layout: &ProvenanceLayout,
-    transaction: &Utf8Path,
-    staged: &ProvenanceLayout,
-    marker: &mut SourceEditMarker,
-) -> anyhow::Result<()> {
-    let backup = transaction.join("backup-state");
-    if layout.state_dir().exists() && !backup.exists() && staged.state_dir().exists() {
-        std::fs::rename(layout.state_dir(), &backup).map_err(|error| {
-            crate::refusal::fault!("move live state {} to backup: {error}", layout.state_dir())
-        })?;
-        crate::test_probes::at("state_after_backup_rename")?;
-        sync_directory(transaction)?;
-        sync_directory(&layout.provenance_dir())?;
+    if marker.phase == SourceEditPhase::Installing {
+        install_in_place(layout, transaction)?;
+        marker.phase = SourceEditPhase::StateInstalled;
+        write_source_edit_marker(layout, marker)?;
+        crate::test_probes::at("source_edit_state_installed")?;
     }
-    if marker.phase != SourceEditPhase::Prepared {
-        return Ok(());
-    }
-    marker.phase = SourceEditPhase::BackupCreated;
-    write_source_edit_marker(layout, marker)?;
-    crate::test_probes::at("source_edit_backup_created")
-}
-
-fn complete_install_phase(
-    layout: &ProvenanceLayout,
-    staged: &ProvenanceLayout,
-    marker: &mut SourceEditMarker,
-) -> anyhow::Result<()> {
-    if staged.state_dir().exists() {
-        install_staged_state(layout, staged)?;
-    } else {
-        crate::write_error::ensure!(
-            Fault,
-            layout.state_dir().exists(),
-            "source-edit recovery found no state"
-        );
-    }
-    if marker.phase != SourceEditPhase::BackupCreated {
-        return Ok(());
-    }
-    marker.phase = SourceEditPhase::StateInstalled;
-    write_source_edit_marker(layout, marker)?;
-    crate::test_probes::at("source_edit_state_installed")
-}
-
-fn install_staged_state(
-    layout: &ProvenanceLayout,
-    staged: &ProvenanceLayout,
-) -> anyhow::Result<()> {
-    crate::write_error::ensure!(
-        Fault,
-        !layout.state_dir().exists(),
-        "source-edit recovery found both staged and live state"
-    );
-    std::fs::rename(staged.state_dir(), layout.state_dir())?;
-    crate::test_probes::at("state_after_install_rename")?;
-    sync_directory(&layout.provenance_dir())
+    Ok(())
 }
 
 /// Removes the prepared working-tree file that the record of `transaction`
@@ -304,41 +243,6 @@ fn read_if_present(path: &Utf8Path) -> anyhow::Result<Option<Vec<u8>>> {
         Ok(_) => std::fs::read(path).map(Some),
     };
     read().map_err(|error| removal_failure(RemovalStep::Read, path, error))
-}
-
-fn validate_recovery_tree(transaction: &Utf8Path) -> anyhow::Result<()> {
-    let staged_repo = transaction.join("staged-repo");
-    require_real_directory(&staged_repo)?;
-    let staged = ProvenanceLayout::new(staged_repo);
-    require_real_directory(&staged.provenance_dir())?;
-    require_real_directory_if_present(&staged.state_dir())?;
-    require_real_directory_if_present(&transaction.join("backup-state"))?;
-    Ok(())
-}
-
-fn require_real_directory(path: &Utf8Path) -> anyhow::Result<()> {
-    let metadata = std::fs::symlink_metadata(path)?;
-    crate::write_error::ensure!(
-        Fault,
-        metadata.is_dir() && !metadata.file_type().is_symlink(),
-        "source-edit recovery path is not a real directory: {path}"
-    );
-    Ok(())
-}
-
-fn require_real_directory_if_present(path: &Utf8Path) -> anyhow::Result<()> {
-    match std::fs::symlink_metadata(path) {
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
-        Err(error) => Err(error.into()),
-        Ok(metadata) => {
-            crate::write_error::ensure!(
-                Fault,
-                metadata.is_dir() && !metadata.file_type().is_symlink(),
-                "source-edit recovery path is not a real directory: {path}"
-            );
-            Ok(())
-        }
-    }
 }
 
 fn read_regular_file(path: &Utf8Path) -> anyhow::Result<Vec<u8>> {

@@ -79,6 +79,42 @@ fn a_per_key_put_syncs_the_parent_of_a_new_directory() -> anyhow::Result<()> {
     Ok(())
 }
 
+/// A whole set installs each put with a rename onto the live key and then a
+/// sync of its directory. The failed sync comes after the marker, so the
+/// write succeeds, and the marker stays for the next section entry. The
+/// directory closes after the write staged its files, because the write
+/// reads each directory of the state before its marker.
+#[test]
+fn a_whole_set_install_syncs_the_directory_after_each_rename() -> anyhow::Result<()> {
+    let temp = tempfile::tempdir()?;
+    let layout = layout_in(&temp);
+    let path = layout.state_dir().join(KEY);
+    let directory = parent(&path)?;
+    std::fs::create_dir_all(&directory)?;
+    std::fs::write(&path, b"old")?;
+    let other = "scopes/a/requirements/req.jsonl";
+    let writes = WriteSet::new(Atomicity::WholeSet)
+        .put(StateKey::new(KEY)?, b"new".to_vec())
+        .put(StateKey::new(other)?, b"other".to_vec());
+    let closed = std::rc::Rc::new(std::cell::RefCell::new(None));
+    let held = std::rc::Rc::clone(&closed);
+    let staged = directory.clone();
+    crate::test_probes::arm("state_prepared", move || {
+        held.borrow_mut().replace(close(&staged, Closed::Reads));
+        Ok(())
+    });
+
+    let result = publish(&layout, writes);
+    crate::test_probes::disarm("state_prepared");
+    drop(closed.borrow_mut().take());
+
+    result?.map_err(|error| anyhow::anyhow!("{error}"))?;
+    assert_eq!(std::fs::read(&path)?, b"new");
+    assert_eq!(std::fs::read_dir(&directory)?.count(), 1);
+    assert!(layout.publication_marker_path().is_file());
+    Ok(())
+}
+
 #[test]
 fn a_jsonl_file_write_syncs_the_directory_after_the_rename() -> anyhow::Result<()> {
     let temp = tempfile::tempdir()?;
@@ -114,7 +150,7 @@ fn a_publication_marker_write_syncs_the_cache_directory() -> anyhow::Result<()> 
     std::fs::create_dir_all(&transaction)?;
 
     let closed = close(&cache, Closed::Reads);
-    let result = write_publication_marker(&layout, &transaction, PublicationPhase::Prepared);
+    let result = write_publication_marker(&layout, &transaction, PublicationPhase::Installing);
     drop(closed);
 
     let Err(error) = result else {
@@ -123,7 +159,7 @@ fn a_publication_marker_write_syncs_the_cache_directory() -> anyhow::Result<()> 
     assert_eq!(format!("{error:#}"), sync_failed(&cache));
     let marker: serde_json::Value =
         serde_json::from_slice(&std::fs::read(layout.publication_marker_path())?)?;
-    assert_eq!(marker["phase"], "prepared");
+    assert_eq!(marker["phase"], "installing");
     Ok(())
 }
 

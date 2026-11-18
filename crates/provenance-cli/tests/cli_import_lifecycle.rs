@@ -10,5 +10,7 @@ mod modern_lifecycle;
 mod publication_recovery;
 #[path = "cli_import_lifecycle/shipped_legacy.rs"]
 mod shipped_legacy;
+#[path = "cli_import_lifecycle/state_links.rs"]
+mod state_links;
 #[path = "cli_import_lifecycle/support.rs"]
 mod support;

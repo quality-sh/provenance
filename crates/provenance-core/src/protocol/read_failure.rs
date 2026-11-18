@@ -63,6 +63,11 @@ pub enum ReadFailure {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         hint: Option<String>,
     },
+    #[error(
+        "a different process has the state file {file} open and does not let other processes \
+         replace it: close the file in that process, and then send the call again"
+    )]
+    StateFileInUse { file: String },
     /// A read failure of no known kind. `cause` is the display chain of the
     /// native error. A path below a state directory in it is relative to that
     /// directory.
@@ -256,7 +261,10 @@ impl ReadFailure {
             Self::ResourceNotFound => 404,
             Self::ReadFailed { .. } | Self::InvalidStateFile { .. } => 500,
             Self::FileAccessDenied => 403,
-            Self::FileUnavailable | Self::GitUnavailable | Self::CacheCloseTimedOut { .. } => 503,
+            Self::FileUnavailable
+            | Self::GitUnavailable
+            | Self::CacheCloseTimedOut { .. }
+            | Self::StateFileInUse { .. } => 503,
             _ => 409,
         }
     }

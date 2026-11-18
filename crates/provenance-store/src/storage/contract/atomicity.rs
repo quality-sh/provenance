@@ -3,7 +3,8 @@
 //! that puts and deletes one key is refused.
 
 use super::{
-    expected, key, publish, read, Atomicity, Harness, PublishFailure, WriteSet, A, B, C, X,
+    expected, key, publish, read, Atomicity, Harness, PublishFailure, StateView, WriteSet, A, B, C,
+    X,
 };
 
 /// A per-key set with no base lands its puts and deletes.
@@ -87,20 +88,56 @@ pub fn a_two_key_whole_set_lands_both_keys<H: Harness>(mut harness: H) {
     assert_eq!(read(&harness).entries(), &expected(after));
 }
 
-/// A whole set of several keys that fails partway rolls back: no key lands.
+/// A whole set of several keys that fails at one key is never seen in part.
 ///
-/// The local adapter lands the set on a copy of the state directory, so a
-/// key that fails leaves the live directory as it was. Another adapter
-/// must give the same result: when one key of the set fails, no key of
-/// the set lands.
-pub fn a_failed_whole_set_lands_no_key<H: Harness>(mut harness: H) {
-    harness.seed(&[("manifest.json", b"{}")]);
+/// The adapter refuses the set with no key changed, lands it, or reports
+/// that it started with an unknown outcome. Each read in the section of the
+/// write gives the state before the set or the whole set, or fails. When
+/// the cause of the failure is gone, the next section gives the state
+/// before a refused set, the whole state of a set that landed, and one of
+/// the two for a started set, the same that a read in the section gave.
+/// Thus no read sees the set in part, and the set is never left in part.
+///
+/// The local adapter refuses the set before its marker when the live entry
+/// of a key is not a file. On Windows, a file that a different process holds
+/// makes the install fail after the marker: the write succeeds, a read in
+/// its section completes the install first or fails, and the next section
+/// entry completes it.
+pub fn a_failed_whole_set_is_never_seen_in_part<H: Harness>(mut harness: H) {
+    harness.seed(&[("manifest.json", b"{}"), (B, b"old")]);
     harness.break_key(B);
-    let before = read(&harness);
+    let before = read(&harness).into_entries();
     let writes = WriteSet::new(Atomicity::WholeSet)
         .put(key(A), b"a".to_vec())
         .put(key(B), b"b".to_vec())
         .put(key(C), b"c".to_vec());
-    assert!(publish(&harness, writes).is_err());
-    assert_eq!(read(&harness), before);
+    let (landed, seen) =
+        harness.with_storage(|storage| (storage.publish(writes), storage.read_view()));
+    let seen = seen.ok().map(StateView::into_entries);
+    let mut whole = before.clone();
+    whole.extend(expected(&[(A, b"a"), (B, b"b"), (C, b"c")]));
+    let allowed = match landed {
+        Err(PublishFailure::Refused(_)) => vec![&before],
+        Ok(()) => vec![&whole],
+        Err(PublishFailure::Started(_)) => vec![&before, &whole],
+        Err(PublishFailure::BaseMoved { .. }) => {
+            panic!("a set with no base is not refused for its base")
+        }
+    };
+    if let Some(seen) = &seen {
+        assert!(
+            allowed.contains(&seen),
+            "a read in the section sees the set in part"
+        );
+    }
+    harness.repair_key(B);
+    let after = read(&harness).into_entries();
+    assert!(
+        allowed.contains(&&after),
+        "the next section leaves the set in part"
+    );
+    assert!(
+        seen.is_none_or(|seen| seen == after),
+        "the next section changes what a read in the section saw"
+    );
 }

@@ -170,10 +170,12 @@ fn a_failure_at_each_probe_of_the_publication_leaves_all_of_the_landing_or_none(
         test_probes::crash_at(phase);
         let result = land(&fixture.root);
         test_probes::disarm(phase);
-        assert!(
-            result.is_err(),
-            "{phase}: the probe error reaches the caller"
+        let marked = phase != "state_prepared";
+        assert_eq!(
+            result.is_ok(),
+            marked,
+            "{phase}: only an error before the marker reaches the caller"
         );
-        assert_reopened(&fixture, phase == "state_published", phase);
+        assert_reopened(&fixture, marked, phase);
     }
 }

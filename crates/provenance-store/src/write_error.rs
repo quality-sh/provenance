@@ -99,6 +99,11 @@ pub enum WriteFailure {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         hint: Option<String>,
     },
+    // `StateFileInUse` has the same wire shape as the read failure of the
+    // same name, so it carries no doc comment either.
+    StateFileInUse {
+        file: String,
+    },
     /// A write failure of no known kind. `cause` is the display chain of the
     /// native error. A path below the repository in it is relative to the
     /// repository root, and any other absolute path is only its file name.
@@ -235,6 +240,11 @@ pub(crate) fn publish_failure(failure: crate::storage::PublishFailure) -> anyhow
     }
 }
 
+/// The error of a state file that a different process holds, which a read
+/// and a write both answer as `state_file_in_use`.
+#[cfg(feature = "host")]
+pub(crate) use crate::storage::local::StateFileInUse;
+
 const STATE_CHANGED: &str = "The stored state changed after this write read it, so the write saved nothing. Read the records again, then send the write again.";
 
 #[derive(Debug, thiserror::Error)]
@@ -296,6 +306,15 @@ impl WriteError {
                 _ => WriteFailure::FileUnavailable,
             };
         }
+        #[cfg(feature = "host")]
+        if let Some(held) = error
+            .chain()
+            .find_map(|cause| cause.downcast_ref::<StateFileInUse>())
+        {
+            return WriteFailure::StateFileInUse {
+                file: held.file.clone(),
+            };
+        }
         UnparsableStateFile::find(error.as_ref())
             .map_or_else(|| self.write_failed(), WriteFailure::from)
     }
@@ -332,7 +351,7 @@ impl WriteError {
         match self.safe() {
             WriteFailure::WriteFailed { .. } | WriteFailure::InvalidStateFile { .. } => 500,
             WriteFailure::FileAccessDenied | WriteFailure::AccessDenied { .. } => 403,
-            WriteFailure::FileUnavailable => 503,
+            WriteFailure::FileUnavailable | WriteFailure::StateFileInUse { .. } => 503,
             WriteFailure::ResourceNotFound => 404,
             WriteFailure::RecordOwnershipConflict { .. }
             | WriteFailure::AlreadyExists

@@ -7,10 +7,10 @@ use crate::storage::local::LocalStateStorage;
 use camino::Utf8Path;
 
 pub struct Local {
-    /// The files of broken keys, held open until the harness drops, before
-    /// the temporary directory is removed.
+    /// The files of broken keys, held open until the harness drops or
+    /// repairs the key, before the temporary directory is removed.
     #[cfg(windows)]
-    held: Vec<std::fs::File>,
+    held: Vec<(String, std::fs::File)>,
     _temp: tempfile::TempDir,
     pub layout: ProvenanceLayout,
     storage: LocalStateStorage,
@@ -42,15 +42,15 @@ impl Harness for Local {
             .unwrap()
     }
 
-    /// A directory in the place of the file makes its rename fail, and the
-    /// view leaves the key out. On Unix, a symbolic link in the directory
-    /// also makes a copy of the state directory fail, so a set that copies
-    /// the stored keys fails too.
+    /// On Linux and macOS, the harness puts a directory with a file and a
+    /// link in the place of the key. A write cannot replace it, so a set
+    /// that changes the key is refused before its marker, and the view
+    /// refuses the link.
     ///
     /// On Windows, the harness holds the file of a stored key open with a
-    /// share mode that permits reads only. A write, a remove or a rename of
-    /// that file then fails, and so does a rename of a directory above it,
-    /// but a read succeeds and the view keeps the key.
+    /// share mode that permits reads only. A replace or a removal of that
+    /// file then fails after the marker of a whole set, but a read succeeds
+    /// and the view keeps the key.
     fn break_key(&mut self, key: &str) {
         let path = self.layout.state_dir().join(key);
         #[cfg(windows)]
@@ -62,7 +62,7 @@ impl Harness for Local {
                 .share_mode(FILE_SHARE_READ)
                 .open(&path)
                 .unwrap();
-            self.held.push(file);
+            self.held.push((key.to_owned(), file));
             return;
         }
         if path.is_file() {
@@ -72,5 +72,15 @@ impl Harness for Local {
         std::fs::write(path.join("keep"), b"").unwrap();
         #[cfg(unix)]
         std::os::unix::fs::symlink(path.join("keep"), path.join("link")).unwrap();
+    }
+
+    /// Closes the held file of `key`, or removes the directory in its place.
+    fn repair_key(&mut self, key: &str) {
+        #[cfg(windows)]
+        self.held.retain(|(held, _)| held != key);
+        let path = self.layout.state_dir().join(key);
+        if path.is_dir() {
+            std::fs::remove_dir_all(&path).unwrap();
+        }
     }
 }

@@ -119,7 +119,7 @@ fn enter_section<R>(
 /// paths. With no file system to resolve the root against, the key is the
 /// lock path of the layout as given.
 #[cfg_attr(not(feature = "host"), allow(clippy::unnecessary_wraps))]
-fn publication_lock_identity(layout: &ProvenanceLayout) -> anyhow::Result<String> {
+pub(crate) fn publication_lock_identity(layout: &ProvenanceLayout) -> anyhow::Result<String> {
     #[cfg(not(feature = "host"))]
     return Ok(layout.publication_lock_path().to_string());
     #[cfg(feature = "host")]
@@ -295,7 +295,7 @@ impl crate::state_store::StateStore {
     /// that has no base, and applies the set to the view once it lands. Any
     /// other store publishes through its adapter, and gives it a set of one
     /// key with the atomicity of each key: one key lands whole either way,
-    /// and a per-key set needs no copy of the state.
+    /// and a per-key set needs no transaction.
     #[rule("rule_store_sends_the_smallest_write_set")]
     fn publish_set(&self, writes: WriteSet) -> anyhow::Result<()> {
         if let Some(stage) = self.stage() {

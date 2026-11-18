@@ -170,12 +170,6 @@ fn a_write_in_the_body_reaches_live_state_only_when_the_stage_returns() {
                 .iter()
                 .any(|source| source.id.as_str() == "source_staged"));
             assert_eq!(state_bytes(&repository), before, "live bytes before return");
-            for transaction in transactions(&repository) {
-                assert!(
-                    !transaction.join("staged-repo/.provenance/cache").exists(),
-                    "the staged copy takes no lock and gets no cache"
-                );
-            }
             Ok(())
         })
         .unwrap();
@@ -335,10 +329,6 @@ fn workers_of_one_stage_run_their_sections_one_at_a_time() {
         })
         .unwrap();
     assert!(has_source(&repository, "source_after_workers"));
-    for transaction in transactions(&repository) {
-        let staged = ProvenanceLayout::new(transaction.join("staged-repo"));
-        assert!(!staged.publication_lock_path().exists());
-    }
 }
 
 #[test]

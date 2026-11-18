@@ -90,16 +90,19 @@ impl Repository {
     ///
     /// The root is canonicalized, the initialized-graph gate runs once, the
     /// manifest must declare the scope, and the settings file and the
-    /// project dictionary are read once.
+    /// project dictionary are read once, in the section of the gate.
     #[rule("rule_repository_reads_settings_once_at_open")]
     #[cfg(feature = "host")]
     pub fn open(root: impl AsRef<Path>, scope: &str) -> Result<Self, OpenFailure> {
         let root = canonical_root(root.as_ref())?;
         let layout = ProvenanceLayout::new(root.clone());
-        let manifest = with_initialized_graph(&layout, Ok).map_err(gate_failure)?;
+        let (manifest, settings, dictionary) = with_initialized_graph(&layout, |manifest| {
+            let (settings, dictionary) = read_open_files(&layout)?;
+            Ok((manifest, settings, dictionary))
+        })
+        .map_err(gate_failure)?;
         let scope = declared_scope(&manifest, scope)?.id.clone();
-        let settings = Settings::load(&layout)?;
-        let dictionary = crate::dictionary_reference::load_project_dictionary(&layout);
+        let settings = settings?;
         let history = Arc::new(crate::state_store::GitHistory::new(root.clone()));
         Ok(Self::with_parts(
             RepositoryIdentity::new(root, scope, settings)
@@ -431,6 +434,25 @@ fn canonical_root(path: &Path) -> Result<Utf8PathBuf, OpenFailure> {
         .map_err(|_| invalid(std::io::Error::other("is not UTF-8")))
 }
 
+/// The settings file and the project dictionary of `layout`, read in the
+/// publication section that the caller holds, so that a write cannot
+/// replace them during the read.
+#[rule("rule_open_reads_settings_in_the_section")]
+#[cfg(feature = "host")]
+fn read_open_files(
+    layout: &ProvenanceLayout,
+) -> anyhow::Result<(
+    Result<Settings, crate::settings::SettingsError>,
+    Option<crate::dictionary_reference::ProjectDictionary>,
+)> {
+    crate::test_probes::at("open_settings_read")?;
+    let settings = Settings::load(layout);
+    Ok((
+        settings,
+        crate::dictionary_reference::load_project_dictionary(layout),
+    ))
+}
+
 #[cfg(feature = "host")]
 fn gate_failure(error: anyhow::Error) -> OpenFailure {
     if error.downcast_ref::<GraphNotInitialized>().is_some() {
@@ -442,6 +464,8 @@ fn gate_failure(error: anyhow::Error) -> OpenFailure {
 
 #[cfg(all(test, feature = "host"))]
 mod one_key_stop_tests;
+#[cfg(all(test, feature = "host"))]
+mod open_section_tests;
 #[cfg(test)]
 #[cfg(feature = "host")]
 mod stage_recovery_tests;

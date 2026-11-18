@@ -115,9 +115,9 @@ fn assert_write_failed(answer: &Value, status: u16, cause: &str) {
     assert!(text.starts_with(cause), "{answer}");
 }
 
-/// The local adapter lands a whole set on a copy of the state directory in
-/// the cache. No Rule states the answer when it cannot make that copy, so
-/// the test has no Rule binding.
+/// The local adapter stages the files of a whole set in a transaction in
+/// the cache. No Rule states the answer when it cannot make that
+/// transaction, so the test has no Rule binding.
 #[test]
 fn a_refused_set_on_local_disk_leaves_no_binding_no_run_row_and_an_open_review() {
     let root = tempfile::tempdir().unwrap();

@@ -19,15 +19,28 @@ use sha2::{Digest as _, Sha256};
 
 #[derive(Debug, thiserror::Error)]
 pub enum SourceEditRecoveryFailure {
-    #[error("source file {file} changed outside the pending source-edit transaction")]
-    ExternalChange { file: Utf8PathBuf },
+    /// The record files have the edit. The person keeps the file or puts
+    /// back its content, and then removes the marker: the next section entry
+    /// removes the rest of the write.
+    #[error(
+        "source file {file} changed outside the pending source-edit transaction. The record \
+         files have the edit. When the file has the content that you want, remove {marker}, and \
+         the next command removes the rest of the write. {backup} can remain with the content \
+         of the file before the edit"
+    )]
+    ExternalChange {
+        file: Utf8PathBuf,
+        marker: Utf8PathBuf,
+        backup: Utf8PathBuf,
+    },
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub(super) enum SourceEditPhase {
-    Prepared,
-    BackupCreated,
+    /// The change list and the prepared file are complete: recovery installs
+    /// the file and the state.
+    Installing,
     StateInstalled,
     FileInstalled,
 }
@@ -129,7 +142,7 @@ impl WholeSetHook for SourceEditPublication {
         crate::test_probes::at("source_edit_temp_prepared")?;
         let marker = SourceEditMarker {
             transaction_dir: transaction.to_owned(),
-            phase: SourceEditPhase::Prepared,
+            phase: SourceEditPhase::Installing,
             target: held.relative().to_owned(),
             target_identity: held.identity().clone(),
             before_digest: held.digest(),
@@ -145,19 +158,6 @@ impl WholeSetHook for SourceEditPublication {
         crate::test_probes::at("source_edit_prepared")
     }
 
-    fn backup_created(
-        &mut self,
-        live: &ProvenanceLayout,
-        transaction: &Utf8Path,
-    ) -> anyhow::Result<()> {
-        sync_directory(transaction)?;
-        sync_directory(&live.provenance_dir())?;
-        let marker = self.marker.as_mut().expect("source-edit marker");
-        marker.phase = SourceEditPhase::BackupCreated;
-        write_source_edit_marker(live, marker)?;
-        crate::test_probes::at("source_edit_backup_created")
-    }
-
     fn state_installed(&mut self, live: &ProvenanceLayout) -> anyhow::Result<()> {
         let marker = self.marker.as_mut().expect("source-edit marker");
         marker.phase = SourceEditPhase::StateInstalled;
@@ -165,9 +165,10 @@ impl WholeSetHook for SourceEditPublication {
         crate::test_probes::at("source_edit_state_installed")
     }
 
-    /// A failed rename back of the target leaves the initial file in the
-    /// backup, so the write keeps its marker, and the next section entry
-    /// puts the backup back and completes the install.
+    /// A refusal with the target in its initial place lets the write end
+    /// with no change. When the rename back of the target fails, the initial
+    /// file stays in the backup: the write succeeds and keeps its marker, and
+    /// the next section entry puts the backup back and completes the install.
     fn install_file(
         &mut self,
         live: &ProvenanceLayout,
@@ -253,7 +254,11 @@ pub(super) fn complete_install(
 }
 
 /// The path of the working-tree file `leaf` next to the target of `marker`.
-fn artifact(layout: &ProvenanceLayout, marker: &SourceEditMarker, leaf: &str) -> Utf8PathBuf {
+pub(super) fn artifact(
+    layout: &ProvenanceLayout,
+    marker: &SourceEditMarker,
+    leaf: &str,
+) -> Utf8PathBuf {
     layout.root().join(&marker.target).with_file_name(leaf)
 }
 

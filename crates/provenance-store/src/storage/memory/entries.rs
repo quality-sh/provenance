@@ -45,4 +45,10 @@ impl Entries {
     pub(super) fn break_key(&mut self, key: StateKey) {
         self.broken.insert(key);
     }
+
+    /// Lets later writes of `key` land again.
+    #[cfg(test)]
+    pub(super) fn repair_key(&mut self, key: &StateKey) {
+        self.broken.remove(key);
+    }
 }

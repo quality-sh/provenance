@@ -22,6 +22,9 @@ pub trait Harness {
     /// it. A case calls it for more than one key in turn, and each key stays
     /// broken. Call it after the last seed.
     fn break_key(&mut self, key: &str);
+    /// Removes the cause of the failure that [`Self::break_key`] gave `key`,
+    /// so that a later write of `key` can land.
+    fn repair_key(&mut self, key: &str);
 }
 
 fn publish<H: Harness>(harness: &H, writes: WriteSet) -> Result<(), PublishFailure> {
@@ -69,7 +72,7 @@ mod one_key;
 mod view;
 
 pub use atomicity::{
-    a_failed_per_key_set_leaves_a_landed_prefix, a_failed_whole_set_lands_no_key,
+    a_failed_per_key_set_leaves_a_landed_prefix, a_failed_whole_set_is_never_seen_in_part,
     a_per_key_set_that_fails_at_its_first_key_is_refused, a_two_key_whole_set_lands_both_keys,
     publish_lands_puts_and_deletes, publish_refuses_a_put_and_delete_of_one_key,
 };
