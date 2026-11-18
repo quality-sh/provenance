@@ -55,9 +55,11 @@ async fn full_scan_rows(inner: &mut Transaction) -> anyhow::Result<u64> {
     let mut handle = file.0.lock_handle().await?;
     let connection = crate::sqlite_ffi::connection(handle.as_raw_handle());
     let mut rows = 0;
-    // SAFETY: the locked handle keeps every other use off the connection
-    // and its statements while this loop runs, and each statement pointer
-    // comes from `sqlite3_next_stmt` on that connection.
+    // SAFETY: `connection` is the sqlite3 pointer of the sqlx handle, and the
+    // declarations in `sqlite_ffi` match sqlite3.h. The locked handle keeps
+    // every other use off the connection and its statements while this loop
+    // runs, and each statement pointer comes from `sqlite3_next_stmt` on that
+    // connection.
     let mut statement =
         unsafe { crate::sqlite_ffi::sqlite3_next_stmt(connection, std::ptr::null_mut()) };
     while !statement.is_null() {

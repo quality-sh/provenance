@@ -74,6 +74,9 @@ fn sqlite_real_bytes(real: f64) -> anyhow::Result<usize> {
     let mut statement = std::ptr::null_mut();
     // Use the same REAL-to-BLOB conversion as the supported read. Formatting
     // the number in Rust, or even with SQLite printf, can give another size.
+    // SAFETY: the declarations in `sqlite_ffi` match sqlite3.h. Each call
+    // gets a pointer that SQLite wrote in this function, and each check
+    // returns before a call that would use a pointer SQLite did not set.
     let result = unsafe {
         (|| {
             crate::write_error::ensure!(
@@ -106,6 +109,8 @@ fn sqlite_real_bytes(real: f64) -> anyhow::Result<usize> {
             Ok(usize::try_from(sqlite::sqlite3_column_bytes(statement, 0))?)
         })()
     };
+    // SAFETY: each pointer is null or came from SQLite in this function, and
+    // nothing uses it after this block.
     unsafe {
         if !statement.is_null() {
             sqlite::sqlite3_finalize(statement);
