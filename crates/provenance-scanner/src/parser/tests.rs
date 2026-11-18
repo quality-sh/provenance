@@ -20,64 +20,10 @@ fn parses_shared_fields_across_multiple_provenance_rules() {
 }
 
 #[test]
-fn parses_statesman_marker_as_legacy_alias() {
-    let parsed = parse_annotations("@statesman rule: SCHADS-PAY-001");
-
-    assert_eq!(parsed.annotations.len(), 1);
-    assert_eq!(parsed.annotations[0].rule, "SCHADS-PAY-001");
-}
-
-/// The legacy marker still parses; it just says so on the way through.
-#[test]
-fn statesman_marker_warns_but_keeps_the_annotation() {
-    let parsed = parse_annotations("@statesman rule: SCHADS-PAY-001");
-
-    assert_eq!(parsed.annotations.len(), 1);
-    assert_eq!(
-        parsed.warnings,
-        vec![ParseWarning {
-            line: 1,
-            message: "@statesman is the legacy marker; use @provenance".to_string(),
-        }]
-    );
-}
-
-#[test]
-fn statesman_marker_warns_once_per_comment_block() {
-    let parsed = parse_annotations(
-        r"
-        @statesman name: Payroll thresholds
-        @statesman rule: SCHADS-PAY-001
-        @statesman rule: SCHADS-PAY-002
-        ",
-    );
-
-    assert_eq!(parsed.annotations.len(), 2);
-    assert_eq!(parsed.warnings.len(), 1);
-    assert_eq!(parsed.warnings[0].line, 2);
-}
-
-#[test]
-fn provenance_marker_draws_no_legacy_warning() {
+fn provenance_marker_draws_no_warning() {
     let parsed = parse_annotations("@provenance rule: SCHADS-PAY-001");
 
     assert_eq!(parsed.warnings, [] as [ParseWarning; 0]);
-}
-
-/// A block that mixes markers is warned about once, at the first legacy
-/// line, whichever marker opened the block.
-#[test]
-fn mixed_markers_warn_once_at_the_legacy_line() {
-    let parsed = parse_annotations(
-        r"
-        @provenance rule: SCHADS-PAY-001
-        @statesman rule: SCHADS-PAY-002
-        ",
-    );
-
-    assert_eq!(parsed.annotations.len(), 2);
-    assert_eq!(parsed.warnings.len(), 1);
-    assert_eq!(parsed.warnings[0].line, 3);
 }
 
 #[test]

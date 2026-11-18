@@ -10,10 +10,9 @@ nightly-only. The Cargo unstable reference requires `-Z bindeps`;
 the tracking issue is rust-lang/cargo#9096. Checked against
 doc.rust-lang.org/cargo/reference/unstable.html on 2026-08-24.
 
-Consequence: the design's transport rationale stands. The Rust SDK
-links provenance-core and provenance-store in process; nothing in the
-implementation uses artifact dependencies
-(`rule_rust_plan_rechecks_artifact_dependencies`).
+Result: the transport reason of the design is correct. The Rust SDK
+links provenance-core and provenance-store in the same process. The
+implementation does not use artifact dependencies.
 
 ## CO-R5-10: const string comparison and assertion
 
@@ -21,8 +20,8 @@ Finding: a `const fn` that compares `&str` bytes with a `while` loop,
 asserted with `assert!` in a `const` item, compiles and holds on
 stable Rust (verified on rustc 1.98.0, 2026-08-24).
 
-Consequence: the `provenance_spec!` identifier-to-key link uses this
-form: `provenance_sdk::identifier_matches_key` is const, and the macro
-pins the link with a const assertion. The compile-fail fixture
-`spec_key_mismatch.rs` keeps the refusal pinned
-(`rule_rust_plan_rechecks_const_string_asserts`).
+Result: the `provenance_spec!` macro uses this form to connect the
+identifier to the spec key. `provenance_sdk::identifier_matches_key` is
+a `const fn`, and the macro uses it in a const assertion. The
+compile-fail fixture `spec_key_mismatch.rs` shows that the compiler
+refuses an identifier that is different from the key.

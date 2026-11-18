@@ -1,8 +1,5 @@
-//! What the parser noticed while reading the source reaches the coverage
-//! report.
-//!
-//! The scan collected these all along and then dropped them, so a repository
-//! still on the legacy Statesman marker was never told to move off it.
+//! The coverage report gives the warnings that the parser makes when it reads
+//! the source files.
 
 use serde_json::Value;
 
@@ -55,10 +52,11 @@ fn warnings(report: &Value) -> &Vec<Value> {
     report["warnings"].as_array().unwrap()
 }
 
-// Implementation aid: keeps parser warnings in the coverage report.
+// Implementation aid: keeps malformed directive warnings, with their file and
+// line, in the report.
 #[test]
-fn a_legacy_statesman_block_warns_that_the_marker_is_deprecated() {
-    let report = scan("// @statesman rule: rule_overtime\nfn pays_overtime() {}\n");
+fn a_malformed_directive_surfaces_with_its_location() {
+    let report = scan("// @provenance rule: rule_overtime\n// @provenance nonsense\nfn f() {}\n");
 
     let warnings = warnings(&report);
     assert_eq!(warnings.len(), 1, "{report}");
@@ -66,7 +64,7 @@ fn a_legacy_statesman_block_warns_that_the_marker_is_deprecated() {
         warnings[0]["message"]
             .as_str()
             .unwrap()
-            .contains("legacy marker"),
+            .contains("malformed directive: expected `key: value`"),
         "{report}"
     );
     assert!(
@@ -79,28 +77,12 @@ fn a_legacy_statesman_block_warns_that_the_marker_is_deprecated() {
     assert!(warnings[0]["line"].is_u64(), "{report}");
 }
 
-// Implementation aid: keeps malformed directive warnings in the report.
-#[test]
-fn a_malformed_directive_surfaces_too() {
-    let report = scan("// @provenance rule: rule_overtime\n// @provenance nonsense\nfn f() {}\n");
-
-    let warnings = warnings(&report);
-    assert_eq!(warnings.len(), 1, "{report}");
-    assert!(
-        warnings[0]["message"]
-            .as_str()
-            .unwrap()
-            .contains("malformed directive: expected `key: value`"),
-        "{report}"
-    );
-}
-
 /// A parse warning is about the file, not about a rule: a directive too
 /// malformed to read never says which rule it meant.
 // Implementation aid: keeps parse warnings free of a Rule id.
 #[test]
 fn a_parse_warning_names_no_rule() {
-    let report = scan("// @statesman rule: rule_overtime\nfn pays_overtime() {}\n");
+    let report = scan("// @provenance rule: rule_overtime\n// @provenance nonsense\nfn f() {}\n");
 
     assert_eq!(warnings(&report)[0]["rule_id"], "", "{report}");
 }

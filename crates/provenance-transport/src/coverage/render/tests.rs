@@ -215,15 +215,14 @@ fn a_warning_about_no_rule_is_rendered_without_an_empty_id() {
             rule_id: String::new(),
             file_path: Some(Utf8PathBuf::from("src/payroll.rs")),
             line: Some(4),
-            message: "legacy marker `@statesman` is deprecated".to_string(),
+            message: "unknown field `owner`".to_string(),
             binding_finding: false,
         }],
     );
 
     let markdown = render_coverage(ReportFormat::Markdown, &report).unwrap();
 
-    assert!(markdown
-        .contains("- Warning in `src/payroll.rs`:4: legacy marker `@statesman` is deprecated"));
+    assert!(markdown.contains("- Warning in `src/payroll.rs`:4: unknown field `owner`"));
     assert!(!markdown.contains("``"));
 }
 

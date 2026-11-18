@@ -3,11 +3,11 @@
 //! The CLI SDK operations moved into provenance-store; every #[rule] id
 //! that moved must still have a binding site the scanner discovers.
 
-use provenance_macros::verifies;
 use provenance_scanner::{source_sites, SourceSiteRole};
 
+// Implementation aid: checks the source files of this workspace. No live Rule
+// states this check.
 #[test]
-#[verifies("rule_rust_binding_scan_follows_store_relocation", examples)]
 fn moved_rule_ids_keep_discovered_binding_sites() {
     let workspace = camino::Utf8PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("../..")

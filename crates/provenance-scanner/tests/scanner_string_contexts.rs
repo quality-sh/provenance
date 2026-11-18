@@ -9,16 +9,14 @@ use provenance_scanner::{scan_file, Language};
 
 #[test]
 fn ignores_comment_markers_inside_same_line_string_literals() {
-    for marker in ["@provenance", "@statesman"] {
-        let source = format!(r#"const FIXTURE: &str = "// {marker} rule: string_only";"#);
-        let scan = scan_file(Utf8Path::new("fixture.rs"), Language::Rust, &source);
+    let source = r#"const FIXTURE: &str = "// @provenance rule: string_only";"#;
+    let scan = scan_file(Utf8Path::new("fixture.rs"), Language::Rust, source);
 
-        assert_eq!(
-            scan.annotations,
-            [] as [provenance_scanner::AnnotationLocation; 0]
-        );
-        assert_eq!(scan.warnings, [] as [provenance_scanner::ParseWarning; 0]);
-    }
+    assert_eq!(
+        scan.annotations,
+        [] as [provenance_scanner::AnnotationLocation; 0]
+    );
+    assert_eq!(scan.warnings, [] as [provenance_scanner::ParseWarning; 0]);
 }
 
 #[test]

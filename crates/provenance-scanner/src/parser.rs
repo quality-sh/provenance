@@ -2,13 +2,7 @@ use std::{fmt, str::FromStr};
 
 use crate::string_context::marker_is_inside_quoted_region;
 
-pub(crate) const PRIMARY_ANNOTATION_MARKER: &str = "@provenance";
-const LEGACY_ANNOTATION_MARKER: &str = "@statesman";
-const ANNOTATION_MARKERS: [&str; 2] = [PRIMARY_ANNOTATION_MARKER, LEGACY_ANNOTATION_MARKER];
-
-/// Said once per comment block, at the first legacy marker: repeating it on
-/// every line of a ten-line block would bury the annotations it sits beside.
-const LEGACY_MARKER_WARNING: &str = "@statesman is the legacy marker; use @provenance";
+const ANNOTATION_MARKER: &str = "@provenance";
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, serde::Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -87,52 +81,27 @@ pub struct ParseResult {
     pub warnings: Vec<ParseWarning>,
 }
 
-/// Which markers a comment block used.
-#[derive(Default)]
-struct MarkerLog {
-    first: Option<&'static str>,
-    warned_legacy: bool,
-}
-
-impl MarkerLog {
-    /// Records a marker and hands back the deprecation warning owed for it.
-    ///
-    /// Only the first legacy marker in a block earns one. The block still
-    /// parses either way; the warning is the only thing deprecation costs.
-    fn record(&mut self, marker: &'static str, line: usize) -> Option<ParseWarning> {
-        self.first.get_or_insert(marker);
-        if marker != LEGACY_ANNOTATION_MARKER || self.warned_legacy {
-            return None;
-        }
-        self.warned_legacy = true;
-        Some(ParseWarning {
-            line,
-            message: LEGACY_MARKER_WARNING.to_string(),
-        })
-    }
-}
-
 pub fn parse_annotations(comment_text: &str) -> ParseResult {
     let mut block = Block::default();
-    let mut markers = MarkerLog::default();
+    let mut found_marker = false;
 
     for (line_idx, raw_line) in comment_text.lines().enumerate() {
         let line = line_idx + 1;
         let stripped = strip_comment_prefix(raw_line);
-        let Some((marker, after_marker)) = split_annotation_marker(stripped) else {
+        let Some(after_marker) = split_annotation_marker(stripped) else {
             continue;
         };
-        block.warnings.extend(markers.record(marker, line));
-        match split_directive(marker, after_marker) {
+        found_marker = true;
+        match split_directive(after_marker) {
             Ok((key, value)) => block.apply(&key, value, line),
             Err(message) => block.warn(line, message),
         }
     }
 
-    if let Some(marker) = markers.first.filter(|_| block.annotations.is_empty()) {
+    if found_marker && block.annotations.is_empty() {
         block.warn(
             0,
-            format!("found {marker} directives but no rule annotations"),
+            format!("found {ANNOTATION_MARKER} directives but no rule annotations"),
         );
     }
 
@@ -144,10 +113,10 @@ pub fn parse_annotations(comment_text: &str) -> ParseResult {
 
 /// Splits the `key: value` text after a marker. The key is trimmed and
 /// lowercase, and the value is trimmed. Only `tags` can have an empty value.
-fn split_directive<'a>(marker: &str, after_marker: &'a str) -> Result<(String, &'a str), String> {
+fn split_directive(after_marker: &str) -> Result<(String, &str), String> {
     let Some((key, value)) = after_marker.split_once(':') else {
         return Err(format!(
-            "malformed directive: expected `key: value` after {marker}"
+            "malformed directive: expected `key: value` after {ANNOTATION_MARKER}"
         ));
     };
     let key = key.trim().to_ascii_lowercase();
@@ -278,30 +247,20 @@ fn parse_confidence(value: &str) -> Result<f64, ConfidenceRejection> {
     }
 }
 
+/// The position of the first marker in the line that is not in a quoted region.
 pub(crate) fn annotation_marker_position(line: &str) -> Option<usize> {
-    annotation_marker(line).map(|(_, position)| position)
+    annotation_marker_positions(line)
+        .find(|position| !marker_is_inside_quoted_region(line, *position))
 }
 
 pub(crate) fn annotation_marker_positions(line: &str) -> impl Iterator<Item = usize> + '_ {
-    ANNOTATION_MARKERS
-        .iter()
-        .flat_map(|marker| line.match_indices(marker).map(|(position, _)| position))
+    line.match_indices(ANNOTATION_MARKER)
+        .map(|(position, _)| position)
 }
 
-fn split_annotation_marker(line: &str) -> Option<(&'static str, &str)> {
-    let (marker, position) = annotation_marker(line)?;
-    Some((marker, line[position + marker.len()..].trim()))
-}
-
-fn annotation_marker(line: &str) -> Option<(&'static str, usize)> {
-    ANNOTATION_MARKERS
-        .iter()
-        .flat_map(|marker| {
-            line.match_indices(marker)
-                .filter(|(position, _)| !marker_is_inside_quoted_region(line, *position))
-                .map(|(position, _)| (*marker, position))
-        })
-        .min_by_key(|(_, position)| *position)
+fn split_annotation_marker(line: &str) -> Option<&str> {
+    let position = annotation_marker_position(line)?;
+    Some(line[position + ANNOTATION_MARKER.len()..].trim())
 }
 
 fn strip_comment_prefix(line: &str) -> &str {
