@@ -118,8 +118,11 @@
 {"scope_id":"default","id":"thread_rule_rule_review_writes_change_only_record_files","parent":{"node_type":"rule","node_id":"rule_review_writes_change_only_record_files"},"status":"active","created_at":1}
 {"scope_id":"default","id":"thread_rule_rule_scan_cut_is_deterministic","parent":{"node_type":"rule","node_id":"rule_scan_cut_is_deterministic"},"status":"active","created_at":1}
 {"scope_id":"default","id":"thread_rule_rule_sdk_local_connection_requires_endpoint","parent":{"node_type":"rule","node_id":"rule_sdk_local_connection_requires_endpoint"},"status":"active","created_at":1}
+{"scope_id":"default","id":"thread_rule_rule_source_change_requires_human_reapproval","parent":{"node_type":"rule","node_id":"rule_source_change_requires_human_reapproval"},"status":"active","created_at":1}
+{"scope_id":"default","id":"thread_rule_rule_source_replacement_requires_dependent_revision","parent":{"node_type":"rule","node_id":"rule_source_replacement_requires_dependent_revision"},"status":"active","created_at":1}
 {"scope_id":"default","id":"thread_rule_rule_ste_dictionary_agent_acquisition","parent":{"node_type":"rule","node_id":"rule_ste_dictionary_agent_acquisition"},"status":"active","created_at":1}
 {"scope_id":"default","id":"thread_rule_rule_ste_dictionary_asset_fallback","parent":{"node_type":"rule","node_id":"rule_ste_dictionary_asset_fallback"},"status":"active","created_at":1}
+{"scope_id":"default","id":"thread_rule_rule_ste_dictionary_download_concurrency","parent":{"node_type":"rule","node_id":"rule_ste_dictionary_download_concurrency"},"status":"active","created_at":1}
 {"scope_id":"default","id":"thread_rule_rule_ste_dictionary_download_identity","parent":{"node_type":"rule","node_id":"rule_ste_dictionary_download_identity"},"status":"active","created_at":1}
 {"scope_id":"default","id":"thread_rule_rule_ste_dictionary_download_retry_bound","parent":{"node_type":"rule","node_id":"rule_ste_dictionary_download_retry_bound"},"status":"active","created_at":1}
 {"scope_id":"default","id":"thread_rule_rule_ste_dictionary_finding_categories","parent":{"node_type":"rule","node_id":"rule_ste_dictionary_finding_categories"},"status":"active","created_at":1}

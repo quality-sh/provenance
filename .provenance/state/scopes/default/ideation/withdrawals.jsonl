@@ -10,8 +10,10 @@
 {"scope_id":"default","id":"36fb52e5-f19b-4fab-932b-da205a0339ec","proposal_id":"1edabaeb-da62-44e8-b13b-5f0d875c982e","actor":"authoring","reason":null}
 {"scope_id":"default","id":"37bdad5e-41c0-4cfa-872a-ed879c7a7212","proposal_id":"b635787e-ade4-49f6-a0a4-2fbf3be0f391","actor":"cli","reason":"Replace the automatic submission with the checked citation evidence."}
 {"scope_id":"default","id":"56eccf9d-4598-477b-9d24-7af0cc9c4061","proposal_id":"db54ed3f-3096-4717-ac99-10f99ee4a7e5","actor":"cli","reason":"A later change replaces this submission."}
+{"scope_id":"default","id":"5b72c063-b076-45f2-9ab7-3adde5ade1dd","proposal_id":"b8eb1d05-0de5-4b5b-82b8-79ffc77862ff","actor":"authoring","reason":null}
 {"scope_id":"default","id":"6be02a91-002b-4716-8a73-ad888f8dc4d8","proposal_id":"19decfc4-ec2b-4034-b256-37592ffedbbe","actor":"cli","reason":"The five Rules archive together with the code removal in provenance-u9mg."}
 {"scope_id":"default","id":"6cfbaae7-43d8-476e-8c38-804aabfdba07","proposal_id":"31bc9f02-13b2-4aa5-828b-50827229a801","actor":"cli","reason":"This submission has no current proposed change."}
+{"scope_id":"default","id":"7811b834-518f-4894-9bba-85de0d8df453","proposal_id":"791dd535-17cf-4485-9bc0-544955953460","actor":"authoring","reason":null}
 {"scope_id":"default","id":"7a2b190e-38a4-4660-9e35-f38e07b27ca5","proposal_id":"d956843f-9062-4fe6-8055-7a34c0a5bc2f","actor":"authoring","reason":null}
 {"scope_id":"default","id":"801a32ca-8ea0-4f14-9e51-a76ca579df9b","proposal_id":"5b12b71e-467a-4c83-844d-c6dd65f24547","actor":"authoring","reason":null}
 {"scope_id":"default","id":"8fc3334b-2326-4311-80d5-0b077f4904f2","proposal_id":"8bddc2c8-a4fd-4097-9f69-e7b12cc50825","actor":"cli","reason":"A later change replaces this submission."}
@@ -23,4 +25,6 @@
 {"scope_id":"default","id":"cc8b938a-fe55-44e9-9ab2-831ff9b7a952","proposal_id":"f4c95e37-0773-4939-a7be-de98d0770bb6","actor":"owner-rulings-worker","reason":"The record has no content change. Withdraw the review submitted for its stamp change."}
 {"scope_id":"default","id":"d3900cf1-b5b2-4409-a44c-c8e76c7b5345","proposal_id":"c3959f9a-215e-45bb-9251-00505c0b4b9a","actor":"authoring","reason":null}
 {"scope_id":"default","id":"e389752e-4e54-4142-8ac6-bbe06814ae11","proposal_id":"c6684fd7-4415-4577-8862-7f399242b554","actor":"authoring","reason":null}
+{"scope_id":"default","id":"e4cd4480-8640-4f18-872e-0b904e226483","proposal_id":"a08cdd22-59b6-4a28-a456-f982125d0131","actor":"authoring","reason":null}
+{"scope_id":"default","id":"e92f0720-fd2b-423d-9aa3-7f3931ecc694","proposal_id":"e283441b-ba47-4060-bf9c-328454c68bbe","actor":"authoring","reason":null}
 {"scope_id":"default","id":"e9ca18c0-b8e9-4cee-b6c8-1d4dfab80d53","proposal_id":"98fa2f83-6002-413c-9cca-ad9a0f7e38cd","actor":"authoring","reason":null}
