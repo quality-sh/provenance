@@ -32,6 +32,10 @@
 {"scope_id":"default","id":"thread_question_question_owner_identity_for_lifecycle_change","parent":{"node_type":"question","node_id":"question_owner_identity_for_lifecycle_change"},"status":"active","created_at":1}
 {"scope_id":"default","id":"thread_question_question_sdk_local_host_ownership","parent":{"node_type":"question","node_id":"question_sdk_local_host_ownership"},"status":"active","created_at":1}
 {"scope_id":"default","id":"thread_question_question_wiki_homepage_direction","parent":{"node_type":"question","node_id":"question_wiki_homepage_direction"},"status":"active","created_at":1}
+{"scope_id":"default","id":"thread_requirement_req_archive_cascades_without_surviving_parents","parent":{"node_type":"requirement","node_id":"req_archive_cascades_without_surviving_parents"},"status":"active","created_at":1}
+{"scope_id":"default","id":"thread_requirement_req_archive_disposes_children","parent":{"node_type":"requirement","node_id":"req_archive_disposes_children"},"status":"active","created_at":1}
+{"scope_id":"default","id":"thread_requirement_req_archive_prunes_parent_edge","parent":{"node_type":"requirement","node_id":"req_archive_prunes_parent_edge"},"status":"active","created_at":1}
+{"scope_id":"default","id":"thread_requirement_req_archive_refuses_sole_parented_children","parent":{"node_type":"requirement","node_id":"req_archive_refuses_sole_parented_children"},"status":"active","created_at":1}
 {"scope_id":"default","id":"thread_requirement_req_change_names_verifying_tests","parent":{"node_type":"requirement","node_id":"req_change_names_verifying_tests"},"status":"active","created_at":1}
 {"scope_id":"default","id":"thread_requirement_req_cli_mcp_shared_grammar","parent":{"node_type":"requirement","node_id":"req_cli_mcp_shared_grammar"},"status":"active","created_at":1}
 {"scope_id":"default","id":"thread_requirement_req_default_wiki_output_is_ignored","parent":{"node_type":"requirement","node_id":"req_default_wiki_output_is_ignored"},"status":"active","created_at":1}
@@ -40,6 +44,7 @@
 {"scope_id":"default","id":"thread_requirement_req_public_operation_contract","parent":{"node_type":"requirement","node_id":"req_public_operation_contract"},"status":"active","created_at":1}
 {"scope_id":"default","id":"thread_requirement_req_query_answers_carry_a_freshness_stamp","parent":{"node_type":"requirement","node_id":"req_query_answers_carry_a_freshness_stamp"},"status":"active","created_at":1}
 {"scope_id":"default","id":"thread_requirement_req_record_lifecycle_edits_one_node","parent":{"node_type":"requirement","node_id":"req_record_lifecycle_edits_one_node"},"status":"active","created_at":1}
+{"scope_id":"default","id":"thread_requirement_req_record_lifecycle_preserves_live_ownership","parent":{"node_type":"requirement","node_id":"req_record_lifecycle_preserves_live_ownership"},"status":"active","created_at":1}
 {"scope_id":"default","id":"thread_requirement_req_refinement_shows_evolving_structure","parent":{"node_type":"requirement","node_id":"req_refinement_shows_evolving_structure"},"status":"active","created_at":1}
 {"scope_id":"default","id":"thread_requirement_req_requirement_document_nests_record_lineage","parent":{"node_type":"requirement","node_id":"req_requirement_document_nests_record_lineage"},"status":"active","created_at":1}
 {"scope_id":"default","id":"thread_requirement_req_resolved_badges_disclose_missing_backing","parent":{"node_type":"requirement","node_id":"req_resolved_badges_disclose_missing_backing"},"status":"active","created_at":1}
