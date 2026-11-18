@@ -41,6 +41,7 @@
 {"scope_id":"default","id":"thread_requirement_req_default_wiki_output_is_ignored","parent":{"node_type":"requirement","node_id":"req_default_wiki_output_is_ignored"},"status":"active","created_at":1}
 {"scope_id":"default","id":"thread_requirement_req_porcelain_target_first_records","parent":{"node_type":"requirement","node_id":"req_porcelain_target_first_records"},"status":"active","created_at":1}
 {"scope_id":"default","id":"thread_requirement_req_pr_report_deterministic_generation","parent":{"node_type":"requirement","node_id":"req_pr_report_deterministic_generation"},"status":"active","created_at":1}
+{"scope_id":"default","id":"thread_requirement_req_proposal_state_from_dispositions","parent":{"node_type":"requirement","node_id":"req_proposal_state_from_dispositions"},"status":"active","created_at":1}
 {"scope_id":"default","id":"thread_requirement_req_provenance_web","parent":{"node_type":"requirement","node_id":"req_provenance_web"},"status":"active","created_at":1}
 {"scope_id":"default","id":"thread_requirement_req_public_operation_contract","parent":{"node_type":"requirement","node_id":"req_public_operation_contract"},"status":"active","created_at":1}
 {"scope_id":"default","id":"thread_requirement_req_query_answers_carry_a_freshness_stamp","parent":{"node_type":"requirement","node_id":"req_query_answers_carry_a_freshness_stamp"},"status":"active","created_at":1}
@@ -50,6 +51,7 @@
 {"scope_id":"default","id":"thread_requirement_req_requirement_document_nests_record_lineage","parent":{"node_type":"requirement","node_id":"req_requirement_document_nests_record_lineage"},"status":"active","created_at":1}
 {"scope_id":"default","id":"thread_requirement_req_resolved_badges_disclose_missing_backing","parent":{"node_type":"requirement","node_id":"req_resolved_badges_disclose_missing_backing"},"status":"active","created_at":1}
 {"scope_id":"default","id":"thread_requirement_req_review_page_adds_records","parent":{"node_type":"requirement","node_id":"req_review_page_adds_records"},"status":"active","created_at":1}
+{"scope_id":"default","id":"thread_requirement_req_shaping_turn_recovery","parent":{"node_type":"requirement","node_id":"req_shaping_turn_recovery"},"status":"active","created_at":1}
 {"scope_id":"default","id":"thread_requirement_req_shared_view_edits_sources_and_records","parent":{"node_type":"requirement","node_id":"req_shared_view_edits_sources_and_records"},"status":"active","created_at":1}
 {"scope_id":"default","id":"thread_requirement_req_source_refinement_for_product_work","parent":{"node_type":"requirement","node_id":"req_source_refinement_for_product_work"},"status":"active","created_at":1}
 {"scope_id":"default","id":"thread_requirement_req_state_merges_without_humans","parent":{"node_type":"requirement","node_id":"req_state_merges_without_humans"},"status":"active","created_at":1}

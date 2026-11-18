@@ -13,6 +13,7 @@
 {"scope_id":"default","id":"7a2b190e-38a4-4660-9e35-f38e07b27ca5","proposal_id":"d956843f-9062-4fe6-8055-7a34c0a5bc2f","actor":"authoring","reason":null}
 {"scope_id":"default","id":"801a32ca-8ea0-4f14-9e51-a76ca579df9b","proposal_id":"5b12b71e-467a-4c83-844d-c6dd65f24547","actor":"authoring","reason":null}
 {"scope_id":"default","id":"8fc3334b-2326-4311-80d5-0b077f4904f2","proposal_id":"8bddc2c8-a4fd-4097-9f69-e7b12cc50825","actor":"cli","reason":"A later change replaces this submission."}
+{"scope_id":"default","id":"99ce7715-28ba-4300-a941-44c72f3bc92d","proposal_id":"2528a5ea-ae10-430d-96a1-e05ad6185b25","actor":"cli","reason":null}
 {"scope_id":"default","id":"a536574a-2e34-4d79-a2e6-8439366c6aaa","proposal_id":"1f23ff9f-7698-4fb5-b6e8-d944c4ca9ff3","actor":"cli","reason":"This submission has no current proposed change."}
 {"scope_id":"default","id":"ab55385f-7e38-46a1-a1bf-7b626c99bf02","proposal_id":"a9f426b3-95e4-4130-8357-12f6034c4fe8","actor":"authoring","reason":null}
 {"scope_id":"default","id":"bf6e98c5-84ed-461c-b456-a0a9ad1edf65","proposal_id":"339296f4-dc13-44dd-ad84-d0a1ecefc6f1","actor":"cli","reason":"The five Rules archive together with the code removal in provenance-u9mg."}
