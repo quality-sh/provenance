@@ -740,25 +740,6 @@ jobs:
           save-if: ${{ github.ref == 'refs/heads/main' && matrix.shard == 'other' }}
       - name: Fetch crates through Socket Firewall
         run: sfw cargo fetch --locked
-      # Packaged crates do not keep the [patch.crates-io] sqlx entries, so the
-      # offline build of the packaged CLI needs crates.io sqlx, which
-      # Cargo.lock does not list. Bead provenance-0461z removes this step
-      # with the patch.
-      - name: Fetch crates.io sqlx for the packaged CLI
-        if: matrix.shard == 'distribution'
-        run: |
-          dir="$RUNNER_TEMP/packaged-sqlx"
-          mkdir -p "$dir/src"
-          touch "$dir/src/lib.rs"
-          cat > "$dir/Cargo.toml" <<'EOF'
-          [package]
-          name = "packaged-sqlx"
-          version = "0.0.0"
-          edition = "2021"
-          [dependencies]
-          sqlx = { version = "0.9", default-features = false, features = ["sqlite", "runtime-tokio"] }
-          EOF
-          sfw cargo fetch --manifest-path "$dir/Cargo.toml"
       - name: Install nextest
         uses: taiki-e/install-action@a4d3f3f761dcd95cce1b72cb61cb6d1963438177 # v2
         with:

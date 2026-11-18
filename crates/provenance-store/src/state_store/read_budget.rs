@@ -68,15 +68,15 @@ pub(super) fn column_bytes(value: &ColumnValue) -> anyhow::Result<usize> {
 /// conversion as the projection.
 #[cfg(feature = "host")]
 fn sqlite_real_bytes(real: f64) -> anyhow::Result<usize> {
-    use crate::sqlite_ffi as sqlite;
+    use libsqlite3_sys as sqlite;
 
     let mut connection = std::ptr::null_mut();
     let mut statement = std::ptr::null_mut();
     // Use the same REAL-to-BLOB conversion as the supported read. Formatting
     // the number in Rust, or even with SQLite printf, can give another size.
-    // SAFETY: the declarations in `sqlite_ffi` match sqlite3.h. Each call
-    // gets a pointer that SQLite wrote in this function, and each check
-    // returns before a call that would use a pointer SQLite did not set.
+    // SAFETY: each call gets a pointer that SQLite wrote in this function,
+    // and each check returns before a call that would use a pointer SQLite
+    // did not set.
     let result = unsafe {
         (|| {
             crate::write_error::ensure!(

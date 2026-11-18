@@ -53,27 +53,26 @@ async fn full_scan_rows(inner: &mut Transaction) -> anyhow::Result<u64> {
             crate::refusal::fault!("the transaction is not a transaction of the file")
         })?;
     let mut handle = file.0.lock_handle().await?;
-    let connection = crate::sqlite_ffi::connection(handle.as_raw_handle());
+    let connection = handle.as_raw_handle().as_ptr();
     let mut rows = 0;
-    // SAFETY: `connection` is the sqlite3 pointer of the sqlx handle, and the
-    // declarations in `sqlite_ffi` match sqlite3.h. The locked handle keeps
-    // every other use off the connection and its statements while this loop
-    // runs, and each statement pointer comes from `sqlite3_next_stmt` on that
-    // connection.
+    // SAFETY: `connection` is the sqlite3 pointer of the sqlx handle. The
+    // locked handle keeps every other use off the connection and its
+    // statements while this loop runs, and each statement pointer comes from
+    // `sqlite3_next_stmt` on that connection.
     let mut statement =
-        unsafe { crate::sqlite_ffi::sqlite3_next_stmt(connection, std::ptr::null_mut()) };
+        unsafe { libsqlite3_sys::sqlite3_next_stmt(connection, std::ptr::null_mut()) };
     while !statement.is_null() {
         // SAFETY: as above.
         let steps = unsafe {
-            crate::sqlite_ffi::sqlite3_stmt_status(
+            libsqlite3_sys::sqlite3_stmt_status(
                 statement,
-                crate::sqlite_ffi::SQLITE_STMTSTATUS_FULLSCAN_STEP,
+                libsqlite3_sys::SQLITE_STMTSTATUS_FULLSCAN_STEP,
                 1,
             )
         };
         rows += u64::try_from(steps)?;
         // SAFETY: as above.
-        statement = unsafe { crate::sqlite_ffi::sqlite3_next_stmt(connection, statement) };
+        statement = unsafe { libsqlite3_sys::sqlite3_next_stmt(connection, statement) };
     }
     Ok(rows)
 }

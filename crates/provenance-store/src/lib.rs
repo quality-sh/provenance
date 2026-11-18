@@ -58,8 +58,6 @@ pub mod scope_snapshot;
 pub mod settings;
 pub mod shards;
 #[cfg(feature = "host")]
-mod sqlite_ffi;
-#[cfg(feature = "host")]
 pub mod stale;
 pub mod state_check;
 pub mod state_store;

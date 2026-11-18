@@ -24,6 +24,7 @@ host = [
     "dep:fs_at",
     "dep:tempfile",
     "dep:sqlx",
+    "dep:libsqlite3-sys",
     "dep:tokio",
     "dep:dunce",
     "dep:provenance-scanner",
@@ -58,6 +59,7 @@ uuid.workspace = true
 # The page cursor signature.
 hmac = "0.13"
 base64 = "0.22.1"
+libsqlite3-sys = { version = ">=0.39.1, <0.41.0", optional = true }
 dunce = { workspace = true, optional = true }
 
 [target.'cfg(unix)'.dependencies]
