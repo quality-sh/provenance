@@ -1,5 +1,5 @@
-//! A refusal for a state file that does not parse names the two procedures
-//! that correct the state and what each procedure removes. The state of most
+//! A refusal for a state file that does not parse names the correction of
+//! the line and then the two procedures, each with what it removes. The state of most
 //! tests has a Requirement line whose `refines` is a string and not a list, as
 //! in a line of an older form. A get over a bad Requirement line answers at the
 //! stored serial, and its freshness warning is the text of the refusal.
@@ -55,7 +55,7 @@ fn manifest_refusal((line, message): &(u64, String)) -> Value {
 /// A JSON get gives the record at the stored serial with the warning.
 #[test]
 #[verifies("rule_state_parse_refusal_names_the_corrections", examples)]
-fn a_json_get_names_the_two_ways_out() {
+fn a_json_get_names_the_corrections() {
     let directory = committed();
     let repo = directory.path();
     let clean = passes(repo, &["req_child", "get", "--format", "json"]);
@@ -73,7 +73,7 @@ fn a_json_get_names_the_two_ways_out() {
 /// A text get gives the record at the stored serial and the warning below it.
 #[test]
 #[verifies("rule_state_parse_refusal_names_the_corrections", examples)]
-fn a_text_get_names_the_two_ways_out() {
+fn a_text_get_names_the_corrections() {
     let directory = committed();
     let repo = directory.path();
     let clean = passes(repo, &["req_child", "get"]);
@@ -88,7 +88,7 @@ fn a_text_get_names_the_two_ways_out() {
 /// A JSON write refuses with the refusal object.
 #[test]
 #[verifies("rule_state_parse_refusal_names_the_corrections", examples)]
-fn a_json_write_names_the_two_ways_out() {
+fn a_json_write_names_the_corrections() {
     let directory = unparsable();
     let args = [&WRITE[..], &["--format", "json"]].concat();
 
@@ -100,7 +100,7 @@ fn a_json_write_names_the_two_ways_out() {
 /// A text write refuses with the refusal object after `Error: `.
 #[test]
 #[verifies("rule_state_parse_refusal_names_the_corrections", examples)]
-fn a_text_write_names_the_two_ways_out() {
+fn a_text_write_names_the_corrections() {
     let directory = unparsable();
     let answer = run(directory.path(), &WRITE);
 
@@ -110,7 +110,7 @@ fn a_text_write_names_the_two_ways_out() {
 
 #[test]
 #[verifies("rule_state_parse_refusal_names_the_corrections", examples)]
-fn init_names_the_two_ways_out_and_changes_no_file() {
+fn init_names_the_corrections_and_changes_no_file() {
     let directory = unparsable();
     let state = directory.path().join(".provenance/state");
     let before = support::state_files::files_below(&state);
@@ -129,7 +129,7 @@ fn init_names_the_two_ways_out_and_changes_no_file() {
 /// and its error line gives the cause with the hint.
 #[test]
 #[verifies("rule_state_parse_refusal_names_the_corrections", examples)]
-fn check_names_the_two_procedures() {
+fn check_names_the_corrections() {
     let directory = unparsable();
 
     let (code, stdout, stderr) = run(directory.path(), &["check"]);
@@ -158,7 +158,7 @@ fn check_gives_the_hint_one_time_in_its_error_line() {
 /// the refusal of the state as its freshness warning.
 #[tokio::test]
 #[verifies("rule_state_parse_refusal_names_the_corrections", examples)]
-async fn an_mcp_get_names_the_two_ways_out() {
+async fn an_mcp_get_names_the_corrections() {
     let directory = unparsable();
     let mut child = tokio::process::Command::new(assert_cmd::cargo::cargo_bin!("provenance"))
         .args(["mcp", "--repo", directory.path().to_str().unwrap()])
@@ -187,10 +187,10 @@ async fn an_mcp_get_names_the_two_ways_out() {
 }
 
 /// A line of a different record family that is not a record gives the same
-/// two ways out.
+/// corrections.
 #[test]
 #[verifies("rule_state_parse_refusal_names_the_corrections", examples)]
-fn a_bad_line_of_a_different_family_names_the_same_ways_out() {
+fn a_bad_line_of_a_different_family_names_the_same_corrections() {
     let directory = committed();
     let repo = directory.path();
     let file = "scopes/default/ideation/proposal_cards.jsonl";
@@ -211,7 +211,7 @@ fn a_bad_line_of_a_different_family_names_the_same_ways_out() {
 /// the refusal object of the manifest.
 #[test]
 #[verifies("rule_state_parse_refusal_names_the_corrections", examples)]
-fn a_json_command_over_a_bad_manifest_names_the_two_procedures() {
+fn a_json_command_over_a_bad_manifest_names_the_corrections() {
     for fault in MANIFEST_FAULTS {
         let directory = committed();
         let repo = directory.path();
@@ -230,7 +230,7 @@ fn a_json_command_over_a_bad_manifest_names_the_two_procedures() {
 /// refusal text of the manifest, and the init changes no file.
 #[test]
 #[verifies("rule_state_parse_refusal_names_the_corrections", examples)]
-fn a_text_get_and_init_over_a_bad_manifest_name_the_two_procedures() {
+fn a_text_get_and_init_over_a_bad_manifest_name_the_corrections() {
     for fault in MANIFEST_FAULTS {
         let directory = committed();
         let repo = directory.path();
@@ -252,7 +252,7 @@ fn a_text_get_and_init_over_a_bad_manifest_name_the_two_procedures() {
 /// manifest in each section that it stops and in its error line.
 #[test]
 #[verifies("rule_state_parse_refusal_names_the_corrections", examples)]
-fn check_over_a_bad_manifest_names_the_two_procedures() {
+fn check_over_a_bad_manifest_names_the_corrections() {
     for fault in MANIFEST_FAULTS {
         let directory = committed();
         let located = fault(directory.path());

@@ -32,7 +32,8 @@ fn assert_refused(output: &std::process::Output, selected: &Path, manifest: &Pat
 }
 
 /// A list read with `--repo` from a different working directory names the line
-/// of the manifest of the selected repository and the two procedures.
+/// of the manifest of the selected repository, the correction of that line
+/// and then the two procedures.
 #[test]
 #[verifies("rule_state_parse_refusal_names_the_corrections", examples)]
 fn requirements_list_names_the_line_of_the_selected_malformed_manifest() {
@@ -50,7 +51,8 @@ fn requirements_list_names_the_line_of_the_selected_malformed_manifest() {
 }
 
 /// An init with `--path` from a different working directory names the line of
-/// the manifest of the selected repository and the two procedures.
+/// the manifest of the selected repository, the correction of that line and
+/// then the two procedures.
 #[test]
 #[verifies("rule_state_parse_refusal_names_the_corrections", examples)]
 fn init_names_the_line_of_the_selected_malformed_manifest() {

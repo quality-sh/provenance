@@ -1,6 +1,7 @@
 //! The open of a repository whose manifest does not parse: the open failure
 //! has the text of the fault of the manifest, and its error is that fault,
-//! with the file, the line and the two procedures that correct the state.
+//! with the file, the line, the correction of that line and then the two
+//! procedures that correct the state.
 
 use provenance_core::protocol::read_failure::{
     ReadFailure, UnparsableStateFile, STATE_CORRECTIONS,

@@ -1,5 +1,6 @@
 //! The state faults of the tests of the refusal of a state file that does
-//! not parse and of the two procedures that correct the state.
+//! not parse, of the correction of its line and of the two procedures that
+//! correct the state.
 use serde_json::{json, Value};
 use std::path::Path;
 
@@ -8,7 +9,9 @@ use super::stale_repo::{commit, init_repo};
 
 /// The hint of a record file that does not parse. The other tests compare
 /// with the public constant; this file pins the text that a person reads.
-pub const HINT: &str = "To correct this fault, use one of these two procedures. \
+pub const HINT: &str = "To correct this fault, correct the line of the file that this answer \
+    names. Then do the operation again. If you cannot correct that line, use one of these \
+    two procedures. \
     Procedure 1: get .provenance/state from a commit where Provenance can read it. \
     This can remove records and changes that are not in that commit. \
     Procedure 2: remove .provenance/state and then do the command provenance init. \
