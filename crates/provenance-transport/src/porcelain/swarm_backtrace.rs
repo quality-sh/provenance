@@ -162,7 +162,8 @@ fn read_contribution_file(path: &Utf8Path) -> anyhow::Result<Vec<Contribution>> 
 /// A `merge/` directory that holds `.json` files but no `merged.json` is
 /// refused: its merge output has another name and would not land.
 fn read_merge_outputs(run_dir: &Utf8Path) -> anyhow::Result<MergeRecords> {
-    let merged = run_dir.join("merge/merged.json");
+    // Joined by components, so that on Windows the path has one separator form.
+    let merged = run_dir.join("merge").join("merged.json");
     if !merged.exists() {
         if let Some(other) = json_files(&run_dir.join("merge"))?.first() {
             anyhow::bail!(
@@ -171,10 +172,13 @@ fn read_merge_outputs(run_dir: &Utf8Path) -> anyhow::Result<MergeRecords> {
             );
         }
     }
-    let paths = ["merge/merged.json", "merged.json", "merge.json"]
-        .into_iter()
-        .map(|file_name| run_dir.join(file_name))
-        .filter(|path| path.exists());
+    let paths = [
+        merged,
+        run_dir.join("merged.json"),
+        run_dir.join("merge.json"),
+    ]
+    .into_iter()
+    .filter(|path| path.exists());
 
     let mut synthesis_packets = Vec::new();
     let mut proposals = Vec::new();

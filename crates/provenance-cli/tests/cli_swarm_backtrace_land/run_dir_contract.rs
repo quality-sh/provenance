@@ -32,14 +32,21 @@ fn swarm_backtrace_land_refuses_merge_output_under_another_name() {
         run_dir.join("merge/merge.json"),
     )
     .unwrap();
+    let other = run_dir.join("merge").join("merge.json");
     let expected = run_dir.join("merge").join("merged.json");
 
-    land(&repo, &run_dir)
-        .failure()
-        .stderr(predicates::str::contains("merge.json"))
-        .stderr(predicates::str::contains(
-            expected.to_string_lossy().as_ref(),
-        ));
+    let assert = land(&repo, &run_dir).failure();
+    // The error is JSON, so a Windows path in stderr has escaped separators.
+    let error: serde_json::Value = serde_json::from_slice(&assert.get_output().stderr).unwrap();
+    let message = error["error"]["message"].as_str().unwrap();
+    assert!(
+        message.contains(other.to_string_lossy().as_ref()),
+        "{message}"
+    );
+    assert!(
+        message.contains(expected.to_string_lossy().as_ref()),
+        "{message}"
+    );
 }
 
 #[test]
