@@ -1,6 +1,6 @@
 import * as Effect from 'effect/Effect';
 import * as OpenApiGenerator from '@effect/openapi-generator/OpenApiGenerator';
-import { validators, operationResponseSchemas, responseClosure, responseSchemas } from './validators.mjs';
+import { requestValidators, operationResponseSchemas, responseClosure, responseSchemas } from './validators.mjs';
 import { clientTypeSchema } from './typescript-schema.mjs';
 import { hoistSharedFamilies, discriminatedUnions } from './contract-families.mjs';
 import {
@@ -94,7 +94,7 @@ export async function effectFiles(document) {
       + 'const generatedSchema = <A>(value: Schema.Schema<any>): GeneratedSchema<A> => value as GeneratedSchema<A>;\n'
       + assembled,
     'effect-matchers.ts': '// Generated from OpenAPI. Do not edit.\n' + views.matchers,
-    ...await validators(contract, names, 'effect-validators', false, { hoisted: true }),
+    ...await requestValidators(contract, names, 'effect-validators'),
   };
 }
 

@@ -53,12 +53,23 @@ const dataKeywords = new Set(['enum', 'const', 'default', 'examples', 'example']
 // Keywords whose value maps names to schemas.
 const schemaMaps = new Set(['properties', 'patternProperties', 'dependentSchemas', '$defs', 'definitions']);
 
-function collectReferences(node, names) {
-  if (Array.isArray(node)) for (const item of node) collectReferences(item, names);
-  else if (node && typeof node === 'object') {
-    if (typeof node.$ref === 'string' && node.$ref.startsWith(componentPrefix)) names.add(node.$ref.slice(componentPrefix.length));
-    for (const [key, value] of Object.entries(node)) if (!dataKeywords.has(key)) collectReferences(value, names);
+// Calls visit on each schema object under node. The values of data keywords
+// are not schemas; the values of schema maps are schemas, whatever their name.
+function walkSchemas(node, visit) {
+  if (Array.isArray(node)) { for (const item of node) walkSchemas(item, visit); return; }
+  if (!node || typeof node !== 'object') return;
+  visit(node);
+  for (const [key, value] of Object.entries(node)) {
+    if (dataKeywords.has(key)) continue;
+    if (schemaMaps.has(key) && value && typeof value === 'object' && !Array.isArray(value)) for (const schema of Object.values(value)) walkSchemas(schema, visit);
+    else walkSchemas(value, visit);
   }
+}
+
+function collectReferences(node, names) {
+  walkSchemas(node, schema => {
+    if (typeof schema.$ref === 'string' && schema.$ref.startsWith(componentPrefix)) names.add(schema.$ref.slice(componentPrefix.length));
+  });
 }
 
 function closure(document, roots) {
@@ -83,6 +94,7 @@ function directionClosures(document) {
       if (!operation?.responses) continue;
       collectReferences(operation.parameters, requestRoots);
       collectReferences(operation.requestBody, requestRoots);
+      for (const variant of queryVariants(operation)) collectReferences(variant.parameters, requestRoots);
     }
   }
   const responses = closure(document, document.paths ? responseSchemas(document) : []);
@@ -104,28 +116,27 @@ export function responseClosure(document) {
 // Response validators ignore unknown fields: a closed object becomes open.
 // A map's value schema, required fields, types, enums and constants stay.
 function openObjects(node) {
-  if (Array.isArray(node)) { for (const item of node) openObjects(item); return; }
-  if (!node || typeof node !== 'object') return;
-  for (const keyword of ['additionalProperties', 'unevaluatedProperties']) if (node[keyword] === false) delete node[keyword];
-  for (const [key, value] of Object.entries(node)) {
-    if (dataKeywords.has(key)) continue;
-    if (schemaMaps.has(key) && value && typeof value === 'object' && !Array.isArray(value)) for (const schema of Object.values(value)) openObjects(schema);
-    else openObjects(value);
-  }
+  walkSchemas(node, schema => {
+    for (const keyword of ['additionalProperties', 'unevaluatedProperties']) if (schema[keyword] === false) delete schema[keyword];
+  });
 }
 
-// A hoisted document names identical request and response schemas once, so
-// it can share a component that the source contract keeps apart. There, a
-// shared component stays closed; the source contract went through the check.
-function validationSchemas(document, hoisted) {
+function responseValidationSchemas(document) {
   const schemas = structuredClone(document.components.schemas);
-  const { responses, requests } = hoisted ? directionClosures(document) : { responses: responseClosure(document), requests: new Set() };
-  for (const name of responses) if (!requests.has(name)) openObjects(schemas[name]);
+  for (const name of responseClosure(document)) openObjects(schemas[name]);
   return schemas;
 }
 
-export async function validators(document, names = responseSchemas(document), prefix = 'validators', _compatibility = true, { hoisted = false } = {}) {
-  const schemas = validationSchemas(document, hoisted);
+export async function validators(document, names = responseSchemas(document), prefix = 'validators', _compatibility = true) {
+  return compile(responseValidationSchemas(document), names, prefix);
+}
+
+/** Validators that compile the components as they are, with no opening. */
+export async function requestValidators(document, names, prefix) {
+  return compile(document.components.schemas, names, prefix);
+}
+
+async function compile(schemas, names, prefix) {
   const ajv = new Ajv({ code: { source: true, esm: true }, strict: true, allowUnionTypes: true });
   addFormats(ajv);
   for (const format of ['int64', 'int32', 'uint64', 'uint32', 'uint16', 'uint8', 'uint', 'int', 'float', 'double']) ajv.addFormat(format, true);

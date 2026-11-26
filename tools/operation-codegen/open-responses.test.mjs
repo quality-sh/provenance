@@ -36,6 +36,7 @@ function contract() {
           id: { type: 'string' },
           version: { type: 'integer', format: 'uint64' },
           kind: { enum: ['reply'] },
+          channel: { const: 'web' },
           author: ref('Author'),
           labels: { type: 'object', additionalProperties: { type: 'string' } },
           changes: { type: 'array', items: { type: 'object', properties: { field: { type: 'string' } }, required: ['field'], additionalProperties: false } },
@@ -71,7 +72,7 @@ async function load(document, names) {
 }
 
 const receipt = () => ({
-  data: { id: 'msg_1', version: 2, kind: 'reply', author: { name: 'Ben' }, labels: { area: 'web' }, changes: [{ field: 'text' }] },
+  data: { id: 'msg_1', version: 2, kind: 'reply', channel: 'web', author: { name: 'Ben' }, labels: { area: 'web' }, changes: [{ field: 'text' }] },
   meta: { next_cursor: null },
 });
 
@@ -103,6 +104,7 @@ test('a response validator still refuses a missing or wrongly typed field', asyn
     body => { delete body.data.changes[0].field; },
     body => { body.data.version = '2'; },
     body => { body.data.kind = 'invented'; },
+    body => { body.data.channel = 'cli'; },
     body => { body.data.labels.area = 3; },
     body => { body.meta.next_cursor = 4; },
   ]) {
@@ -119,21 +121,24 @@ test('a request validator compiled in the same call still refuses an unknown fie
   assert.equal(wire.ReplyRequest({ text: 'Agreed.', author: { name: 'Ben', added: 1 } }), false);
 });
 
+const sharedMessage = /^A request and a response share these schema components: Author\./;
+
 test('a component shared by a request and a response stops generation and names the component', async () => {
   const document = contract();
   document.components.schemas.ReplyRequest.properties.author = ref('Author');
-  await assert.rejects(validators(document, ['ReplyReceipt'], 'open', false), /\bAuthor\b/);
+  await assert.rejects(validators(document, ['ReplyReceipt'], 'open', false), { message: sharedMessage });
 });
 
-test('a hoisted document keeps a shared component closed and opens the rest of the response', async () => {
+test('a request property named like a data keyword still reaches its component', async () => {
   const document = contract();
-  document.components.schemas.ReplyRequest.properties.author = ref('Author');
-  const files = await validators(document, ['ReplyReceipt', 'ReplyRequest'], 'open', false, { hoisted: true });
-  const wire = await import(`data:text/javascript;base64,${Buffer.from(files['open.mjs']).toString('base64')}`);
-  const body = receipt();
-  body.data.added = 1;
-  assert.equal(wire.ReplyReceipt(body), true);
-  body.data.author.added = 1;
-  assert.equal(wire.ReplyReceipt(body), false);
-  assert.equal(wire.ReplyRequest({ text: 'Agreed.', author: { name: 'Ben', added: 1 } }), false);
+  document.components.schemas.ReplyRequest.properties.default = ref('Author');
+  await assert.rejects(validators(document, ['ReplyReceipt'], 'open', false), { message: sharedMessage });
+});
+
+test('a query variant parameter is a request root', async () => {
+  const document = contract();
+  document.paths['/replies'].post['x-provenance-query-variants'] = [
+    { selector: null, parameters: [{ name: 'author', in: 'query', schema: ref('Author') }], success: ref('ReplyReceipt'), failure: ref('ReplyReceipt') },
+  ];
+  await assert.rejects(validators(document, ['ReplyReceipt'], 'open', false), { message: sharedMessage });
 });
