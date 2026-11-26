@@ -95,7 +95,7 @@ fn a_refused_submission_publishes_neither_the_record_nor_a_submission() {
     let withdrawals = shards::withdrawals_path(&layout, &scope);
     std::fs::create_dir_all(withdrawals.parent().unwrap()).unwrap();
     let invalid = json!({"scope_id":"default", "id":"withdrawal_a",
-        "proposal_id":"proposal_missing", "actor":"agent", "reason":null});
+        "proposal_id":"proposal_missing", "actor":{"identity_type":"agent","id":"agent"}, "reason":null});
     std::fs::write(&withdrawals, format!("{invalid}\n")).unwrap();
     let sections = || {
         [

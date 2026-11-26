@@ -8,29 +8,6 @@ use crate::model::ids::{ScopeId, StableId};
 #[error("accepted proposal must be asserted before disposition")]
 pub struct ApprovalEvidenceRequired;
 
-/// The refusal of a review decision by an actor that the manifest does not
-/// list. Each cause has no field, so its text cannot give an actor ID.
-#[provenance_macros::rule("rule_decision_refusal_hides_reviewer_ids")]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
-pub enum DispositionActorRefusal {
-    #[error(
-        "The manifest field disposition_actor_ids is empty, thus no actor can make a review \
-         decision. {NEXT_STEP}"
-    )]
-    NoActorsConfigured,
-    #[error(
-        "The manifest field disposition_actor_ids does not contain the actor of a review \
-         decision. {NEXT_STEP}"
-    )]
-    ActorNotListed,
-}
-
-/// The next step that each cause of a [`DispositionActorRefusal`] gives. The
-/// flag replaces the full list, so the caller gives it for each actor.
-const NEXT_STEP: &str = "To change this field, use the command provenance init \
-    --disposition-actor-id <DISPOSITION_ACTOR_ID>. Give --disposition-actor-id one time for each \
-    actor that can make a review decision.";
-
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
@@ -39,6 +16,17 @@ pub struct DispositionActor {
     pub id: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub name: Option<String>,
+}
+
+impl DispositionActor {
+    /// An entry of `disposition_actor_ids` for a person with this ID.
+    pub fn human(id: impl Into<String>) -> Self {
+        Self {
+            identity_type: IdentityType::Human,
+            id: id.into(),
+            name: None,
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

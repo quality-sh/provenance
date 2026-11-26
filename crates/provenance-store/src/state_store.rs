@@ -328,14 +328,14 @@ impl StateStore {
     pub fn list_proposal_cards_with_actor_ids(
         &self,
         scope: &ScopeId,
-        disposition_actor_ids: &[String],
+        disposition_actor_ids: &provenance_core::Reviewers,
     ) -> anyhow::Result<Vec<ProposalCard>> {
         self.project_proposal_cards(scope, Some(disposition_actor_ids), || Ok(()))
     }
     fn project_proposal_cards(
         &self,
         scope: &ScopeId,
-        disposition_actor_ids: Option<&[String]>,
+        disposition_actor_ids: Option<&provenance_core::Reviewers>,
         after_validation: impl FnOnce() -> anyhow::Result<()>,
     ) -> anyhow::Result<Vec<ProposalCard>> {
         self.with_repository_read(|held| {

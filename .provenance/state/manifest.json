@@ -6,6 +6,9 @@
     }
   ],
   "disposition_actor_ids": [
-    "ben_nasraoui"
+    {
+      "identity_type": "human",
+      "id": "ben_nasraoui"
+    }
   ]
 }

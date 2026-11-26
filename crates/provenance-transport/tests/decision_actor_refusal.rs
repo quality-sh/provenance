@@ -10,7 +10,7 @@ use support::resource_http::{call, call_with_headers, host};
 const NOT_LISTED: &str = "The manifest field disposition_actor_ids does not contain the actor of \
     a review decision. To change this field, use the command provenance init \
     --disposition-actor-id <DISPOSITION_ACTOR_ID>. Give --disposition-actor-id one time for each \
-    actor that can make a review decision.";
+    person that can make a review decision.";
 
 fn decision(actor: &str) -> Value {
     json!({"data":{

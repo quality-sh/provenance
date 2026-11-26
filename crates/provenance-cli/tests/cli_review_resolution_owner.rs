@@ -90,7 +90,7 @@ fn withdraw_created(host: &Host, owner: Option<&str>) -> String {
     let (status, result) = post(
         host,
         &format!("/resolutions/res_reject/submissions/{proposal}/withdraw"),
-        &json!({"actor":"shaping_agent", "declared_by":owner, "reason":"Submit it again."}),
+        &json!({"actor":{"identity_type":"human","id":"reviewer"}, "declared_by":owner, "reason":"Submit it again."}),
     );
     assert_eq!(status, 200, "{result}");
     proposal
@@ -105,7 +105,7 @@ fn resolution_owner_can_withdraw_through_the_host() {
     let proposal = pending(&host);
     let before = read(&host);
     let path = format!("/resolutions/res_reject/submissions/{proposal}/withdraw");
-    let data = json!({"actor":"shaping_agent", "declared_by":"shaping_agent", "reason":"Revise the result."});
+    let data = json!({"actor":{"identity_type":"human","id":"reviewer"}, "declared_by":"shaping_agent", "reason":"Revise the result."});
     let (status, result) = post(&host, &path, &data);
     println!("POST {path} {data}\nHTTP {status} {result}");
     assert_eq!(status, 200, "{result}");
@@ -128,7 +128,7 @@ fn wrong_resolution_withdrawal_owner_leaves_the_submission_pending() {
     let (status, result) = post(
         &host,
         &format!("/resolutions/res_reject/submissions/{proposal}/withdraw"),
-        &json!({"actor":"shaping_agent", "declared_by":"another_agent", "reason":"Revise the result."}),
+        &json!({"actor":{"identity_type":"agent","id":"shaping_agent"}, "declared_by":"another_agent", "reason":"Revise the result."}),
     );
     assert_eq!(status, 409, "{result}");
     assert_eq!(result["error"]["kind"], "record_ownership_conflict");
@@ -151,7 +151,7 @@ fn omitted_resolution_owner_cannot_submit_or_withdraw() {
     let (status, result) = post(
         &host,
         &format!("/resolutions/res_reject/submissions/{proposal}/withdraw"),
-        &json!({"actor":"shaping_agent", "reason":"Revise the result."}),
+        &json!({"actor":{"identity_type":"agent","id":"shaping_agent"}, "reason":"Revise the result."}),
     );
     assert_eq!(status, 409, "{result}");
     assert_eq!(result["error"]["kind"], "record_ownership_conflict");
@@ -171,7 +171,7 @@ fn unowned_resolution_can_submit_and_withdraw_without_an_owner() {
     let (status, result) = post(
         &host,
         &format!("/resolutions/res_reject/submissions/{proposal}/withdraw"),
-        &json!({"actor":"cli", "reason":"Revise the result."}),
+        &json!({"actor":{"identity_type":"agent","id":"shaping_agent"}, "reason":"Revise the result."}),
     );
     assert_eq!(status, 200, "{result}");
     let after = read(&host);

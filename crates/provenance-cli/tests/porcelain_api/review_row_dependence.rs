@@ -126,7 +126,7 @@ fn a_review_write_addressed_to_a_different_record_gives_the_address_refusal() {
     let expected = json!({"kind":"invalid_update",
         "message":"the review submission does not belong to the addressed record"});
     let decision = super::review_cycle::decision("accepted", "req_b", None);
-    let withdrawal = json!({"actor":"agent", "declared_by":null, "reason":"Again."});
+    let withdrawal = json!({"actor":{"identity_type":"agent","id":"agent"}, "declared_by":null, "reason":"Again."});
     for (action, body) in [("decide", decision), ("withdraw", withdrawal)] {
         let input = directory_file(&repo, "write.json", &body.to_string());
         let path = format!("{addressed}/{action}");

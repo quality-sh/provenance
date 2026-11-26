@@ -137,7 +137,7 @@ async fn withdraw(host: &StatementHost, path: &str, proposal: &str) {
         host,
         "POST",
         &format!("{path}/submissions/{proposal}/withdraw"),
-        Some(json!({"actor":"agent","declared_by":null,"reason":"Revise it."})),
+        Some(json!({"actor":{"identity_type":"agent","id":"agent"},"declared_by":null,"reason":"Revise it."})),
     )
     .await;
 }

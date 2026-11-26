@@ -365,12 +365,12 @@ async fn configuration(
     }
     // The manifest read can wait for the publication lock, so it runs off the runtime workers.
     let repository = config.repository.clone();
-    let actor_ids =
-        match tokio::task::spawn_blocking(move || repository.disposition_actor_ids()).await {
-            Ok(Ok(actor_ids)) => actor_ids,
-            Ok(Err(error)) => return read_refusal(error),
-            Err(_) => return refusal(OperationFailure::Internal),
-        };
+    let actors = match tokio::task::spawn_blocking(move || repository.disposition_actor_ids()).await
+    {
+        Ok(Ok(actors)) => actors,
+        Ok(Err(error)) => return read_refusal(error),
+        Err(_) => return refusal(OperationFailure::Internal),
+    };
     let path = config.path.clone();
     let cached = config.reviewer.clone();
     let reviewer = tokio::task::spawn_blocking(move || {
@@ -383,11 +383,13 @@ async fn configuration(
     .await
     .ok()
     .flatten();
+    // The page decides as the person of the Git identity, so it gets the IDs of the human entries.
+    let person_ids: Vec<&str> = actors.people().collect();
     if let Some(actor_id) = reviewer {
         config.value["reviewer"] =
-            json!({ "allowed": actor_ids.contains(&actor_id), "actorId": actor_id });
+            json!({ "allowed": person_ids.contains(&actor_id.as_str()), "actorId": actor_id });
     }
-    config.value["dispositionActorIds"] = json!(actor_ids);
+    config.value["dispositionActorIds"] = json!(person_ids);
     Json(config.value).into_response()
 }
 

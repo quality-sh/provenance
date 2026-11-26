@@ -137,7 +137,7 @@ async fn content_update_replaces_or_opens_the_current_submission() {
     store
         .withdraw_record_review(
             serde_json::from_value(json!({
-                "scope_id":"default", "actor":"ben",
+                "scope_id":"default", "actor":{"identity_type":"agent","id":"ben"},
                 "proposal_id":second.proposal_id
             }))
             .unwrap(),
@@ -207,7 +207,8 @@ async fn revision_keeps_the_prior_submission_and_feedback_readable() {
         .unwrap();
     let proposal = created.decision.pending.unwrap().proposal_id;
     let mut manifest = store.manifest().unwrap();
-    manifest.disposition_actor_ids.push("reviewer".to_owned());
+    manifest.disposition_actor_ids =
+        std::iter::once(provenance_core::DispositionActor::human("reviewer")).collect();
     std::fs::write(
         store.layout.manifest_path(),
         serde_json::to_vec(&manifest).unwrap(),

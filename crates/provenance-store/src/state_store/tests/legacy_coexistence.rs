@@ -24,7 +24,11 @@ fn modern_lifecycle_coexists_with_frozen_shipped_records() {
     copy_tree(&shipped, &layout.state_dir());
     let store = crate::test_support::store(&layout);
     let existing = store.manifest().unwrap();
-    let mut actor_ids = existing.disposition_actor_ids.clone();
+    let mut actor_ids = existing
+        .disposition_actor_ids
+        .people()
+        .map(str::to_owned)
+        .collect::<Vec<_>>();
     actor_ids.push("reviewer".into());
     let manifest =
         crate::repository_init::plan_manifest(Some(existing), None, None, actor_ids, false, None)
@@ -82,7 +86,7 @@ fn modern_lifecycle_coexists_with_frozen_shipped_records() {
             decision: DispositionDecision::Accepted,
             rationale: "Reviewed".into(),
             actor: DispositionActor {
-                identity_type: IdentityType::Agent,
+                identity_type: IdentityType::Human,
                 id: "reviewer".into(),
                 name: None,
             },

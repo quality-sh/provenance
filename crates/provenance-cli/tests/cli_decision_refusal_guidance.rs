@@ -7,8 +7,8 @@
 use crate::review_host_support;
 
 use provenance_macros::verifies;
-use provenance_mcp::Client;
-use review_host_support::{follow::create, repository_with_actors, request, response, start};
+use review_host_support::surfaces::Surface;
+use review_host_support::{follow::create, repository_with_actors};
 use serde_json::{json, Value};
 use std::path::Path;
 use std::process::{Command, Stdio};
@@ -17,12 +17,12 @@ use std::process::{Command, Stdio};
 const EMPTY_FIELD: &str = "The manifest field disposition_actor_ids is empty, thus no actor can \
     make a review decision. To change this field, use the command provenance init \
     --disposition-actor-id <DISPOSITION_ACTOR_ID>. Give --disposition-actor-id one time for each \
-    actor that can make a review decision.";
+    person that can make a review decision.";
 /// The refusal of a decision when the field holds other actors.
 const ACTOR_NOT_LISTED: &str = "The manifest field disposition_actor_ids does not contain the \
     actor of a review decision. To change this field, use the command provenance init \
     --disposition-actor-id <DISPOSITION_ACTOR_ID>. Give --disposition-actor-id one time for each \
-    actor that can make a review decision.";
+    person that can make a review decision.";
 /// The complete error output of an init command whose list does not contain
 /// the actor of a stored decision.
 const INIT_REFUSAL: &str = "Error: the planned Provenance state is not valid\n\nCaused by:\n    \
@@ -97,112 +97,59 @@ fn expected_refusal(actor_ids: &[&str]) -> Value {
     json!({"kind": "access_denied", "message": message})
 }
 
-/// Checks the complete refusal `error` and that the complete answer gives no actor ID.
-fn assert_guidance(actor_ids: &[&str], error: &Value, answer: &str) {
-    assert_eq!(error, &expected_refusal(actor_ids), "{answer}");
+/// Checks that a decision by [`STRANGER`] through `surface` gets the refusal
+/// for `actor_ids` in the field, and that the complete answer gives no actor ID.
+fn refused(surface: Surface, actor_ids: &[&str]) {
+    let (repo, proposal) = repository(actor_ids);
+    let path = decide_path(&proposal);
+    let answer = surface.call(repo.path(), "post", &path, Some(&decision(STRANGER)));
+    assert_eq!(answer.code, surface.refused(403), "{}", answer.text);
+    assert_eq!(answer.body, expected_refusal(actor_ids), "{}", answer.text);
     for id in LISTED.into_iter().chain([STRANGER]) {
-        assert!(!answer.contains(id), "{id} in {answer}");
+        assert!(!answer.text.contains(id), "{id} in {}", answer.text);
     }
-}
-
-fn refused_by_cli(actor_ids: &[&str]) {
-    let (repo, proposal) = repository(actor_ids);
-    let refused = api(
-        repo.path(),
-        "post",
-        &decide_path(&proposal),
-        Some(&decision(STRANGER)),
-    );
-    assert_eq!(refused.status.code(), Some(1), "{}", stderr(&refused));
-    assert!(refused.stdout.is_empty(), "{refused:?}");
-    let answer = stderr(&refused);
-    let envelope: Value =
-        serde_json::from_str(answer.trim()).unwrap_or_else(|error| panic!("{error}: {answer}"));
-    assert_guidance(actor_ids, &envelope["error"], &answer);
-}
-
-fn refused_by_http(actor_ids: &[&str]) {
-    let (repo, proposal) = repository(actor_ids);
-    let host = start(repo.path());
-    let refused = response(
-        request(&host, "POST", &format!("/{}", decide_path(&proposal)), true)
-            .set("Content-Type", "application/json")
-            .send_string(&json!({"data": decision(STRANGER)}).to_string()),
-    );
-    assert_eq!(refused.status(), 403);
-    let answer = refused.into_string().unwrap();
-    let envelope: Value = serde_json::from_str(&answer).unwrap();
-    assert_guidance(actor_ids, &envelope["error"], &answer);
-}
-
-async fn refused_by_mcp(actor_ids: &[&str]) {
-    let (repo, proposal) = repository(actor_ids);
-    let mut child = tokio::process::Command::new(assert_cmd::cargo::cargo_bin!("provenance"))
-        .args(["mcp", "--repo", repo.path().to_str().unwrap()])
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::inherit())
-        .kill_on_drop(true)
-        .spawn()
-        .unwrap();
-    let io = tokio::io::join(child.stdout.take().unwrap(), child.stdin.take().unwrap());
-    let client = Client::connect(io).await.unwrap();
-    let refused = client
-        .call(
-            "api",
-            json!({"path": decide_path(&proposal), "method": "post", "input": decision(STRANGER)}),
-        )
-        .await;
-    assert_eq!(refused["isError"], json!(true), "{refused}");
-    assert_guidance(
-        actor_ids,
-        &refused["structuredContent"]["error"],
-        &refused.to_string(),
-    );
-    client.cancel().await.unwrap();
-    assert!(child.wait().await.unwrap().success());
 }
 
 #[test]
 #[verifies("rule_decision_refusal_names_reviewer_field", examples)]
 #[verifies("rule_decision_refusal_hides_reviewer_ids", examples)]
 fn cli_api_refusal_names_the_field_when_the_field_is_empty() {
-    refused_by_cli(&[]);
+    refused(Surface::Cli, &[]);
 }
 
 #[test]
 #[verifies("rule_decision_refusal_names_reviewer_field", examples)]
 #[verifies("rule_decision_refusal_hides_reviewer_ids", examples)]
 fn cli_api_refusal_names_the_field_when_the_field_holds_other_actors() {
-    refused_by_cli(&LISTED);
+    refused(Surface::Cli, &LISTED);
 }
 
 #[test]
 #[verifies("rule_decision_refusal_names_reviewer_field", examples)]
 #[verifies("rule_decision_refusal_hides_reviewer_ids", examples)]
 fn http_refusal_names_the_field_when_the_field_is_empty() {
-    refused_by_http(&[]);
+    refused(Surface::Http, &[]);
 }
 
 #[test]
 #[verifies("rule_decision_refusal_names_reviewer_field", examples)]
 #[verifies("rule_decision_refusal_hides_reviewer_ids", examples)]
 fn http_refusal_names_the_field_when_the_field_holds_other_actors() {
-    refused_by_http(&LISTED);
+    refused(Surface::Http, &LISTED);
 }
 
-#[tokio::test(flavor = "multi_thread")]
+#[test]
 #[verifies("rule_decision_refusal_names_reviewer_field", examples)]
 #[verifies("rule_decision_refusal_hides_reviewer_ids", examples)]
-async fn mcp_refusal_names_the_field_when_the_field_is_empty() {
-    refused_by_mcp(&[]).await;
+fn mcp_refusal_names_the_field_when_the_field_is_empty() {
+    refused(Surface::Mcp, &[]);
 }
 
-#[tokio::test(flavor = "multi_thread")]
+#[test]
 #[verifies("rule_decision_refusal_names_reviewer_field", examples)]
 #[verifies("rule_decision_refusal_hides_reviewer_ids", examples)]
-async fn mcp_refusal_names_the_field_when_the_field_holds_other_actors() {
-    refused_by_mcp(&LISTED).await;
+fn mcp_refusal_names_the_field_when_the_field_holds_other_actors() {
+    refused(Surface::Mcp, &LISTED);
 }
 
 #[test]

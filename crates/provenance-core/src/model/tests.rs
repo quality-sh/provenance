@@ -19,3 +19,4 @@ include!("tests/proposal_lifecycle_dispositions.rs");
 include!("tests/shaping.rs");
 
 mod record_stamps;
+mod reviewers;

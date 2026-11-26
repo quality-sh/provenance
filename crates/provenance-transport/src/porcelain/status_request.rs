@@ -54,7 +54,10 @@ impl crate::StatementHost {
         let proposal = pending["proposal_id"].as_str()?;
         let kept = current["data"]["status"].as_str()?;
         let empty_list = if self.reviewer_ids().is_some_and(|ids| ids.is_empty()) {
-            format!("{}\n", DispositionActorRefusal::NoActorsConfigured)
+            format!(
+                "{}\n",
+                DispositionActorRefusal::NoActorsConfigured(provenance_core::IdentityType::Human)
+            )
         } else {
             String::new()
         };

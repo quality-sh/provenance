@@ -24,7 +24,8 @@ pub struct InitialState {
 pub fn initial_state() -> InitialState {
     use provenance_core::{Manifest, RepoPathPrefix};
     let mut manifest = Manifest::default_with_scope(scope(), RepoPathPrefix::new("."));
-    manifest.disposition_actor_ids = vec![DECIDER.into()];
+    manifest.disposition_actor_ids =
+        std::iter::once(provenance_core::DispositionActor::human(DECIDER)).collect();
     let key = |value: &str| StateKey::new(value).expect("a state key");
     let shard = |rows: &[serde_json::Value]| {
         let mut bytes = Vec::new();

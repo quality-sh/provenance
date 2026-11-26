@@ -368,7 +368,7 @@ fn a_read_names_the_line_of_a_withdrawal_that_names_no_submission() {
         .join(".provenance/state/scopes/default/ideation/withdrawals.jsonl");
     std::fs::create_dir_all(path.parent().unwrap()).unwrap();
     let withdrawal = json!({"scope_id":"default","id":"withdrawal_lost",
-        "proposal_id":"proposal_missing","actor":"reviewer","reason":null});
+        "proposal_id":"proposal_missing","actor":{"identity_type":"human","id":"reviewer"},"reason":null});
     std::fs::write(&path, format!("{withdrawal}\n")).unwrap();
     assert_rows(
         &[answer(&repo, &["api", "requirements/req_a"], "json")],

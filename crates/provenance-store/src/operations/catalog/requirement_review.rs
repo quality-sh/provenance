@@ -171,7 +171,7 @@ pub struct WithdrawRecordReviewRequest {
     pub scope_id: ScopeId,
     pub record_kind: provenance_core::NodeType,
     pub record_id: StableId,
-    pub actor: String,
+    pub actor: DispositionActor,
     pub proposal_id: StableId,
     pub declared_by: Option<String>,
     pub reason: Option<String>,

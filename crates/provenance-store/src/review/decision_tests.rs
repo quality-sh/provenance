@@ -82,7 +82,7 @@ fn feedback(body: &str) -> Value {
 fn withdraw(store: &StateStore, proposal: &StableId) -> anyhow::Result<CycleEntry> {
     store.withdraw_record_review(
         serde_json::from_value(
-            json!({"scope_id":"default","actor":"agent","proposal_id":proposal}),
+            json!({"scope_id":"default","actor":{"identity_type":"agent","id":"agent"},"proposal_id":proposal}),
         )
         .unwrap(),
     )
@@ -280,7 +280,7 @@ fn an_unauthorized_actor_cannot_accept_a_review() {
     let text = "The manifest field disposition_actor_ids does not contain the actor of a review \
                 decision. To change this field, use the command provenance init \
                 --disposition-actor-id <DISPOSITION_ACTOR_ID>. Give --disposition-actor-id one \
-                time for each actor that can make a review decision.";
+                time for each person that can make a review decision.";
     assert_eq!(error.to_string(), text);
     let crate::write_error::WriteFailure::AccessDenied { message } =
         crate::write_error::WriteError(error).safe()

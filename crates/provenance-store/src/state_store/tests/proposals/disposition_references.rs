@@ -361,7 +361,8 @@ fn input(scope: &ScopeId, artifact_type: &str, artifact_id: &str) -> CreateDispo
 
 fn allow_actor(store: &crate::state_store::StateStore) {
     let mut manifest = store.manifest().unwrap();
-    manifest.disposition_actor_ids.push("reviewer".into());
+    manifest.disposition_actor_ids =
+        std::iter::once(provenance_core::DispositionActor::human("reviewer")).collect();
     std::fs::write(
         store.layout.manifest_path(),
         serde_json::to_vec(&manifest).unwrap(),

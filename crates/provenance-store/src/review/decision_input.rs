@@ -70,7 +70,9 @@ pub struct ReviewFeedback {
 #[serde(deny_unknown_fields)]
 pub struct WithdrawRecordReview {
     pub scope_id: ScopeId,
-    pub actor: String,
+    /// The author of the submission or an actor of the manifest field
+    /// `disposition_actor_ids`.
+    pub actor: DispositionActor,
     pub proposal_id: StableId,
     pub declared_by: Option<String>,
     /// Optional nonempty reason, kept as part of the withdrawal history.

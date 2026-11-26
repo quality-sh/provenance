@@ -12,7 +12,7 @@ Options:
       --path-prefix <PATH_PREFIX>
           
       --disposition-actor-id <DISPOSITION_ACTOR_ID>
-          Repository-local actor ID allowed to attest proposal dispositions. Repeat for multiple actors. On re-init, omission preserves the allowlist
+          ID of a person who can make a review decision. The command writes an entry with the identity type human. Repeat for each person. A given value replaces the list; on re-init, omission keeps the list
       --clear-disposition-actors
           Empty the repository-local disposition actor allowlist
       --ste-pdf <STE_PDF>

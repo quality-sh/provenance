@@ -132,7 +132,7 @@ fn withdraw(repo: &str, id: &str, proposal: &str) {
     api(
         repo,
         &path,
-        &json!({"actor": "agent", "declared_by": OWNER}),
+        &json!({"actor": {"identity_type":"agent","id":"agent"}, "declared_by": OWNER}),
     );
 }
 

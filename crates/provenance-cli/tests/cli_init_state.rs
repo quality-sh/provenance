@@ -87,7 +87,7 @@ fn bare_rerun_keeps_the_manifest_scope_and_actor_ids() {
         );
     }
     assert_eq!(
-        manifest(temporary.path())["disposition_actor_ids"][0],
+        manifest(temporary.path())["disposition_actor_ids"][0]["id"],
         "reviewer"
     );
 }

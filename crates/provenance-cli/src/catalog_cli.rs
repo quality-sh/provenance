@@ -248,7 +248,7 @@ fn actionable_failure(
             let hint = format!(
                 "record {id} already has pending submission {submission}; \
                  run `{}` to see it; to withdraw it, run \
-                 `printf '%s' '{{\"actor\":\"<actor>\"}}' | provenance api {collection}/{id}/submissions/{submission}/withdraw --method post --input -{}`. \
+                 `printf '%s' '{{\"actor\":{{\"identity_type\":\"<identity_type>\",\"id\":\"<actor>\"}}}}' | provenance api {collection}/{id}/submissions/{submission}/withdraw --method post --input -{}`. \
                  For an owned record, also put \"declared_by\":\"<owner>\" in the body",
                 review_read_command(id, Some(context)),
                 context_options(Some(context))

@@ -256,7 +256,7 @@ impl StatementHost {
     }
     /// The reviewer list of the bound repository, when the host access can
     /// read it.
-    pub fn reviewer_ids(&self) -> Option<Vec<String>> {
+    pub fn reviewer_ids(&self) -> Option<provenance_core::Reviewers> {
         self.access.reviewer_ids()
     }
 

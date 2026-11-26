@@ -233,7 +233,7 @@ async fn kind(out: &mut Transcript, http: &Http, plural: &str, singular: &str, i
         http,
         "POST",
         &format!("{submission}/withdraw"),
-        Some(json!({"actor":"agent", "declared_by":null, "reason":"Revise it."})),
+        Some(json!({"actor":{"identity_type":"human","id":"reviewer"}, "declared_by":null, "reason":"Revise it."})),
         &[],
         &format!("{shown}/withdraw"),
     )
@@ -280,7 +280,7 @@ async fn requirement_writes(out: &mut Transcript, http: &Http) {
         http,
         "POST",
         &format!("/requirements/req_new/submissions/{proposal}/withdraw"),
-        Some(json!({"actor":"agent", "declared_by":null, "reason":"Revise it."})),
+        Some(json!({"actor":{"identity_type":"agent","id":"agent"}, "declared_by":null, "reason":"Revise it."})),
         &[],
         &format!("{record}/submissions/{{proposal}}/withdraw"),
     )

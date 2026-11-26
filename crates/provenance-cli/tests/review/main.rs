@@ -17,6 +17,8 @@ mod cli_agent_review_paths;
 mod cli_decision_refusal_guidance;
 #[path = "../cli_review_accepted_citation.rs"]
 mod cli_review_accepted_citation;
+#[path = "../cli_review_decision_identity.rs"]
+mod cli_review_decision_identity;
 #[path = "../cli_review_detach.rs"]
 mod cli_review_detach;
 #[path = "../cli_review_detach_refusals.rs"]
@@ -71,6 +73,10 @@ mod cli_review_undeclared_scope;
 mod cli_review_uninitialized;
 #[path = "../cli_review_unknown_routes.rs"]
 mod cli_review_unknown_routes;
+#[path = "../cli_review_withdrawal_identity.rs"]
+mod cli_review_withdrawal_identity;
+#[path = "../cli_reviewer_list_manifest.rs"]
+mod cli_reviewer_list_manifest;
 #[cfg(target_os = "linux")]
 #[path = "../review_host_support/codex.rs"]
 mod codex;

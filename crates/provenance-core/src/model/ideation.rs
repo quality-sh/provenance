@@ -5,6 +5,7 @@ pub(super) mod dispositions;
 pub(super) mod legacy_audit;
 pub(super) mod lifecycle;
 pub(super) mod proposals;
+pub(super) mod reviewers;
 pub(super) mod synthesis;
 pub(super) mod withdrawals;
 

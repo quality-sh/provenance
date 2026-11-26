@@ -37,7 +37,7 @@ impl StateStore {
             self.permits(&path, "*"),
             "withdrawals of review submissions go through the review seam"
         );
-        if withdrawal.actor.trim().is_empty() {
+        if withdrawal.actor.id.trim().is_empty() {
             return Err(crate::refusal::refuse!(
                 (crate::write_error::WriteFailure::invalid_field("request.actor")),
                 "invalid withdrawal actor"

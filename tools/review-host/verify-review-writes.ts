@@ -144,6 +144,25 @@ async function revisionAfterRejectionKeepsFeedbackAndWaitsForDecision(): Promise
   });
 }
 
+// @provenance verification: examples
+// @provenance rule: rule_withdrawal_actor_is_author_or_reviewer
+async function listedPersonWithdrawsWithTheActorObject(): Promise<void> {
+  const id = 'req_withdrawn';
+  const proposal = await withHost(async client => (await createRequirement(client, id)).decision.pending.proposal_id);
+  await withHost(async client => {
+    const withdrawn = await client.withdrawRequirementReview({
+      id, proposal_id: proposal, data: { actor: reviewer, reason: 'Revise it first.' },
+    });
+    assert.equal(withdrawn.data.fact, 'withdrawn');
+    assert.equal(withdrawn.data.actor, reviewer.id);
+  });
+  await withHost(async client => {
+    const { data } = await client.getRequirement({ id });
+    assert.equal(data.decision.pending, null);
+    assert.deepEqual(data.decision.withdrawn, [proposal]);
+  });
+}
+
 // Implementation aid: no Rule names the generated Promise client. It shares the
 // runtime of the Effect SDK, which rule_effect_sdk_retains_unknown_writes governs.
 // This check keeps the client from sending a write again and shows that the client
@@ -196,6 +215,7 @@ try {
   ], { cwd: work, encoding: 'utf8', timeout: 180_000, env });
   await twoDiscussionsKeepTheirRepliesAndStatus();
   await revisionAfterRejectionKeepsFeedbackAndWaitsForDecision();
+  await listedPersonWithdrawsWithTheActorObject();
   await lostWriteResponseIsReportedAndNotResent();
   console.log(`Verified review and Discussion writes across host restarts: ${binaryArg}`);
 } finally {

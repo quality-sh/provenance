@@ -164,7 +164,7 @@ async fn change(surface: &impl Surface, step: usize) {
                 surface,
                 "POST",
                 &format!("/requirements/req_b/submissions/{proposal}/withdraw"),
-                json!({"actor":"agent", "declared_by":null, "reason":"Revise it."}),
+                json!({"actor":{"identity_type":"agent","id":"agent"}, "declared_by":null, "reason":"Revise it."}),
             )
             .await;
         }
