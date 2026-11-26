@@ -6,6 +6,8 @@ use crate::export_fixture_support;
 mod follow_up_qualification;
 #[path = "cli_swarm_backtrace_land/malformed_input.rs"]
 mod malformed_input;
+#[path = "cli_swarm_backtrace_land/run_dir_contract.rs"]
+mod run_dir_contract;
 #[path = "cli_swarm_backtrace_land/successful_landing.rs"]
 mod successful_landing;
 #[path = "cli_swarm_backtrace_land/support.rs"]

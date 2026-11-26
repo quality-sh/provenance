@@ -21,6 +21,7 @@ mod document_review;
 mod document_roots;
 mod evidence;
 mod front_equivalence;
+mod history_index_work;
 mod hydration;
 mod hydration_support;
 mod identity;

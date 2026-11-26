@@ -1,6 +1,6 @@
 import * as Effect from 'effect/Effect';
 import * as OpenApiGenerator from '@effect/openapi-generator/OpenApiGenerator';
-import { validators, operationResponseSchemas, responseSchemas } from './validators.mjs';
+import { requestValidators, operationResponseSchemas, responseClosure, responseSchemas } from './validators.mjs';
 import { clientTypeSchema } from './typescript-schema.mjs';
 import { hoistSharedFamilies, discriminatedUnions } from './contract-families.mjs';
 import {
@@ -16,6 +16,9 @@ function pascal(value) {
 
 export async function effectFiles(document) {
   document = exactQuerySuccesses(document);
+  // A component shared by a request and a response stops generation here,
+  // before hoisting can merge request and response schemas.
+  responseClosure(document);
   // Family hoisting names structurally identical per-operation schemas once.
   // It runs on the raw document so the wire validators below keep the full
   // validation truth, including validation-only cross-field anyOf conditions.
@@ -91,7 +94,7 @@ export async function effectFiles(document) {
       + 'const generatedSchema = <A>(value: Schema.Schema<any>): GeneratedSchema<A> => value as GeneratedSchema<A>;\n'
       + assembled,
     'effect-matchers.ts': '// Generated from OpenAPI. Do not edit.\n' + views.matchers,
-    ...await validators(contract, names, 'effect-validators', false),
+    ...await requestValidators(contract, names, 'effect-validators'),
   };
 }
 

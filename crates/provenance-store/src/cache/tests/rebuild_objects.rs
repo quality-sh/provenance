@@ -22,6 +22,10 @@ const ONE_ROW: [&str; 4] = [
     "projection_validation",
 ];
 
+/// The tables that a history read fills and a build leaves empty: the index
+/// of the record changes of each record file.
+const HISTORY_INDEX: [&str; 2] = ["record_history_changes", "record_history_commits"];
+
 /// Each object of the catalog, then each row of each table, in a fixed
 /// order, and the number of rows of each table.
 async fn everything(layout: &ProvenanceLayout) -> (Vec<String>, Vec<(String, usize)>) {
@@ -266,7 +270,11 @@ async fn a_rebuild_leaves_every_table_as_the_first_build_made_it() {
     let (made, counts) = everything(&layout).await;
     let thin: Vec<&(String, usize)> = counts
         .iter()
-        .filter(|(table, rows)| *rows < 2 && !ONE_ROW.contains(&table.as_str()))
+        .filter(|(table, rows)| {
+            *rows < 2
+                && !ONE_ROW.contains(&table.as_str())
+                && !HISTORY_INDEX.contains(&table.as_str())
+        })
         .collect();
     assert_eq!(thin, Vec::<&(String, usize)>::new(), "{counts:?}");
     let (instance, made) = take(made, "projection_instance");
