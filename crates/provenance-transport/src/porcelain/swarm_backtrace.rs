@@ -70,7 +70,9 @@ fn land(
             || !synthesis_packets.is_empty()
             || !proposals.is_empty()
             || !assertions.is_empty(),
-        "swarm run contains no landable records"
+        "swarm run contains no landable records: land reads each .json file in {run_dir}/extractors/, \
+         {run_dir}/refuters/ and {run_dir}/contributions/, and the merge output at \
+         {run_dir}/merge/merged.json, {run_dir}/merged.json or {run_dir}/merge.json"
     );
 
     for contribution in &contributions {
@@ -156,7 +158,19 @@ fn read_contribution_file(path: &Utf8Path) -> anyhow::Result<Vec<Contribution>> 
 /// Reads the merge output from its named files only, so that other files in
 /// the run directory, such as scratch copies of single records, do not stop
 /// the landing.
+///
+/// A `merge/` directory that holds `.json` files but no `merged.json` is
+/// refused: its merge output has another name and would not land.
 fn read_merge_outputs(run_dir: &Utf8Path) -> anyhow::Result<MergeRecords> {
+    let merged = run_dir.join("merge/merged.json");
+    if !merged.exists() {
+        if let Some(other) = json_files(&run_dir.join("merge"))?.first() {
+            anyhow::bail!(
+                "{other} is not read: land reads the merge output in the merge directory \
+                 only from {merged}"
+            );
+        }
+    }
     let paths = ["merge/merged.json", "merged.json", "merge.json"]
         .into_iter()
         .map(|file_name| run_dir.join(file_name))
