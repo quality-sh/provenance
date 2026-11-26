@@ -728,7 +728,7 @@
       "description": "Actions: discuss, reply."
     },
     "run_dir": {
-      "description": "The swarm run directory: its extractors, refuters, contributions, and merge output. Actions: swarm_backtrace_land.",
+      "description": "The swarm run directory: the .json files in its extractors, refuters, and contributions directories, and the merge output in merge/merged.json. Actions: swarm_backtrace_land.",
       "type": "string"
     },
     "severity": {

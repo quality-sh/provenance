@@ -16,7 +16,7 @@ fn swarm_backtrace_land_schema() -> serde_json::Value {
 const SWARM_BACKTRACE_LAND_FIELDS: &[Field] = &[
     Field::text("run_dir")
         .required()
-        .doc("The swarm run directory: its extractors, refuters, contributions, and merge output."),
+        .doc("The swarm run directory: the .json files in its extractors, refuters, and contributions directories, and the merge output in merge/merged.json."),
     Field::switch("replace")
         .doc("Replace the generated records that an earlier landing of this run wrote."),
 ];

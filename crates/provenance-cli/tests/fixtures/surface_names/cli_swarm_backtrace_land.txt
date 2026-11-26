@@ -7,6 +7,6 @@ Options:
       --repo <REPO>        [default: .]
       --scope <SCOPE>      [default: default]
       --format <FORMAT>    [possible values: json]
-      --run-dir <RUN_DIR>  The swarm run directory: its extractors, refuters, contributions, and merge output.
+      --run-dir <RUN_DIR>  The swarm run directory: the .json files in its extractors, refuters, and contributions directories, and the merge output in merge/merged.json.
       --replace            Replace the generated records that an earlier landing of this run wrote.
   -h, --help               Print help
