@@ -13,9 +13,18 @@ test('Effect schemas retain production wire values and reject contract violation
   assert.equal(typeof generator.effectFiles, 'function');
   const document = JSON.parse(await readFile(new URL('../../contracts/operations/fixtures.openapi.json', import.meta.url)));
   const names = Object.keys(document.components.schemas);
-  for (const name of names) document.paths[`/fixture/${name}`] = { get: { operationId: name, responses: {
-    200: { description: 'Fixture', content: { 'application/json': { schema: { $ref: `#/components/schemas/${name}` } } } },
-  } } };
+  // The corpus derives these components in the request direction
+  // (crates/provenance-codegen/src/corpus.rs). They are request bodies here,
+  // so that their validators keep refusing unknown fields. Their nested
+  // definitions carry the request name as a prefix and get no operation.
+  const requests = ['CheckStatementInput', 'SearchInput', 'TypedSpecInput'];
+  const body = name => ({ content: { 'application/json': { schema: { $ref: `#/components/schemas/${name}` } } } });
+  for (const name of names) {
+    if (requests.includes(name)) document.paths[`/fixture/${name}`] = { post: { operationId: name,
+      requestBody: { required: true, ...body(name) }, responses: { 200: { description: 'Fixture', ...body('ReportOutput') } } } };
+    else if (!requests.some(request => name.startsWith(request))) document.paths[`/fixture/${name}`] = { get: { operationId: name,
+      responses: { 200: { description: 'Fixture', ...body(name) } } } };
+  }
   const directory = await mkdtemp(join(import.meta.dirname, '.effect-test-'));
   try {
     for (const [name, source] of Object.entries(await generator.effectFiles(document))) await writeFile(join(directory, name), source);
