@@ -6,11 +6,11 @@ description: Reverse-engineer candidate requirements from an existing codebase w
 # Swarm backtrace
 
 This skill does shaping in reverse. Agents partition an existing codebase and extract
-candidates. A candidate states *what must be true for this code to be correct* and names
-the function that already decides it. Agents then remove duplicate candidates but keep
-**all** evidence sites, challenge every candidate, and land each one as a proposal. The
-source of each proposal is the codebase, pinned to a commit. This file is the full
-procedure.
+candidates. A candidate states *what must be true for this code to be correct*. It also
+names the function that already decides it. Agents then remove duplicate candidates but
+keep **all** evidence sites. They challenge every candidate and land each one as a
+proposal. The source of each proposal is the codebase, pinned to a commit. This file is
+the full procedure.
 
 ## Ground rules
 
@@ -25,8 +25,8 @@ Before you call code redundant or delete tests, run
 2. **Pin the commit.** Record the exact commit in the Source. If the target repository
    changes during the run, the run is against the pinned commit, not HEAD.
 3. **Evidence discipline.** Every claim cites typed evidence. Code evidence has
-   `file_path` and `line`, and the bare symbol name wherever the behavior lives in a named
-   function or type. A line is where you looked; the symbol identifies a candidate primary
+   `file_path` and `line`. When the behavior is in a named function or type, code
+   evidence also has the bare symbol name. A line is where you looked; the symbol identifies a candidate primary
    implementation and survives the next refactor. Other evidence types need no file
    location. Mark speculation `unsupported` or `exploratory`. Rate uncertainty with a
    rationale.
@@ -36,8 +36,9 @@ Before you call code redundant or delete tests, run
 
 ## Where the files go
 
-Use one work directory per run, outside the tracked tree of the target, or in a path that
-Git ignores:
+Use one work directory per run. Git must not track it. Add the work directory to
+`.gitignore` (for example the line `.provenance-swarm/`), or use a path that Git already
+ignores.
 
 ```text
 .provenance-swarm/<run-id>/
@@ -46,12 +47,14 @@ Git ignores:
   run/                 the run directory that `land` reads (stage 5)
     extractors/<partition>.json
     refuters/<batch>.json
+    contributions/<name>.json   (optional) more Contributions
     merge/merged.json
 ```
 
-`land` reads only the files of the run directory contract (stage 5). Keep scratch files
-in `scratch/`, not in `run/`. Every `.json` file in `run/extractors/` and
-`run/refuters/` must be a Contribution.
+`land` reads each `.json` file in `run/extractors/`, `run/refuters/`, and
+`run/contributions/`, and the merge output (stage 5). It reads no other files. Every
+`.json` file in those three directories must be a Contribution. Keep scratch files in
+`scratch/`, not in `run/`.
 
 ## Pipeline
 
@@ -88,8 +91,8 @@ same time. Stage 3 waits for every extractor.
     "entry_points": ["src/auth/mod.rs:login"]}]
   ```
 
-**Partition size:** one agent context per partition. A partition that an agent cannot
-read in its context gives shallow, hedged candidates: split it. A partition of three
+**Partition size:** one agent context per partition. A partition that is too large for
+the agent context gives candidates of low quality: split it. A partition of three
 files hides cross-file behavior from the agent: merge it. Aim for one subsystem (auth,
 billing, sync protocol) of about 2 to 10 thousand lines. Cut along dependency seams, not
 by name. Shared core code that everything reads can be its own partition *and* background
@@ -108,7 +111,7 @@ Each extractor reads its partition and returns candidates. Give each one:
   statement; its shape (`requirement` or `rule`, below); the candidate primary
   implementation symbol for each rule candidate; `file:line` evidence sites (several when
   the behavior spans files); a confidence from 0.0 to 1.0 with a one-line rationale; open
-  questions. A suspicion that the agent cannot ground in a line of code goes in a
+  questions. Some suspicions have no line of code as evidence. Put each of them in a
   separate `speculation` list, never among the candidates.
 
 **A good candidate statement** describes externally observable behavior or an
@@ -133,10 +136,10 @@ The statement stays in domain language in both shapes. "Sync retries are capped 
 with exponential backoff" is the statement either way. A rule candidate also gives
 `src/sync/retry.rs` + `retry_budget` as its candidate primary implementation.
 
-**Never drop the symbol.** An extractor that finds a candidate primary implementation
-and reports only prose loses the most expensive thing it found. The shaping loop can
-land the Rule later, but it cannot recover a dropped symbol without another read of the
-partition. If you cannot name one symbol, give a requirement candidate; do not guess a
+**Never drop the symbol.** An extractor can find a candidate primary implementation and
+report only prose. Then it loses the most expensive thing it found. The shaping loop can
+land the Rule later. But it cannot find a dropped symbol again without another read of
+the partition. If you cannot name one symbol, give a requirement candidate; do not guess a
 function.
 
 ### 3. Remove duplicates and merge (waits for all extractors)
@@ -148,11 +151,11 @@ meaning, not by words. For each cluster:
   `provenance-grounded-writing` skill's climbing test first; a merge is where
   capability-list language comes in.
 - **Keep ALL evidence sites from every duplicate; never pick one winner.** Independent
-  sites are the strongest sign that the behavior is intentional.
+  sites are the strongest sign that the behavior is a design decision.
 - Keep the confidence rationale with the most context. Record disagreement between
   extractors as a contested point for stage 4.
-- When one duplicate names a candidate implementation symbol and the other only
-  describes the behavior, keep the symbol and merge as a rule candidate. Stage 4 decides
+- One duplicate can name a candidate implementation symbol while the other only
+  describes the behavior. Then keep the symbol and merge as a rule candidate. Stage 4 decides
   if the symbol is a sound primary implementation.
 - Give each merged candidate a stable `proposal_key`: `backtrace/<partition>/<slug>`, or
   `backtrace/cross/<slug>` for a candidate merged across partitions. This key is the
@@ -164,17 +167,18 @@ Fan out refuters over the merged candidates, about 10 to 20 candidates per agent
 each refuter the candidates *with* their evidence sites and read access to the code. Each
 candidate gets three questions:
 
-1. **Requirement or implementation detail?** Apply the rewrite test again, hostilely.
+1. **Requirement or implementation detail?** Apply the rewrite test again, and try to
+   show that the candidate is only a detail.
 2. **Does the evidence support it?** Read every cited site again. A constant proves
    that a value exists, not that something enforces it. Find the enforcement path or
    demote the candidate.
 3. **Is the primary implementation claim sound?** Rule candidates only. Open the named
-   symbol and read it. Does that one function realize the whole obligation, or only a
-   part, while a caller, a `WHERE` clause, or a schema constraint realizes the rest?
+   symbol and read it. Does that one function enforce the whole obligation, or only a
+   part? A caller, a `WHERE` clause, or a schema constraint can enforce the rest.
    Several implementation sites fail this workflow's binding threshold: demote the
-   candidate to a requirement candidate and keep **every** site as evidence. The drift
-   between those sites is the finding. Check the other direction too: a function that
-   realizes three unrelated obligations needs three candidates or none. A type whose
+   candidate to a requirement candidate and keep **every** site as evidence. The
+   differences between those sites are the finding. Check the other direction too: a
+   function that enforces three unrelated obligations needs three candidates or none. A type whose
    construction makes the wrong state impossible passes as the primary implementation.
 
 Refuters return, per candidate, one verdict: uphold, demote-rule-to-requirement,
@@ -187,15 +191,30 @@ mark it `unsupported` or `exploratory`; they do not delete it.
 Only the orchestrator lands. Do not send large JSON through shell flags. Write the run
 directory files, validate them, then land the run directory.
 
-Run directory contract (`land` reads these paths and no other files):
+Run directory contract. `land` reads these paths and no other files:
 
-- `extractors/<partition>.json`: `<Contribution>` or `{"contribution": <Contribution>}`,
-  one file for each extractor participant slot.
-- `refuters/<batch>.json`: `<Contribution>` or `{"contribution": <Contribution>}`, one
-  file for each refuter participant slot.
-- `merge/merged.json`: `{"synthesis_packet": <SynthesisPacket>, "proposals":
-  [<ProposalCard>, ...], "assertions": [<Assertion>, ...]}`. Every qualifying proposal
-  has its assertion here. The run never writes dispositions.
+- Each `.json` file in `extractors/`: `<Contribution>` or
+  `{"contribution": <Contribution>}`, one file for each extractor participant slot.
+- Each `.json` file in `refuters/`: `<Contribution>` or
+  `{"contribution": <Contribution>}`, one file for each refuter participant slot.
+- Each `.json` file in `contributions/`: more Contributions in the same forms. This
+  directory is optional.
+- The merge output, `merge/merged.json`: `{"synthesis_packet": <SynthesisPacket>,
+  "proposals": [<ProposalCard>, ...], "assertions": [<Assertion>, ...]}`. Every
+  qualifying proposal has its assertion here. The run never writes dispositions.
+
+`land` also reads a `merged.json` and a `merge.json` in the root of the run directory.
+It lands the records of all the merge files that it finds. Do not keep an old root
+`merged.json` beside `merge/merged.json`. `land` reads both files, and a record in both
+stops the landing with `duplicate <kind> id <id> in run`.
+
+Two errors name the paths:
+
+- `merge/` holds `.json` files but no `merged.json`: `land` stops with
+  `<file> is not read: land reads the merge output in the merge directory only from
+  <run>/merge/merged.json`. Rename the merge output to `merge/merged.json`.
+- No path holds a record: `land` stops with `swarm run contains no landable records`,
+  followed by the list of the paths that it reads.
 
 Get the shapes from the CLI:
 
@@ -222,33 +241,36 @@ Then land:
 provenance swarm-backtrace land --scope <scope> --run-dir .provenance-swarm/<run-id>/run --format json
 ```
 
-`land` validates the records already in the scope together with the incoming records,
-and writes all of them in one atomic write. A failure writes nothing. A follow-up run of
-proposals only can use contributions and synthesis packets that are already landed, but
-a qualifying proposal still needs its assertion.
+`land` validates the records already in the scope together with the incoming records.
+Then it writes all of them in one atomic write. A failure writes nothing. A follow-up
+run of proposals only can use contributions and synthesis packets that are already
+landed. A qualifying proposal still needs its assertion.
 
 Use `--replace` only to land regenerated contributions or synthesis packets again.
 Proposal and assertion IDs are immutable: an identical record lands again with no change,
 and a different record with the same ID fails. Without `--replace`, an existing
 contribution or synthesis packet ID fails.
 
-**Input rules that `land` enforces.** Each one stops the landing when it is not met:
+**Input rules that `land` enforces.**
 
-- A proposal's `builds_on` lists assertion IDs of *other* proposals, never the
-  proposal's own assertion and never a proposal ID. Omit `builds_on`, or write
-  `"builds_on": []`, when the proposal builds on nothing. Its own assertion in `builds_on` fails with
-  `proposal assertion lineage contains a cycle`.
-- Each `reference_id` in a contribution's `evidence_references`, and each `claim_id` in
-  its `material_claims`, occurs in one contribution only, across all files of the run and
-  the contributions already in the scope. A refuter that cites the same code line as an
-  extractor gives its reference a new ID, for example `evidence_auth_guard_refuter`.
-  Proposal `traceability.evidence_references` can repeat contribution reference IDs.
-- A `required_human_decisions` entry with `blocks_promotion: true`, or an
-  `evidence_gaps` entry with `blocking_promotion: true`, stops the synthesis packet from
-  asserting any proposal. An assertion against that packet fails with
+- A proposal's `builds_on` lists assertion IDs of *other* proposals. It never lists the
+  proposal's own assertion or a proposal ID. Omit `builds_on`, or write
+  `"builds_on": []`, when the proposal builds on nothing. Its own assertion in
+  `builds_on` fails with `proposal assertion lineage contains a cycle`.
+- Give each `reference_id` in a contribution's `evidence_references` one owner
+  contribution. Do the same for each `claim_id` in its `material_claims`. Count all
+  files of the run and the contributions already in the scope. `land` checks this rule
+  only for the claims that an assertion cites, and for the evidence of those claims. A
+  cited ID with two owners fails with `assertion claim <id> must have exactly one owner`
+  or `assertion evidence <id> must have exactly one owner`. A refuter that cites the same
+  code line as an extractor gives its reference a new ID, for example
+  `evidence_auth_guard_refuter`. Proposal `traceability.evidence_references` can repeat
+  contribution reference IDs.
+- A `required_human_decisions` entry with `blocks_promotion: true` stops the synthesis
+  packet from asserting any proposal. An `evidence_gaps` entry with
+  `blocking_promotion: true` does the same. An assertion against that packet fails with
   `assertion has a blocking human decision` or `assertion has a blocking evidence gap`.
-  Set these flags
-  honestly, and land the proposals of a blocked packet without assertions.
+  Set these flags honestly. Land the proposals of a blocked packet without assertions.
 
 **Contribution shape.** Turn each extractor or refuter answer into one Contribution.
 Each candidate becomes one material claim with its own evidence references:
@@ -297,35 +319,50 @@ Synthesis packet:
   them.
 - Put each candidate with no enforcement path in `evidence_gaps`.
 - Put uncovered partitions (below) in `open_questions`.
-- List each proposal in `suggested_artifacts` with the same `proposal_id`,
-  `proposal_key`, and `proposal_type` as the proposal.
+- List each proposal that can have an assertion in `suggested_artifacts`. Use the same
+  `proposal_id`, `proposal_key`, and `proposal_type` as the proposal.
 
 Proposals:
 
 - One per merged candidate that survives stage 4.
-- `proposal_type` is `"requirement_candidate"` for a behavioral requirement,
-  `"rule_candidate"` for an atomic obligation with one evidenced candidate primary
-  implementation function or type, `"source_gap"` for a missing policy or spec source,
-  and `"question"` for a candidate that became only a question.
+- Set `proposal_type` from this list:
+  - `"requirement_candidate"`: a behavioral requirement.
+  - `"rule_candidate"`: an atomic obligation with one evidenced candidate primary
+    implementation function or type.
+  - `"source_gap"`: a missing policy or spec source.
+  - `"question"`: a candidate that became only a question.
 - A `rule_candidate` carries its binding where a human can act on it. An evidence
-  reference has no symbol field (only `reference_id`, `evidence_type`, `summary`,
-  `file_path`, `line`), so the implementation file goes in `file_path`, and the symbol
-  goes in that reference's `summary` and in the proposal's `summary`:
+  reference has no symbol field. Its fields are only `reference_id`, `evidence_type`,
+  `summary`, `file_path`, and `line`. Thus the implementation file goes in `file_path`.
+  The symbol goes in that reference's `summary` and in the proposal's `summary`:
   `<file>:<symbol> implements <what>`. A rule candidate whose symbol is only in an
   extractor's chat output is a requirement candidate with a better label.
 - Set `confidence` (`0.0` to `1.0`) on the proposal; do not put the score in `summary`.
 - Keep ALL merged evidence sites in `traceability.evidence_references` and the
   supporting claim IDs in `traceability.supporting_claim_ids`.
 - Write `promotion_state: "proposed"` on every proposal.
-- A proposal qualifies for an assertion when the synthesis packet lists it, its
-  supporting claims are not contested, the claims have positive evidence (not
-  `unsupported` or `exploratory`) owned by one contribution, and the packet has no
-  blocking gap or decision. A qualifying proposal must have its assertion in
-  `merge/merged.json`.
+- A synthesis packet qualifies a proposal for an assertion when all these conditions
+  are true:
+  - The packet and the proposal have the same scope and the same target.
+  - The packet's `suggested_artifacts` lists the proposal with the same `proposal_id`,
+    `proposal_key`, and `proposal_type`.
+  - The packet has no blocking evidence gap and no blocking human decision.
+  - The packet has no assertion for a different proposal.
+  - The proposal has at least one supporting claim, and the packet's `contested_claims`
+    does not list one of them.
+- Each qualifying proposal must have its assertion in `merge/merged.json`. If it has
+  none, `land` stops with `qualifying proposal <id> requires an assertion`.
+- Qualification does not examine the evidence. The assertion check does. Each claim
+  that an assertion cites must use a positive evidence type, not `unsupported` or
+  `exploratory`. Each evidence reference of that claim must also use one. If not, `land` stops with
+  `assertion claim <id> must use a positive evidence type`.
+- Some proposals must not have an assertion, for example a proposal that rests on
+  speculation. Leave that proposal out of `suggested_artifacts`, or put its claim in
+  `contested_claims`. Then the packet does not qualify it, and it lands with no
+  assertion.
 
-**What the graph shows after `land`.** A proposal that has an assertion reads as
-`promotion_state: "asserted"` in `provenance api proposals`, although its row stays
-`proposed`. A proposal with no assertion reads as `proposed`. Asserted is not accepted:
+**What the graph shows after `land`.** In `provenance api proposals`, a proposal that
+has an assertion reads as `promotion_state: "asserted"`. Its row stays `proposed`. A proposal with no assertion reads as `proposed`. Asserted is not accepted:
 only a human disposition accepts, rejects, or defers a proposal, and the run writes
 none.
 
