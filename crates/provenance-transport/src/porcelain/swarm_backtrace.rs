@@ -153,16 +153,14 @@ fn read_contribution_file(path: &Utf8Path) -> anyhow::Result<Vec<Contribution>> 
     deserialize_landing_value(path, "contribution", value).map(|contribution| vec![contribution])
 }
 
+/// Reads the merge output from its named files only, so that other files in
+/// the run directory, such as scratch copies of single records, do not stop
+/// the landing.
 fn read_merge_outputs(run_dir: &Utf8Path) -> anyhow::Result<MergeRecords> {
-    let mut paths = json_files(&run_dir.join("merge"))?;
-    for file_name in ["merged.json", "merge.json"] {
-        let path = run_dir.join(file_name);
-        if path.exists() {
-            paths.push(path);
-        }
-    }
-    paths.sort();
-    paths.dedup();
+    let paths = ["merge/merged.json", "merged.json", "merge.json"]
+        .into_iter()
+        .map(|file_name| run_dir.join(file_name))
+        .filter(|path| path.exists());
 
     let mut synthesis_packets = Vec::new();
     let mut proposals = Vec::new();
