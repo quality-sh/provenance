@@ -178,3 +178,40 @@ fn identical_proposal_and_assertion_relanding_without_replace_is_rejected() {
     assert_eq!(export["proposal_cards"].as_array().unwrap().len(), 1);
     assert_eq!(export["assertion_records"].as_array().unwrap().len(), 1);
 }
+
+#[test]
+fn swarm_backtrace_land_skips_scratch_files_beside_the_merge_output() {
+    let dir = tempfile::tempdir().unwrap();
+    let repo = dir.path().join("repo").to_string_lossy().to_string();
+    let run_dir = dir.path().join("run");
+    init_repo(&repo);
+    create_source(&repo);
+    write_run_dir(&run_dir, "Publishing is guarded by worker assignment.");
+    let merge: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(run_dir.join("merge/merged.json")).unwrap()).unwrap();
+    std::fs::write(
+        run_dir.join("merge/assertion.sample.json"),
+        merge["assertions"][0].to_string(),
+    )
+    .unwrap();
+    std::fs::write(run_dir.join("notes.json"), r#"{"scratch": true}"#).unwrap();
+    let run_dir = run_dir.to_string_lossy().to_string();
+
+    provenance()
+        .args([
+            "swarm-backtrace",
+            "land",
+            "--repo",
+            &repo,
+            "--scope",
+            "default",
+            "--run-dir",
+            &run_dir,
+            "--format",
+            "json",
+        ])
+        .bounded_assert()
+        .success()
+        .stdout(predicates::str::contains(r#""proposals": 1"#))
+        .stdout(predicates::str::contains(r#""assertions": 1"#));
+}
