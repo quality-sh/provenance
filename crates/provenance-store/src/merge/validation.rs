@@ -181,7 +181,7 @@ pub fn changed_statement_diagnostics(
     }
 }
 
-fn is_scoped_family(path: &Utf8Path, family: &str) -> bool {
+pub(super) fn is_scoped_family(path: &Utf8Path, family: &str) -> bool {
     let Some(family_dir) = path
         .parent()
         .filter(|path| path.file_name() == Some(family))

@@ -4,8 +4,10 @@ use provenance_macros::rule;
 use serde_json::Value;
 use std::collections::{BTreeMap, BTreeSet};
 
+mod review_cycle;
 pub mod validation;
 
+pub use review_cycle::review_cycle_conflicts;
 pub use validation::{changed_statement_diagnostics, validate_merged_records, ShardFamily};
 
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
@@ -18,6 +20,9 @@ pub enum MergeConflictKind {
     DivergentEdit,
     /// One side deleted a record the other side changed.
     DeleteModify,
+    /// Each side added a review submission of one record with the same
+    /// review cycle.
+    SameReviewCycle,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]

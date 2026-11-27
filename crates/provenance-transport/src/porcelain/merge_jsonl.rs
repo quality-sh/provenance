@@ -5,7 +5,8 @@ use provenance_porcelain::merge_jsonl::{MergeJsonlInput, MergeJsonlPort, MergeRe
 use provenance_porcelain::WorkFuture;
 use provenance_store::merge::{
     changed_statement_diagnostics, ensure_unique_ids, merge_records, read_jsonl_rows_for_shard,
-    validate_merged_records, MergeOutcome, MergeSide, ShardFamily, StoredRow,
+    review_cycle_conflicts, validate_merged_records, MergeOutcome, MergeSide, ShardFamily,
+    StoredRow,
 };
 use provenance_store::statement_analysis::violation_error;
 
@@ -85,6 +86,10 @@ fn merge(
         &record_values(&our_rows),
         &record_values(&their_rows),
     )?;
+    let outcome = match target_path {
+        Some(shard_path) => review_cycle_conflicts(shard_path, &record_values(&our_rows), outcome)?,
+        None => outcome,
+    };
     let records = match &outcome {
         MergeOutcome::Clean { records } => records,
         MergeOutcome::Conflicted { partial, .. } => partial,

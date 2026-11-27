@@ -309,8 +309,13 @@ over the ours file, which git reads. `--path %P` is the path of the file in the
 repository, which tells the merge the record kind. The command exits non-zero
 when the merge has a conflict or when the merged records fail the write checks;
 git then leaves the path unmerged. The JSON report names each conflicting
-record, its kind (`add_add`, `divergent_edit`, or `delete_modify`), and the
-base, ours, and theirs versions.
+record, its kind (`add_add`, `divergent_edit`, `delete_modify`, or
+`same_review_cycle`), and the base, ours, and theirs versions.
+`same_review_cycle` is a review submission of their branch that has the record
+and the review cycle of a review submission of our branch. Two branches from
+one base give their submissions of one record the same review cycle, and a read
+of a record with two submissions of one cycle refuses. The written file keeps
+our submission.
 
 ## MCP server
 

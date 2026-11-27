@@ -168,8 +168,9 @@ fn submission_lines(repo: &str, submission: &str) -> String {
 /// Flow (pairs 15 and 16): each branch changes `req_a`, which opens a
 /// review submission with review cycle 2 on each branch. One branch
 /// approves its submission and the other rejects its submission. The merge
-/// driver refuses the two changes of the record, and the person keeps the
-/// record of the first branch. The repair removes each line of the
+/// driver refuses the two changes of the record and the two submissions with
+/// one cycle. The person keeps the record of the first branch and the
+/// submission lines of both branches. The repair removes each line of the
 /// rejected submission.
 #[test]
 #[verifies("rule_disagreeing_review_rows_refuse_record", examples)]
@@ -191,10 +192,21 @@ fn two_changes_of_one_record_merged_give_two_submissions_with_one_cycle() {
     let merged = super::review_history::git_output(&repo, &["merge", "--no-edit", "side"]);
     assert!(!merged.status.success(), "{merged:?}");
     let conflicts = git(&repo, &["diff", "--name-only", "--diff-filter=U"]);
-    for file in conflicts.lines() {
+    assert!(
+        conflicts.lines().any(|file| file == PROPOSALS),
+        "{conflicts}"
+    );
+    for file in conflicts.lines().filter(|file| *file != PROPOSALS) {
         git(&repo, &["checkout", "--ours", "--", file]);
     }
-    commit(&repo);
+    let ours = git(&repo, &["show", &format!(":2:{PROPOSALS}")]);
+    let theirs = git(&repo, &["show", &format!(":3:{PROPOSALS}")]);
+    let mut kept = ours.lines().map(str::to_owned).collect::<Vec<_>>();
+    let added = theirs
+        .lines()
+        .filter(|line| !ours.lines().any(|our| our == *line));
+    kept.extend(added.map(str::to_owned).collect::<Vec<_>>());
+    store_lines(&repo, PROPOSALS, &kept);
 
     let mut submissions = [accepted.clone(), rejected.clone()];
     submissions.sort_by_key(|submission| line_naming(&repo, PROPOSALS, "id", submission));
