@@ -237,17 +237,7 @@ short-lived link - how would that work?" Starting an anchor is one session's wor
      --format json
    ```
 
-6. **Record the start on the thread.** Record the appetite, no-gos, and question
-   rationale on the requirement thread.
-
-   ```sh
-   provenance <anchor_requirement_id> discuss --scope <scope> \
-     --role assistant \
-     --body "START: appetite=<...>; no-gos=<...>; first questions=<...>" \
-     --format json
-   ```
-
-7. **Handoff.** End with copy-paste next commands. Include parallel lines only for
+6. **Handoff.** End your reply to the user with copy-paste next commands. Include parallel lines only for
    independent topics/questions.
 
 ## Mode 2: Answer Questions
@@ -362,7 +352,7 @@ person; do not change the stored order yourself. When the person answers an exis
 Question, answer that Question in the graph, even if you also mint follow-up Questions.
 
 Use the same fresh, unfiltered Topic read before a turn that only adds a thread note,
-claims or releases the Topic, checks saved decisions, or writes a handoff. Such turns do not need a Question read unless
+claims or releases the Topic, or checks saved decisions. Such turns do not need a Question read unless
 they work on a Question. A claim command or remembered handoff does not replace
 the required get commands.
 
@@ -618,16 +608,10 @@ Before final response:
      provenance <topic_id> update --scope <scope> --if-match <current_etag> --stdin --format json
    ```
 
-3. Post a handoff on the requirement thread:
-
-   ```sh
-   provenance <anchor_requirement_id> discuss --scope <scope> \
-     --role assistant \
-     --body "HANDOFF: landed=<named artifacts>; open questions=<...>; next=<copy-paste commands>" \
-     --format json
-   ```
-
-4. Tell the user what landed, what remains, and the next commands. Tell them that the
+3. Tell the user what landed, what remains, and the next commands. Do not write a
+   handoff, a status note, or next commands into a thread, a Discussion, or a record.
+   The next session finds its place from the open Questions and the Topic claim, and
+   from Beads where the project uses it. Tell them that the
    open page shows the tree, and give the link of the anchor's parent again (see
    "Start every session"). Use artifact names and ids together, never bare ids.
 
