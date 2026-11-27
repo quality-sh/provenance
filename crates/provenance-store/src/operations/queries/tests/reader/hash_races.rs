@@ -239,7 +239,7 @@ async fn a_read_only_hash_refuses_stale_state_with_a_pending_publication() {
     crate::publication::write_publication_marker(
         &store.layout(),
         &transaction,
-        crate::publication::PublicationPhase::Prepared,
+        crate::publication::PublicationPhase::Installing,
     )
     .unwrap();
     let shard = crate::shards::requirements_path(&store.layout(), &store.scope);

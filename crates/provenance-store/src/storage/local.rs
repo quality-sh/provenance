@@ -3,8 +3,9 @@
 //! A per-key set lands each key under the advisory lock of its shard. A put
 //! is a temporary file in the cache, a sync of it, a rename onto the key, and
 //! a sync of the directory of the key and of each directory that the put
-//! made. A delete is a remove and a sync of its directory. A whole set lands
-//! as one swap of a changed copy of the state directory.
+//! made. A delete is a remove and a sync of its directory. A whole set
+//! stages its changed files, writes a marker, and then installs each file
+//! in place.
 
 use super::{Atomicity, PublishFailure, StateKey, StateStorage, StateView, StorageError, WriteSet};
 use crate::layout::ProvenanceLayout;
@@ -20,6 +21,14 @@ pub(crate) mod durability;
 mod durability_tests;
 #[cfg(any(unix, windows))]
 mod file_install;
+mod in_place;
+#[cfg(test)]
+mod in_place_tests;
+#[cfg(test)]
+mod install_guard_tests;
+mod live_entry;
+#[cfg(test)]
+mod marked_write_tests;
 mod recovery;
 mod section;
 mod transactions;
@@ -27,6 +36,7 @@ pub(crate) mod whole_set;
 pub use durability::is_state_temporary_name;
 #[cfg(any(unix, windows))]
 pub(crate) use file_install::FileInstall;
+pub(crate) use in_place::{install as install_in_place, StateFileInUse};
 #[cfg(all(test, unix))]
 pub(crate) use recovery::validated_transaction_dir;
 pub use recovery::{write_publication_marker, PublicationPhase};
@@ -39,9 +49,6 @@ pub(crate) use transactions::{
     contained_transaction, end_marked_write, read_marker, removal_failure, remove_leftovers,
     remove_unpublished, write_marker, RemovalStep, TransactionKind,
 };
-
-#[cfg(test)]
-pub(crate) use whole_set::copy_directory;
 
 /// Canonical state in the files of one state directory.
 ///
@@ -59,9 +66,10 @@ pub(crate) use whole_set::copy_directory;
 /// made. After a delete, it syncs the directory. Thus on Unix, a key that
 /// landed keeps its new bytes, or stays deleted, after a power loss. On
 /// Windows, a directory has no sync: the file sync occurs, but a power loss
-/// can lose a rename, a new directory or a delete. A whole set lands as one
-/// swap of a changed copy of the state directory, so every key lands or no
-/// key lands.
+/// can lose a rename, a new directory or a delete. A whole set stages its
+/// changed files and a change list, and a marker names them before the
+/// first key changes, so after a stop the next section entry completes it:
+/// every key lands or no key lands.
 #[derive(Clone, Debug)]
 pub struct LocalStateStorage {
     layout: ProvenanceLayout,
@@ -75,13 +83,11 @@ impl LocalStateStorage {
 
 impl StateStorage for LocalStateStorage {
     fn read_view(&self) -> Result<StateView, StorageError> {
-        crate::test_probes::at("state_tree_read").map_err(StorageError::Read)?;
-        let mut entries = BTreeMap::new();
-        let state = self.layout.state_dir();
-        if state.try_exists().map_err(read_error(&state))? {
-            read_tree(&state, "", &mut entries)?;
-        }
-        Ok(StateView::new(entries))
+        let section = section::section_writes(&self.layout).map_err(StorageError::Read)?;
+        let _writes = section.as_deref().map(section::take);
+        self.complete_marked_write(section.is_some())
+            .map_err(StorageError::Read)?;
+        self.read_state()
     }
 
     /// With a base, the adapter reads the tree under the lock and compares
@@ -92,15 +98,28 @@ impl StateStorage for LocalStateStorage {
     /// A per-key set lands each key in key order: a put with a temporary
     /// file and a rename, a delete with a remove. It syncs as
     /// `durability::write_synced_state_file` and
-    /// `durability::remove_synced_file` state. A whole set lands as one swap
-    /// of the state directory; see `whole_set`.
+    /// `durability::remove_synced_file` state. A whole set installs each
+    /// changed file in place; see `whole_set` and `in_place`.
     fn publish(&self, writes: WriteSet) -> Result<(), PublishFailure> {
-        self.ensure_publishable(&writes)?;
+        let section = section::section_writes(&self.layout).map_err(PublishFailure::Refused)?;
+        let _writes = section.as_deref().map(section::take);
+        self.ensure_publishable(&writes, section.is_some())?;
         self.land(&writes)
     }
 }
 
 impl LocalStateStorage {
+    /// The keys and bytes of the state directory, with no completion.
+    fn read_state(&self) -> Result<StateView, StorageError> {
+        crate::test_probes::at("state_tree_read").map_err(StorageError::Read)?;
+        let mut entries = BTreeMap::new();
+        let state = self.layout.state_dir();
+        if state.try_exists().map_err(read_error(&state))? {
+            read_tree(&state, "", &mut entries)?;
+        }
+        Ok(StateView::new(entries))
+    }
+
     /// Lands a set that passed its checks. A set with no key returns before
     /// it lands, so it makes no transaction, file or marker.
     #[rule("rule_empty_write_set_writes_no_data")]
@@ -116,20 +135,47 @@ impl LocalStateStorage {
 
     /// Refuses a set whose puts and deletes share a key, and, under the lock,
     /// a set whose base is not the stored tree. A set with no base reads
-    /// nothing.
-    fn ensure_publishable(&self, writes: &WriteSet) -> Result<(), PublishFailure> {
+    /// nothing. The caller holds the writes of the section when `in_section`.
+    fn ensure_publishable(
+        &self,
+        writes: &WriteSet,
+        in_section: bool,
+    ) -> Result<(), PublishFailure> {
         writes.ensure_disjoint()?;
+        self.complete_marked_write(in_section)
+            .map_err(PublishFailure::Refused)?;
         if writes.base_view().is_some() {
             let view = self
-                .read_view()
+                .read_state()
                 .map_err(|error| PublishFailure::Refused(error.into()))?;
             writes.ensure_base(view.entries())?;
         }
         Ok(())
     }
 
+    /// Completes a write whose marker stays after its install failed, when
+    /// the caller holds the writes of a section that this process holds
+    /// (`in_section`), on any thread. No other write through the port in
+    /// the process runs while the caller holds them, so the marker belongs
+    /// to a write that ended. Thus no read or write through the port in the
+    /// section sees a set that landed in part: the call completes the set
+    /// first, or fails with the error of the install, such as a state file
+    /// that a different process holds. With no marker, it reads nothing
+    /// more. Out of a section of this process it does nothing, because a
+    /// write of a different process can own the marker.
+    #[rule("rule_section_reads_no_partial_whole_set")]
+    fn complete_marked_write(&self, in_section: bool) -> anyhow::Result<()> {
+        let marked = [TransactionKind::Import, TransactionKind::SourceEdit]
+            .into_iter()
+            .any(|kind| kind.marker(&self.layout).exists());
+        if marked && in_section {
+            section::recover_pending(&self.layout)?;
+        }
+        Ok(())
+    }
+
     /// A failure that leaves the marker of the transaction began to land:
-    /// recovery completes or rolls it back. Any other failure landed no key.
+    /// recovery completes it. Any other failure landed no key.
     fn land_whole_set(
         &self,
         writes: &WriteSet,

@@ -232,18 +232,30 @@ fn init_recovers_interrupted_publication_before_classifying_the_repository() {
     let temp = tempfile::tempdir().unwrap();
     let repo = temp.path().join("repo");
     init(&repo, &["--scope", "default"]).success();
+    // The write stopped after its marker and before it installed the
+    // manifest, its one put.
     let transaction = repo.join(".provenance/cache/import-transactions/interrupted-init");
-    std::fs::create_dir_all(&transaction).unwrap();
+    std::fs::create_dir_all(transaction.join("staged")).unwrap();
     std::fs::rename(
-        repo.join(".provenance/state"),
-        transaction.join("backup-state"),
+        repo.join(".provenance/state/manifest.json"),
+        transaction.join("staged/manifest.json"),
+    )
+    .unwrap();
+    let digest: [u8; 32] = <sha2::Sha256 as sha2::Digest>::digest(
+        std::fs::read(transaction.join("staged/manifest.json")).unwrap(),
+    )
+    .into();
+    std::fs::write(
+        transaction.join("changes.json"),
+        serde_json::json!({ "puts": [{ "key": "manifest.json", "sha256": digest }], "deletes": [] })
+            .to_string(),
     )
     .unwrap();
     std::fs::write(
         repo.join(".provenance/cache/import-publication.json"),
         serde_json::to_vec(&serde_json::json!({
             "transaction_dir": transaction,
-            "phase": "backup_created"
+            "phase": "installing"
         }))
         .unwrap(),
     )

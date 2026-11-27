@@ -6,6 +6,7 @@
 //! in `error.hint`. An error of no type that the CLI knows gets the failure
 //! object that the MCP tools also give.
 
+use provenance_core::protocol::read_failure::ReadFailure;
 use provenance_porcelain::action::ActionError;
 use provenance_porcelain::get::ReadError;
 use serde_json::{json, Map, Value};
@@ -31,6 +32,9 @@ pub fn json_refusal(error: &anyhow::Error) -> Value {
     }
     if let Some(action) = error.downcast_ref::<ActionError>() {
         return envelope(action_error(action), &action.to_string());
+    }
+    if let Some(held @ ReadFailure::StateFileInUse { .. }) = error.downcast_ref::<ReadFailure>() {
+        return json!({"error": held, "meta": {}});
     }
     json!({"error": provenance_transport::refusal::failure(error.as_ref()), "meta": {}})
 }

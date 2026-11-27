@@ -143,7 +143,8 @@ fn rename_failure(
         format!(
             "rename a temporary file from the cache {} to {path}: the cache and the state \
              directory {} are on two file systems, and the store writes the state only when \
-             they are on one file system",
+             they are on one file system. Put .provenance/cache on the file system of \
+             .provenance/state, and then send the call again",
             layout.cache_dir(),
             layout.state_dir()
         )
@@ -202,6 +203,23 @@ fn sync_directories(parent: &Path, first_made: Option<&Path>) -> anyhow::Result<
 /// True when it removed a file.
 pub fn remove_synced_file(path: &Utf8Path) -> anyhow::Result<bool> {
     remove_synced_file_checked(path.as_std_path(), || Ok(()))?.map_err(anyhow::Error::from)
+}
+
+/// Moves the synced file `staged` onto the live state file `target`, on the
+/// same file system, and then syncs the directory of `target` and each
+/// directory that the call made, as [`write_synced_state_file`] does. The
+/// target has all of its new bytes or keeps its old bytes. A reader that has
+/// the target open with delete sharing does not make the move fail.
+pub(in crate::storage::local) fn install_staged_file(
+    staged: &Utf8Path,
+    target: &Utf8Path,
+) -> anyhow::Result<()> {
+    let (parent, first_made) = make_parent(target.as_std_path())?;
+    let source = crate::long_path::extended(staged)?;
+    let destination = crate::long_path::extended(target)?;
+    std::fs::rename(source, destination)
+        .map_err(|error| crate::refusal::caused(error, format!("install {staged} at {target}")))?;
+    sync_directories(parent, first_made)
 }
 
 /// Writes `bytes` to the file at `path` in a staged tree, with a temporary

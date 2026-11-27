@@ -25,43 +25,78 @@ fn relative_access_recovers_a_marker_written_through_a_path_alias() {
         .exists());
 }
 
-/// A crash before the commit point leaves the live state missing and the old
-/// state in the backup. Recovery restores the backup for each such phase.
+/// A stop after the marker leaves the change list in the transaction and a
+/// put that is not installed yet. Recovery installs it.
 #[test]
-fn relative_repository_access_restores_backup_after_interrupted_publication() {
-    for phase in ["prepared", "backup_created"] {
-        let dir = tempfile::tempdir().unwrap();
-        let repo = dir.path().join("repo");
-        init_repo(&repo, None);
-        create_system_source(&repo);
-        let transaction = repo.join(".provenance/cache/import-transactions/interrupted");
-        std::fs::create_dir_all(&transaction).unwrap();
-        std::fs::rename(
-            repo.join(".provenance/state"),
-            transaction.join("backup-state"),
-        )
+fn relative_repository_access_completes_an_interrupted_install() {
+    let dir = tempfile::tempdir().unwrap();
+    let repo = dir.path().join("repo");
+    init_repo(&repo, None);
+    create_system_source(&repo);
+    let sources = repo.join(".provenance/state/scopes/default/sources");
+    let shard = std::fs::read_dir(&sources)
+        .unwrap()
+        .next()
+        .unwrap()
+        .unwrap()
+        .file_name()
+        .into_string()
         .unwrap();
-        write_publication_marker(&repo, &transaction, phase);
+    let key = format!("scopes/default/sources/{shard}");
+    let transaction = repo.join(".provenance/cache/import-transactions/interrupted");
+    std::fs::create_dir_all(transaction.join("staged/scopes/default/sources")).unwrap();
+    let staged = transaction.join("staged").join(&key);
+    std::fs::rename(sources.join(&shard), &staged).unwrap();
+    let digest: [u8; 32] =
+        <sha2::Sha256 as sha2::Digest>::digest(std::fs::read(&staged).unwrap()).into();
+    std::fs::write(
+        transaction.join("changes.json"),
+        serde_json::json!({ "puts": [{ "key": key, "sha256": digest }], "deletes": [] })
+            .to_string(),
+    )
+    .unwrap();
+    write_publication_marker(&repo, &transaction, "installing");
 
-        check_repo_relative(&repo);
+    check_repo_relative(&repo);
 
-        assert!(
-            repo.join(".provenance/state/manifest.json").is_file(),
-            "{phase}"
-        );
-        assert!(
-            !repo
-                .join(".provenance/cache/import-publication.json")
-                .exists(),
-            "{phase}"
-        );
-        assert!(!transaction.exists(), "{phase}");
-        assert_eq!(
-            source_ids(&repo),
-            ["source_a"],
-            "{phase}: the backup is readable"
-        );
-    }
+    assert!(!repo
+        .join(".provenance/cache/import-publication.json")
+        .exists());
+    assert!(!transaction.exists());
+    assert_eq!(source_ids(&repo), ["source_a"], "the install is complete");
+}
+
+/// A marker that names a phase that the program does not know does not
+/// parse. The command refuses it with the path of the marker, states that
+/// the program cannot read it, and changes no file.
+#[test]
+fn repository_access_refuses_a_marker_that_it_cannot_read() {
+    let dir = tempfile::tempdir().unwrap();
+    let repo = dir.path().join("repo");
+    init_repo(&repo, None);
+    let transaction = repo.join(".provenance/cache/import-transactions/unknown");
+    std::fs::create_dir_all(&transaction).unwrap();
+    write_publication_marker(&repo, &transaction, "backup_created");
+
+    let output = provenance()
+        .args(["check", "--repo", repo.to_str().unwrap()])
+        .output()
+        .unwrap();
+
+    let stderr = String::from_utf8(output.stderr).unwrap();
+    assert_eq!(output.status.code(), Some(1), "{stderr}");
+    // The path of the marker has the separators of the platform, so the
+    // test checks the text around it.
+    assert!(stderr.starts_with("Error: read marker "), "{stderr}");
+    assert!(
+        stderr.contains(
+            "import-publication.json: this program cannot read the content of the marker"
+        ),
+        "{stderr}"
+    );
+    assert!(!stderr.contains("release"), "{stderr}");
+    assert!(transaction.is_dir());
+    assert!(repo.join(".provenance/state/manifest.json").is_file());
 }
 
 #[test]
@@ -87,10 +122,10 @@ fn repository_access_finishes_cleanup_after_published_state() {
     let repo = dir.path().join("repo");
     init_repo(&repo, None);
     let transaction = repo.join(".provenance/cache/import-transactions/published");
-    std::fs::create_dir_all(transaction.join("backup-state")).unwrap();
+    std::fs::create_dir_all(transaction.join("staged")).unwrap();
     std::fs::copy(
         repo.join(".provenance/state/manifest.json"),
-        transaction.join("backup-state/manifest.json"),
+        transaction.join("staged/manifest.json"),
     )
     .unwrap();
     create_system_source(&repo);

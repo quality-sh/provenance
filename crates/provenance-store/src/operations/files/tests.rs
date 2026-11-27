@@ -5,6 +5,9 @@ use std::io::Read;
 #[cfg(any(unix, windows))]
 #[path = "../../publication/backup_tests.rs"]
 mod backup_tests;
+#[cfg(any(unix, windows))]
+#[path = "../../publication/changed_source_tests.rs"]
+mod changed_source_tests;
 #[path = "tests/held_write_cleanup.rs"]
 mod held_write_cleanup;
 #[path = "tests/held_write_races.rs"]
@@ -16,9 +19,6 @@ mod held_writes;
 mod prepared_file_tests;
 #[path = "tests/prepared_files.rs"]
 mod prepared_files;
-#[cfg(unix)]
-#[path = "../../publication/rollback_stop_tests.rs"]
-mod rollback_stop_tests;
 #[cfg(any(unix, windows))]
 #[path = "../../publication/source_edit_recovery_tests.rs"]
 mod source_edit_recovery_tests;

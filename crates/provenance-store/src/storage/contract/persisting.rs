@@ -60,6 +60,12 @@ impl Harness for Persisting {
         self.kept.broken.lock().unwrap().insert(key.clone());
         self.storage.fail_on(key);
     }
+
+    fn repair_key(&mut self, key: &str) {
+        let key = StateKey::new(key).unwrap();
+        self.kept.broken.lock().unwrap().remove(&key);
+        self.storage.repair(&key);
+    }
 }
 
 #[test]

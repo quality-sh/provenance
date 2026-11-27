@@ -22,7 +22,10 @@ impl LocalStateStorage {
                 "a file install lands only with a whole set"
             )));
         }
-        self.ensure_publishable(writes)?;
+        let section =
+            super::section::section_writes(&self.layout).map_err(PublishFailure::Refused)?;
+        let _writes = section.as_deref().map(super::section::take);
+        self.ensure_publishable(writes, section.is_some())?;
         let FileInstall(hook) = file;
         self.land_whole_set(writes, hook)
     }

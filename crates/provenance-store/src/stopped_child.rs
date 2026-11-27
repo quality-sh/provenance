@@ -14,15 +14,13 @@ const FILE_SIZE: &str = "PROVENANCE_STOPPED_CHILD_FILE_SIZE";
 
 /// The probes of a whole-set publication in their order, and whether a
 /// stop at the probe reopens as the new state.
-pub const CRASH_PHASES: [(&str, bool); 8] = [
+pub const CRASH_PHASES: [(&str, bool); 6] = [
     ("state_prepared", false),
-    ("state_marker_prepared", false),
-    ("state_after_backup_rename", false),
-    ("state_backup_created", false),
-    ("state_before_install", false),
-    ("state_after_install_rename", true),
+    ("state_marker_prepared", true),
+    ("state_file_installed", true),
     ("state_installed", true),
     ("state_published", true),
+    ("marked_transaction_removed", true),
 ];
 
 /// Runs `write` on the repository of the parent when this process is a
@@ -109,6 +107,11 @@ pub fn files_named(directory: &Utf8Path, prefix: &str, suffix: &str) -> Vec<Stri
 
 /// Every state file under `root`, by path relative to the state directory.
 pub fn state_tree(root: &Utf8Path) -> BTreeMap<Utf8PathBuf, Vec<u8>> {
+    tree(&ProvenanceLayout::new(root).state_dir())
+}
+
+/// Each file below `directory`, keyed by its path below it.
+pub fn tree(directory: &Utf8Path) -> BTreeMap<Utf8PathBuf, Vec<u8>> {
     fn visit(base: &Utf8Path, directory: &Utf8Path, tree: &mut BTreeMap<Utf8PathBuf, Vec<u8>>) {
         for entry in std::fs::read_dir(directory).unwrap() {
             let path = Utf8PathBuf::from_path_buf(entry.unwrap().path()).unwrap();
@@ -120,9 +123,8 @@ pub fn state_tree(root: &Utf8Path) -> BTreeMap<Utf8PathBuf, Vec<u8>> {
             }
         }
     }
-    let state = ProvenanceLayout::new(root).state_dir();
     let mut tree = BTreeMap::new();
-    visit(&state, &state, &mut tree);
+    visit(directory, directory, &mut tree);
     tree
 }
 

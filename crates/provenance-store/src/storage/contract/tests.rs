@@ -27,6 +27,10 @@ impl Harness for Memory {
     fn break_key(&mut self, key: &str) {
         self.storage.fail_on(StateKey::new(key).unwrap());
     }
+
+    fn repair_key(&mut self, key: &str) {
+        self.storage.repair(&StateKey::new(key).unwrap());
+    }
 }
 
 #[test]
@@ -168,15 +172,15 @@ fn each_adapter_a_failed_per_key_set_leaves_a_landed_prefix() {
 #[test]
 #[verifies("rule_write_sets_publish_through_the_storage_port", examples)]
 #[verifies("rule_stage_lands_as_one_whole_set", examples)]
-fn each_adapter_lands_a_two_key_whole_set_and_rolls_back_a_failed_one() {
+fn each_adapter_lands_a_two_key_whole_set_and_never_shows_a_failed_one_in_part() {
     a_two_key_whole_set_lands_both_keys(local());
-    a_failed_whole_set_lands_no_key(local());
+    a_failed_whole_set_is_never_seen_in_part(local());
     a_two_key_whole_set_lands_both_keys(Memory::default());
-    a_failed_whole_set_lands_no_key(Memory::default());
+    a_failed_whole_set_is_never_seen_in_part(Memory::default());
     a_two_key_whole_set_lands_both_keys(Persisting::default());
     a_two_key_whole_set_lands_both_keys(WholeLanding::default());
-    a_failed_whole_set_lands_no_key(Persisting::default());
-    a_failed_whole_set_lands_no_key(WholeLanding::default());
+    a_failed_whole_set_is_never_seen_in_part(Persisting::default());
+    a_failed_whole_set_is_never_seen_in_part(WholeLanding::default());
 }
 
 #[test]

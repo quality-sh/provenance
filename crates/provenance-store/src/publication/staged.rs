@@ -190,6 +190,3 @@ pub fn with_staged_state<R>(
     held.land_stage(staged.stage_changes()?)?;
     Ok(result)
 }
-
-#[cfg(all(test, feature = "host"))]
-pub(super) use crate::storage::local::copy_directory;

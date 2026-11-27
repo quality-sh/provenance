@@ -30,7 +30,7 @@ pub(super) fn backups(root: &Utf8Path) -> Vec<String> {
 
 /// After the rename of the prepared file onto the target, the write goes
 /// only forward. The probe makes each removal of the backup fail until the
-/// test disarms it: the write gives an error and keeps its marker, and the
+/// test disarms it: the write succeeds and keeps its marker, and the
 /// next section entry does not open. The entry after that completes the
 /// install.
 #[test]
@@ -55,7 +55,7 @@ fn a_failed_removal_of_the_backup_keeps_the_marker_until_a_section_entry_removes
     let (backup, phase) = marked_backup(&layout);
     let expected =
         format!("remove backup {backup}: repository file write failed: injected unlink failure");
-    assert_eq!(format!("{:#}", written.unwrap_err()), expected);
+    written.unwrap();
     assert_eq!(phase, "state_installed");
     assert_eq!(published(root), (AFTER.to_vec(), AFTER.to_vec()));
     assert_eq!(std::fs::read(&backup).unwrap(), BEFORE);
@@ -112,7 +112,7 @@ fn a_person_change_after_a_failed_removal_of_the_backup_stops_the_section_entry_
     test_probes::arm("repository_file_unlink_backup", || {
         anyhow::bail!("injected unlink failure")
     });
-    try_publish(root).unwrap_err();
+    try_publish(root).unwrap();
     test_probes::disarm("repository_file_unlink_backup");
     std::fs::write(root.join("source.txt"), b"person\n").unwrap();
 
@@ -123,14 +123,21 @@ fn a_person_change_after_a_failed_removal_of_the_backup_stops_the_section_entry_
     });
 
     let error = crate::write_error::WriteError(entered.unwrap_err());
-    assert_eq!(
-        format!("{:#}", error.0),
-        format!(
-            "end the write that {} names: source file {} changed outside the pending \
-             source-edit transaction",
-            layout.source_edit_marker_path(),
+    let text = format!("{:#}", error.0);
+    let marker = layout.source_edit_marker_path();
+    assert!(
+        text.starts_with(&format!(
+            "end the write that {marker} names: source file {} changed outside the pending \
+             source-edit transaction. The record files have the edit. When the file has the \
+             content that you want, remove {marker}, and the next command removes the rest of \
+             the write. ",
             root.join("source.txt")
-        )
+        )),
+        "{text}"
+    );
+    assert!(
+        text.ends_with(".backup can remain with the content of the file before the edit"),
+        "{text}"
     );
     assert!(matches!(
         error.safe(),
@@ -142,8 +149,8 @@ fn a_person_change_after_a_failed_removal_of_the_backup_stops_the_section_entry_
 
 /// The store renames the target to the backup, a later step before the
 /// rename of the prepared file fails, and the rename back fails too. The
-/// write keeps its marker and names the backup. The next section entry puts
-/// the backup back and completes the install.
+/// write succeeds and keeps its marker, which names the backup. The next
+/// section entry puts the backup back and completes the install.
 #[test]
 #[verifies("rule_stopped_write_leaves_no_transaction_data", examples)]
 fn a_failed_restore_keeps_the_marker_until_the_section_entry_completes_the_install() {
@@ -163,11 +170,8 @@ fn a_failed_restore_keeps_the_marker_until_the_section_entry_completes_the_insta
     test_probes::disarm("repository_file_restore");
 
     let (backup, phase) = marked_backup(&layout);
-    assert_eq!(
-        format!("{:#}", written.unwrap_err()),
-        format!("restore backup {backup}: injected restore failure")
-    );
-    assert_eq!(phase, "state_installed");
+    written.unwrap();
+    assert_eq!(phase, "installing");
     assert!(!root.join("source.txt").exists());
     assert_eq!(std::fs::read(&backup).unwrap(), BEFORE);
 

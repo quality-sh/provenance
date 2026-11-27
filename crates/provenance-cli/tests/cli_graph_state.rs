@@ -29,14 +29,30 @@ fn interrupted_publication_is_recovered_by_health() {
     write_manifest(root);
     let state = root.join(".provenance/state");
     let cache = root.join(".provenance/cache");
+    // The write stopped after its marker and before it installed the
+    // manifest, its one put.
     let transaction = cache.join("import-transactions/interrupted");
-    std::fs::create_dir_all(&transaction).unwrap();
-    std::fs::rename(&state, transaction.join("backup-state")).unwrap();
+    std::fs::create_dir_all(transaction.join("staged")).unwrap();
+    std::fs::rename(
+        state.join("manifest.json"),
+        transaction.join("staged/manifest.json"),
+    )
+    .unwrap();
+    let digest: [u8; 32] = <sha2::Sha256 as sha2::Digest>::digest(
+        std::fs::read(transaction.join("staged/manifest.json")).unwrap(),
+    )
+    .into();
+    std::fs::write(
+        transaction.join("changes.json"),
+        serde_json::json!({ "puts": [{ "key": "manifest.json", "sha256": digest }], "deletes": [] })
+            .to_string(),
+    )
+    .unwrap();
     std::fs::write(
         cache.join("import-publication.json"),
         serde_json::json!({
             "transaction_dir": transaction,
-            "phase": "backup_created"
+            "phase": "installing"
         })
         .to_string(),
     )

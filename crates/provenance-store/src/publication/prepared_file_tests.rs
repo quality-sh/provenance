@@ -134,11 +134,8 @@ fn a_prepared_file_with_a_leading_part_of_the_replacement_is_removed_at_the_next
 #[test]
 #[verifies("rule_stopped_write_leaves_no_transaction_data", examples)]
 fn a_marked_source_edit_replaces_a_prepared_file_with_a_leading_part_of_the_replacement() {
-    for phase in [
-        "source_edit_prepared",
-        "source_edit_backup_created",
-        "source_edit_state_installed",
-    ] {
+    {
+        let phase = "source_edit_prepared";
         let temp = fixture();
         let root_path = canonical_root(&temp);
         let root = root_path.as_path();

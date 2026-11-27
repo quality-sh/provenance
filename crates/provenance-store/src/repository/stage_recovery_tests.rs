@@ -1,8 +1,9 @@
 //! Crash and error phases of `Repository::stage`.
 //!
-//! The commit point is the rename of the staged state into live. An
-//! interruption before it reopens as the complete old state; one after it
-//! reopens as the complete new state. No row expects a mixture.
+//! The commit point is the marker that names the complete change list. An
+//! interruption before it reopens as the complete old state; one after it,
+//! also one in the recovery, reopens as the complete new state. The live
+//! state directory exists at each stop. No row expects a mixture.
 
 use super::Repository;
 use crate::cache::tests::fixtures::{open, seeded_layout, sid};
@@ -177,14 +178,52 @@ fn crash_child() {
     });
 }
 
+/// The test that the recovery stop tests run as a child: it opens the
+/// repository, so the section entry completes the stopped write.
+const RECOVERY_CHILD: &str = "repository::stage_recovery_tests::recovery_child";
+
+#[test]
+fn recovery_child() {
+    run_as_child(&["state_file_installed", "state_installed"], |root| {
+        open(&ProvenanceLayout::new(root.to_owned()));
+    });
+}
+
 #[test]
 #[verifies("rule_live_projection_shows_only_published_state", examples)]
 #[verifies("rule_stopped_write_leaves_no_transaction_data", examples)]
+#[verifies("rule_stopped_write_completes_after_its_marker", examples)]
 fn process_crashes_reopen_as_complete_old_or_new_state() {
     for (phase, committed) in CRASH_PHASES {
         let fixture = fixture();
         stop_in_child(&fixture, phase);
+        assert!(
+            ProvenanceLayout::new(fixture.root.clone())
+                .state_dir()
+                .is_dir(),
+            "{phase}: the live state directory exists at the stop"
+        );
         assert_reopened(&fixture, committed, phase);
+    }
+}
+
+/// The write stops after its first file install. The recovery of the next
+/// section entry then stops at each of its own probes, and the entry after
+/// that completes the write.
+#[test]
+#[verifies("rule_stopped_write_completes_after_its_marker", examples)]
+fn a_stop_in_the_recovery_reopens_as_the_complete_new_state() {
+    for phase in ["state_file_installed", "state_installed"] {
+        let fixture = fixture();
+        stop_in_child(&fixture, "state_file_installed");
+        crate::stopped_child::stop_in_child(RECOVERY_CHILD, &fixture.root, phase);
+        assert!(
+            ProvenanceLayout::new(fixture.root.clone())
+                .state_dir()
+                .is_dir(),
+            "{phase}: the live state directory exists at the stop"
+        );
+        assert_reopened(&fixture, true, phase);
     }
 }
 
@@ -196,9 +235,15 @@ fn a_stop_before_the_prepared_marker_leaves_a_transaction_that_the_next_section_
 
     let left = transactions(&fixture.root);
     assert_eq!(left.len(), 1, "the stopped write left its transaction");
+    let changed: BTreeMap<_, _> = fixture
+        .new
+        .iter()
+        .filter(|(path, bytes)| fixture.old.get(*path) != Some(*bytes))
+        .map(|(path, bytes)| (path.clone(), bytes.clone()))
+        .collect();
     assert!(
-        state_tree(&left[0].join("staged-repo")) == fixture.new,
-        "the transaction holds a full copy of the state"
+        crate::stopped_child::tree(&left[0].join("staged")) == changed,
+        "the transaction holds only the changed files"
     );
     let layout = ProvenanceLayout::new(fixture.root.clone());
     assert!(!layout.publication_marker_path().exists());
@@ -281,18 +326,21 @@ fn the_removal_of_a_stopped_transaction_keeps_a_link_and_its_target() {
 
 #[test]
 #[verifies("rule_live_projection_shows_only_published_state", examples)]
-fn errors_before_published_roll_back_and_an_error_at_published_keeps_new_state() {
+#[verifies("rule_write_succeeds_after_its_marker", examples)]
+fn an_error_before_the_marker_is_refused_and_an_error_after_it_keeps_new_state() {
     for (phase, _) in CRASH_PHASES {
         let fixture = fixture();
         let repository = open(&ProvenanceLayout::new(fixture.root.clone()));
         test_probes::crash_at(phase);
         let result = stage_rule(&repository);
         test_probes::disarm(phase);
-        assert!(
-            result.is_err(),
-            "{phase}: the probe error reaches the caller"
+        let marked = phase != "state_prepared";
+        assert_eq!(
+            result.is_ok(),
+            marked,
+            "{phase}: only an error before the marker reaches the caller"
         );
-        assert_reopened(&fixture, phase == "state_published", phase);
+        assert_reopened(&fixture, marked, phase);
     }
 }
 
