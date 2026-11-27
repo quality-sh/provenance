@@ -87,7 +87,7 @@ fn merge(
         &record_values(&their_rows),
     )?;
     let outcome = match target_path {
-        Some(shard_path) => review_cycle_conflicts(shard_path, &record_values(&our_rows), outcome)?,
+        Some(shard_path) => review_cycle_conflicts(shard_path, &our_rows, &their_rows, outcome)?,
         None => outcome,
     };
     let records = match &outcome {

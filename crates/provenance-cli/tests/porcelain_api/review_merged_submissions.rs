@@ -8,9 +8,7 @@ use super::review_cycle::describe;
 use super::review_disagreeing_rows::{check_reports, line_of, refused, remove_lines, state_file};
 use super::review_history::{commit, git, git_output};
 use super::review_merged_decisions::{decide, lines, DISPOSITIONS, PROPOSALS, WITHDRAWALS};
-use super::review_merged_withdrawals::{
-    check_passes, pending, read, repository, withdraw, Merge,
-};
+use super::review_merged_withdrawals::{check_passes, pending, read, repository, withdraw, Merge};
 use super::*;
 
 /// The ID of a stored line.
@@ -27,11 +25,16 @@ fn id_of(line: &str) -> String {
 pub(super) fn driver_kept_both_sides(repo: &str) -> Vec<String> {
     let conflicts = git(repo, &["diff", "--name-only", "--diff-filter=U"]);
     let conflicts = conflicts.lines().map(str::to_owned).collect::<Vec<_>>();
-    assert!(conflicts.iter().any(|file| file == PROPOSALS), "{conflicts:?}");
+    assert!(
+        conflicts.iter().any(|file| file == PROPOSALS),
+        "{conflicts:?}"
+    );
     let ours = git(repo, &["show", &format!(":2:{PROPOSALS}")]);
     let theirs = git(repo, &["show", &format!(":3:{PROPOSALS}")]);
     let mut expected = ours.lines().map(str::to_owned).collect::<Vec<_>>();
-    let added = theirs.lines().filter(|line| !ours.lines().any(|our| our == *line));
+    let added = theirs
+        .lines()
+        .filter(|line| !ours.lines().any(|our| our == *line));
     expected.extend(added.map(str::to_owned));
     expected.sort_by_key(|line| id_of(line));
     assert_eq!(lines(repo, PROPOSALS), expected);
@@ -89,7 +92,10 @@ fn accepted_driver_files_of_two_submissions_with_one_cycle_refuse_with_the_repai
             state_file(file).trim_start_matches("scopes/default/")
         );
         let our_lines = format!("ideation/proposal_cards.jsonl line {our_line}");
-        let mut each = [(our_line, &ours, our_lines), (their_line, &theirs, their_lines)];
+        let mut each = [
+            (our_line, &ours, our_lines),
+            (their_line, &theirs, their_lines),
+        ];
         each.sort();
         let expected = json!({"kind":"invalid_state_file", "file":state_file(PROPOSALS),
             "line":each[1].0,
@@ -98,7 +104,11 @@ fn accepted_driver_files_of_two_submissions_with_one_cycle_refuse_with_the_repai
                 each[1].2),
             "hint":"To repair, keep one submission and remove the lines of each other \
                 submission, then commit."});
-        assert_eq!(refused(&repo, &["api", "requirements/req_a"]), expected, "{side}");
+        assert_eq!(
+            refused(&repo, &["api", "requirements/req_a"]),
+            expected,
+            "{side}"
+        );
         check_reports(&repo, &expected);
 
         remove_lines(&repo, &[(PROPOSALS, their_line), (file, named)]);

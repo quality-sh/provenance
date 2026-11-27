@@ -5,36 +5,44 @@
 //! keeps both, and each read of the record then refuses. The check finds these
 //! submissions with the reading of the review rows and reports them as a
 //! conflict, so that git leaves the file unmerged for a person.
+//!
+//! The merge keeps both submissions. A merge driver sees one file, but the
+//! decisions and the withdrawals of a submission are in other files. When the
+//! person accepts the file as written, the read of the record refuses and
+//! names each line of each review file that the repair removes.
 
-use super::validation::is_scoped_family;
-use super::{CanonicalRecord, MergeConflict, MergeConflictKind, MergeOutcome};
-use anyhow::Context;
+use super::validation::ShardFamily;
+use super::{
+    stored_row, with_side, CanonicalRecord, MergeConflict, MergeConflictKind, MergeOutcome,
+    StoredRow,
+};
+use crate::jsonl::record_line_value;
+use crate::state_store::message_ids::ShardLine;
 use camino::Utf8Path;
 use provenance_core::review::{read_review_rows, ReviewRowFault, StoredReviewRows};
 use provenance_core::ProposalCard;
 use std::collections::BTreeSet;
 
-/// Whether the shard at `path` is the Proposal file of a scope.
-fn is_proposal_file(path: &Utf8Path) -> bool {
-    path.file_name() == Some("proposal_cards.jsonl") && is_scoped_family(path, "ideation")
-}
-
-fn id_of(record: &CanonicalRecord) -> Option<&str> {
-    record.get("id").and_then(serde_json::Value::as_str)
-}
-
 /// Reports the review submissions of their side that share a review cycle with ours.
 ///
-/// Each submission of their side that the merge keeps beside a submission of
-/// our side with the same record and review cycle gets a conflict, and the
-/// merge keeps only our submission. A group of submissions that our side
-/// alone already holds is not the doing of the merge and stays.
+/// Only the Proposal file of a scope has the check. Each submission of their
+/// side that the merge keeps beside a submission of our side with the same
+/// record and review cycle gets a `same_review_cycle` conflict, after the
+/// conflicts of the merge by ID. A submission that already has a conflict of
+/// the merge by ID gets no second conflict. The merge keeps each submission.
+/// A group of submissions that one side alone holds is not the doing of the
+/// merge and gets no conflict.
+///
+/// A merged line that is not a Proposal is refused as a read of the file
+/// refuses it: `invalid_state_file` at the line of the side that holds it,
+/// with the side at the start of the message.
 pub fn review_cycle_conflicts(
     shard_path: &Utf8Path,
-    ours: &[CanonicalRecord],
+    ours: &[StoredRow],
+    theirs: &[StoredRow],
     outcome: MergeOutcome<Vec<CanonicalRecord>>,
 ) -> anyhow::Result<MergeOutcome<Vec<CanonicalRecord>>> {
-    if !is_proposal_file(shard_path) {
+    if ShardFamily::for_shard_path(shard_path) != ShardFamily::Proposals {
         return Ok(outcome);
     }
     let (records, mut conflicts) = match outcome {
@@ -43,27 +51,29 @@ pub fn review_cycle_conflicts(
     };
     let cards = records
         .iter()
-        .map(|record| serde_json::from_value::<ProposalCard>(record.clone()))
-        .collect::<Result<Vec<_>, _>>()
-        .with_context(|| format!("a merged line of {shard_path} is not a Proposal"))?;
-    let ours: BTreeSet<&str> = ours.iter().filter_map(id_of).collect();
+        .map(|record| proposal(shard_path, ours, theirs, record))
+        .collect::<anyhow::Result<Vec<_>>>()?;
+    let our_ids: BTreeSet<&str> = ours.iter().filter_map(|row| id_of(row.record())).collect();
+    let reported: BTreeSet<String> = conflicts.iter().map(|c| c.record_id.clone()).collect();
     let reading = read_review_rows(StoredReviewRows {
         proposals: &cards,
         dispositions: &[],
         withdrawals: &[],
     });
-    let mut dropped = BTreeSet::new();
     for fault in reading.faults() {
         let ReviewRowFault::OneCycleTwoSubmissions { submissions, .. } = fault else {
             continue;
         };
         let positions = submissions.iter().map(|lines| lines.submission.position);
         let (kept, added): (Vec<usize>, Vec<usize>) =
-            positions.partition(|&at| ours.contains(cards[at].id.as_str()));
+            positions.partition(|&at| our_ids.contains(cards[at].id.as_str()));
         let Some(&kept) = kept.first() else {
             continue;
         };
         for at in added {
+            if reported.contains(cards[at].id.as_str()) {
+                continue;
+            }
             conflicts.push(MergeConflict {
                 kind: MergeConflictKind::SameReviewCycle,
                 record_id: cards[at].id.as_str().to_owned(),
@@ -71,17 +81,38 @@ pub fn review_cycle_conflicts(
                 ours: Some(records[kept].clone()),
                 theirs: Some(records[at].clone()),
             });
-            dropped.insert(at);
         }
     }
-    if conflicts.is_empty() {
-        return Ok(MergeOutcome::Clean { records });
-    }
-    let partial = records
-        .into_iter()
-        .enumerate()
-        .filter(|(at, _)| !dropped.contains(at))
-        .map(|(_, record)| record)
-        .collect();
-    Ok(MergeOutcome::Conflicted { conflicts, partial })
+    Ok(if conflicts.is_empty() {
+        MergeOutcome::Clean { records }
+    } else {
+        MergeOutcome::Conflicted {
+            conflicts,
+            partial: records,
+        }
+    })
+}
+
+fn id_of(record: &CanonicalRecord) -> Option<&str> {
+    record.get("id").and_then(serde_json::Value::as_str)
+}
+
+/// The Proposal of a merged record, read from the stored line of the side
+/// that holds it.
+fn proposal(
+    shard_path: &Utf8Path,
+    ours: &[StoredRow],
+    theirs: &[StoredRow],
+    record: &CanonicalRecord,
+) -> anyhow::Result<ProposalCard> {
+    let (side, row) = stored_row(ours, theirs, record)?;
+    let line = row.line_number;
+    let (_, value) = record_line_value::<ProposalCard>(shard_path, line, row.line.as_bytes())
+        .map_err(|error| with_side(error, shard_path, line, side))?;
+    serde_json::from_value(value).map_err(|error| {
+        crate::refusal::state_fault(
+            &ShardLine::new(shard_path, line),
+            format!("{side}: {error}"),
+        )
+    })
 }

@@ -162,22 +162,31 @@ pub(crate) fn preserved_lines(
 ) -> anyhow::Result<Vec<String>> {
     merged
         .iter()
-        .map(|record| {
+        .map(|record| stored_row(ours, theirs, record).map(|(_, row)| row.line.clone()))
+        .collect()
+}
+
+/// The stored row that holds a merged record, and its side: the row of ours
+/// when ours holds the record, else the row of theirs. A record that no row
+/// holds is refused.
+fn stored_row<'a>(
+    ours: &'a [StoredRow],
+    theirs: &'a [StoredRow],
+    record: &CanonicalRecord,
+) -> anyhow::Result<(MergeSide, &'a StoredRow)> {
+    let ours = ours.iter().map(|row| (MergeSide::Ours, row));
+    let theirs = theirs.iter().map(|row| (MergeSide::Theirs, row));
+    ours.chain(theirs)
+        .find(|(_, row)| &row.record == record)
+        .ok_or_else(|| {
             let named = record
                 .get("id")
                 .and_then(Value::as_str)
                 .unwrap_or("<record with no id>");
-            ours.iter()
-                .chain(theirs.iter())
-                .find(|row| &row.record == record)
-                .map(|row| row.line.clone())
-                .ok_or_else(|| {
-                    crate::refusal::fault!(
-                        "merged record {named} matches no stored line; refusing to re-encode it"
-                    )
-                })
+            crate::refusal::fault!(
+                "merged record {named} matches no stored line; refusing to re-encode it"
+            )
         })
-        .collect()
 }
 
 /// Merges by the selected key, keeping a change when the other side matches the
