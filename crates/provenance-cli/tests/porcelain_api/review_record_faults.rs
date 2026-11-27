@@ -169,14 +169,14 @@ fn submission_lines(repo: &str, submission: &str) -> String {
 /// review submission with review cycle 2 on each branch. One branch
 /// approves its submission and the other rejects its submission. The merge
 /// driver refuses the two changes of the record and the two submissions with
-/// one cycle. The person keeps the record of the first branch and the
-/// submission lines of both branches. The repair removes each line of the
-/// rejected submission.
+/// one cycle, and writes both submissions. The person accepts the Proposal
+/// file that the driver wrote and keeps the record of the first branch. The
+/// repair removes each line of the rejected submission.
 #[test]
 #[verifies("rule_disagreeing_review_rows_refuse_record", examples)]
 #[verifies("rule_review_row_refusal_gives_repair", examples)]
 #[verifies("rule_check_reports_review_row_faults", examples)]
-fn two_changes_of_one_record_merged_give_two_submissions_with_one_cycle() {
+fn an_approved_and_a_rejected_change_of_one_record_merge_to_two_submissions_with_one_cycle() {
     let (_directory, repo) = repository(Merge::Driver);
     let first = git(&repo, &["rev-parse", "--abbrev-ref", "HEAD"]);
     git(&repo, &["checkout", "-q", "-b", "side"]);
@@ -191,22 +191,11 @@ fn two_changes_of_one_record_merged_give_two_submissions_with_one_cycle() {
     commit(&repo);
     let merged = super::review_history::git_output(&repo, &["merge", "--no-edit", "side"]);
     assert!(!merged.status.success(), "{merged:?}");
-    let conflicts = git(&repo, &["diff", "--name-only", "--diff-filter=U"]);
-    assert!(
-        conflicts.lines().any(|file| file == PROPOSALS),
-        "{conflicts}"
-    );
-    for file in conflicts.lines().filter(|file| *file != PROPOSALS) {
+    let conflicts = super::review_merged_submissions::driver_kept_both_sides(&repo);
+    for file in conflicts.iter().filter(|file| *file != PROPOSALS) {
         git(&repo, &["checkout", "--ours", "--", file]);
     }
-    let ours = git(&repo, &["show", &format!(":2:{PROPOSALS}")]);
-    let theirs = git(&repo, &["show", &format!(":3:{PROPOSALS}")]);
-    let mut kept = ours.lines().map(str::to_owned).collect::<Vec<_>>();
-    let added = theirs
-        .lines()
-        .filter(|line| !ours.lines().any(|our| our == *line));
-    kept.extend(added.map(str::to_owned));
-    store_lines(&repo, PROPOSALS, &kept);
+    commit(&repo);
 
     let mut submissions = [accepted.clone(), rejected.clone()];
     submissions.sort_by_key(|submission| line_naming(&repo, PROPOSALS, "id", submission));

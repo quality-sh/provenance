@@ -73,6 +73,8 @@ mod cli_merge_jsonl;
 mod cli_merge_jsonl_preservation;
 #[path = "../cli_merge_jsonl_refusals.rs"]
 mod cli_merge_jsonl_refusals;
+#[path = "../cli_merge_jsonl_review_cycle.rs"]
+mod cli_merge_jsonl_review_cycle;
 #[path = "../cli_merge_swarm_runs.rs"]
 mod cli_merge_swarm_runs;
 #[path = "../cli_multiple_parents.rs"]
