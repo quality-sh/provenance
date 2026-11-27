@@ -8,7 +8,7 @@
 //!
 //! | Law | Statement |
 //! | --- | --------- |
-//! | L0 | Each process ends in the process limit, with no panic. |
+//! | L0 | Each process ends in the process limit, with no panic. A stopped write that exits before the kill gives an answer. |
 //! | L3 | A write that succeeded stays unless a later write changed it. |
 //! | L4 | Of two writes on one etag, at most one succeeds. |
 //! | L6 | The reads after each write equal the reads after a full rebuild. |
@@ -43,8 +43,8 @@ mod laws;
 mod process;
 #[path = "simulation_cli_support/reads.rs"]
 mod reads;
-#[path = "simulation_cli_support/stop_limit.rs"]
-mod stop_limit;
+#[path = "simulation_cli_support/stop_harness.rs"]
+mod stop_harness;
 
 use fixture::{run_cli, run_steps, state_entries};
 use hegel::{Hegel, NondeterminismStrictness, Settings, TestCase};

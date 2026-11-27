@@ -3,7 +3,8 @@
 //! Each process has the limit [`PROCESS_LIMIT`] from its start, for all of
 //! its waits. A process that does not end in it is killed, and its case breaks L0, so a stopped
 //! process fails its case in minutes and does not hold the job. A process
-//! that panics also breaks L0.
+//! that panics also breaks L0, and so does a stopped write that exits before
+//! the kill with no answer.
 
 #[path = "stop.rs"]
 pub mod stop;
@@ -126,12 +127,15 @@ impl Running {
         Ok(self.collect(status, what))
     }
 
-    /// Kills the process and gives its output. A killed process ends, so
-    /// this wait needs no deadline.
-    pub fn kill(mut self, what: &str) -> Output {
+    /// Kills the process and gives its output, and tells if the process
+    /// exited before the kill. A killed process ends, so this wait needs no
+    /// deadline.
+    pub fn kill(mut self, what: &str) -> (Output, bool) {
+        let ended = self.ended();
         let _ = self.child.kill();
         let status = self.child.wait().expect("a killed process ends");
-        self.collect(status, what)
+        let exited = ended || !may_be_killed(status);
+        (self.collect(status, what), exited)
     }
 
     fn collect(self, status: ExitStatus, what: &str) -> Output {
@@ -145,6 +149,23 @@ impl Running {
             note_l0_break(format!("{what} panicked: {}", stderr.trim()));
         }
         output
+    }
+}
+
+/// Tells if `status` can be the status of a process that the test killed.
+/// On Unix the kill sends SIGKILL, so another status is an exit before the
+/// kill. On Windows the status does not tell a kill from an exit.
+fn may_be_killed(status: ExitStatus) -> bool {
+    #[cfg(unix)]
+    {
+        use std::os::unix::process::ExitStatusExt as _;
+        const SIGKILL: i32 = 9;
+        status.signal() == Some(SIGKILL)
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = status;
+        true
     }
 }
 
@@ -253,6 +274,29 @@ fn finish(child: Child, what: &str) -> Result<Value, String> {
 
 /// The data of the success in `output`, or the text of its refusal with its
 /// kind first.
+/// Tells if a process gave an answer at its end: the data of a success on
+/// standard output, a refusal with its kind on standard error, or a panic.
+fn answered(output: &Output) -> bool {
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    !output.stdout.is_empty()
+        || output.status.success()
+        || refusal_kind(stderr.trim()) != "no_kind"
+        || panicked(output)
+}
+
+/// Notes `what` as an L0 break when its process ended with no answer. A
+/// panic has its own break.
+fn note_no_answer(output: &Output, what: &str) {
+    if !answered(output) {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        note_l0_break(format!(
+            "{what} exited with no answer ({}): {}",
+            output.status,
+            stderr.trim()
+        ));
+    }
+}
+
 fn answer(output: &Output) -> Result<Value, String> {
     if output.status.success() {
         return Ok(parse(&output.stdout)["data"].clone());
