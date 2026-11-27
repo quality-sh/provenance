@@ -477,6 +477,8 @@ pub mod events;
 
 pub mod follow;
 
+pub mod manifest;
+
 pub mod scripted_feed;
 
 pub mod surfaces;

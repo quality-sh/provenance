@@ -1,9 +1,8 @@
 use crate::review_host_support;
-use provenance_core::protocol::read_failure::STATE_CORRECTIONS;
 use provenance_macros::verifies;
 use review_host_support::{
     follow::{create, setup, Follow},
-    repository, start, waits,
+    manifest, repository, start, waits,
 };
 
 #[test]
@@ -228,11 +227,7 @@ fn a_manifest_that_does_not_parse_gives_its_fault_as_the_read_error_reason() {
     feed.send(serde_json::json!({"type":"ready", "epoch":feed.epoch, "sequence":0}));
     let follow = feed.follow(repo.path());
     follow.frame();
-    std::fs::write(
-        repo.path().join(".provenance/state/manifest.json"),
-        "{\"scopes\":\"default\"}\n",
-    )
-    .unwrap();
+    std::fs::write(manifest::path(repo.path()), manifest::DAMAGED).unwrap();
     feed.send(
         serde_json::json!({"type":"reset", "epoch":feed.epoch, "sequence":1, "reason":"recovery"}),
     );
@@ -246,10 +241,7 @@ fn a_manifest_that_does_not_parse_gives_its_fault_as_the_read_error_reason() {
             "continuity": "unknown",
             "epoch": feed.epoch,
             "sequence": 1,
-            "reason": format!(
-                "manifest.json line 1: invalid type: string \"default\", expected a sequence; \
-                 {STATE_CORRECTIONS}"
-            ),
+            "reason": manifest::damaged_reason(),
         })
     );
 }

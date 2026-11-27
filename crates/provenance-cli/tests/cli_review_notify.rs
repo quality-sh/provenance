@@ -6,11 +6,10 @@ use crate::codex;
 use crate::review_host_support;
 
 use codex::{notify, parts, registration, replay, Codex};
-use provenance_core::protocol::read_failure::STATE_CORRECTIONS;
 use provenance_macros::verifies;
 use review_host_support::{
     follow::{create, page_request, page_rule},
-    repository_with_actors, response, start_with, Host,
+    manifest, repository_with_actors, response, start_with, Host,
 };
 use serde_json::json;
 use std::{path::Path, process::Output, thread::JoinHandle, time::Duration};
@@ -438,10 +437,7 @@ fn a_manifest_that_does_not_parse_gives_its_fault_as_the_read_error_reason() {
     let setup = Setup::start();
     setup.register();
 
-    review_host_support::replace_file(
-        &setup.path().join(".provenance/state/manifest.json"),
-        "{\"scopes\":\"default\"}\n",
-    );
+    review_host_support::replace_file(&manifest::path(setup.path()), manifest::DAMAGED);
 
     let queued = setup.codex.wait_for(&setup.thread, 2);
     let (status, frame) = parts(&queued[1]);
@@ -457,10 +453,7 @@ fn a_manifest_that_does_not_parse_gives_its_fault_as_the_read_error_reason() {
             "repository": "A",
             "scope": "default",
             "rootId": "req_notify",
-            "reason": format!(
-                "manifest.json line 1: invalid type: string \"default\", expected a sequence; \
-                 {STATE_CORRECTIONS}"
-            ),
+            "reason": manifest::damaged_reason(),
         })
     );
 }

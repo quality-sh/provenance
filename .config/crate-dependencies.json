@@ -407,7 +407,8 @@
       ],
       "dev-dependencies": [
         "provenance-transport",
-        "tempfile"
+        "tempfile",
+        "tokio"
       ]
     },
     "provenance-scanner": {
