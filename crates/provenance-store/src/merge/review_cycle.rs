@@ -26,6 +26,7 @@ use std::collections::BTreeSet;
 
 /// Reports a `same_review_cycle` conflict for a submission of their side that
 /// shares a record and a review cycle with ours, and keeps both submissions.
+/// A group of submissions that only one side holds gets no conflict.
 #[rule("rule_merge_reports_same_review_cycle")]
 pub fn review_cycle_conflicts(
     shard_path: &Utf8Path,

@@ -146,8 +146,9 @@ fn submissions_with_one_cycle_at_another_path_merge_to_both_rows() {
 /// `delete_modify` and keeps their S, and S shares the cycle of our new
 /// submission. The report names S one time, and the file holds each
 /// submission that the report names.
+// No Rule binding: this test pins the limit of one report for each
+// submission, and its one conflict comes from the merge by ID.
 #[test]
-#[verifies("rule_merge_reports_same_review_cycle", examples)]
 fn a_submission_that_one_side_removes_and_the_other_changes_is_reported_one_time() {
     let directory = tempfile::tempdir().unwrap();
     let base = submission_in_cycle("submission_base", "req_a", 1, "Base.");
