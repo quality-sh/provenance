@@ -114,6 +114,7 @@ the live state tell where the stop landed. Each stop that a case draws adds
 | stops after the rename of the key and before the answer | It killed a one-key write after the rename of its temporary file to the key. |
 | stops after the answer | The write gave its answer, a success or a refusal, before the kill. |
 | stops of a write that ended before the test saw a point | The write ended before the test saw a point of its publish. |
+| stops of a write that exited with no answer | The test saw the point of the write only after the write ended, and the write exited with no success and no refusal. |
 | stops of a write that the simulation did not send | The CLI layer has no route for the write, or the read of its etag refused. |
 | stops with no waiting write of the engine | No write of the engine waited, so the stop had no write. |
 | stops of a write that did not end in its limit | The write did not end in the process limit; the case breaks L0. |

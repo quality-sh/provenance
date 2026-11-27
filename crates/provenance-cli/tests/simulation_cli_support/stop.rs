@@ -34,6 +34,10 @@ use std::time::Duration;
 mod events;
 use events::CacheEvents;
 
+#[cfg(test)]
+#[path = "stop_limit.rs"]
+mod limit;
+
 /// The time between two looks at the disk. The wait sleeps between its
 /// looks, so that it does not keep a core busy.
 const LOOK_INTERVAL: Duration = Duration::from_micros(100);
@@ -126,6 +130,9 @@ pub enum Stop {
     Answered { before: Entries },
     /// The write ended before the test saw a point.
     Ended,
+    /// The test saw the point of the write only after the write ended, and
+    /// the write exited with no answer.
+    Exited,
     /// The write did not end in the process limit, so its case breaks L0.
     Limit,
 }
@@ -138,12 +145,13 @@ const AFTER_RENAME: &str = "stops after the rename of the key and before the ans
 const NO_LIVE_STATE: &str = "stops that left no live state";
 const ANSWERED: &str = "stops after the answer";
 const ENDED: &str = "stops of a write that ended before the test saw a point";
+const EXITED: &str = "stops of a write that exited with no answer";
 const UNSENT: &str = "stops of a write that the simulation did not send";
 const NO_WRITE: &str = "stops with no waiting write of the engine";
 const LIMIT: &str = "stops of a write that did not end in its limit";
 
 /// Each row of the job summary that counts stops.
-const ROWS: [&str; 11] = [
+const ROWS: [&str; 12] = [
     BEFORE_MARKER,
     BEFORE_INSTALL,
     AFTER_INSTALL,
@@ -152,6 +160,7 @@ const ROWS: [&str; 11] = [
     NO_LIVE_STATE,
     ANSWERED,
     ENDED,
+    EXITED,
     UNSENT,
     NO_WRITE,
     LIMIT,
@@ -173,6 +182,7 @@ impl Stop {
             },
             Self::Answered { .. } => ANSWERED,
             Self::Ended => ENDED,
+            Self::Exited => EXITED,
             Self::Limit => LIMIT,
         }
     }
@@ -213,7 +223,7 @@ pub fn run_stopped(
     let files_before = files(layout.state_dir().as_std_path());
     let watch = Watch::new(layout);
     let mut running = Running::start(request.spawn(root));
-    let Some(made) = watch.reach(&mut running, Point::of(at)) else {
+    let Some((made, ended)) = watch.reach(&mut running, Point::of(at)) else {
         let output = match running.wait(&what) {
             Ok(output) => output,
             Err(text) => return (Some(done(task, Err(text), false)), Stop::Limit),
@@ -234,6 +244,10 @@ pub fn run_stopped(
         };
         let result = result.and_then(|data| effect(task, &request, &data));
         return (Some(done(task, result, false)), Stop::Answered { before });
+    }
+    if ended {
+        let result = answer(&output).and_then(|data| effect(task, &request, &data));
+        return (Some(done(task, result, false)), Stop::Exited);
     }
     let landing = match &made {
         Made::Transaction(transaction) => landing(layout, transaction),
@@ -320,9 +334,11 @@ impl<'a> Watch<'a> {
     }
 
     /// Waits until the write `running` reaches `point`, and gives the entry
-    /// that it made. When the write ends or its deadline is past, the test
-    /// takes each event up to that time and looks one more time; it gives
-    /// `None` when that look does not find the point. A marker counts only
+    /// that it made and if the write had ended when the test saw the point.
+    /// When the write ends, the test takes each event up to that time and
+    /// looks one more time; it gives `None` when that look does not find the
+    /// point. When the deadline is past and the write still runs, it gives
+    /// `None`, so that the wait reports the limit. A marker counts only
     /// after the transaction of the write appeared: each entry to the
     /// publication section recovers a marker that an earlier stop left,
     /// before the write makes its transaction
@@ -330,11 +346,15 @@ impl<'a> Watch<'a> {
     /// transaction makes no temporary file of a one-key write. A one-key
     /// write is reached when the test sees its temporary file, at each
     /// point.
-    fn reach(&self, running: &mut Running, point: Point) -> Option<Made> {
+    fn reach(&self, running: &mut Running, point: Point) -> Option<(Made, bool)> {
         let mut made = None;
         loop {
             let runs = running.runs();
-            if !runs {
+            let ended = !runs && running.ended();
+            if !runs && !ended {
+                return None;
+            }
+            if ended {
                 self.events.settle();
             }
             made = made.or_else(|| {
@@ -351,9 +371,9 @@ impl<'a> Watch<'a> {
                 Some(_) => true,
             };
             if reached {
-                return made;
+                return made.map(|made| (made, ended));
             }
-            if !runs {
+            if ended {
                 return None;
             }
             std::thread::sleep(LOOK_INTERVAL);

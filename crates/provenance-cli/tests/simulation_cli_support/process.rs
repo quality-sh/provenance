@@ -79,18 +79,28 @@ pub struct Running {
 }
 
 impl Running {
-    pub fn start(mut child: Child) -> Self {
+    pub fn start(child: Child) -> Self {
+        Self::with_limit(child, PROCESS_LIMIT)
+    }
+
+    /// Starts the waits of `child` with the deadline `limit` from now.
+    pub fn with_limit(mut child: Child, limit: Duration) -> Self {
         Self {
             stdout: read_pipe(child.stdout.take()),
             stderr: read_pipe(child.stderr.take()),
             child,
-            deadline: Instant::now() + PROCESS_LIMIT,
+            deadline: Instant::now() + limit,
         }
     }
 
     /// Tells if the process runs and its deadline is not past.
     pub fn runs(&mut self) -> bool {
         Instant::now() < self.deadline && matches!(self.child.try_wait(), Ok(None))
+    }
+
+    /// Tells if the process exited.
+    pub fn ended(&mut self) -> bool {
+        matches!(self.child.try_wait(), Ok(Some(_)))
     }
 
     /// Waits for the end of the process up to its deadline. At the deadline,
