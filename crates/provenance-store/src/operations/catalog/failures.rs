@@ -3,7 +3,7 @@
 use crate::cache::CompletionTimedOut;
 #[cfg(feature = "host")]
 use crate::operations::files::FileAccessRefusal;
-use crate::operations::reader::{CatchUpFailed, ReadRefusal};
+use crate::operations::reader::{CatchUpFailed, NoRevisionCause, ReadRefusal};
 #[cfg(feature = "host")]
 use crate::stale::git::GitRefusal;
 use crate::write_error::{
@@ -11,7 +11,7 @@ use crate::write_error::{
 };
 use provenance_core::protocol::{
     failure::OperationFailure,
-    read_failure::{MovedUnit, ReadFailure, UnparsableStateFile},
+    read_failure::{MovedUnit, ReadFailure, UnparsableStateFile, MATERIALIZE},
 };
 use provenance_macros::rule;
 
@@ -98,7 +98,8 @@ impl ReadError {
     }
     /// The refusal of a document read whose catch-up failed with `cause`: the
     /// location, the message and the hint of a state line that does not
-    /// parse, else the cause as text.
+    /// parse, else the cause as text. A read with no stored revision gives
+    /// the cause of its failed catch-up in these same members.
     #[rule("rule_document_catch_up_refusal_gives_typed_cause")]
     fn catch_up_refusal(&self, cause: &anyhow::Error) -> ReadFailure {
         let message = match self.classified(cause, UnparsableStateFile::catch_up_failure) {
@@ -136,13 +137,69 @@ impl ReadError {
             return completion_failure(timed_out);
         }
         if let Some(refusal) = error.downcast_ref::<ReadRefusal>() {
-            return refusal_failure(refusal);
+            return self.refusal_failure(refusal);
         }
         if let Some(refusal) = error.downcast_ref::<SourceFailure>() {
             return store_refusal(&refusal.failure).unwrap_or_else(|| self.read_failed(error));
         }
         UnparsableStateFile::find(error.as_ref())
             .map_or_else(|| self.read_failed(error), state_line)
+    }
+    /// The closed failure of a read refusal.
+    fn refusal_failure(&self, refusal: &ReadRefusal) -> ReadFailure {
+        match refusal {
+            ReadRefusal::NoProjection { cause, .. } => self.no_projection(cause.as_ref()),
+            ReadRefusal::Stale {
+                serial,
+                digest,
+                instance_id,
+                moved,
+                ..
+            } => ReadFailure::Stale {
+                serial: *serial,
+                digest: digest.clone(),
+                instance_id: instance_id.clone(),
+                moved: moved.iter().map(moved_unit).collect(),
+            },
+            ReadRefusal::UnitUnreadable { unit, .. } => {
+                ReadFailure::UnitUnreadable { unit: unit.clone() }
+            }
+            ReadRefusal::SchemaBehind { .. } => ReadFailure::SchemaBehind,
+            ReadRefusal::HalfMigrated { .. } => ReadFailure::HalfMigrated,
+        }
+    }
+    /// The `no_projection` failure of a read with no stored revision: the
+    /// members of `document_catch_up_failed` for a failed catch-up, and the
+    /// text of a read database that did not open. `provenance materialize` is
+    /// the hint of a read with no cause or with an absent database, the two
+    /// causes that it corrects.
+    fn no_projection(&self, cause: Option<&NoRevisionCause>) -> ReadFailure {
+        let unopened = |error: &anyhow::Error, hint: Option<&str>| ReadFailure::NoProjection {
+            location: None,
+            message: Some(failure_cause(error, native(error))),
+            hint: hint.map(str::to_owned),
+        };
+        match cause {
+            None => ReadFailure::NoProjection {
+                location: None,
+                message: None,
+                hint: Some(MATERIALIZE.to_owned()),
+            },
+            Some(NoRevisionCause::Absent(error)) => unopened(error, Some(MATERIALIZE)),
+            Some(NoRevisionCause::Unopened(error)) => unopened(error, None),
+            Some(NoRevisionCause::CatchUp(error)) => match self.catch_up_refusal(native(error)) {
+                ReadFailure::DocumentCatchUpFailed {
+                    location,
+                    message,
+                    hint,
+                } => ReadFailure::NoProjection {
+                    location,
+                    message: Some(message),
+                    hint,
+                },
+                failure => failure,
+            },
+        }
     }
     /// The `ReadFailed` failure of `error`, the native error or a cause in it.
     fn read_failed(&self, error: &anyhow::Error) -> ReadFailure {
@@ -205,29 +262,6 @@ const fn file_failure(error: &FileAccessRefusal) -> Option<ReadFailure> {
 const fn completion_failure(error: &CompletionTimedOut) -> ReadFailure {
     ReadFailure::CacheCloseTimedOut {
         stage: error.stage.public(),
-    }
-}
-
-fn refusal_failure(refusal: &ReadRefusal) -> ReadFailure {
-    match refusal {
-        ReadRefusal::NoProjection { .. } => ReadFailure::NoProjection,
-        ReadRefusal::Stale {
-            serial,
-            digest,
-            instance_id,
-            moved,
-            ..
-        } => ReadFailure::Stale {
-            serial: *serial,
-            digest: digest.clone(),
-            instance_id: instance_id.clone(),
-            moved: moved.iter().map(moved_unit).collect(),
-        },
-        ReadRefusal::UnitUnreadable { unit, .. } => {
-            ReadFailure::UnitUnreadable { unit: unit.clone() }
-        }
-        ReadRefusal::SchemaBehind { .. } => ReadFailure::SchemaBehind,
-        ReadRefusal::HalfMigrated { .. } => ReadFailure::HalfMigrated,
     }
 }
 

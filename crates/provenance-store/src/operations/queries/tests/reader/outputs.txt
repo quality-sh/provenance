@@ -59,4 +59,4 @@ catch-up refused: refused: rule rule_anchored is refused: a rule needs one requi
 materialize refused: Err(rule rule_anchored is refused: a rule needs one requirement)
 refused absent AnnotateOnly: refused: no projection revision in <root>/.provenance/cache/provenance.db; run `provenance materialize` (error returned from database: (code: 14) unable to open database file: (code: 14) unable to open database file)
 refused absent RefuseStale: refused: no projection revision in <root>/.provenance/cache/provenance.db; run `provenance materialize` (error returned from database: (code: 14) unable to open database file: (code: 14) unable to open database file)
-refused absent CatchUp: refused: no projection revision in <root>/.provenance/cache/provenance.db; run `provenance materialize` (catch-up failed: rule rule_anchored is refused: a rule needs one requirement)
+refused absent CatchUp: refused: no projection revision in <root>/.provenance/cache/provenance.db (catch-up failed: rule rule_anchored is refused: a rule needs one requirement)

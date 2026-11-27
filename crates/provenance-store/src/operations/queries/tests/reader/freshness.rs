@@ -68,8 +68,10 @@ async fn a_read_with_no_database_refuses_and_names_materialize() {
     assert!(!store.layout().cache_db_path().exists());
 }
 
+/// `provenance materialize` refuses with the same cause, so the refusal
+/// gives the cause and does not name it.
 #[tokio::test]
-async fn a_refused_catch_up_over_no_database_names_materialize() {
+async fn a_refused_catch_up_over_no_database_gives_the_cause_and_not_materialize() {
     let store = test_stores::seeded_queries();
     crate::cache::tests::fixtures::create_rule_of(
         &store.state_store(),
@@ -82,7 +84,7 @@ async fn a_refused_catch_up_over_no_database_names_materialize() {
         .await
         .unwrap_err();
     let text = format!("{refused:#}");
-    assert!(text.contains("provenance materialize"), "{text}");
+    assert!(!text.contains("provenance materialize"), "{text}");
     assert!(text.contains("needs one requirement"), "{text}");
 }
 
@@ -213,9 +215,11 @@ async fn annotate_only_does_not_change_a_delete_mode_cache_that_it_refuses() {
 
 /// When the freshness step fails before it can rebuild, the read falls
 /// back to the stored file; an old file holds no revision table, and the
-/// refusal must still be the typed one that names materialize.
+/// refusal must still be the typed one, with the error of the freshness step.
+/// `provenance materialize` refuses with that error, so the refusal does not
+/// name it.
 #[tokio::test]
-async fn a_pre_stamp_database_refuses_and_names_materialize_when_catch_up_fails() {
+async fn a_pre_stamp_database_refuses_with_the_cause_when_catch_up_fails() {
     let store = test_stores::seeded_queries();
     old_database(&store).await;
     // A file where the lock directory belongs makes the guard fail before
@@ -234,7 +238,8 @@ async fn a_pre_stamp_database_refuses_and_names_materialize_when_catch_up_fails(
         "{refused:#}"
     );
     let text = format!("{refused:#}");
-    assert!(text.contains("provenance materialize"), "{text}");
+    assert!(text.contains("publication lock path"), "{text}");
+    assert!(!text.contains("provenance materialize"), "{text}");
     assert!(!text.contains("no such table"), "{text}");
 }
 
