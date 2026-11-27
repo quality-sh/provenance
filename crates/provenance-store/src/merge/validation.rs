@@ -327,11 +327,11 @@ mod tests {
             ProjectionFamily::Topics => (ShardFamily::Topics, "id"),
             ProjectionFamily::Questions => (ShardFamily::Questions, "id"),
             ProjectionFamily::Discussions => (ShardFamily::Discussions, "discussion_id"),
+            ProjectionFamily::ProposalCards => (ShardFamily::Proposals, "id"),
             ProjectionFamily::Threads
             | ProjectionFamily::Messages
             | ProjectionFamily::Contributions
             | ProjectionFamily::SynthesisPackets
-            | ProjectionFamily::ProposalCards
             | ProjectionFamily::AssertionRecords
             | ProjectionFamily::Dispositions
             | ProjectionFamily::ImplementationBindings
