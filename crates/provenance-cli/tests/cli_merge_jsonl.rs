@@ -331,3 +331,60 @@ fn one_review_row_cleared_on_both_sides_reports_a_conflict() {
         ])
     );
 }
+
+const PROPOSALS_SHARD: &str = ".provenance/state/scopes/default/ideation/proposal_cards.jsonl";
+
+/// A review submission of `requirement` with review cycle 1, as the store
+/// writes it.
+fn submission(id: &str, requirement: &str) -> String {
+    format!(
+        "{{\"scope_id\":\"default\",\"id\":\"{id}\",\
+         \"proposal_key\":\"review:requirement:{requirement}:1\",\
+         \"proposal_type\":\"record_revision\",\"title\":\"Review {requirement}\",\
+         \"summary\":\"The change of {id}.\",\"traceability\":{{\"target\":\
+         {{\"artifact_type\":\"requirement\",\"artifact_id\":\"{requirement}\"}},\
+         \"source_ids\":[],\"evidence_references\":[],\"supporting_claim_ids\":[]}},\
+         \"promotion_state\":\"proposed\",\"record_revision\":{{\"revision\":\
+         \"{}\"}},\"actor\":\"cli\"}}\n",
+        "a".repeat(64)
+    )
+}
+
+/// Two branches each submit a review of `req_a` from one base, so each
+/// submission has review cycle 1. A clean merge would keep two submissions
+/// with one cycle, which each read of `req_a` refuses.
+#[test]
+fn two_submissions_of_one_record_with_one_cycle_report_a_conflict() {
+    let directory = tempfile::tempdir().unwrap();
+    let ours = submission("submission_ours", "req_a");
+    let theirs = submission("submission_theirs", "req_a");
+    let sides = Sides::write(directory.path(), "", &ours, &theirs);
+
+    let failure = sides.merge(PROPOSALS_SHARD).assert().code(1);
+
+    let report: serde_json::Value = serde_json::from_slice(&failure.get_output().stdout).unwrap();
+    assert_eq!(report["status"], "conflicted", "{report}");
+    assert_eq!(report["conflicts"].as_array().unwrap().len(), 1, "{report}");
+    assert_eq!(report["conflicts"][0]["kind"], "same_review_cycle");
+    assert_eq!(report["conflicts"][0]["record_id"], "submission_theirs");
+    assert_eq!(report["conflicts"][0]["ours"]["id"], "submission_ours");
+    assert_eq!(report["conflicts"][0]["theirs"]["id"], "submission_theirs");
+    // Git keeps the output file: our submission and not theirs.
+    assert_eq!(std::fs::read_to_string(&sides.output).unwrap(), ours);
+}
+
+#[test]
+fn submissions_of_two_records_merge_to_both_rows() {
+    let directory = tempfile::tempdir().unwrap();
+    let ours = submission("submission_ours", "req_a");
+    let theirs = submission("submission_theirs", "req_b");
+    let sides = Sides::write(directory.path(), "", &ours, &theirs);
+
+    sides.merge(PROPOSALS_SHARD).assert().success();
+
+    let merged = std::fs::read_to_string(&sides.output).unwrap();
+    assert!(
+        merged.contains(&ours) && merged.contains(&theirs),
+        "{merged}"
+    );
+}
