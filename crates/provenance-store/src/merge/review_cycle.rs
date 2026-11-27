@@ -23,10 +23,12 @@ fn id_of(record: &CanonicalRecord) -> Option<&str> {
     record.get("id").and_then(serde_json::Value::as_str)
 }
 
-/// Adds a conflict for each review submission of their side that the merge
-/// keeps beside a submission of our side with the same record and review
-/// cycle, and keeps only our submission. A group of submissions that our
-/// side alone already holds is not the doing of the merge and stays.
+/// Reports the review submissions of their side that share a review cycle with ours.
+///
+/// Each submission of their side that the merge keeps beside a submission of
+/// our side with the same record and review cycle gets a conflict, and the
+/// merge keeps only our submission. A group of submissions that our side
+/// alone already holds is not the doing of the merge and stays.
 pub fn review_cycle_conflicts(
     shard_path: &Utf8Path,
     ours: &[CanonicalRecord],
