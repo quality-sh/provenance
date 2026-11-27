@@ -205,7 +205,7 @@ fn two_changes_of_one_record_merged_give_two_submissions_with_one_cycle() {
     let added = theirs
         .lines()
         .filter(|line| !ours.lines().any(|our| our == *line));
-    kept.extend(added.map(str::to_owned).collect::<Vec<_>>());
+    kept.extend(added.map(str::to_owned));
     store_lines(&repo, PROPOSALS, &kept);
 
     let mut submissions = [accepted.clone(), rejected.clone()];
