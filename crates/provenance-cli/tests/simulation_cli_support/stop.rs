@@ -10,10 +10,13 @@
 //! transactions, the directory of the marker and the cache, and kills the
 //! write process when it sees the point of the stop. A one-key write has one
 //! point: its temporary file appears in the cache. The rename comes one file
-//! sync later, so the kill can land before or after it. A kill does not let
-//! the process remove its transaction, its marker or its temporary file. So
-//! after the kill, these entries, the phase of the marker and the live state
-//! tell where the stop landed.
+//! sync later, so the kill can land before or after it. That file can live
+//! for less time than the gap between two looks, so the test also gets the
+//! file events of the cache: they stay in their queue after the rename, so
+//! the test sees the point even then. A kill does not let the process remove
+//! its transaction, its marker or its temporary file. So after the kill,
+//! these entries, the phase of the marker and the live state tell where the
+//! stop landed.
 
 use super::{answer, done, effect, layer, panicked, parse, refusal_kind, request, Running};
 use crate::fixture::state_entries;
@@ -26,6 +29,10 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
+
+#[path = "stop_events.rs"]
+mod events;
+use events::CacheEvents;
 
 /// The time between two looks at the disk. The wait sleeps between its
 /// looks, so that it does not keep a core busy.
@@ -256,29 +263,44 @@ struct Watch<'a> {
     layout: &'a ProvenanceLayout,
     /// The transactions before the write started.
     before: BTreeSet<OsString>,
-    /// The temporary files of one-key writes in the cache before the write
-    /// started: an earlier stop before a rename leaves its temporary file
-    /// until the next entry to the publication section.
-    temporary_before: BTreeSet<PathBuf>,
+    /// The names of the temporary files of one-key writes in the cache
+    /// before the write started.
+    temporary_before: BTreeSet<OsString>,
+    /// The file events of the cache.
+    events: CacheEvents,
 }
 
 impl<'a> Watch<'a> {
+    /// Starts the watch of the cache. An earlier stop before a rename leaves
+    /// its temporary file until the next entry to the publication section,
+    /// so a temporary file that is there now is not one of the write.
     fn new(layout: &'a ProvenanceLayout) -> Self {
         let before = names(layout.import_transactions_dir().as_std_path());
-        let temporary_before = state_temporaries(layout);
+        let temporary_before: BTreeSet<_> = state_temporaries(layout)
+            .iter()
+            .filter_map(|path| path.file_name().map(OsString::from))
+            .collect();
+        let cache = layout.cache_dir();
         Self {
             layout,
             before,
+            events: CacheEvents::start(cache.as_std_path(), temporary_before.clone()),
             temporary_before,
         }
     }
 
-    /// A temporary file of a one-key write in the cache that was not there
-    /// before the write started.
+    /// A temporary file of a one-key write that was not there before the
+    /// write started: one that a look at the cache sees, or else one that an
+    /// event named. The events of some systems come some time after the
+    /// change, so the look finds the file while the write runs more often.
     fn new_temporary(&self) -> Option<PathBuf> {
         state_temporaries(self.layout)
             .into_iter()
-            .find(|path| !self.temporary_before.contains(path))
+            .find(|path| {
+                path.file_name()
+                    .is_some_and(|name| !self.temporary_before.contains(name))
+            })
+            .or_else(|| self.events.new_temporary())
     }
 
     /// The name of a transaction that was not there before the write started.
@@ -298,17 +320,23 @@ impl<'a> Watch<'a> {
     }
 
     /// Waits until the write `running` reaches `point`, and gives the entry
-    /// that it made. Gives `None` when the write ends first or its deadline
-    /// is past. A marker counts only after the transaction of the write
-    /// appeared: each entry to the publication section recovers a marker
-    /// that an earlier stop left, before the write makes its transaction
+    /// that it made. When the write ends or its deadline is past, the test
+    /// takes each event up to that time and looks one more time; it gives
+    /// `None` when that look does not find the point. A marker counts only
+    /// after the transaction of the write appeared: each entry to the
+    /// publication section recovers a marker that an earlier stop left,
+    /// before the write makes its transaction
     /// (`LocalSectionLock::acquire_checked`). A write that made a
     /// transaction makes no temporary file of a one-key write. A one-key
-    /// write is reached when its temporary file appears in the cache, at
-    /// each point.
+    /// write is reached when the test sees its temporary file, at each
+    /// point.
     fn reach(&self, running: &mut Running, point: Point) -> Option<Made> {
         let mut made = None;
-        while running.runs() {
+        loop {
+            let runs = running.runs();
+            if !runs {
+                self.events.settle();
+            }
             made = made.or_else(|| {
                 self.new_transaction()
                     .map(|name| {
@@ -325,9 +353,11 @@ impl<'a> Watch<'a> {
             if reached {
                 return made;
             }
+            if !runs {
+                return None;
+            }
             std::thread::sleep(LOOK_INTERVAL);
         }
-        None
     }
 }
 
