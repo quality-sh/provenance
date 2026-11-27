@@ -2,7 +2,8 @@
 //! write is past and the write still runs, so that the wait reports the
 //! limit and does not hide a write that hangs.
 
-use super::{Point, Running, Watch};
+use crate::process::stop::{Point, Watch};
+use crate::process::{take_l0_breaks, Running};
 use provenance_store::layout::ProvenanceLayout;
 use std::process::{Child, Command, Stdio};
 use std::time::Duration;
@@ -48,5 +49,5 @@ fn a_write_that_hangs_after_its_temporary_file_reaches_its_limit() {
     );
     let waited = running.wait("hung write");
     assert!(waited.is_err(), "the wait did not report the limit");
-    super::super::take_l0_breaks();
+    take_l0_breaks();
 }

@@ -43,6 +43,8 @@ mod laws;
 mod process;
 #[path = "simulation_cli_support/reads.rs"]
 mod reads;
+#[path = "simulation_cli_support/stop_limit.rs"]
+mod stop_limit;
 
 use fixture::{run_cli, run_steps, state_entries};
 use hegel::{Hegel, NondeterminismStrictness, Settings, TestCase};

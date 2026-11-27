@@ -34,10 +34,6 @@ use std::time::Duration;
 mod events;
 use events::CacheEvents;
 
-#[cfg(test)]
-#[path = "stop_limit.rs"]
-mod limit;
-
 /// The time between two looks at the disk. The wait sleeps between its
 /// looks, so that it does not keep a core busy.
 const LOOK_INTERVAL: Duration = Duration::from_micros(100);
@@ -75,7 +71,7 @@ impl Point {
 }
 
 /// The entry that the write made and that the test saw.
-enum Made {
+pub enum Made {
     /// The transaction of a write of two keys or more.
     Transaction(PathBuf),
     /// The temporary file of a one-key write, in the cache.
@@ -273,7 +269,7 @@ pub fn run_stopped(
 /// as the test sees them while its stopped write runs. The write runs alone,
 /// so a transaction or a temporary file that was not there before the write
 /// started is one of the write.
-struct Watch<'a> {
+pub struct Watch<'a> {
     layout: &'a ProvenanceLayout,
     /// The transactions before the write started.
     before: BTreeSet<OsString>,
@@ -288,7 +284,7 @@ impl<'a> Watch<'a> {
     /// Starts the watch of the cache. An earlier stop before a rename leaves
     /// its temporary file until the next entry to the publication section,
     /// so a temporary file that is there now is not one of the write.
-    fn new(layout: &'a ProvenanceLayout) -> Self {
+    pub fn new(layout: &'a ProvenanceLayout) -> Self {
         let before = names(layout.import_transactions_dir().as_std_path());
         let temporary_before: BTreeSet<_> = state_temporaries(layout)
             .iter()
@@ -346,7 +342,7 @@ impl<'a> Watch<'a> {
     /// transaction makes no temporary file of a one-key write. A one-key
     /// write is reached when the test sees its temporary file, at each
     /// point.
-    fn reach(&self, running: &mut Running, point: Point) -> Option<(Made, bool)> {
+    pub fn reach(&self, running: &mut Running, point: Point) -> Option<(Made, bool)> {
         let mut made = None;
         loop {
             let runs = running.runs();
