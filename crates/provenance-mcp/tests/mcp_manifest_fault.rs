@@ -1,7 +1,7 @@
 //! The MCP server of a repository whose manifest stops parsing after the
 //! server starts: a read and a write of the `api` tool each refuse with
-//! `invalid_state_file`, the line of the manifest and the two procedures that
-//! correct the state.
+//! `invalid_state_file`, the line of the manifest, the correction of that line
+//! and then the two procedures that correct the state.
 #![cfg(feature = "test-fixture")]
 
 use crate::support;

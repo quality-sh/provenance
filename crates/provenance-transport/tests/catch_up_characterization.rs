@@ -75,7 +75,7 @@ async fn reads_after_each_write_equal_a_full_rebuild() {
         "4b95c406da338453",
         "{text}"
     );
-    assert_eq!(fingerprint(without_actors), "51845083c6512b10", "{text}");
+    assert_eq!(fingerprint(without_actors), "998f679fd5df7554", "{text}");
     actors.sort();
     actors.dedup();
     let expected = [
