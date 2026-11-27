@@ -10,22 +10,30 @@
 //! transactions, the directory of the marker and the cache, and kills the
 //! write process when it sees the point of the stop. A one-key write has one
 //! point: its temporary file appears in the cache. The rename comes one file
-//! sync later, so the kill can land before or after it. A kill does not let
-//! the process remove its transaction, its marker or its temporary file. So
-//! after the kill, these entries, the phase of the marker and the live state
-//! tell where the stop landed.
+//! sync later, so the kill can land before or after it. That file can live
+//! for less time than the gap between two looks, so the test also gets the
+//! file events of the cache: they stay in their queue after the rename, so
+//! the test sees the point even then. A kill does not let the process remove
+//! its transaction, its marker or its temporary file. So after the kill,
+//! these entries, the phase of the marker and the live state tell where the
+//! stop landed. The exit status tells if the kill stopped the write: a write
+//! that exited before the kill with no answer is a fault of the product, so
+//! its case breaks L0.
 
-use super::{answer, done, effect, layer, panicked, parse, refusal_kind, request, Running};
+use super::{answer, answered, done, effect, layer, note_no_answer, parse, request, Running};
 use crate::fixture::state_entries;
 use provenance_simulation::generate::Task;
 use provenance_simulation::{stats, Done};
 use provenance_store::layout::ProvenanceLayout;
-use provenance_store::storage::local::is_state_temporary_name;
 use provenance_store::storage::StateKey;
-use std::collections::{BTreeMap, BTreeSet};
-use std::ffi::OsString;
+use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
+use std::process::Output;
 use std::time::Duration;
+
+#[path = "stop_watch.rs"]
+mod watch;
+pub use watch::Watch;
 
 /// The time between two looks at the disk. The wait sleeps between its
 /// looks, so that it does not keep a core busy.
@@ -64,7 +72,7 @@ impl Point {
 }
 
 /// The entry that the write made and that the test saw.
-enum Made {
+pub enum Made {
     /// The transaction of a write of two keys or more.
     Transaction(PathBuf),
     /// The temporary file of a one-key write, in the cache.
@@ -117,8 +125,12 @@ pub enum Stop {
     /// The write gave its answer before the kill. `before` is the state
     /// before the write started.
     Answered { before: Entries },
-    /// The write ended before the test saw a point.
+    /// The write ended before the test saw a point. When it gave no
+    /// answer, its case breaks L0.
     Ended,
+    /// The write reached its point and exited with no answer before the
+    /// kill, so its case breaks L0.
+    Exited,
     /// The write did not end in the process limit, so its case breaks L0.
     Limit,
 }
@@ -131,12 +143,13 @@ const AFTER_RENAME: &str = "stops after the rename of the key and before the ans
 const NO_LIVE_STATE: &str = "stops that left no live state";
 const ANSWERED: &str = "stops after the answer";
 const ENDED: &str = "stops of a write that ended before the test saw a point";
+const EXITED: &str = "stops of a write that exited with no answer";
 const UNSENT: &str = "stops of a write that the simulation did not send";
 const NO_WRITE: &str = "stops with no waiting write of the engine";
 const LIMIT: &str = "stops of a write that did not end in its limit";
 
 /// Each row of the job summary that counts stops.
-const ROWS: [&str; 11] = [
+const ROWS: [&str; 12] = [
     BEFORE_MARKER,
     BEFORE_INSTALL,
     AFTER_INSTALL,
@@ -145,6 +158,7 @@ const ROWS: [&str; 11] = [
     NO_LIVE_STATE,
     ANSWERED,
     ENDED,
+    EXITED,
     UNSENT,
     NO_WRITE,
     LIMIT,
@@ -166,6 +180,7 @@ impl Stop {
             },
             Self::Answered { .. } => ANSWERED,
             Self::Ended => ENDED,
+            Self::Exited => EXITED,
             Self::Limit => LIMIT,
         }
     }
@@ -211,22 +226,25 @@ pub fn run_stopped(
             Ok(output) => output,
             Err(text) => return (Some(done(task, Err(text), false)), Stop::Limit),
         };
+        note_no_answer(&output, &what);
         let result = answer(&output).and_then(|data| effect(task, &request, &data));
         return (Some(done(task, result, false)), Stop::Ended);
     };
-    let output = running.kill(&what);
-    // A process gives its answer at its end: the data of a success on
-    // standard output, or a refusal with its kind on standard error.
-    let stderr = String::from_utf8_lossy(&output.stderr);
-    let refused = refusal_kind(stderr.trim()) != "no_kind";
-    if !output.stdout.is_empty() || output.status.success() || refused || panicked(&output) {
-        let result = if output.stdout.is_empty() {
-            answer(&output)
-        } else {
-            Ok(parse(&output.stdout)["data"].clone())
-        };
-        let result = result.and_then(|data| effect(task, &request, &data));
-        return (Some(done(task, result, false)), Stop::Answered { before });
+    match end(running, &what) {
+        End::Answered(output) => {
+            let result = if output.stdout.is_empty() {
+                answer(&output)
+            } else {
+                Ok(parse(&output.stdout)["data"].clone())
+            };
+            let result = result.and_then(|data| effect(task, &request, &data));
+            return (Some(done(task, result, false)), Stop::Answered { before });
+        }
+        End::Exited(output) => {
+            let result = answer(&output).and_then(|data| effect(task, &request, &data));
+            return (Some(done(task, result, false)), Stop::Exited);
+        }
+        End::Killed => {}
     }
     let landing = match &made {
         Made::Transaction(transaction) => landing(layout, transaction),
@@ -248,86 +266,30 @@ pub fn run_stopped(
     )
 }
 
-/// The transactions, the marker and the temporary files of one repository,
-/// as the test sees them while its stopped write runs. The write runs alone,
-/// so a transaction or a temporary file that was not there before the write
-/// started is one of the write.
-struct Watch<'a> {
-    layout: &'a ProvenanceLayout,
-    /// The transactions before the write started.
-    before: BTreeSet<OsString>,
-    /// The temporary files of one-key writes in the cache before the write
-    /// started: an earlier stop before a rename leaves its temporary file
-    /// until the next entry to the publication section.
-    temporary_before: BTreeSet<PathBuf>,
+/// How a write that reached the point of its stop ended.
+pub enum End {
+    /// The write gave its answer before the kill.
+    Answered(Output),
+    /// The write exited with no answer before the kill, so its case breaks
+    /// L0.
+    Exited(Output),
+    /// The kill stopped the write before its answer.
+    Killed,
 }
 
-impl<'a> Watch<'a> {
-    fn new(layout: &'a ProvenanceLayout) -> Self {
-        let before = names(layout.import_transactions_dir().as_std_path());
-        let temporary_before = state_temporaries(layout);
-        Self {
-            layout,
-            before,
-            temporary_before,
-        }
-    }
-
-    /// A temporary file of a one-key write in the cache that was not there
-    /// before the write started.
-    fn new_temporary(&self) -> Option<PathBuf> {
-        state_temporaries(self.layout)
-            .into_iter()
-            .find(|path| !self.temporary_before.contains(path))
-    }
-
-    /// The name of a transaction that was not there before the write started.
-    fn new_transaction(&self) -> Option<OsString> {
-        let names = names(self.layout.import_transactions_dir().as_std_path());
-        names.into_iter().find(|name| !self.before.contains(name))
-    }
-
-    /// Tells if the marker is there. A listing of its directory opens no
-    /// file of the write.
-    fn marker(&self) -> bool {
-        let marker = self.layout.publication_marker_path();
-        let (Some(directory), Some(name)) = (marker.parent(), marker.file_name()) else {
-            return false;
-        };
-        names(directory.as_std_path()).contains(&OsString::from(name))
-    }
-
-    /// Waits until the write `running` reaches `point`, and gives the entry
-    /// that it made. Gives `None` when the write ends first or its deadline
-    /// is past. A marker counts only after the transaction of the write
-    /// appeared: each entry to the publication section recovers a marker
-    /// that an earlier stop left, before the write makes its transaction
-    /// (`LocalSectionLock::acquire_checked`). A write that made a
-    /// transaction makes no temporary file of a one-key write. A one-key
-    /// write is reached when its temporary file appears in the cache, at
-    /// each point.
-    fn reach(&self, running: &mut Running, point: Point) -> Option<Made> {
-        let mut made = None;
-        while running.runs() {
-            made = made.or_else(|| {
-                self.new_transaction()
-                    .map(|name| {
-                        let directory = self.layout.import_transactions_dir();
-                        Made::Transaction(directory.as_std_path().join(name))
-                    })
-                    .or_else(|| self.new_temporary().map(Made::Temporary))
-            });
-            let reached = match &made {
-                None => false,
-                Some(Made::Transaction(_)) if point == Point::Second => self.marker(),
-                Some(_) => true,
-            };
-            if reached {
-                return made;
-            }
-            std::thread::sleep(LOOK_INTERVAL);
-        }
-        None
+/// Kills the write `running` that reached the point of its stop, and tells
+/// how it ended. The exit status decides, not the time when the test saw
+/// the point: a write can exit after the test saw its point and before the
+/// kill.
+pub fn end(running: Running, what: &str) -> End {
+    let (output, exited) = running.kill(what);
+    if answered(&output) {
+        End::Answered(output)
+    } else if exited {
+        note_no_answer(&output, what);
+        End::Exited(output)
+    } else {
+        End::Killed
     }
 }
 
@@ -365,27 +327,6 @@ fn landing(layout: &ProvenanceLayout, transaction: &Path) -> Landing {
     }
 }
 
-/// The paths of the temporary files of one-key writes in the cache of
-/// `layout`: each file directly in the cache whose name the store gives to
-/// such a file.
-fn state_temporaries(layout: &ProvenanceLayout) -> BTreeSet<PathBuf> {
-    let cache = layout.cache_dir();
-    let Ok(entries) = std::fs::read_dir(&cache) else {
-        return BTreeSet::new();
-    };
-    entries
-        .flatten()
-        .filter(|entry| {
-            entry
-                .file_name()
-                .to_str()
-                .is_some_and(is_state_temporary_name)
-                && entry.file_type().is_ok_and(|kind| kind.is_file())
-        })
-        .map(|entry| entry.path())
-        .collect()
-}
-
 /// Each file below `directory` with its bytes, or none when it does not
 /// exist.
 fn files(directory: &Path) -> Files {
@@ -402,10 +343,4 @@ fn files(directory: &Path) -> Files {
         }
     }
     found
-}
-
-/// The names in `directory`, or none when it does not exist.
-fn names(directory: &Path) -> BTreeSet<OsString> {
-    std::fs::read_dir(directory)
-        .map_or_default(|entries| entries.flatten().map(|entry| entry.file_name()).collect())
 }

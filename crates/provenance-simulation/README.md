@@ -19,7 +19,7 @@ Each layer is one job, so a failure names one layer.
 
 | Law | Layers | What it checks |
 | --- | --- | --- |
-| L0 | all | Each operation or process ends in its time limit, with no panic. |
+| L0 | all | Each operation or process ends in its time limit, with no panic. A stopped CLI write that exits before the kill gives an answer. |
 | L1 | engine, contract | An operation that fails, with no unknown outcome, lands no write. |
 | L2 | engine, contract | After an engine stops, the state opens and reads again. |
 | L3 | all | A write that succeeded stays unless a later write changed it. |
@@ -113,7 +113,8 @@ the live state tell where the stop landed. Each stop that a case draws adds
 | stops before the rename of the key | It killed a one-key write while its temporary file existed, before the rename. |
 | stops after the rename of the key and before the answer | It killed a one-key write after the rename of its temporary file to the key. |
 | stops after the answer | The write gave its answer, a success or a refusal, before the kill. |
-| stops of a write that ended before the test saw a point | The write ended before the test saw a point of its publish. |
+| stops of a write that ended before the test saw a point | The write ended before the test saw a point of its publish. When it gave no success, no refusal and no panic, the case breaks L0. |
+| stops of a write that exited with no answer | The write reached its point and then exited before the kill with no success, no refusal and no panic; the case breaks L0. |
 | stops of a write that the simulation did not send | The CLI layer has no route for the write, or the read of its etag refused. |
 | stops with no waiting write of the engine | No write of the engine waited, so the stop had no write. |
 | stops of a write that did not end in its limit | The write did not end in the process limit; the case breaks L0. |

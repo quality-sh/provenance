@@ -3,7 +3,8 @@
 //! Each process has the limit [`PROCESS_LIMIT`] from its start, for all of
 //! its waits. A process that does not end in it is killed, and its case breaks L0, so a stopped
 //! process fails its case in minutes and does not hold the job. A process
-//! that panics also breaks L0.
+//! that panics also breaks L0, and so does a stopped write that exits before
+//! the kill with no answer.
 
 #[path = "stop.rs"]
 pub mod stop;
@@ -79,18 +80,28 @@ pub struct Running {
 }
 
 impl Running {
-    pub fn start(mut child: Child) -> Self {
+    pub fn start(child: Child) -> Self {
+        Self::with_limit(child, PROCESS_LIMIT)
+    }
+
+    /// Starts the waits of `child` with the deadline `limit` from now.
+    pub fn with_limit(mut child: Child, limit: Duration) -> Self {
         Self {
             stdout: read_pipe(child.stdout.take()),
             stderr: read_pipe(child.stderr.take()),
             child,
-            deadline: Instant::now() + PROCESS_LIMIT,
+            deadline: Instant::now() + limit,
         }
     }
 
     /// Tells if the process runs and its deadline is not past.
     pub fn runs(&mut self) -> bool {
         Instant::now() < self.deadline && matches!(self.child.try_wait(), Ok(None))
+    }
+
+    /// Tells if the process exited.
+    pub fn ended(&mut self) -> bool {
+        matches!(self.child.try_wait(), Ok(Some(_)))
     }
 
     /// Waits for the end of the process up to its deadline. At the deadline,
@@ -116,12 +127,15 @@ impl Running {
         Ok(self.collect(status, what))
     }
 
-    /// Kills the process and gives its output. A killed process ends, so
-    /// this wait needs no deadline.
-    pub fn kill(mut self, what: &str) -> Output {
+    /// Kills the process and gives its output, and tells if the process
+    /// exited before the kill. A killed process ends, so this wait needs no
+    /// deadline.
+    pub fn kill(mut self, what: &str) -> (Output, bool) {
+        let ended = self.ended();
         let _ = self.child.kill();
         let status = self.child.wait().expect("a killed process ends");
-        self.collect(status, what)
+        let exited = ended || !may_be_killed(status);
+        (self.collect(status, what), exited)
     }
 
     fn collect(self, status: ExitStatus, what: &str) -> Output {
@@ -135,6 +149,23 @@ impl Running {
             note_l0_break(format!("{what} panicked: {}", stderr.trim()));
         }
         output
+    }
+}
+
+/// Tells if `status` can be the status of a process that the test killed.
+/// On Unix the kill sends SIGKILL, so another status is an exit before the
+/// kill. On Windows the status does not tell a kill from an exit.
+pub fn may_be_killed(status: ExitStatus) -> bool {
+    #[cfg(unix)]
+    {
+        use std::os::unix::process::ExitStatusExt as _;
+        const SIGKILL: i32 = 9;
+        status.signal() == Some(SIGKILL)
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = status;
+        true
     }
 }
 
@@ -239,6 +270,29 @@ impl Request {
 /// The data of a success, or the text of a refusal with its kind first.
 fn finish(child: Child, what: &str) -> Result<Value, String> {
     answer(&wait_limited(child, what)?)
+}
+
+/// Tells if a process gave an answer at its end: the data of a success on
+/// standard output, a refusal with its kind on standard error, or a panic.
+fn answered(output: &Output) -> bool {
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    !output.stdout.is_empty()
+        || output.status.success()
+        || refusal_kind(stderr.trim()) != "no_kind"
+        || panicked(output)
+}
+
+/// Notes `what` as an L0 break when its process ended with no answer. A
+/// panic has its own break.
+fn note_no_answer(output: &Output, what: &str) {
+    if !answered(output) {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        note_l0_break(format!(
+            "{what} exited with no answer ({}): {}",
+            output.status,
+            stderr.trim()
+        ));
+    }
 }
 
 /// The data of the success in `output`, or the text of its refusal with its
