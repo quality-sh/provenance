@@ -155,7 +155,7 @@ impl Running {
 /// Tells if `status` can be the status of a process that the test killed.
 /// On Unix the kill sends SIGKILL, so another status is an exit before the
 /// kill. On Windows the status does not tell a kill from an exit.
-fn may_be_killed(status: ExitStatus) -> bool {
+pub fn may_be_killed(status: ExitStatus) -> bool {
     #[cfg(unix)]
     {
         use std::os::unix::process::ExitStatusExt as _;
@@ -272,8 +272,6 @@ fn finish(child: Child, what: &str) -> Result<Value, String> {
     answer(&wait_limited(child, what)?)
 }
 
-/// The data of the success in `output`, or the text of its refusal with its
-/// kind first.
 /// Tells if a process gave an answer at its end: the data of a success on
 /// standard output, a refusal with its kind on standard error, or a panic.
 fn answered(output: &Output) -> bool {
@@ -297,6 +295,8 @@ fn note_no_answer(output: &Output, what: &str) {
     }
 }
 
+/// The data of the success in `output`, or the text of its refusal with its
+/// kind first.
 fn answer(output: &Output) -> Result<Value, String> {
     if output.status.success() {
         return Ok(parse(&output.stdout)["data"].clone());

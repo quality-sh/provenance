@@ -131,3 +131,23 @@ fn a_write_that_exits_with_no_answer_after_its_point_is_no_landing() {
         "the exit with no answer broke no L0"
     );
 }
+
+/// A write can exit after the last look and before the kill. Only the
+/// status of the kill tells it from a write that the kill stopped.
+#[cfg(unix)]
+#[test]
+fn only_a_sigkill_status_counts_as_a_kill() {
+    use crate::process::may_be_killed;
+    let exited = spawn("sh", &["-c", "exit 3"])
+        .wait()
+        .expect("the test waits for the process");
+    assert_eq!(exited.code(), Some(3), "the process did not exit with 3");
+    assert!(
+        !may_be_killed(exited),
+        "an exit with a code was counted as a kill"
+    );
+    let mut child = hung();
+    child.kill().expect("the test kills the process");
+    let killed = child.wait().expect("the test waits for the process");
+    assert!(may_be_killed(killed), "a SIGKILL was not counted as a kill");
+}
