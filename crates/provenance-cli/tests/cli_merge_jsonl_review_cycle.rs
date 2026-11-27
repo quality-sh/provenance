@@ -4,9 +4,6 @@
 //! same review cycle, and each read of a record with two submissions of one
 //! cycle refuses. So the merge reports a conflict, and git leaves the file for
 //! a person.
-//!
-//! No Rule binds the tests of the review cycle conflict: the Rule text waits
-//! for the review of the owner.
 
 use super::cli_merge_jsonl::Sides;
 use provenance_core::protocol::read_failure::STATE_CORRECTIONS;
@@ -51,6 +48,7 @@ fn conflict_report(sides: &Sides, shard_path: &str) -> Value {
 /// branch, and the output file keeps both submissions, so that the read of
 /// `req_a` after the person accepts the file names each line to remove.
 #[test]
+#[verifies("rule_merge_reports_same_review_cycle", examples)]
 fn two_submissions_of_one_record_with_one_cycle_report_a_conflict() {
     let directory = tempfile::tempdir().unwrap();
     let ours = submission("submission_ours", "req_a");
@@ -148,6 +146,8 @@ fn submissions_with_one_cycle_at_another_path_merge_to_both_rows() {
 /// `delete_modify` and keeps their S, and S shares the cycle of our new
 /// submission. The report names S one time, and the file holds each
 /// submission that the report names.
+// No Rule binding: this test pins the limit of one report for each
+// submission, and its one conflict comes from the merge by ID.
 #[test]
 fn a_submission_that_one_side_removes_and_the_other_changes_is_reported_one_time() {
     let directory = tempfile::tempdir().unwrap();

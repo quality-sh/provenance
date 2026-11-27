@@ -21,21 +21,14 @@ use crate::state_store::message_ids::ShardLine;
 use camino::Utf8Path;
 use provenance_core::review::{read_review_rows, ReviewRowFault, StoredReviewRows};
 use provenance_core::ProposalCard;
+use provenance_macros::rule;
 use std::collections::BTreeSet;
 
-/// Reports the review submissions of their side that share a review cycle with ours.
+/// Reports a `same_review_cycle` conflict for a submission of their side that
+/// shares a record and a review cycle with ours, and keeps both submissions.
 ///
-/// Only the Proposal file of a scope has the check. Each submission of their
-/// side that the merge keeps beside a submission of our side with the same
-/// record and review cycle gets a `same_review_cycle` conflict, after the
-/// conflicts of the merge by ID. A submission that already has a conflict of
-/// the merge by ID gets no second conflict. The merge keeps each submission.
-/// A group of submissions that one side alone holds is not the doing of the
-/// merge and gets no conflict.
-///
-/// A merged line that is not a Proposal is refused as a read of the file
-/// refuses it: `invalid_state_file` at the line of the side that holds it,
-/// with the side at the start of the message.
+/// A group of submissions that only one side holds gets no conflict.
+#[rule("rule_merge_reports_same_review_cycle")]
 pub fn review_cycle_conflicts(
     shard_path: &Utf8Path,
     ours: &[StoredRow],
