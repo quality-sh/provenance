@@ -168,14 +168,15 @@ fn submission_lines(repo: &str, submission: &str) -> String {
 /// Flow (pairs 15 and 16): each branch changes `req_a`, which opens a
 /// review submission with review cycle 2 on each branch. One branch
 /// approves its submission and the other rejects its submission. The merge
-/// driver refuses the two changes of the record, and the person keeps the
-/// record of the first branch. The repair removes each line of the
-/// rejected submission.
+/// driver refuses the two changes of the record and the two submissions with
+/// one cycle, and writes both submissions. The person accepts the Proposal
+/// file that the driver wrote and keeps the record of the first branch. The
+/// repair removes each line of the rejected submission.
 #[test]
 #[verifies("rule_disagreeing_review_rows_refuse_record", examples)]
 #[verifies("rule_review_row_refusal_gives_repair", examples)]
 #[verifies("rule_check_reports_review_row_faults", examples)]
-fn two_changes_of_one_record_merged_give_two_submissions_with_one_cycle() {
+fn an_approved_and_a_rejected_change_of_one_record_merge_to_two_submissions_with_one_cycle() {
     let (_directory, repo) = repository(Merge::Driver);
     let first = git(&repo, &["rev-parse", "--abbrev-ref", "HEAD"]);
     git(&repo, &["checkout", "-q", "-b", "side"]);
@@ -190,8 +191,8 @@ fn two_changes_of_one_record_merged_give_two_submissions_with_one_cycle() {
     commit(&repo);
     let merged = super::review_history::git_output(&repo, &["merge", "--no-edit", "side"]);
     assert!(!merged.status.success(), "{merged:?}");
-    let conflicts = git(&repo, &["diff", "--name-only", "--diff-filter=U"]);
-    for file in conflicts.lines() {
+    let conflicts = super::review_merged_submissions::driver_kept_both_sides(&repo);
+    for file in conflicts.iter().filter(|file| *file != PROPOSALS) {
         git(&repo, &["checkout", "--ours", "--", file]);
     }
     commit(&repo);

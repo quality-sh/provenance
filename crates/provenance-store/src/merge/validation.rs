@@ -53,6 +53,11 @@ pub enum ShardFamily {
     Topics,
     /// `.provenance/state/scopes/<scope>/questions/*.jsonl`
     Questions,
+    /// `.provenance/state/scopes/<scope>/ideation/proposal_cards.jsonl`. Its
+    /// lines are read as lines of no known record type, as each other reader
+    /// of the file reads them, and the merge checks the review submissions
+    /// among the merged rows.
+    Proposals,
     /// Any other path, including per-scope families without declared
     /// relations and files outside the state directory. Merged records pass
     /// unchecked.
@@ -101,6 +106,9 @@ impl ShardFamily {
         if path.file_name() == Some("discussions.jsonl") && is_scoped_family(path, "threads") {
             return Self::Discussions;
         }
+        if path.file_name() == Some("proposal_cards.jsonl") && is_scoped_family(path, "ideation") {
+            return Self::Proposals;
+        }
         Self::Unrecognized
     }
 }
@@ -124,7 +132,7 @@ impl ShardFamily {
             Self::Rules => record_line_value::<Rule>,
             Self::Topics => record_line_value::<Topic>,
             Self::Questions => record_line_value::<Question>,
-            Self::Unrecognized => untyped_line_value,
+            Self::Proposals | Self::Unrecognized => untyped_line_value,
         }
     }
 }
@@ -153,7 +161,7 @@ pub fn validate_merged_records(
         ShardFamily::Rules => validate_typed_records::<Rule>(records, "rule"),
         ShardFamily::Topics => validate_typed_records::<Topic>(records, "topic"),
         ShardFamily::Questions => validate_typed_records::<Question>(records, "question"),
-        ShardFamily::Discussions | ShardFamily::Unrecognized => Ok(()),
+        ShardFamily::Discussions | ShardFamily::Proposals | ShardFamily::Unrecognized => Ok(()),
     }
 }
 
@@ -319,11 +327,11 @@ mod tests {
             ProjectionFamily::Topics => (ShardFamily::Topics, "id"),
             ProjectionFamily::Questions => (ShardFamily::Questions, "id"),
             ProjectionFamily::Discussions => (ShardFamily::Discussions, "discussion_id"),
+            ProjectionFamily::ProposalCards => (ShardFamily::Proposals, "id"),
             ProjectionFamily::Threads
             | ProjectionFamily::Messages
             | ProjectionFamily::Contributions
             | ProjectionFamily::SynthesisPackets
-            | ProjectionFamily::ProposalCards
             | ProjectionFamily::AssertionRecords
             | ProjectionFamily::Dispositions
             | ProjectionFamily::ImplementationBindings

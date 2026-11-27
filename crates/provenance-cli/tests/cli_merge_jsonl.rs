@@ -21,15 +21,15 @@ fn bare_rule(id: &str) -> String {
     rule(id, "")
 }
 
-struct Sides {
+pub struct Sides {
     base: PathBuf,
     ours: PathBuf,
     theirs: PathBuf,
-    output: PathBuf,
+    pub output: PathBuf,
 }
 
 impl Sides {
-    fn write(directory: &Path, base: &str, ours: &str, theirs: &str) -> Self {
+    pub fn write(directory: &Path, base: &str, ours: &str, theirs: &str) -> Self {
         let sides = Self {
             base: directory.join("base.jsonl"),
             ours: directory.join("ours.jsonl"),
@@ -42,7 +42,7 @@ impl Sides {
         sides
     }
 
-    fn merge(&self, shard_path: &str) -> Command {
+    pub fn merge(&self, shard_path: &str) -> Command {
         let mut command = Command::cargo_bin("provenance").unwrap();
         command.args([
             "merge-jsonl",
